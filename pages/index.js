@@ -1,7 +1,7 @@
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
-import { canAccessArea } from '../lib/roles'
+import { canSeeArea } from '../lib/modules'
 import ReportImprovementLink from '../components/ReportImprovementLink'
 
 const departments = [
@@ -163,9 +163,11 @@ const departments = [
 export default function Portal() {
   const router = useRouter()
   const [user, setUser] = useState(null)
+  const [modules, setModules] = useState(null)
 
   useEffect(() => {
     fetch('/api/portal-auth?action=me').then(r => r.json()).then(d => {
+      setModules(d.modules || null)
       if (!d.user) { router.replace('/login'); return }
       // External customer/design-team users only have the Design portal.
       if (d.user.role === 'external' || d.user.external) { router.replace('/design'); return }
@@ -178,7 +180,7 @@ export default function Portal() {
     router.replace('/login')
   }
 
-  const visible = departments.filter(d => user && canAccessArea(user.role, d.key))
+  const visible = departments.filter(d => user && canSeeArea(user.role, d.key, modules))
 
   return (
     <>

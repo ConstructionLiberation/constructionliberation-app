@@ -2,7 +2,8 @@ import { fromEmail, replyTo } from '../../lib/tenantSettings'
 import { getPortalUsers, savePortalUsers } from '../../lib/db'
 import { getExternalUsers, saveExternalUsers, findExternalByEmail, verifyExternalPassword, stripExternal } from '../../lib/designUsers'
 import { hashPassword, verifyPassword, createSessionToken, verifySessionToken, SESSION_COOKIE, createResetToken, verifyResetToken } from '../../lib/portalAuth'
-import { currentTenantId } from '../../lib/tenantContext'
+import { currentTenantId, currentTenant } from '../../lib/tenantContext'
+import { enabledModules } from '../../lib/modules'
 import { ROLES, normRole } from '../../lib/roles'
 import withTenant from '../../lib/withTenant'
 
@@ -130,14 +131,18 @@ async function handler(req, res) {
             const full = ext.find(x => x.id === u.id)
             if (full) return res.json({ user: { ...u, ...stripExternal(full) } })
           } catch {}
-          return res.json({ user: { ...u, external: true, role: 'external' } })
+          return res.json({ user: { ...u, external: true, role: 'external' }, modules: enabledModules(currentTenant()) })
         }
         // Enrich token claims (id/email/role/name) with the full stored record
         // so callers get phone, firstName, etc. (needed for email signatures).
         try {
           const users = await getPortalUsers()
           const full = users.find(x => x.id === u.id)
-          if (full) return res.json({ user: { ...u, ...strip(full) } })
+          // The modules ride along with the user, because every caller that
+          // needs to know the role also needs to know what the customer has
+          // bought. A second endpoint for it would be a second round trip and a
+          // second thing to forget to call.
+          if (full) return res.json({ user: { ...u, ...strip(full) }, modules: enabledModules(currentTenant()) })
         } catch {}
       }
       return res.json({ user: u || null })

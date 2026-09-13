@@ -1,107 +1,94 @@
-pkg870 - Cron health. READ ONLY.
-================================
+pkg871 - Module gates, part 1: the rule and the portal tiles
+============================================================
 
-ONE NEW FILE TO CREATE BY HAND IN GITHUB
-  pages/api/admin/cron-health.js
-
-Nothing replaced. Writes nothing. No behaviour change anywhere.
-
-
-WHAT IT IS
-----------
-You asked for a way to see whether the crons are working. The heartbeats have
-been recording since pkg858, so there is real data to read now.
-
-    /api/admin/cron-health
-
-For every cron: its schedule, when it last ran, how long it took, whether it
-succeeded, and whether it is OVERDUE.
+WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING.
+No customer is resolved, so no module list exists, so every area stays visible
+exactly as today.
 
 
-THE POINT IS THE ABSENCES
--------------------------
-A cron that ERRORS shows up in the Vercel log. A cron that silently STOPS
-RUNNING writes nothing, logs nothing, and looks exactly like a quiet week.
-
-That is how three of yours came to have no schedule at all without anyone
-noticing - deep-sync, wip-sync and pipedrive-sync - and it is how, under
-multi-tenancy, a sync could stop for one customer while working for everyone
-else.
-
-Statuses:
-  ok               ran within its expected interval
-  OVERDUE          scheduled, but has not run when it should have
-  last run failed  ran and threw
-  never run        scheduled, no heartbeat yet
-  not scheduled    the file exists, nothing calls it  <- your three
+FILES (3) - none new
+  lib/modules.js            REPLACES the pkg869 version
+  pages/api/portal-auth.js
+  pages/index.js
 
 
-SCHEDULES ARE READ FROM vercel.json ITSELF
-------------------------------------------
-Not copied into a list in this file. A second copy of the schedule drifts from
-the real one, and a monitoring page reporting against the wrong schedule is
-worse than no monitoring page. Change vercel.json and this follows
-automatically.
+ONE FUNCTION, NOT TWO
+---------------------
+An area is visible only when BOTH are true:
+
+    the customer has bought the module      lib/modules.js
+    the role is allowed the area            lib/roles.js
+
+canSeeArea(role, area, modules) asks both. It lives in modules.js and is the
+only function anyone should call. Two near-identical checks in two files is how
+one gets updated and the other does not - which is the fault this project keeps
+producing.
+
+The portal learns its module list from the same call that already tells it the
+role, /api/portal-auth?action=me. A separate endpoint would be a second round
+trip and a second thing to forget to call.
 
 
-TWO FAULTS THE TEST CAUGHT IN MY OWN PARSER
--------------------------------------------
-I ran it against all 16 of your real schedules rather than a few I made up, and
-it got two wrong:
+TESTED FROM BOTH DIRECTIONS
+---------------------------
+  single tenant today, admin
+    everything, unchanged
 
-  0 6,7 * * *     crm-daily-activities    read as UNKNOWN - a list of hours
-  0 9 * * 1-5     variation-reminders     read as DAILY
+  a customer with Operations + Commercial only
+    their admin              commercial, operations, lessons-learnt, hr, admin
+    their post-contract user commercial, operations, lessons-learnt, hr
+    their accounts user      (nothing)
 
-The second was the dangerous one. That cron runs weekdays. Calling it daily
-would report it OVERDUE every Sunday morning, for ever. An alert that cries wolf
-weekly is an alert people switch off, which is worse than not having one.
-
-Now: any day-of-week restriction is treated as weekly, which is the safe upper
-bound, and a list of hours is still daily. All 16 read correctly:
-
-    deliveries-sync   24h    crm-email-sync      0.3h
-    hs-expiry-email   24h    crm-email-volume    24h
-    weekly-report      1h    crm-call-volume     24h
-    notifications     24h    gp-snapshot        744h
-    design x4         24h    variation-reminders 168h
-    hs-renewals        1h    crm-daily-activities 24h
-
-    unreadable schedules: 0
-
-A cron is allowed to be one full interval late plus an hour before it is called
-overdue, so an 08:00 job is not flagged at 08:00:01 the next day.
+  the two that must not be loosened
+    post-contract sees Business Financials at a customer that HAS it   false
+      - the role still applies. A purchase must not grant a role access.
+    admin sees Bookkeeping at a customer that has NOT bought it         false
+      - the module still applies. An admin cannot see what was not bought.
+    admin sees the Admin area at a customer with few modules            true
+      - Admin is not a sellable module, so it is role-gated only.
 
 
-WHAT TO EXPECT ON THE FIRST LOOK
---------------------------------
-Heartbeats only began at pkg858, so anything that has not run since then reads
-as "never run" until its next scheduled time. Give it a day before treating a
-"never run" as a problem. The hourly ones - weekly-report, hs-renewals,
-crm-email-sync - should already have data.
+ONE THING THAT FALLS OUT, worth knowing before you sell
+-------------------------------------------------------
+An ACCOUNTS user at a customer without Bookkeeping sees NOTHING. Correct by the
+rules - accounts is only allowed bookkeeping and management - but they would log
+in to an empty portal.
 
-deep-sync, wip-sync and pipedrive-sync will read "not scheduled". That is
-correct and unchanged; they are parked by agreement.
+That is a provisioning warning rather than a code change: the platform admin
+should say "this customer has accounts users but no Bookkeeping module". Noted
+for when provisioning is built.
 
 
-NOT IN THIS PACKAGE
--------------------
-A screen, and email alerts. This is the data. A page that reads it, and a cron
-that emails you when something goes overdue, are worth doing once you have
-looked at the raw output and told me whether the statuses are right - I would
-rather not build an alert on top of a judgement you have not checked.
+WHAT THIS DOES NOT DO YET - read this
+-------------------------------------
+IT ONLY HIDES THE TILES. Typing /bookkeeping directly still loads the page.
+
+So this is cosmetic until the server side lands. That is the next package and it
+is the bigger half: the area guard applied to the API routes, so a page reached
+by URL has no data to draw and says so plainly.
+
+23 API routes already check canAccessArea for roles - mostly the design ones -
+so the pattern exists. It needs extending to modules and applying to the rest.
+
+I would rather ship the rule and the visible half now, with that stated, than
+hold both back and land 170 files at once.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile: 0 errors
-- import-graph check: clean
-- the parser against all 16 real schedules, twice: once finding two faults, once
-  clean
-- read only - the file contains redis.keys and redis.get and no writes
+- esbuild compile on all 3: 0 errors
+- import-graph check: clean, 186 client entry points. lib/modules.js is imported
+  by pages/index.js, so this mattered.
+- ran canSeeArea across both roles and module combinations, output above
+- confirmed the single-tenant path returns null modules, which means everything
+  visible - so today is unchanged
 
 
-WHAT TO DO AFTER DEPLOYING
---------------------------
-Visit /api/admin/cron-health as admin and send me the output, or just look at
-"problems" and the top few rows. Tell me if any status looks wrong for a cron
-you know the behaviour of - that is the part I cannot check from here.
+WHAT TO CHECK AFTER DEPLOYING
+-----------------------------
+1. Sign in. The portal home page shows exactly the same tiles it did before.
+2. Sign in as a non-admin if you can, and confirm the same.
+3. Open Bookkeeping, Commercial, Operations, Design - all as before.
+
+If a tile has disappeared, tell me immediately: that would mean the module list
+is being read as empty rather than absent, and the difference matters.
