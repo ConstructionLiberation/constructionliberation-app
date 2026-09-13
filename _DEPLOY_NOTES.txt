@@ -1,122 +1,107 @@
-pkg869 - Platform admin: the customer list
-==========================================
+pkg870 - Cron health. READ ONLY.
+================================
 
-WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING, unless you go
-looking. One new page at /platform, not linked from anywhere.
+ONE NEW FILE TO CREATE BY HAND IN GITHUB
+  pages/api/admin/cron-health.js
 
-
-THREE NEW FILES TO CREATE BY HAND IN GITHUB
--------------------------------------------
-  lib/modules.js
-  pages/api/platform/tenants.js       (folder pages/api/platform/ is new)
-  pages/platform/index.js             (folder pages/platform/ is new)
-
-Nothing is replaced. No existing file changes.
+Nothing replaced. Writes nothing. No behaviour change anywhere.
 
 
 WHAT IT IS
 ----------
-/platform - the customer registry. Add a customer, set their web addresses,
-switch their modules on and off, set their sender name and reply-to, point at
-their database.
+You asked for a way to see whether the crons are working. The heartbeats have
+been recording since pkg858, so there is real data to read now.
 
-Deliberately plain. It is a tool for one person, used a handful of times per
-customer, so it is built to be unambiguous rather than pretty.
+    /api/admin/cron-health
 
-Right now it will tell you there is no control database yet and what to do about
-it. That is the correct state and it is worth seeing - it is the screen you will
-come back to after the Upstash step.
+For every cron: its schedule, when it last ran, how long it took, whether it
+succeeded, and whether it is OVERDUE.
 
 
-WHO CAN REACH IT
-----------------
-Once tenancy is on: only from a platform address (PLATFORM_HOSTS) and only for
-an admin. A customer's own admin must never see this - it lists every other
-customer.
+THE POINT IS THE ABSENCES
+-------------------------
+A cron that ERRORS shows up in the Vercel log. A cron that silently STOPS
+RUNNING writes nothing, logs nothing, and looks exactly like a quiet week.
 
-Until tenancy is on there IS no platform address, so an admin can reach it from
-the normal portal. That is a deliberate temporary door - the registry has to be
-set up from somewhere - and it closes by itself the moment TENANCY_ENABLED=1.
+That is how three of yours came to have no schedule at all without anyone
+noticing - deep-sync, wip-sync and pipedrive-sync - and it is how, under
+multi-tenancy, a sync could stop for one customer while working for everyone
+else.
 
-/platform is not in the middleware open list, so it is behind the login like
-every other page.
-
-
-CREDENTIALS GO IN AND NEVER COME OUT
-------------------------------------
-A customer's database url and token are write-only. The list shows "set" or
-"missing" and nothing else, and the API strips them from every response - not
-even to you. There is no screen that needs them, and a screen that shows them is
-a screen that can leak them.
-
-Editing a customer to change their modules leaves the database pointer alone.
-You only type credentials when adding a customer or deliberately repointing one.
+Statuses:
+  ok               ran within its expected interval
+  OVERDUE          scheduled, but has not run when it should have
+  last run failed  ran and threw
+  never run        scheduled, no heartbeat yet
+  not scheduled    the file exists, nothing calls it  <- your three
 
 
-MODULES, AND WHY THEY ARE A SECOND QUESTION
+SCHEDULES ARE READ FROM vercel.json ITSELF
+------------------------------------------
+Not copied into a list in this file. A second copy of the schedule drifts from
+the real one, and a monitoring page reporting against the wrong schedule is
+worse than no monitoring page. Change vercel.json and this follows
+automatically.
+
+
+TWO FAULTS THE TEST CAUGHT IN MY OWN PARSER
 -------------------------------------------
-lib/roles.js already answers "may this ROLE see this area". lib/modules.js adds
-the question in front: "has this CUSTOMER bought this area".
+I ran it against all 16 of your real schedules rather than a few I made up, and
+it got two wrong:
 
-Two separate questions on purpose. A customer who has not bought Bookkeeping
-should not see it whatever role someone holds; a post-contract user at a
-customer who HAS bought it still should not see Business Financials. Collapse
-them and a customer's purchase could grant a role access it should not have.
+  0 6,7 * * *     crm-daily-activities    read as UNKNOWN - a list of hours
+  0 9 * * 1-5     variation-reminders     read as DAILY
 
-The module ids match the area names in lib/roles.js exactly, so one check can
-ask both without a translation table. A translation table is a second copy of
-the same list, and second copies diverge.
+The second was the dangerous one. That cron runs weekdays. Calling it daily
+would report it OVERDUE every Sunday morning, for ever. An alert that cries wolf
+weekly is an alert people switch off, which is worse than not having one.
 
-ALWAYS ON: Operations, HR, Lessons Learnt. The portal has no coherent shape
-without them, so switching them off is not offered.
+Now: any day-of-week restriction is treated as weekly, which is the safe upper
+bound, and a list of hours is still daily. All 16 read correctly:
 
-DEPENDENCIES ARE ENFORCED. Turning off a module another one reads does not
-produce an error - it produces a page that loads with nothing in it, or a figure
-computed from half its inputs. So the combination is refused at the point of
-creation. Tested:
+    deliveries-sync   24h    crm-email-sync      0.3h
+    hs-expiry-email   24h    crm-email-volume    24h
+    weekly-report      1h    crm-call-volume     24h
+    notifications     24h    gp-snapshot        744h
+    design x4         24h    variation-reminders 168h
+    hs-renewals        1h    crm-daily-activities 24h
 
-    Ops only                     ok
-    Commercial + Bookkeeping     ok
-    Business Financials alone    REFUSED: Business Financials needs
-                                 Bookkeeping, which is switched off
-    Design alone                 ok
-    Everything                   ok
+    unreadable schedules: 0
 
-An address can only belong to one customer - a typo that re-points an existing
-customer's address is refused with the name of the customer that already owns it.
-
-A customer record with no module list gets EVERYTHING, not nothing. A new
-customer whose modules have not been set yet should look broken to whoever is
-setting them up, not to their staff.
+A cron is allowed to be one full interval late plus an hour before it is called
+overdue, so an 08:00 job is not flagged at 08:00:01 the next day.
 
 
-WHAT IS NOT IN THIS PACKAGE
----------------------------
-The gates themselves. Nothing yet checks hasModule() before drawing a menu item
-or serving an API route - that is the next package and it touches the nav, the
-pages and 169 routes.
+WHAT TO EXPECT ON THE FIRST LOOK
+--------------------------------
+Heartbeats only began at pkg858, so anything that has not run since then reads
+as "never run" until its next scheduled time. Give it a day before treating a
+"never run" as a problem. The hourly ones - weekly-report, hs-renewals,
+crm-email-sync - should already have data.
 
-So switching a module off here changes nothing today. The list is the record;
-enforcing it comes next.
+deep-sync, wip-sync and pipedrive-sync will read "not scheduled". That is
+correct and unchanged; they are parked by agreement.
 
-Also not here: view-as, the audit trail, and provisioning a database
-automatically. Those follow.
+
+NOT IN THIS PACKAGE
+-------------------
+A screen, and email alerts. This is the data. A page that reads it, and a cron
+that emails you when something goes overdue, are worth doing once you have
+looked at the raw output and told me whether the statuses are right - I would
+rather not build an alert on top of a judgement you have not checked.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
-- import-graph check: clean, 186 client entry points. lib/modules.js IS imported
-  by a page, so this mattered - it contains no server-only import.
-- ran the module rules across five combinations, output above
-- confirmed /platform is not in the middleware open list
+- esbuild compile: 0 errors
+- import-graph check: clean
+- the parser against all 16 real schedules, twice: once finding two faults, once
+  clean
+- read only - the file contains redis.keys and redis.get and no writes
 
 
-WHAT TO CHECK AFTER DEPLOYING
------------------------------
-1. Visit /platform while signed in as admin. You should see "No control database
-   yet" and the instructions. That is correct.
-2. Sign in as a non-admin, or ask someone to, and confirm /platform gives them
-   nothing useful.
-3. Nothing else in the portal should have changed - no new menu items, no
-   behaviour difference anywhere.
+WHAT TO DO AFTER DEPLOYING
+--------------------------
+Visit /api/admin/cron-health as admin and send me the output, or just look at
+"problems" and the top few rows. Tell me if any status looks wrong for a cron
+you know the behaviour of - that is the part I cannot check from here.
