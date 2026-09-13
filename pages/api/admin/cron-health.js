@@ -2,8 +2,6 @@ import withTenant from '../../../lib/withTenant'
 import { getClient } from '../../../lib/db'
 import { requireRole } from '../../../lib/portalAuth'
 import vercelConfig from '../../../vercel.json'
-import fs from 'fs'
-import path from 'path'
 
 // CRON HEALTH. READ ONLY.
 //
@@ -77,25 +75,35 @@ async function handler(req, res) {
     heartbeatNames = (await redis.keys('cron:last:*')).map(k => k.replace('cron:last:', ''))
   } catch {}
 
-  // AND EVERY CRON FILE THAT EXISTS.
+  // CRONS WITH NO SCHEDULE AND NO HISTORY.
   //
-  // The first version listed only crons with a schedule or a heartbeat, which
-  // meant deep-sync, wip-sync and pipedrive-sync - the three with NEITHER - were
-  // invisible. The "not scheduled" status was unreachable, which made it exactly
-  // the wrong thing to miss: a cron nobody scheduled is the one most likely to
-  // be forgotten.
+  // A cron appears here if it is in vercel.json, or if it has ever written a
+  // heartbeat. Three have NEITHER - deep-sync, wip-sync and pipedrive-sync - so
+  // they were invisible, and "not scheduled" was a status nothing could reach.
   //
-  // Read from the folder rather than a list kept here, because a list kept here
-  // is a second copy of the truth. It may not be readable inside a serverless
-  // function - if not, folderListed comes back false and the report degrades to
-  // what it did before rather than failing.
-  let fileNames = []
-  let folderListed = false
-  try {
-    const dir = path.join(process.cwd(), 'pages', 'api', 'cron')
-    fileNames = fs.readdirSync(dir).filter(f => f.endsWith('.js')).map(f => f.slice(0, -3))
-    folderListed = true
-  } catch {}
+  // I tried reading the pages/api/cron folder at runtime. It does not work
+  // inside a Vercel function - folderListed came back false. So this is a list.
+  //
+  // IT IS A SECOND COPY OF THE TRUTH AND I AM WRITING THAT DOWN RATHER THAN
+  // HIDING IT. The fault class that has cost this project most is one rule kept
+  // in two places and left to diverge, so a list like this needs a reason:
+  //
+  //   - it covers ONE case: a cron file that has never run AND has no schedule
+  //   - a cron with a schedule comes from vercel.json automatically
+  //   - a cron that has ever run registers itself by writing a heartbeat
+  //   - so the only way this drifts is a NEW cron file that is never scheduled
+  //     and never runs, which would stay invisible anyway
+  //
+  // The failure mode of the copy is no worse than not having it. If one of these
+  // is later scheduled it appears twice and is de-duplicated below.
+  //
+  // The alternative is webpack's require.context, which enumerates the folder at
+  // BUILD time with no list at all. It is the better answer and I would rather
+  // use it - but it fails the BUILD if it cannot resolve, and a build failure
+  // costs more than this list does. Say the word and I will switch.
+  const UNSCHEDULED_CRON_FILES = ['deep-sync', 'wip-sync', 'pipedrive-sync']
+  const fileNames = UNSCHEDULED_CRON_FILES
+  const folderListed = false
 
   const names = [...new Set([...scheduledNames, ...heartbeatNames, ...fileNames])].sort()
   const now = Date.now()
@@ -141,10 +149,10 @@ async function handler(req, res) {
   const problems = rows.filter(r => r.status !== 'ok')
   return res.json({
     checkedAt: new Date().toISOString(),
-    // False means the cron folder could not be read inside the function, so any
-    // cron with no schedule and no heartbeat is still invisible. Tell me if it
-    // is false and I will find another way to enumerate them.
+    // Kept, and always false now, so the report says plainly that the
+    // unscheduled list is hand-written rather than discovered.
     folderListed,
+    unscheduledFromList: fileNames,
     total: rows.length,
     problems: problems.length,
     crons: rows.sort((a, b) => {

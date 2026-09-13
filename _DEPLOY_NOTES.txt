@@ -1,113 +1,81 @@
-pkg872 - Three faults the cron data exposed, including one in my own work
-=========================================================================
+pkg873 - The three parked crons, made visible
+=============================================
 
-THREE FILES, none new.
-  lib/forEachTenant.js
-  pages/api/admin/cron-health.js
-  pages/api/cron/hs-expiry-email.js
-
-No behaviour change to any job. Only what gets recorded and reported.
+ONE FILE.  pages/api/admin/cron-health.js  - replaces the pkg872 version.
+Read only. No behaviour change.
 
 
-WHAT THE FIRST REAL READING SHOWED
-----------------------------------
-14 crons healthy, 2 explained. gp-snapshot runs on the 22nd, variation-reminders
-on weekdays, and heartbeats only began at pkg858 - both correct, neither a
-problem.
+WHAT HAPPENED
+-------------
+pkg872 tried to list the pages/api/cron folder at runtime so a cron with no
+schedule and no history would still appear. Your reading came back
 
-But the data exposed three things.
+    folderListed: false
 
-
-1. TWO JOBS REPORTING GREEN WHILE DOING NOTHING
------------------------------------------------
-    crm-call-volume        1 ms    ok: true
-    crm-daily-activities   1 ms    ok: true
-
-One millisecond. refreshCallVolume returns
-
-    { ok: false, error: 'Not configured. Missing in Vercel: ...' }
-
-the moment it finds no 8x8 credentials - but sends it as a 200. The heartbeat
-read the status code and recorded a success.
-
-So the monitoring said healthy for two jobs that were exiting immediately. That
-is the precise failure the monitoring exists to catch, and it was being produced
-BY the monitoring.
-
-Fixed: a 200 carrying { ok: false } is now a failure. A handler that says it
-failed has failed, whatever code it chose to send.
-
-EXPECT THOSE TWO TO TURN RED after this deploys. That is correct. 8x8 is on your
-backlog, so "not configured" is the true state - it just was not being reported.
+so it does not work inside a Vercel function. The three parked crons were still
+invisible, which was the whole point of that change.
 
 
-2. THREE JOBS WITH NO MONITORING AT ALL
+WHAT IT DOES NOW
+----------------
+An explicit list:
+
+    const UNSCHEDULED_CRON_FILES = ['deep-sync', 'wip-sync', 'pipedrive-sync']
+
+THIS IS A SECOND COPY OF THE TRUTH, AND I HAVE WRITTEN THAT IN THE FILE RATHER
+THAN QUIETLY ADDING IT. The fault class that has cost this project most is one
+rule kept in two places and left to diverge, so a list like this needs a reason:
+
+  - it covers ONE case: a cron file that has never run AND has no schedule
+  - a cron WITH a schedule comes from vercel.json automatically
+  - a cron that has EVER RUN registers itself by writing a heartbeat
+  - so the only way it drifts is a new cron file that is never scheduled and
+    never runs - which would be invisible anyway
+
+The failure mode of the copy is no worse than not having it. That is the test I
+applied, and it is the only reason I am comfortable with it.
+
+The response now also returns unscheduledFromList, so the report says plainly
+which names are hand-written rather than discovered.
+
+
+THE BETTER ANSWER I DID NOT TAKE
+--------------------------------
+webpack's require.context enumerates the folder at BUILD time with no list at
+all. It is genuinely better.
+
+I did not use it because it fails the BUILD if it cannot resolve, and I broke
+your build once already today with an import that compiled fine on its own. A
+build failure costs more than this list does.
+
+If you would rather have no list, say so and I will switch - but I would want to
+do it on its own, not bundled with anything else, so that if the build goes red
+there is exactly one thing to undo.
+
+
+ALSO: the two 8x8 crons still read "ok"
 ---------------------------------------
-forms-weekly-notify, deliveries-notify and rams-reminders are called as
-FUNCTIONS from hs-expiry-email, not as routes. forEachTenant never saw them, so
-they recorded nothing and did not appear.
-
-hs-expiry-email ran for 8.5 seconds and reported success. Had the RAMS reminders
-inside it thrown and been swallowed, it would have looked identical.
-
-Each now records its own heartbeat and appears beside the rest, judged against
-the dispatcher's daily schedule and labelled "runs inside hs-expiry-email".
-
-
-3. MY OWN DESIGN FLAW
----------------------
-I told you deep-sync, wip-sync and pipedrive-sync would show as "not scheduled".
-They did not appear at all.
-
-A cron only appeared if it was in vercel.json or had written a heartbeat. Those
-three have NEITHER, so the one status I built specifically for them was
-unreachable - and a cron nobody scheduled is exactly the one most likely to be
-forgotten.
-
-cron-health now also lists the pages/api/cron folder, so a cron file with no
-schedule and no history is visible rather than absent. Read from the folder, not
-from a list kept in the file, because a list kept there is a second copy of the
-truth.
-
-CAVEAT, and I need you to check this: reading the folder from inside a
-serverless function may not work on Vercel. The response now carries
-
-    folderListed: true | false
-
-If it comes back FALSE, the three parked crons are still invisible and I will
-find another way. Tell me either way.
+Expected. Their heartbeats are from 02:30 and 07:00, before pkg872 deployed. The
+ok:false fix applies on the NEXT run, so they will flip to "last run failed"
+tomorrow morning. That is correct, not a regression - 8x8 is not configured.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
+- esbuild compile: 0 errors
+- the now-unused fs and path imports removed - confirmed 0 remaining
 - import-graph check: clean
-- ran the status rules against your REAL data plus the cases the fixes are for:
-
-    crm-email-sync   (healthy, 15 min)          -> ok
-    hs-expiry-email  (healthy, daily)           -> ok
-    gp-snapshot      (monthly, no heartbeat)    -> never run
-    crm-call-volume  (200 with ok:false)        -> last run failed
-    deep-sync        (no schedule)              -> not scheduled
-    rams-reminders   (via dispatcher)           -> ok
-    rams-reminders   (dispatcher stalled 3 days)-> OVERDUE
-    variation-reminders (weekdays, read Sunday) -> ok
-
-    failures: 0
-
-  The last one matters: that is the weekday cron NOT being falsely flagged on a
-  Sunday, which was the fault the parser test caught in pkg870.
+- my first attempt at this edit asserted and wrote nothing, because the comment
+  text it was matching had changed. Worth noting only because that is the
+  behaviour you want from these scripts: fail whole, not half
 
 
-WHAT TO CHECK AFTER DEPLOYING
------------------------------
-1. /api/admin/cron-health - check "folderListed". That is the one I cannot
-   verify from here.
-2. Expect crm-call-volume and crm-daily-activities to read "last run failed"
-   after their next run. Correct, not a regression.
-3. Expect deep-sync, wip-sync and pipedrive-sync to appear as "not scheduled",
-   IF folderListed is true.
-4. Tomorrow after 08:00: forms-weekly-notify, deliveries-notify and
-   rams-reminders should appear with fresh heartbeats.
-5. No email or job behaviour should change. If a notification stops arriving,
-   tell me - nothing here should touch that.
+WHAT TO CHECK
+-------------
+/api/admin/cron-health - deep-sync, wip-sync and pipedrive-sync should now
+appear as "not scheduled", and total should read 19 rather than 16.
+
+Tomorrow morning, after 08:00:
+  - crm-call-volume and crm-daily-activities flip to "last run failed"
+  - forms-weekly-notify, deliveries-notify and rams-reminders appear for the
+    first time, labelled "runs inside hs-expiry-email"
