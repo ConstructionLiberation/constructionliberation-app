@@ -1,87 +1,122 @@
-pkg868 - Per-customer email settings, batch 2. The last 48 sites.
-=================================================================
+pkg869 - Platform admin: the customer list
+==========================================
 
-WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING.
-Every email still comes from exactly the address it does today, and every link
-still points where it does today.
-
-No new files to create. 30 files, all existing.
-Note pages/api/project/[id]/ uses literal square brackets.
+WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING, unless you go
+looking. One new page at /platform, not linked from anywhere.
 
 
-WHAT THIS FINISHES
-------------------
-There were 60 places where an environment variable fell back to a hardcoded
-Rock Roofing address or URL. pkg862/863 did the 12 that reach customers
-directly. This does the remaining 48.
+THREE NEW FILES TO CREATE BY HAND IN GITHUB
+-------------------------------------------
+  lib/modules.js
+  pages/api/platform/tenants.js       (folder pages/api/platform/ is new)
+  pages/platform/index.js             (folder pages/platform/ is new)
 
-AFTER THIS THERE ARE NONE LEFT. Verified by grep: the only file still
-containing a rockroofing or resend.dev default is lib/tenantSettings.js itself,
-which is where they belong.
+Nothing is replaced. No existing file changes.
 
 
-THE pkg863 LESSON, APPLIED BEFORE CONVERTING RATHER THAN AFTER
---------------------------------------------------------------
-pkg862 flattened four near-identical fallback chains into one that matched none
-of them, and pkg863 corrected it. That was luck - it was caught because you
-questioned whether a test was needed.
+WHAT IT IS
+----------
+/platform - the customer registry. Add a customer, set their web addresses,
+switch their modules on and off, set their sender name and reply-to, point at
+their database.
 
-So before touching anything this time I checked every chain at every call site.
-Two would have been flattened again:
+Deliberately plain. It is a tool for one person, used a handful of times per
+customer, so it is built to be unambiguous rather than pretty.
 
-  design-email-test.js used NOTIFY_FROM_EMAIL with NO FORMS fallback. Mapping it
-  to the existing 'notify' kind would have ADDED one. It gets its own kind,
-  'notifyOnly'.
-
-  THREE different base-URL chains exist - PORTAL_BASE_URL, PORTAL_URL and
-  APP_URL - each with the same default. A single baseUrl() trying all three
-  would change the answer for any site naming only one. baseUrl() now takes the
-  caller's own env var name.
-
-Four near-identical rules are not one rule. That is the whole lesson.
+Right now it will tell you there is no control database yet and what to do about
+it. That is the correct state and it is worth seeing - it is the screen you will
+come back to after the Upstash step.
 
 
-ALSO MOVED IN: three Microsoft mailbox settings
------------------------------------------------
-  MS_SYNC_GROUP        crm-sync@rockroofing.co.uk
-  MS_BCC_MAILBOX       crm@rockroofing.co.uk
-  MS_INTERNAL_DOMAIN   rockroofing.co.uk
+WHO CAN REACH IT
+----------------
+Once tenancy is on: only from a platform address (PLATFORM_HOSTS) and only for
+an admin. A customer's own admin must never see this - it lists every other
+customer.
 
-Each customer has their own Microsoft tenant, so these are per-customer too.
-MS_INTERNAL_DOMAIN matters more than it looks: it decides which emails count as
-internal. Wrong for a customer, and their own staff get counted as clients.
+Until tenancy is on there IS no platform address, so an admin can reach it from
+the normal portal. That is a deliberate temporary door - the registry has to be
+set up from somewhere - and it closes by itself the moment TENANCY_ENABLED=1.
+
+/platform is not in the middleware open list, so it is behind the login like
+every other page.
+
+
+CREDENTIALS GO IN AND NEVER COME OUT
+------------------------------------
+A customer's database url and token are write-only. The list shows "set" or
+"missing" and nothing else, and the API strips them from every response - not
+even to you. There is no screen that needs them, and a screen that shows them is
+a screen that can leak them.
+
+Editing a customer to change their modules leaves the database pointer alone.
+You only type credentials when adding a customer or deliberately repointing one.
+
+
+MODULES, AND WHY THEY ARE A SECOND QUESTION
+-------------------------------------------
+lib/roles.js already answers "may this ROLE see this area". lib/modules.js adds
+the question in front: "has this CUSTOMER bought this area".
+
+Two separate questions on purpose. A customer who has not bought Bookkeeping
+should not see it whatever role someone holds; a post-contract user at a
+customer who HAS bought it still should not see Business Financials. Collapse
+them and a customer's purchase could grant a role access it should not have.
+
+The module ids match the area names in lib/roles.js exactly, so one check can
+ask both without a translation table. A translation table is a second copy of
+the same list, and second copies diverge.
+
+ALWAYS ON: Operations, HR, Lessons Learnt. The portal has no coherent shape
+without them, so switching them off is not offered.
+
+DEPENDENCIES ARE ENFORCED. Turning off a module another one reads does not
+produce an error - it produces a page that loads with nothing in it, or a figure
+computed from half its inputs. So the combination is refused at the point of
+creation. Tested:
+
+    Ops only                     ok
+    Commercial + Bookkeeping     ok
+    Business Financials alone    REFUSED: Business Financials needs
+                                 Bookkeeping, which is switched off
+    Design alone                 ok
+    Everything                   ok
+
+An address can only belong to one customer - a typo that re-points an existing
+customer's address is refused with the name of the customer that already owns it.
+
+A customer record with no module list gets EVERYTHING, not nothing. A new
+customer whose modules have not been set yet should look broken to whoever is
+setting them up, not to their staff.
+
+
+WHAT IS NOT IN THIS PACKAGE
+---------------------------
+The gates themselves. Nothing yet checks hasModule() before drawing a menu item
+or serving an API route - that is the next package and it touches the nav, the
+pages and 169 routes.
+
+So switching a module off here changes nothing today. The list is the record;
+enforcing it comes next.
+
+Also not here: view-as, the audit trail, and provisioning a database
+automatically. Those follow.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 30 files: 0 failures
-- the import-graph check: clean, 185 client entry points, nothing reaching a
-  server-only module
-- grep confirms zero Rock fallbacks left outside lib/tenantSettings.js
-- AND THE ONE THAT MATTERS: every accessor run against EVERY combination of the
-  13 environment variables being set or unset, compared to the original
-  expression from the call site.
-
-        accessors: 14
-        env combinations: 8192
-        comparisons: 114688   mismatches: 0
-
-  So whatever your Vercel project has set, every sender, reply-to and link is
-  byte-identical to what it was before this package.
+- esbuild compile on all 3: 0 errors
+- import-graph check: clean, 186 client entry points. lib/modules.js IS imported
+  by a page, so this mattered - it contains no server-only import.
+- ran the module rules across five combinations, output above
+- confirmed /platform is not in the middleware open list
 
 
 WHAT TO CHECK AFTER DEPLOYING
 -----------------------------
-The risk is an email going out from the wrong address, or a link in one
-pointing somewhere wrong. Worth a spread rather than depth:
-
-1. Report a Problem - confirm it reaches you.
-2. Send a variation to yourself - FROM address as before, instruct link works.
-3. A RAMS approval email if you can raise one - that one carries a link built
-   from RAMS_APPROVE_ORIGIN.
-4. An issue notification from the Site App.
-5. Tomorrow morning: the H&S expiry email, the deliveries notification and the
-   CRM daily activity email all arrive as usual. Four crons are in this package.
-
-If any email fails to send, or arrives from onboarding@resend.dev, tell me which
-one.
+1. Visit /platform while signed in as admin. You should see "No control database
+   yet" and the instructions. That is correct.
+2. Sign in as a non-admin, or ask someone to, and confirm /platform gives them
+   nothing useful.
+3. Nothing else in the portal should have changed - no new menu items, no
+   behaviour difference anywhere.
