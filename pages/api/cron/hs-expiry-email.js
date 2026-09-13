@@ -1,5 +1,5 @@
 import { fromEmail } from '../../../lib/tenantSettings'
-import forEachTenant from '../../../lib/forEachTenant'
+import forEachTenant, { recordSubJob } from '../../../lib/forEachTenant'
 import { get, getTeamMembers, getOpsUsers } from '../../../lib/db'
 import { runFormsWeeklyNotify } from './forms-weekly-notify'
 import { runDeliveriesNotify } from './deliveries-notify'
@@ -38,7 +38,9 @@ async function handler(req, res) {
     // ── Monday: weekly forms digest ──
     let formsResult = { skipped: 'not Monday' }
     if (force || now.getDay() === 1) {
+      const t0 = Date.now()
       try { formsResult = await runFormsWeeklyNotify({ force }) } catch (e) { formsResult = { ok: false, error: e.message } }
+      await recordSubJob('forms-weekly-notify', t0, formsResult)
     }
 
     // ── Weekly Outstanding Invoices report ──
@@ -48,11 +50,15 @@ async function handler(req, res) {
 
     // ── DAILY: deliveries expected today -> notify site supervisors ──
     let deliveriesResult = {}
+    const tDel = Date.now()
     try { deliveriesResult = await runDeliveriesNotify({ force }) } catch (e) { deliveriesResult = { ok: false, error: e.message } }
+    await recordSubJob('deliveries-notify', tDel, deliveriesResult)
 
     // ── DAILY: RAMS "still to sign" reminders (self-throttled to every 2 days) ──
     let ramsResult = {}
+    const tRams = Date.now()
     try { ramsResult = await runRamsReminders({ force }) } catch (e) { ramsResult = { ok: false, error: e.message } }
+    await recordSubJob('rams-reminders', tRams, ramsResult)
 
     // ── 1st of month: H&S expiry digest ──
     if (!force && now.getDate() !== 1) return res.status(200).json({ ok: true, forms: formsResult, invoiceReport, deliveries: deliveriesResult, rams: ramsResult, expiry: 'skipped (not 1st)' })

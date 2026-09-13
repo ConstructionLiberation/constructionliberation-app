@@ -2,6 +2,8 @@ import withTenant from '../../../lib/withTenant'
 import { getClient } from '../../../lib/db'
 import { requireRole } from '../../../lib/portalAuth'
 import vercelConfig from '../../../vercel.json'
+import fs from 'fs'
+import path from 'path'
 
 // CRON HEALTH. READ ONLY.
 //
@@ -75,7 +77,27 @@ async function handler(req, res) {
     heartbeatNames = (await redis.keys('cron:last:*')).map(k => k.replace('cron:last:', ''))
   } catch {}
 
-  const names = [...new Set([...scheduledNames, ...heartbeatNames])].sort()
+  // AND EVERY CRON FILE THAT EXISTS.
+  //
+  // The first version listed only crons with a schedule or a heartbeat, which
+  // meant deep-sync, wip-sync and pipedrive-sync - the three with NEITHER - were
+  // invisible. The "not scheduled" status was unreachable, which made it exactly
+  // the wrong thing to miss: a cron nobody scheduled is the one most likely to
+  // be forgotten.
+  //
+  // Read from the folder rather than a list kept here, because a list kept here
+  // is a second copy of the truth. It may not be readable inside a serverless
+  // function - if not, folderListed comes back false and the report degrades to
+  // what it did before rather than failing.
+  let fileNames = []
+  let folderListed = false
+  try {
+    const dir = path.join(process.cwd(), 'pages', 'api', 'cron')
+    fileNames = fs.readdirSync(dir).filter(f => f.endsWith('.js')).map(f => f.slice(0, -3))
+    folderListed = true
+  } catch {}
+
+  const names = [...new Set([...scheduledNames, ...heartbeatNames, ...fileNames])].sort()
   const now = Date.now()
   const rows = []
 
@@ -87,31 +109,42 @@ async function handler(req, res) {
     const lastMs = hb && hb.startedAt ? Date.parse(hb.startedAt) : null
     const ageMs = lastMs ? now - lastMs : null
 
+    // Jobs that run inside another job - forms-weekly-notify, deliveries-notify
+    // and rams-reminders are called as functions from hs-expiry-email. They have
+    // no schedule of their own, so they are judged against the dispatcher's.
+    const viaDispatcher = hb && hb.viaDispatcher ? hb.viaDispatcher : null
+    const effectiveInterval = interval || (viaDispatcher ? 86400000 : null)
+
     let status
-    if (!sched) status = 'not scheduled'
+    if (!sched && !viaDispatcher) status = 'not scheduled'
     else if (!lastMs) status = 'never run'
+    else if (effectiveInterval && ageMs > effectiveInterval + 3600000) status = 'OVERDUE'
     // Allowed to be one full interval late plus an hour, so a job that runs at
     // 08:00 is not reported as overdue at 08:00:01 the next day.
-    else if (interval && ageMs > interval + 3600000) status = 'OVERDUE'
     else if (hb && hb.ok === false) status = 'last run failed'
     else status = 'ok'
 
     rows.push({
       name,
-      schedule: sched ? sched.schedule : null,
+      schedule: sched ? sched.schedule : (viaDispatcher ? `runs inside ${viaDispatcher}` : null),
+      runsInside: viaDispatcher,
       status,
       lastRunAt: hb ? hb.startedAt : null,
       hoursSince: ageMs != null ? Math.round(ageMs / 360000) / 10 : null,
       durationMs: hb ? hb.ms : null,
       ok: hb ? hb.ok : null,
       error: hb ? hb.error : null,
-      expectedEveryHours: interval ? Math.round(interval / 360000) / 10 : null,
+      expectedEveryHours: effectiveInterval ? Math.round(effectiveInterval / 360000) / 10 : null,
     })
   }
 
   const problems = rows.filter(r => r.status !== 'ok')
   return res.json({
     checkedAt: new Date().toISOString(),
+    // False means the cron folder could not be read inside the function, so any
+    // cron with no schedule and no heartbeat is still invisible. Tell me if it
+    // is false and I will find another way to enumerate them.
+    folderListed,
     total: rows.length,
     problems: problems.length,
     crons: rows.sort((a, b) => {

@@ -1,94 +1,113 @@
-pkg871 - Module gates, part 1: the rule and the portal tiles
-============================================================
+pkg872 - Three faults the cron data exposed, including one in my own work
+=========================================================================
 
-WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING.
-No customer is resolved, so no module list exists, so every area stays visible
-exactly as today.
+THREE FILES, none new.
+  lib/forEachTenant.js
+  pages/api/admin/cron-health.js
+  pages/api/cron/hs-expiry-email.js
 
-
-FILES (3) - none new
-  lib/modules.js            REPLACES the pkg869 version
-  pages/api/portal-auth.js
-  pages/index.js
+No behaviour change to any job. Only what gets recorded and reported.
 
 
-ONE FUNCTION, NOT TWO
+WHAT THE FIRST REAL READING SHOWED
+----------------------------------
+14 crons healthy, 2 explained. gp-snapshot runs on the 22nd, variation-reminders
+on weekdays, and heartbeats only began at pkg858 - both correct, neither a
+problem.
+
+But the data exposed three things.
+
+
+1. TWO JOBS REPORTING GREEN WHILE DOING NOTHING
+-----------------------------------------------
+    crm-call-volume        1 ms    ok: true
+    crm-daily-activities   1 ms    ok: true
+
+One millisecond. refreshCallVolume returns
+
+    { ok: false, error: 'Not configured. Missing in Vercel: ...' }
+
+the moment it finds no 8x8 credentials - but sends it as a 200. The heartbeat
+read the status code and recorded a success.
+
+So the monitoring said healthy for two jobs that were exiting immediately. That
+is the precise failure the monitoring exists to catch, and it was being produced
+BY the monitoring.
+
+Fixed: a 200 carrying { ok: false } is now a failure. A handler that says it
+failed has failed, whatever code it chose to send.
+
+EXPECT THOSE TWO TO TURN RED after this deploys. That is correct. 8x8 is on your
+backlog, so "not configured" is the true state - it just was not being reported.
+
+
+2. THREE JOBS WITH NO MONITORING AT ALL
+---------------------------------------
+forms-weekly-notify, deliveries-notify and rams-reminders are called as
+FUNCTIONS from hs-expiry-email, not as routes. forEachTenant never saw them, so
+they recorded nothing and did not appear.
+
+hs-expiry-email ran for 8.5 seconds and reported success. Had the RAMS reminders
+inside it thrown and been swallowed, it would have looked identical.
+
+Each now records its own heartbeat and appears beside the rest, judged against
+the dispatcher's daily schedule and labelled "runs inside hs-expiry-email".
+
+
+3. MY OWN DESIGN FLAW
 ---------------------
-An area is visible only when BOTH are true:
+I told you deep-sync, wip-sync and pipedrive-sync would show as "not scheduled".
+They did not appear at all.
 
-    the customer has bought the module      lib/modules.js
-    the role is allowed the area            lib/roles.js
+A cron only appeared if it was in vercel.json or had written a heartbeat. Those
+three have NEITHER, so the one status I built specifically for them was
+unreachable - and a cron nobody scheduled is exactly the one most likely to be
+forgotten.
 
-canSeeArea(role, area, modules) asks both. It lives in modules.js and is the
-only function anyone should call. Two near-identical checks in two files is how
-one gets updated and the other does not - which is the fault this project keeps
-producing.
+cron-health now also lists the pages/api/cron folder, so a cron file with no
+schedule and no history is visible rather than absent. Read from the folder, not
+from a list kept in the file, because a list kept there is a second copy of the
+truth.
 
-The portal learns its module list from the same call that already tells it the
-role, /api/portal-auth?action=me. A separate endpoint would be a second round
-trip and a second thing to forget to call.
+CAVEAT, and I need you to check this: reading the folder from inside a
+serverless function may not work on Vercel. The response now carries
 
+    folderListed: true | false
 
-TESTED FROM BOTH DIRECTIONS
----------------------------
-  single tenant today, admin
-    everything, unchanged
-
-  a customer with Operations + Commercial only
-    their admin              commercial, operations, lessons-learnt, hr, admin
-    their post-contract user commercial, operations, lessons-learnt, hr
-    their accounts user      (nothing)
-
-  the two that must not be loosened
-    post-contract sees Business Financials at a customer that HAS it   false
-      - the role still applies. A purchase must not grant a role access.
-    admin sees Bookkeeping at a customer that has NOT bought it         false
-      - the module still applies. An admin cannot see what was not bought.
-    admin sees the Admin area at a customer with few modules            true
-      - Admin is not a sellable module, so it is role-gated only.
-
-
-ONE THING THAT FALLS OUT, worth knowing before you sell
--------------------------------------------------------
-An ACCOUNTS user at a customer without Bookkeeping sees NOTHING. Correct by the
-rules - accounts is only allowed bookkeeping and management - but they would log
-in to an empty portal.
-
-That is a provisioning warning rather than a code change: the platform admin
-should say "this customer has accounts users but no Bookkeeping module". Noted
-for when provisioning is built.
-
-
-WHAT THIS DOES NOT DO YET - read this
--------------------------------------
-IT ONLY HIDES THE TILES. Typing /bookkeeping directly still loads the page.
-
-So this is cosmetic until the server side lands. That is the next package and it
-is the bigger half: the area guard applied to the API routes, so a page reached
-by URL has no data to draw and says so plainly.
-
-23 API routes already check canAccessArea for roles - mostly the design ones -
-so the pattern exists. It needs extending to modules and applying to the rest.
-
-I would rather ship the rule and the visible half now, with that stated, than
-hold both back and land 170 files at once.
+If it comes back FALSE, the three parked crons are still invisible and I will
+find another way. Tell me either way.
 
 
 CHECKS I RAN
 ------------
 - esbuild compile on all 3: 0 errors
-- import-graph check: clean, 186 client entry points. lib/modules.js is imported
-  by pages/index.js, so this mattered.
-- ran canSeeArea across both roles and module combinations, output above
-- confirmed the single-tenant path returns null modules, which means everything
-  visible - so today is unchanged
+- import-graph check: clean
+- ran the status rules against your REAL data plus the cases the fixes are for:
+
+    crm-email-sync   (healthy, 15 min)          -> ok
+    hs-expiry-email  (healthy, daily)           -> ok
+    gp-snapshot      (monthly, no heartbeat)    -> never run
+    crm-call-volume  (200 with ok:false)        -> last run failed
+    deep-sync        (no schedule)              -> not scheduled
+    rams-reminders   (via dispatcher)           -> ok
+    rams-reminders   (dispatcher stalled 3 days)-> OVERDUE
+    variation-reminders (weekdays, read Sunday) -> ok
+
+    failures: 0
+
+  The last one matters: that is the weekday cron NOT being falsely flagged on a
+  Sunday, which was the fault the parser test caught in pkg870.
 
 
 WHAT TO CHECK AFTER DEPLOYING
 -----------------------------
-1. Sign in. The portal home page shows exactly the same tiles it did before.
-2. Sign in as a non-admin if you can, and confirm the same.
-3. Open Bookkeeping, Commercial, Operations, Design - all as before.
-
-If a tile has disappeared, tell me immediately: that would mean the module list
-is being read as empty rather than absent, and the difference matters.
+1. /api/admin/cron-health - check "folderListed". That is the one I cannot
+   verify from here.
+2. Expect crm-call-volume and crm-daily-activities to read "last run failed"
+   after their next run. Correct, not a regression.
+3. Expect deep-sync, wip-sync and pipedrive-sync to appear as "not scheduled",
+   IF folderListed is true.
+4. Tomorrow after 08:00: forms-weekly-notify, deliveries-notify and
+   rams-reminders should appear with fresh heartbeats.
+5. No email or job behaviour should change. If a notification stops arriving,
+   tell me - nothing here should touch that.
