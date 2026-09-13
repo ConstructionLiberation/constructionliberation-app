@@ -84,7 +84,7 @@ export default async function handler(req, res) {
       restrictedToPlatformHosts: false,
       tenants: [],
       modules: MODULES,
-      message: 'No control database yet. Set CONTROL_REDIS_URL and CONTROL_REDIS_TOKEN in Vercel, redeploy, then add your first customer here.',
+      message: 'No control database yet. Create an Upstash Redis store in Vercel with the prefix CONTROL_REDIS, redeploy, then add your first customer here.',
     })
   }
 

@@ -1,96 +1,77 @@
-pkg874 - Lock the platform page to you, before the registry exists
-==================================================================
+pkg875 - Read the control database credentials Vercel actually created
+======================================================================
 
 TWO FILES, neither new.
+  lib/tenants.js
   pages/api/platform/tenants.js
-  pages/platform/index.js
 
-Deploy this BEFORE creating the Upstash control database.
-
-
-THE GAP
--------
-pkg869 required only the admin ROLE until tenancy was switched on. That leaves a
-window - between creating the control database and throwing the switch - where
-any Rock admin could open /platform and read your full customer list, their
-addresses and their modules.
-
-That window could be five minutes or five weeks. "Short" was doing a lot of work
-in that sentence, and this is the one screen where the blast radius is every
-customer at once rather than one.
+Deploy this, then redeploy is all you need - no variables to copy by hand.
 
 
-THE FIX - two independent conditions
-------------------------------------
-  PLATFORM_ADMINS    comma-separated emails. Yours.
-  PLATFORM_HOSTS     comma-separated addresses. Your own domain.
+WHY
+---
+Creating the store through Vercel's Upstash integration with the prefix
+CONTROL_REDIS produced:
 
-Named people AND, once tenancy is on, the right address. Neither alone is enough.
+    CONTROL_REDIS_KV_REST_API_URL
+    CONTROL_REDIS_KV_REST_API_TOKEN
+    CONTROL_REDIS_KV_URL
+    CONTROL_REDIS_REDIS_URL
 
-While PLATFORM_ADMINS is unset, any admin can reach it - otherwise there would be
-no way to set it up at all. SET IT AS SOON AS THE CONTROL DATABASE EXISTS.
+The code was looking for CONTROL_REDIS_URL and CONTROL_REDIS_TOKEN, which do not
+exist. So nothing would have resolved and /platform would still have said "no
+control database yet" after a correct setup - the most confusing possible
+outcome.
 
-Refusals return 404, not 403. A 403 confirms the page exists and that somebody
-has access to it. A 404 says nothing.
+Both spellings are now accepted, exactly as lib/db.js already accepts three
+different spellings for Rock's database. Same pattern, not a special case.
 
-THE PAGE NOW WARNS WHEN THE DOOR IS OPEN - an amber line saying "Any admin can
-reach this page" until PLATFORM_ADMINS is set. An open door should be visible on
-the screen, not only in a JSON field nobody goes looking for.
+The alternative was copying the values into a second pair of variables by hand.
+That works until Vercel rotates the credentials and the copy silently goes
+stale - and a stale credential on the control database means every customer
+fails to resolve at once. Reading the name Vercel actually set has no such
+failure.
+
+REDIS_URL and KV_URL are the non-REST connection strings. Ignored - the app uses
+the REST API throughout.
 
 
 CHECKS I RAN
 ------------
 - esbuild compile on both: 0 errors
-- import-graph check: clean
-- confirmed the page cannot be trusted to hide itself: it is client-side, so it
-  renders its shell on any address and simply shows the API's refusal. The API
-  guard is the real one; the page is only ever a view. That was true before and
-  is unchanged.
+- grepped for CONTROL_REDIS everywhere else: only a help message, updated to
+  describe how the store is actually created rather than variable names that
+  Vercel does not produce
 
 
-WHAT TO CHECK
--------------
-1. /platform as yourself - loads, with an amber warning that any admin can reach
-   it. That warning is correct right now.
-2. After you set PLATFORM_ADMINS, the warning goes and anyone else gets nothing.
+NOW DO THIS
+-----------
+1. Deploy these two files.
+2. Add ONE more variable in Vercel:
+
+       PLATFORM_ADMINS = james@rockroofing.co.uk
+
+3. Do NOT add TENANCY_ENABLED. That is the switch and it comes last.
+4. Redeploy.
+5. Open /platform. It should now show an EMPTY CUSTOMER LIST with an "Add a
+   customer" button, and the amber "any admin can reach this page" warning
+   should be GONE.
+
+If it still says "No control database yet", stop and tell me - that would mean
+the variables are not reaching the function and I would want to see the names
+again rather than guess.
 
 
-NOW THE UPSTASH STEP
---------------------
-Everything after this is unverifiable without it, so it is the right moment.
+ONE THING FOR LATER
+-------------------
+You ticked Production AND Preview, which is right for now. It does mean preview
+deployments will read and write the LIVE customer registry. Harmless today with
+nothing in it. When staging is set up, that needs revisiting - a staging
+deployment should not be able to edit real customers.
 
-You found earlier that your database was created through Vercel rather than
-Upstash directly - the kv_ prefix on your environment variables gives it away.
-So create the second one the same way.
 
-  1. Vercel project -> Storage -> create a Redis database.
-     Name it something like constructionliberation-control.
-     Same region as Rock's existing one.
-
-  2. Vercel will inject its credentials under its own prefixed names, based on
-     what you called the store. Copy the REST URL and REST TOKEN values into TWO
-     NEW environment variables named exactly:
-
-         CONTROL_REDIS_URL
-         CONTROL_REDIS_TOKEN
-
-     Redundant, but it keeps the code independent of whatever Vercel decides to
-     call things next time. That naming has already changed more than once.
-
-  3. Also add:
-
-         PLATFORM_ADMINS = james@rockroofing.co.uk
-
-  4. DO NOT add TENANCY_ENABLED. That is the switch and it comes last.
-
-  5. Redeploy so the variables take effect, then open /platform. It should show
-     an empty customer list rather than "No control database yet", and the amber
-     warning should be gone.
-
-  6. Tell me, and I will send the two calls to stamp Rock's identity and register
-     it - identity first, so nothing is ever pointed at a database that cannot
-     prove who it is.
-
-While you are in that screen: check whether a second database costs anything on
-your plan, and what the database limit is. You thought you were on a free tier,
-and that number matters before this becomes a hundred databases.
+HAVE READY FOR THE NEXT STEP
+----------------------------
+Rock's own database REST credentials, for the registry entry - the values of
+KV_REST_API_URL and KV_REST_API_TOKEN, which I can see are already in your
+project. Not the CONTROL_REDIS ones; those point at the registry itself.
