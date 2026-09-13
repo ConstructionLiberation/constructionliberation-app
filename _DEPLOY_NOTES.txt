@@ -1,81 +1,96 @@
-pkg873 - The three parked crons, made visible
-=============================================
+pkg874 - Lock the platform page to you, before the registry exists
+==================================================================
 
-ONE FILE.  pages/api/admin/cron-health.js  - replaces the pkg872 version.
-Read only. No behaviour change.
+TWO FILES, neither new.
+  pages/api/platform/tenants.js
+  pages/platform/index.js
 
-
-WHAT HAPPENED
--------------
-pkg872 tried to list the pages/api/cron folder at runtime so a cron with no
-schedule and no history would still appear. Your reading came back
-
-    folderListed: false
-
-so it does not work inside a Vercel function. The three parked crons were still
-invisible, which was the whole point of that change.
+Deploy this BEFORE creating the Upstash control database.
 
 
-WHAT IT DOES NOW
-----------------
-An explicit list:
+THE GAP
+-------
+pkg869 required only the admin ROLE until tenancy was switched on. That leaves a
+window - between creating the control database and throwing the switch - where
+any Rock admin could open /platform and read your full customer list, their
+addresses and their modules.
 
-    const UNSCHEDULED_CRON_FILES = ['deep-sync', 'wip-sync', 'pipedrive-sync']
-
-THIS IS A SECOND COPY OF THE TRUTH, AND I HAVE WRITTEN THAT IN THE FILE RATHER
-THAN QUIETLY ADDING IT. The fault class that has cost this project most is one
-rule kept in two places and left to diverge, so a list like this needs a reason:
-
-  - it covers ONE case: a cron file that has never run AND has no schedule
-  - a cron WITH a schedule comes from vercel.json automatically
-  - a cron that has EVER RUN registers itself by writing a heartbeat
-  - so the only way it drifts is a new cron file that is never scheduled and
-    never runs - which would be invisible anyway
-
-The failure mode of the copy is no worse than not having it. That is the test I
-applied, and it is the only reason I am comfortable with it.
-
-The response now also returns unscheduledFromList, so the report says plainly
-which names are hand-written rather than discovered.
+That window could be five minutes or five weeks. "Short" was doing a lot of work
+in that sentence, and this is the one screen where the blast radius is every
+customer at once rather than one.
 
 
-THE BETTER ANSWER I DID NOT TAKE
---------------------------------
-webpack's require.context enumerates the folder at BUILD time with no list at
-all. It is genuinely better.
+THE FIX - two independent conditions
+------------------------------------
+  PLATFORM_ADMINS    comma-separated emails. Yours.
+  PLATFORM_HOSTS     comma-separated addresses. Your own domain.
 
-I did not use it because it fails the BUILD if it cannot resolve, and I broke
-your build once already today with an import that compiled fine on its own. A
-build failure costs more than this list does.
+Named people AND, once tenancy is on, the right address. Neither alone is enough.
 
-If you would rather have no list, say so and I will switch - but I would want to
-do it on its own, not bundled with anything else, so that if the build goes red
-there is exactly one thing to undo.
+While PLATFORM_ADMINS is unset, any admin can reach it - otherwise there would be
+no way to set it up at all. SET IT AS SOON AS THE CONTROL DATABASE EXISTS.
 
+Refusals return 404, not 403. A 403 confirms the page exists and that somebody
+has access to it. A 404 says nothing.
 
-ALSO: the two 8x8 crons still read "ok"
----------------------------------------
-Expected. Their heartbeats are from 02:30 and 07:00, before pkg872 deployed. The
-ok:false fix applies on the NEXT run, so they will flip to "last run failed"
-tomorrow morning. That is correct, not a regression - 8x8 is not configured.
+THE PAGE NOW WARNS WHEN THE DOOR IS OPEN - an amber line saying "Any admin can
+reach this page" until PLATFORM_ADMINS is set. An open door should be visible on
+the screen, not only in a JSON field nobody goes looking for.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile: 0 errors
-- the now-unused fs and path imports removed - confirmed 0 remaining
+- esbuild compile on both: 0 errors
 - import-graph check: clean
-- my first attempt at this edit asserted and wrote nothing, because the comment
-  text it was matching had changed. Worth noting only because that is the
-  behaviour you want from these scripts: fail whole, not half
+- confirmed the page cannot be trusted to hide itself: it is client-side, so it
+  renders its shell on any address and simply shows the API's refusal. The API
+  guard is the real one; the page is only ever a view. That was true before and
+  is unchanged.
 
 
 WHAT TO CHECK
 -------------
-/api/admin/cron-health - deep-sync, wip-sync and pipedrive-sync should now
-appear as "not scheduled", and total should read 19 rather than 16.
+1. /platform as yourself - loads, with an amber warning that any admin can reach
+   it. That warning is correct right now.
+2. After you set PLATFORM_ADMINS, the warning goes and anyone else gets nothing.
 
-Tomorrow morning, after 08:00:
-  - crm-call-volume and crm-daily-activities flip to "last run failed"
-  - forms-weekly-notify, deliveries-notify and rams-reminders appear for the
-    first time, labelled "runs inside hs-expiry-email"
+
+NOW THE UPSTASH STEP
+--------------------
+Everything after this is unverifiable without it, so it is the right moment.
+
+You found earlier that your database was created through Vercel rather than
+Upstash directly - the kv_ prefix on your environment variables gives it away.
+So create the second one the same way.
+
+  1. Vercel project -> Storage -> create a Redis database.
+     Name it something like constructionliberation-control.
+     Same region as Rock's existing one.
+
+  2. Vercel will inject its credentials under its own prefixed names, based on
+     what you called the store. Copy the REST URL and REST TOKEN values into TWO
+     NEW environment variables named exactly:
+
+         CONTROL_REDIS_URL
+         CONTROL_REDIS_TOKEN
+
+     Redundant, but it keeps the code independent of whatever Vercel decides to
+     call things next time. That naming has already changed more than once.
+
+  3. Also add:
+
+         PLATFORM_ADMINS = james@rockroofing.co.uk
+
+  4. DO NOT add TENANCY_ENABLED. That is the switch and it comes last.
+
+  5. Redeploy so the variables take effect, then open /platform. It should show
+     an empty customer list rather than "No control database yet", and the amber
+     warning should be gone.
+
+  6. Tell me, and I will send the two calls to stamp Rock's identity and register
+     it - identity first, so nothing is ever pointed at a database that cannot
+     prove who it is.
+
+While you are in that screen: check whether a second database costs anything on
+your plan, and what the database limit is. You thought you were on a free tier,
+and that number matters before this becomes a hundred databases.

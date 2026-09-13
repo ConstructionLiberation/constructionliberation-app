@@ -96,6 +96,14 @@ export default function PlatformPage() {
               Tenant resolution is <strong>{state.tenancyEnabled ? 'ON' : 'OFF'}</strong>.
               {!state.tenancyEnabled && ' Set TENANCY_ENABLED=1 in Vercel once a customer resolves correctly here.'}
             </div>
+            {/* An open door should be visible on the page, not only in the API
+                response. Nobody reads a JSON field they have to go looking for. */}
+            {!state.restrictedToNamedAdmins && (
+              <div style={{ fontSize: 12, color: '#b45309', marginTop: 8 }}>
+                Any admin can reach this page. Set PLATFORM_ADMINS in Vercel to your
+                email to restrict it.
+              </div>
+            )}
             {state.platformHosts?.length > 0 && (
               <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>
                 Platform addresses: {state.platformHosts.join(', ')}

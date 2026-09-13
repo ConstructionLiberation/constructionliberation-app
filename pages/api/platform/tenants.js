@@ -21,9 +21,43 @@ import { MODULES, normaliseModules, validateModules, NEEDS_XERO } from '../../..
 // are never sent back out, not even to James. There is no screen that needs
 // them and a screen that shows them is a screen that can leak them.
 
+// TWO INDEPENDENT CONDITIONS, not one.
+//
+// The first version required only the admin ROLE until tenancy was switched on.
+// That leaves a window - between creating the control database and throwing the
+// switch - where ANY Rock admin could open this and read the full customer list,
+// their addresses and their modules. That window could be five minutes or five
+// weeks, and "short" is doing a lot of work in that sentence.
+//
+// So: named people AND, once tenancy is on, the right address. Neither alone is
+// enough.
+//
+//   PLATFORM_ADMINS   comma-separated emails. Yours.
+//   PLATFORM_HOSTS    comma-separated addresses. Your own domain.
+//
+// While PLATFORM_ADMINS is unset, any admin can reach it - otherwise there would
+// be no way to set it up at all. Set it as soon as the control database exists.
+// The report below says which of the two conditions are actually in force, so it
+// cannot be quietly left open.
+function platformAdmins() {
+  return String(process.env.PLATFORM_ADMINS || '')
+    .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+}
+
 function platformGuard(req, res) {
-  if (!requireRole(req, res, ['admin'])) return false
-  if (!tenancyEnabled()) return true          // temporary door, see above
+  const session = requireRole(req, res, ['admin'])
+  if (!session) return false
+
+  const named = platformAdmins()
+  if (named.length && !named.includes(String(session.email || '').toLowerCase())) {
+    // 404 rather than 403. A 403 confirms the page exists and that somebody has
+    // access to it; a 404 says nothing at all.
+    res.status(404).json({ error: 'Not found' })
+    return false
+  }
+
+  if (!tenancyEnabled()) return true
+
   const host = String((req.headers['x-forwarded-host'] || req.headers.host || '')).toLowerCase().split(':')[0]
   const allowed = String(process.env.PLATFORM_HOSTS || '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean)
   if (!allowed.includes(host)) {
@@ -46,6 +80,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       controlDatabaseConfigured: false,
       tenancyEnabled: false,
+      restrictedToNamedAdmins: platformAdmins().length > 0,
+      restrictedToPlatformHosts: false,
       tenants: [],
       modules: MODULES,
       message: 'No control database yet. Set CONTROL_REDIS_URL and CONTROL_REDIS_TOKEN in Vercel, redeploy, then add your first customer here.',
@@ -60,6 +96,9 @@ export default async function handler(req, res) {
     return res.json({
       controlDatabaseConfigured: true,
       tenancyEnabled: tenancyEnabled(),
+      // Shown so an open door cannot be left open quietly.
+      restrictedToNamedAdmins: platformAdmins().length > 0,
+      restrictedToPlatformHosts: tenancyEnabled(),
       platformHosts: String(process.env.PLATFORM_HOSTS || '').split(',').map(h => h.trim()).filter(Boolean),
       tenants: tenants.map(safe).sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id))),
       modules: MODULES,
