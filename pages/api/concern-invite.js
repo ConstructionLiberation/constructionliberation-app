@@ -1,3 +1,4 @@
+import { fromEmail } from '../../lib/tenantSettings'
 import { get, set, getPortalUsers, getLiveTasks } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
@@ -59,7 +60,7 @@ async function handler(req, res) {
   if (!projectNo || !meetingId) return res.status(400).json({ error: 'projectNo and meetingId required' })
 
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   const ORGANISER = (FROM.match(/<(.+)>/) || [])[1] || 'notifications@rockroofing.co.uk'
   if (!RESEND_KEY) return res.status(200).json({ sent: false, error: 'Email not configured' })
 

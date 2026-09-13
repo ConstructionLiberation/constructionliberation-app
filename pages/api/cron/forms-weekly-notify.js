@@ -1,3 +1,4 @@
+import { fromEmail } from '../../../lib/tenantSettings'
 import forEachTenant from '../../../lib/forEachTenant'
 import { get, getTeamMembers, getOpsProjects, getSubmissionIndex } from '../../../lib/db'
 import { loadPreStarts, isPreStartDone } from '../../../lib/preStartDone'
@@ -28,7 +29,7 @@ function cellCount(cell) {
 
 export async function runFormsWeeklyNotify({ force = false } = {}) {
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   if (!RESEND_KEY) return { ok: false, reason: 'email not configured' }
 
   const [alloc, ops, team, subs] = await Promise.all([

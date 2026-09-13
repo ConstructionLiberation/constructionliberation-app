@@ -1,3 +1,4 @@
+import { baseUrl } from '../../lib/tenantSettings'
 import { get, set, getOpsProjects, getPortalUsers } from '../../lib/db'
 import { put } from '@vercel/blob'
 import { verifySessionToken, SESSION_COOKIE } from '../../lib/portalAuth'
@@ -15,7 +16,7 @@ import withTenant from '../../lib/withTenant'
 //   downloads: { <userId>: { name, company, at } } }
 // Each manual: { url, builtAt, builtBy, sections, projectName, projectNo, revision }
 const OKEY = (no) => `design:oms-manual:${no}`
-const APP_URL = process.env.APP_URL || 'https://app.rockroofing.co.uk'
+const APP_URL = baseUrl('APP_URL')
 const LOGO_URL = `${APP_URL}/rock-logo.jpg`
 
 const ROCK = {

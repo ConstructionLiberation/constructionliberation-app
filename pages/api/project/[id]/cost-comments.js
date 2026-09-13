@@ -1,3 +1,4 @@
+import { baseUrl } from '../../../../lib/tenantSettings'
 import withTenant from '../../../../lib/withTenant'
 import { get, set } from '../../../../lib/db'
 import { requireRole } from '../../../../lib/portalAuth'
@@ -93,7 +94,7 @@ async function handler(req, res) {
     let notified = { sent: 0, names: [] }
     try {
       const users = await getMentionableUsersForRoles(MENTION_ROLES)
-      const baseUrl = process.env.PORTAL_BASE_URL || 'https://app.rockroofing.co.uk'
+      const baseUrl = baseUrl('PORTAL_BASE_URL')
       const projLabel = await resolveProjectLabel(id, clean(req.body?.projectLabel, 120))
       notified = await notifyMentions({
         body,

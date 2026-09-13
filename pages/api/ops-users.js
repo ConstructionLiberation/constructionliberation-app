@@ -1,4 +1,4 @@
-import { replyTo, siteAppUrl } from '../../lib/tenantSettings'
+import { fromEmail, replyTo, siteAppUrl } from '../../lib/tenantSettings'
 import { requireRole } from '../../lib/portalAuth'
 import { getOpsUsers, saveOpsUsers, getOpsProjects } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
@@ -38,7 +38,7 @@ function genPin() {
 
 async function sendInviteEmail({ to, firstName, pin, isReset }) {
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   // Replies to invite emails land in this real inbox (from-address is a
   // send-only subdomain). Override with FORMS_REPLY_TO if it ever changes.
   const REPLY_TO = replyTo()

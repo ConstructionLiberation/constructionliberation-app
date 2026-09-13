@@ -1,4 +1,4 @@
-import { alertEmail, replyTo } from '../../lib/tenantSettings'
+import { alertEmail, fromEmail, replyTo } from '../../lib/tenantSettings'
 import { get, set } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
@@ -67,7 +67,7 @@ async function handler(req, res) {
     // Notify the office (best-effort).
     const RESEND_KEY = process.env.RESEND_API_KEY
     if (RESEND_KEY) {
-      const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+      const FROM = fromEmail('forms')
       const TO = alertEmail()
       const html = `
         <div style="font-family:system-ui,Arial,sans-serif;max-width:560px">
@@ -115,7 +115,7 @@ function attachmentsHtml(list) {
 async function notifyReporterResolved(report, req) {
   const RESEND_KEY = process.env.RESEND_API_KEY
   if (!RESEND_KEY || !report.userEmail) return false
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   const REPLY_TO = replyTo()
   const commentsBlock = report.comments && report.comments.trim()
     ? `<p style="margin:14px 0 4px;color:#888;font-size:13px">Notes from the team:</p>

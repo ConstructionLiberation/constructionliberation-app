@@ -1,3 +1,4 @@
+import { fromEmail } from '../../lib/tenantSettings'
 import { assembleWeek } from './planning-week'
 import withTenant from '../../lib/withTenant'
 
@@ -16,7 +17,7 @@ const dow = (s) => DOWFULL[(parseISO(s).getDay() + 6) % 7]
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   if (!RESEND_KEY) return res.status(200).json({ sent: 0, error: 'Email not configured' })
 
   try {

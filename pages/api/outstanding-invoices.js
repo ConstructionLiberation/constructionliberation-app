@@ -1,3 +1,4 @@
+import { fromEmail } from '../../lib/tenantSettings'
 import { requireRole } from '../../lib/portalAuth'
 import { gatherOutstandingInvoices, getWeeklyRecipients, setWeeklyRecipients, sendWeeklyOverdueReport, getWeeklySchedule, setWeeklySchedule, maybeSendScheduledReport } from '../../lib/outstandingInvoicesReport'
 import { buildOutstandingInvoicesPDF } from '../../lib/outstandingInvoicesPdf'
@@ -240,7 +241,7 @@ async function notifyMentions(userIds, invoiceNumber, comment, baseUrl) {
 
   // Email each mentioned user (best-effort).
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   if (!RESEND_KEY) return
   const link = baseUrl ? `${baseUrl}/outstanding-invoices` : null
   for (const uid of userIds) {

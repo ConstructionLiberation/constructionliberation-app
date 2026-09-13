@@ -1,3 +1,4 @@
+import { fromEmail } from '../../lib/tenantSettings'
 import { currentTenantId } from '../../lib/tenantContext'
 import { getProject, saveProject, get, getClient } from '../../lib/db'
 import { isInstructed } from '../../lib/applications'
@@ -207,7 +208,7 @@ async function handler(req, res) {
       const bytes = await buildVariationPDF({ variation: withInstruction, project, logoUrl: `${proto}://${req.headers.host}/rock-logo.jpg` })
       const label = projectLabel(project.jobNo, project.name)
       const who = [instruction.byName, instruction.byRole, instruction.byCompany].filter(Boolean).join(', ')
-      const FROM = process.env.NOTIFY_FROM_EMAIL || process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+      const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
       const text = `Variation ${variation.varNumber} for ${label} has been instructed.\n\n`
         + `Instructed by ${who}\n`
         + `on ${new Date(instruction.at).toLocaleString('en-GB')}\n`

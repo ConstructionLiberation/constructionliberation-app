@@ -1,4 +1,4 @@
-import { replyTo } from '../../lib/tenantSettings'
+import { fromEmail, replyTo } from '../../lib/tenantSettings'
 import { getSubmission, getOpsProject, getForms } from '../../lib/db'
 import { SEED_FORMS } from '../../lib/formDefs'
 import { buildPsnPDF } from '../../lib/preStartNotifyPdf'
@@ -15,7 +15,7 @@ async function handler(req, res) {
 
   const RESEND_KEY = process.env.RESEND_API_KEY
   if (!RESEND_KEY) return res.status(500).json({ error: 'Email not configured' })
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   const REPLY_TO = replyTo()
 
   try {

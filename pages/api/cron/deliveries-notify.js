@@ -1,3 +1,4 @@
+import { fromEmail } from '../../../lib/tenantSettings'
 import { get, getOpsProjects, getTeamMembers } from '../../../lib/db'
 
 // Daily 7am deliveries notification.
@@ -16,7 +17,7 @@ const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit'
 
 export async function runDeliveriesNotify({ force = false } = {}) {
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   if (!RESEND_KEY) return { ok: false, reason: 'email not configured' }
 
   const [deliveries, alloc, ops, team, roster, hsCols, hsData] = await Promise.all([

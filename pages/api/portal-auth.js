@@ -1,3 +1,4 @@
+import { fromEmail, replyTo } from '../../lib/tenantSettings'
 import { getPortalUsers, savePortalUsers } from '../../lib/db'
 import { getExternalUsers, saveExternalUsers, findExternalByEmail, verifyExternalPassword, stripExternal } from '../../lib/designUsers'
 import { hashPassword, verifyPassword, createSessionToken, verifySessionToken, SESSION_COOKIE, createResetToken, verifyResetToken } from '../../lib/portalAuth'
@@ -41,8 +42,8 @@ const strip = (u) => { const { passwordHash, ...rest } = u; return rest }
 async function sendPortalInvite({ to, name, tempPassword, origin }) {
   const RESEND_KEY = process.env.RESEND_API_KEY
   if (!RESEND_KEY) return { sent: false, error: 'Email not configured' }
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
-  const REPLY_TO = process.env.FORMS_REPLY_TO || 'notifications@rockroofing.co.uk'
+  const FROM = fromEmail('forms')
+  const REPLY_TO = replyTo()
   const loginUrl = `${origin || 'https://app.rockroofing.co.uk'}/login`
   const html = `
     <div style="font-family:system-ui,Arial,sans-serif;max-width:520px;margin:0 auto;color:#1a1a19">
@@ -72,8 +73,8 @@ async function sendPortalInvite({ to, name, tempPassword, origin }) {
 async function sendResetLink({ to, name, resetUrl }) {
   const RESEND_KEY = process.env.RESEND_API_KEY
   if (!RESEND_KEY) return { sent: false, error: 'Email not configured' }
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
-  const REPLY_TO = process.env.FORMS_REPLY_TO || 'notifications@rockroofing.co.uk'
+  const FROM = fromEmail('forms')
+  const REPLY_TO = replyTo()
   const html = `
     <div style="font-family:system-ui,Arial,sans-serif;max-width:520px;margin:0 auto;color:#1a1a19">
       <h2 style="color:#1a1a19">Hi ${name ? name.split(' ')[0] : 'there'},</h2>

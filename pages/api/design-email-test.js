@@ -1,3 +1,4 @@
+import { fromEmail } from '../../lib/tenantSettings'
 import { verifySessionToken, SESSION_COOKIE } from '../../lib/portalAuth'
 import { _sendDesignEmail } from '../../lib/designEmail'
 import withTenant from '../../lib/withTenant'
@@ -20,7 +21,7 @@ async function handler(req, res) {
     FORMS_FROM_EMAIL: process.env.FORMS_FROM_EMAIL || null,
     NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || null,
     FORMS_REPLY_TO: process.env.FORMS_REPLY_TO || null,
-    fromUsed: process.env.FORMS_FROM_EMAIL || process.env.NOTIFY_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>',
+    fromUsed: process.env.FORMS_FROM_EMAIL || fromEmail('notifyOnly'),
     recipient: to,
   }
   if (!to) return res.json({ ...diag, sent: false, error: 'No recipient - pass ?to=you@example.com' })

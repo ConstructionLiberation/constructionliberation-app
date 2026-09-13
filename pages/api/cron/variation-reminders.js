@@ -1,3 +1,4 @@
+import { fromEmail } from '../../../lib/tenantSettings'
 import { currentTenantId } from '../../../lib/tenantContext'
 import forEachTenant from '../../../lib/forEachTenant'
 import { getAllProjectSettings, saveProject, getProject, get } from '../../../lib/db'
@@ -31,7 +32,7 @@ async function handler(req, res) {
     const proto = req.headers['x-forwarded-proto'] || 'https'
     const origin = `${proto}://${req.headers.host}`
     const RESEND_KEY = process.env.RESEND_API_KEY
-    const FROM = process.env.NOTIFY_FROM_EMAIL || process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+    const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
 
     for (const [projectId, proj] of Object.entries(all || {})) {
       const vars = Array.isArray(proj?.variations) ? proj.variations : []

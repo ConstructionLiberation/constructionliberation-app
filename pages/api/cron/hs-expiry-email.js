@@ -1,3 +1,4 @@
+import { fromEmail } from '../../../lib/tenantSettings'
 import forEachTenant from '../../../lib/forEachTenant'
 import { get, getTeamMembers, getOpsUsers } from '../../../lib/db'
 import { runFormsWeeklyNotify } from './forms-weekly-notify'
@@ -57,7 +58,7 @@ async function handler(req, res) {
     if (!force && now.getDate() !== 1) return res.status(200).json({ ok: true, forms: formsResult, invoiceReport, deliveries: deliveriesResult, rams: ramsResult, expiry: 'skipped (not 1st)' })
 
     const RESEND_KEY = process.env.RESEND_API_KEY
-    const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+    const FROM = fromEmail('forms')
     if (!RESEND_KEY) return res.status(200).json({ ok: false, reason: 'email not configured' })
 
     const [columns, data, people, team] = await Promise.all([

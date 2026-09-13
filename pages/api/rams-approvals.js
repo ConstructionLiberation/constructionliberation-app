@@ -1,3 +1,4 @@
+import { fromEmail, ramsApproveOrigin } from '../../lib/tenantSettings'
 import {
   getRamsApprovals, saveRamsApprovals,
   getRamsSignatures, saveRamsSignatures,
@@ -269,14 +270,14 @@ async function handler(req, res) {
 
 async function sendSiteManagerEmail({ req, projectNo, fileId, email, smName, token }) {
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   if (!RESEND_KEY) return false
 
   // The approval page is a no-login page that lives on the MAIN PORTAL domain.
   // The CM usually triggers this from the Site App (siteapp.*), whose host must
   // NOT be used or the Site Manager would hit a login wall. Always use the portal
   // domain (override with RAMS_APPROVE_ORIGIN if needed).
-  const origin = process.env.RAMS_APPROVE_ORIGIN || 'https://app.rockroofing.co.uk'
+  const origin = ramsApproveOrigin()
   const approveUrl = `${origin}/rams-approve?token=${encodeURIComponent(token)}`
 
   let projName = projectNo
@@ -326,7 +327,7 @@ async function sendSiteManagerEmail({ req, projectNo, fileId, email, smName, tok
 // signed RAMS (original + the approval/signature record up to this point).
 async function sendSiteManagerApprovedCopy({ req, projectNo, fileId }) {
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   if (!RESEND_KEY) return false
   try {
     const approvals = await getRamsApprovals(projectNo)

@@ -1,3 +1,4 @@
+import { fromEmail } from '../../lib/tenantSettings'
 import { get, getOpsProject, getPortalUsers } from '../../lib/db'
 import { buildIssuePDF } from '../../lib/issuePdf'
 import withTenant from '../../lib/withTenant'
@@ -11,7 +12,7 @@ async function handler(req, res) {
   if (!id) return res.status(400).json({ error: 'Missing id' })
 
   const RESEND_KEY = process.env.RESEND_API_KEY
-  const FROM = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+  const FROM = fromEmail('forms')
   if (!RESEND_KEY) return res.status(200).json({ sent: 0, error: 'Email not configured' })
 
   try {

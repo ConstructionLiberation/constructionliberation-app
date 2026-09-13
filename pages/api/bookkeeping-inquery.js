@@ -1,3 +1,4 @@
+import { fromEmail } from '../../lib/tenantSettings'
 import { currentTenantId } from '../../lib/tenantContext'
 import { get, set, getPortalUsers } from '../../lib/db'
 import { requireRole } from '../../lib/portalAuth'
@@ -123,7 +124,7 @@ async function handler(req, res) {
     await set(INQUERY_KEY, state)
 
     const key = process.env.RESEND_API_KEY
-    const from = process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
+    const from = fromEmail('forms')
     const baseUrl = process.env.PORTAL_BASE_URL || `https://${req.headers.host}`
     const results = []
 

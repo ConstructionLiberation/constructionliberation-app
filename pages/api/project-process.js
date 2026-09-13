@@ -1,3 +1,4 @@
+import { baseUrl, fromEmail } from '../../lib/tenantSettings'
 import { get, set, getOpsProjects, getPortalUsers } from '../../lib/db'
 import { verifySessionToken, SESSION_COOKIE } from '../../lib/portalAuth'
 import { buildCardsForProject, buildCardsForProjectAsync, getProcessTemplate, saveProcessTemplate } from '../../lib/projectProcessTemplate'
@@ -11,8 +12,8 @@ import withTenant from '../../lib/withTenant'
 //                                 projects that appear AFTER the board is first set up.
 const BOARD_KEY = 'ops:project-process'
 const SEEN_KEY = 'ops:project-process-seen'
-const FROM = process.env.NOTIFY_FROM_EMAIL || process.env.FORMS_FROM_EMAIL || 'Rock Roofing <onboarding@resend.dev>'
-const APP_URL = process.env.PORTAL_URL || 'https://app.rockroofing.co.uk'
+const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
+const APP_URL = baseUrl('PORTAL_URL')
 
 function readCookie(req, name) {
   const raw = req.headers.cookie || ''
