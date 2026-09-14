@@ -16,7 +16,23 @@ async function handler(req, res) {
     const { projectNo, data } = req.body || {}
     if (!projectNo) return res.status(400).json({ error: 'Missing project number' })
     try {
-      const record = { ...data, projectNo, updatedAt: Date.now() }
+      // MERGE, DO NOT REPLACE.
+      //
+      // This wrote { ...data } straight over the stored record, so anything the
+      // client did not send back was erased - including sentAt, sentManually,
+      // recipients and statuses, which are the PROOF a Pre-Start was issued.
+      //
+      // It has not bitten, because the autosave stops once stage is 'sent' and
+      // both save paths send a complete payload. But that is a guard in a
+      // different file holding this one up. A third caller, or a change to that
+      // guard, and a Pre-Start that was issued reads as never issued - it
+      // reappears in Forms Missing and the Monday chaser emails the Contracts
+      // Manager about it again.
+      //
+      // Same shape as the write that lost the Gas Lane application: a save that
+      // assumes the client holds the whole truth.
+      const existing = (await getPreStart(projectNo)) || {}
+      const record = { ...existing, ...data, projectNo, updatedAt: Date.now() }
       await savePreStart(projectNo, record)
       return res.json({ ok: true, data: record })
     } catch (e) {

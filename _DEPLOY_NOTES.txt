@@ -1,83 +1,109 @@
-pkg896 - The manifest error on every page load
-==============================================
+pkg898 - One PDF text rule, the Pre-Start write, and three pages hidden
+=======================================================================
 
-ONE FILE.  middleware.js  (repository root)
-
-
-WHAT IT WAS
------------
-    Manifest: Line: 1, column: 1, Syntax error.    /site.webmanifest:1
-
-The file is fine. It exists in /public and it is valid JSON - I parsed it.
-
-MIDDLEWARE WAS INTERCEPTING IT. The open list allowed /favicon and
-/rock-logo.jpg, one filename at a time, and missed everything else. So the
-browser's request for site.webmanifest had no session, was redirected to /login,
-and the browser got an HTML page where it expected JSON.
-
-/apple-touch-icon.png had exactly the same problem.
+EIGHT FILES.
+  lib/pdfText.js            <-- NEW, create by hand
+  lib/applicationPdf.js
+  lib/handoverPdf.js
+  lib/weeklyLabourPdf.js
+  lib/variationPdf.js
+  lib/preStartPdf.js
+  components/OperationsNav.js
+  pages/api/pre-start.js
 
 
-WHY IT IS WORTH FIXING RATHER THAN IGNORING
--------------------------------------------
-Day to day it is a console warning nobody reads.
+1. HIDE RAMS BUILDER, SUB-CONTRACTOR ONBOARDING AND PQQs
+---------------------------------------------------------
+HIDDEN, NOT DELETED. The pages still exist - remove `hidden: true` to bring one
+back. Deleting them would lose the work and make returning to it a rebuild
+rather than a decision.
 
-But site.webmanifest is the file that decides WHAT THE SITE APP IS CALLED and
-WHICH ICON IT GETS when an operative adds it to their phone's home screen. That
-has been silently failing for every operative who has ever tried - they would
-have got a generic browser icon and the page title, with nothing to explain why.
+`hidden` was already the convention (Negotiating uses it) but was only honoured
+at the TOP level. Marking a sub-tab hidden did nothing, so the only way to take
+one off the nav was to delete it. Now honoured on children too.
 
-apple-touch-icon.png is the iPhone equivalent, and was equally blocked.
+H&S sub-tabs after this: RAMS Matrix, H&S Matrix, Operatives.
 
 
-THE FIX
--------
-Static files are allowed by EXTENSION rather than one filename at a time:
+2. FOUR PDF SANITISERS THAT DISAGREED, AND ONE MISSING
+------------------------------------------------------
+pdf-lib's standard fonts use WinAnsi. Hand it a character outside that range and
+drawText THROWS - the PDF fails, so the download fails, or the email that was
+going to carry it never sends.
 
-    /\.(webmanifest|ico|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|txt|xml)$/i
+Five builders need the rule. What was actually there:
 
-Added to BOTH lists - the main one and the Site App passthrough. The Site App one
-matters more, since siteapp.rockroofing.co.uk is where an operative actually
-installs from, and it was missing it too.
+  applicationPdf   kept £, but replaced every ACCENTED character with a space
+  variationPdf     kept £, same accent problem
+  handoverPdf      DROPPED £ entirely (\\x20-\\x7E)
+  weeklyLabourPdf  correct - kept everything Latin-1, plus a droplet rule
+  preStartPdf      NONE AT ALL
 
-By extension so the next icon or font added to /public does not need remembering.
-None of these file types can carry data.
+So a name like Jose Nunez came out mangled on an application and on a variation -
+documents that go to the customer. And a curly quote pasted into a Pre-Start
+field made the send fail outright.
 
-Checked it does not open anything it should not:
+I reported earlier that variationPdf had no sanitiser. WRONG - it has one called
+`san`, and my search looked for the word "sanit". Second time today a search
+pattern produced a confident false answer. Both are corrected here.
 
-    /site.webmanifest       open      /wip                     closed
-    /apple-touch-icon.png   open      /api/dashboard           closed
-    /favicon.ico            open      /retention               closed
-    /robots.txt             open      /api/project/abc/report  closed
+Now one rule in lib/pdfText.js, used by all five. Tested across fourteen cases:
+
+    pound sign            Total £1,234.56      kept
+    curly apostrophe      James'               kept as '
+    smart quotes          "Pre-Start"          kept as "
+    em dash               J190 - Russell Hill
+    ellipsis              and so on...
+    non-breaking space    J190 Russell
+    water droplet         WI: Leak at Gas Lane
+    emoji                 removed
+    accented name         Dori Balog, José Núñez   KEPT
+    degree symbol         15°C on the roof         KEPT
+    tick                  Y complete
+    plain text            unchanged
+
+    failures: 0     every output WinAnsi-safe: true
+
+My first version of the shared rule turned "James' site" into "James site" - it
+missed U+02BC, an apostrophe some keyboards produce, so it was stripped rather
+than replaced. A DROPPED apostrophe is worse than a wrong one: nobody reads it
+as an encoding problem, they read it as a typo we made. Caught by the test,
+fixed, retested.
+
+
+3. THE PRE-START WRITE MERGES INSTEAD OF REPLACING
+--------------------------------------------------
+pages/api/pre-start.js wrote { ...data } straight over the stored record, so
+anything the client did not send back was erased - including sentAt,
+sentManually, recipients and statuses, which are the PROOF a Pre-Start was
+issued.
+
+It has not bitten, because the autosave stops once the record is sent and both
+save paths send a complete payload. But that is a guard in a DIFFERENT FILE
+holding this one up. A third caller, or a change to that guard, and a Pre-Start
+that was issued reads as never issued: it reappears in Forms Missing and the
+Monday chaser emails the Contracts Manager about it again.
+
+Same shape as the write that lost the Gas Lane application.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile: 0 errors
-- middleware still imports only next/server - it runs at the edge
-- confirmed the rule is in both lists
-- ran the pattern against six paths that must open and six that must stay closed
-- parsed site.webmanifest to confirm the file itself was never the problem
-
-My first attempt at this edit asserted and wrote nothing, because the anchor
-line appears TWICE in the file. That is the assert doing its job - it stopped me
-patching one list and leaving the other, which is the half-fix that would have
-left the Site App still broken.
-
-
-ONE FOR LATER, NOT NOW
-----------------------
-The manifest hardcodes "Rock Roofing" as the app name and points at Rock's
-icons. Under multi-tenancy every customer's Site App would install as "Rock
-Roofing" on their operatives' phones.
-
-It needs to be served per customer rather than as a static file - a small API
-route reading the customer's name and logo. Not urgent, but it belongs on the
-list with the other per-customer branding.
+- esbuild compile on all 8: 0 errors
+- import-graph check: clean
+- the sanitiser across 14 cases, and confirmed every output is WinAnsi-safe
+- confirmed the only page.drawText in preStartPdf that bypasses the shared
+  helper is a fixed literal, so no user text reaches it
+- confirmed the H&S nav now filters hidden children
 
 
 WHAT TO CHECK
 -------------
-1. Reload any page. The Manifest syntax error should be gone from the console.
-2. On your phone, on siteapp.rockroofing.co.uk, add it to the home screen. It
-   should now be called "Rock Roofing" with the proper icon.
+1. Operations > H&S - three sub-tabs: RAMS Matrix, H&S Matrix, Operatives.
+2. Download a variation PDF and an application PDF. They should look exactly as
+   before. If a name with an accent appears anywhere, it should now be spelled
+   properly rather than gapped.
+3. Pre-Start: paste a curly quote or an em-dash into a field, save, and send.
+   It should work - that is the case that used to fail.
+4. The weekly labour sheet, if one is due - the droplet rule moved files and
+   should still print "WI:" on a leak visit.

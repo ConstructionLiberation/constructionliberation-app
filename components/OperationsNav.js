@@ -31,13 +31,17 @@ export const NAV = [
   { key: 'financials', label: 'Project Financials', href: '/operations/project-financials' },
   {
     key: 'hs', label: 'H&S', href: '/operations/hs/rams-matrix',
+    // RAMS Builder, Sub-Contractor Onboarding and PQQs are HIDDEN, not deleted.
+    // They are unfinished rather than unwanted, and the pages still exist - remove
+    // `hidden: true` to bring one back. Deleting them would lose the work and
+    // make returning to it a rebuild rather than a decision.
     children: [
-      { key: 'hs:rams-builder', label: 'RAMS Builder', href: '/operations/hs/rams-builder' },
+      { key: 'hs:rams-builder', label: 'RAMS Builder', href: '/operations/hs/rams-builder', hidden: true },
       { key: 'hs:rams-matrix', label: 'RAMS Matrix', href: '/operations/hs/rams-matrix' },
       { key: 'hs:hs-matrix', label: 'H&S Matrix', href: '/operations/hs/hs-matrix' },
       { key: 'hs:operatives', label: 'Operatives', href: '/operations/hs/operatives' },
-      { key: 'hs:onboarding', label: 'Sub-Contractor Onboarding', href: '/operations/hs/onboarding' },
-      { key: 'hs:pqqs', label: 'PQQs', href: '/operations/hs/pqqs' },
+      { key: 'hs:onboarding', label: 'Sub-Contractor Onboarding', href: '/operations/hs/onboarding', hidden: true },
+      { key: 'hs:pqqs', label: 'PQQs', href: '/operations/hs/pqqs', hidden: true },
     ],
   },
   { key: 'negotiating', label: 'Negotiating', href: '/operations/negotiating', hidden: true },
@@ -88,7 +92,11 @@ function SectionTabs({ active, section }) {
   if (!parent) return null
   return (
     <div style={{ background: '#fff', borderBottom: '1px solid #ececec', padding: '0 24px', display: 'flex', gap: 4, overflowX: 'auto', height: 46, alignItems: 'center' }}>
-      {parent.children.map(c => {
+      {/* `hidden` is honoured on CHILDREN too, not only top-level sections.
+          It was filtered at the top level only, so marking a sub-tab hidden did
+          nothing and the only way to take one off the nav was to delete it -
+          which loses the page. */}
+      {parent.children.filter(c => !c.hidden).map(c => {
         const on = active === c.key
         return (
           <a key={c.key} href={c.href} style={{
