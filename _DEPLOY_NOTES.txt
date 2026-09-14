@@ -1,77 +1,92 @@
-pkg875 - Read the control database credentials Vercel actually created
-======================================================================
+pkg876 - Make the platform domain usable
+========================================
 
 TWO FILES, neither new.
-  lib/tenants.js
-  pages/api/platform/tenants.js
+  lib/withTenant.js
+  middleware.js          (repository root, not in a folder)
 
-Deploy this, then redeploy is all you need - no variables to copy by hand.
+WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING.
+PLATFORM_HOSTS is unset, so none of it is reachable yet.
 
 
-WHY
----
-Creating the store through Vercel's Upstash integration with the prefix
-CONTROL_REDIS produced:
+A DOOR LOCKED FROM THE INSIDE
+-----------------------------
+You asked whether you could move the platform to its own domain first. You
+could not, and the reason is a fault in what I built.
 
-    CONTROL_REDIS_KV_REST_API_URL
-    CONTROL_REDIS_KV_REST_API_TOKEN
-    CONTROL_REDIS_KV_URL
-    CONTROL_REDIS_REDIS_URL
+withTenant demanded a platform SESSION before letting anything through on a
+platform host. But the login route is itself wrapped. So:
 
-The code was looking for CONTROL_REDIS_URL and CONTROL_REDIS_TOKEN, which do not
-exist. So nothing would have resolved and /platform would still have said "no
-control database yet" after a correct setup - the most confusing possible
-outcome.
+    no session -> cannot reach login -> cannot get a session
 
-Both spellings are now accepted, exactly as lib/db.js already accepts three
-different spellings for Rock's database. Same pattern, not a special case.
+Point a domain at the project today and you would have been locked out of it
+with no way in except editing an environment variable back out again.
 
-The alternative was copying the values into a second pair of variables by hand.
-That works until Vercel rotates the credentials and the copy silently goes
-stale - and a stale credential on the control database means every customer
-fails to resolve at once. Reading the name Vercel actually set has no such
-failure.
+Fixed: no session is required to REACH the platform host. Authorisation is done
+where it belongs - requireRole plus the PLATFORM_ADMINS check inside the
+platform route.
 
-REDIS_URL and KV_URL are the non-REST connection strings. Ignored - the app uses
-the REST API throughout.
+
+A SECOND PROBLEM, WORSE
+-----------------------
+Pointing a domain at this Vercel project makes it serve the WHOLE app. So
+admin.constructionliberation.com would also have answered /crm, /wip, /retention
+and every other route - and, having no customer database of its own, would have
+fallen back to reading ROCK'S.
+
+One address quietly serving another company's portal is the exact thing this
+entire exercise exists to prevent, and I would have handed it to you as a
+feature.
+
+Now, on a platform host, only two things are reachable:
+
+    /api/portal-auth     signing in
+    /api/platform/*      the platform itself
+
+Everything else is 404. Not 403 - a 403 confirms the route exists.
+
+And middleware redirects any other PAGE on that host to /platform, so the screen
+matches the API rather than drawing a portal that then fails every call.
+
+
+WHAT THIS MEANS FOR YOUR LOGIN - read this before setting PLATFORM_HOSTS
+------------------------------------------------------------------------
+The platform host has no user store of its own, so signing in there
+authenticates against ROCK'S user records - the same username and password you
+use today.
+
+That is interim and it is not where this should end up. A platform login should
+live in the control database, independent of any customer, so that Construction
+Liberation is not administered through Rock Roofing's user list. That is its own
+package and it matters more once the account ownership question you raised is
+settled.
+
+Worth knowing now so you are not surprised: moving the platform to its own
+domain does NOT yet move the login off Rock.
 
 
 CHECKS I RAN
 ------------
 - esbuild compile on both: 0 errors
-- grepped for CONTROL_REDIS everywhere else: only a help message, updated to
-  describe how the store is actually created rather than variable names that
-  Vercel does not produce
+- confirmed middleware still imports only next/server - it runs at the edge and
+  a node import there breaks the build
+- confirmed sessionBelongsTo is still used for the CUSTOMER branch, which is
+  where the cross-tenant session check lives. Only the platform branch changed.
 
 
-NOW DO THIS
------------
-1. Deploy these two files.
-2. Add ONE more variable in Vercel:
+TO SET THE DOMAIN UP, when you want it
+--------------------------------------
+  1. Add the domain to the Vercel project - admin.constructionliberation.com or
+     whatever you choose.
+  2. Add the environment variable:
 
-       PLATFORM_ADMINS = james@rockroofing.co.uk
+         PLATFORM_HOSTS = admin.constructionliberation.com
 
-3. Do NOT add TENANCY_ENABLED. That is the switch and it comes last.
-4. Redeploy.
-5. Open /platform. It should now show an EMPTY CUSTOMER LIST with an "Add a
-   customer" button, and the amber "any admin can reach this page" warning
-   should be GONE.
+  3. Redeploy.
+  4. Visit it. You should land on /platform, and be asked to sign in with your
+     Rock credentials.
+  5. Check that app.rockroofing.co.uk/platform ALSO still works - it will, until
+     TENANCY_ENABLED is set. After that, only the platform domain will.
 
-If it still says "No control database yet", stop and tell me - that would mean
-the variables are not reaching the function and I would want to see the names
-again rather than guess.
-
-
-ONE THING FOR LATER
--------------------
-You ticked Production AND Preview, which is right for now. It does mean preview
-deployments will read and write the LIVE customer registry. Harmless today with
-nothing in it. When staging is set up, that needs revisiting - a staging
-deployment should not be able to edit real customers.
-
-
-HAVE READY FOR THE NEXT STEP
-----------------------------
-Rock's own database REST credentials, for the registry entry - the values of
-KV_REST_API_URL and KV_REST_API_TOKEN, which I can see are already in your
-project. Not the CONTROL_REDIS ones; those point at the registry itself.
+None of this is required before registering Rock. It can wait until after, and
+registering Rock is the more useful thing to get done.

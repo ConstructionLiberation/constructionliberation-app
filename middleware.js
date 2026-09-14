@@ -22,6 +22,33 @@ export async function middleware(req) {
   const host = (req.headers.get('host') || '').toLowerCase()
   const isForms = host.startsWith('siteapp.') || host.startsWith('forms.')
 
+  // ── The platform address serves the platform only ──
+  //
+  // Pointing a domain at this project makes it serve the WHOLE app. Without
+  // this, admin.constructionliberation.com would render /crm, /wip and the rest
+  // - the pages would draw their shell and then fail every API call, which
+  // looks like a broken portal rather than a wrong address.
+  //
+  // The API is already locked down in lib/withTenant.js; this is so the SCREEN
+  // matches. Anything else here goes to /platform.
+  const platformHosts = String(process.env.PLATFORM_HOSTS || '')
+    .split(',').map(h => h.trim().toLowerCase().split(':')[0]).filter(Boolean)
+  if (platformHosts.length && platformHosts.includes(host.split(':')[0])) {
+    const { pathname } = req.nextUrl
+    const ok =
+      pathname.startsWith('/platform') ||
+      pathname.startsWith('/login') ||
+      pathname.startsWith('/api/platform') ||
+      pathname.startsWith('/api/portal-auth') ||
+      pathname.startsWith('/_next') ||
+      pathname.startsWith('/favicon')
+    if (!ok) {
+      const url = req.nextUrl.clone()
+      url.pathname = '/platform'
+      return NextResponse.redirect(url)
+    }
+  }
+
   // ── Site App subdomain routing (unchanged) ──
   if (isForms) {
     const url = req.nextUrl.clone()
