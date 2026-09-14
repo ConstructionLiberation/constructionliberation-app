@@ -1,80 +1,83 @@
-pkg895 - The cold-snapshot report. Spreading a request does not copy it.
-========================================================================
+pkg896 - The manifest error on every page load
+==============================================
 
-ONE FILE.  pages/api/project/[id]/report.js  (literal square brackets)
-
-REPLACES the pkg894 version. Deploy pkg894 first if you have not - it has the
-error-email changes - then this over the top.
+ONE FILE.  middleware.js  (repository root)
 
 
-WHAT HAPPENED
--------------
-You cleared the cache and downloaded a report. It said:
+WHAT IT WAS
+-----------
+    Manifest: Line: 1, column: 1, Syntax error.    /site.webmanifest:1
 
-    Could not build the financial data for this report.
+The file is fine. It exists in /public and it is valid JSON - I parsed it.
 
-The rebuild ran, produced nothing, and could not say why. Three layers between
-the cause and the message.
+MIDDLEWARE WAS INTERCEPTING IT. The open list allowed /favicon and
+/rock-logo.jpg, one filename at a time, and missed everything else. So the
+browser's request for site.webmanifest had no session, was redirected to /login,
+and the browser got an HTML page where it expected JSON.
+
+/apple-touch-icon.png had exactly the same problem.
 
 
-THE CAUSE
----------
-pkg894 called the dashboard handler directly instead of over HTTP - right idea -
-and passed it a copy of the request:
+WHY IT IS WORTH FIXING RATHER THAN IGNORING
+-------------------------------------------
+Day to day it is a console warning nobody reads.
 
-    await dashboardHandler({ ...req, method: 'GET', query: {} }, fakeRes)
+But site.webmanifest is the file that decides WHAT THE SITE APP IS CALLED and
+WHICH ICON IT GETS when an operative adds it to their phone's home screen. That
+has been silently failing for every operative who has ever tried - they would
+have got a generic browser icon and the page title, with nothing to explain why.
 
-{ ...req } LOOKS LIKE IT COPIES THE REQUEST AND DOES NOT.
-
-On a Node IncomingMessage, `headers` is a GETTER ON THE PROTOTYPE. Spread copies
-only own enumerable properties, so the copy had no headers at all. Demonstrated:
-
-    const req = new http.IncomingMessage()
-    req.headers = { host: 'app.rockroofing.co.uk' }
-    ({ ...req }).headers        ->  undefined
-    ({ headers: req.headers })  ->  present
-
-So withTenant saw no host, resolved no customer, and returned 404 Unknown
-address - which my code read as "no projects" and reported as "could not build
-the financial data".
-
-The tenant check worked perfectly. It refused a request with no address, exactly
-as designed. It was my request that was broken.
+apple-touch-icon.png is the iPhone equivalent, and was equally blocked.
 
 
 THE FIX
 -------
-The inner request is now built explicitly - method, query, url, headers,
-cookies - rather than spread. Checked: this pattern appears nowhere else in the
-codebase.
+Static files are allowed by EXTENSION rather than one filename at a time:
 
+    /\.(webmanifest|ico|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|txt|xml)$/i
 
-ALSO: THE FAILURE NOW NAMES ITSELF
-----------------------------------
-The rebuild produced nothing and returned a flat 503. The dashboard has three
-different failure replies - 401 not connected to Xero, 500 with a message, or
-genuinely no projects - and they need completely different responses.
+Added to BOTH lists - the main one and the Site App passthrough. The Site App one
+matters more, since siteapp.rockroofing.co.uk is where an operative actually
+installs from, and it was missing it too.
 
-If it fails again the error now says which, with the status code and the
-dashboard's own message. Guessing between them from a screenshot is how an
-evening disappears.
+By extension so the next icon or font added to /public does not need remembering.
+None of these file types can carry data.
+
+Checked it does not open anything it should not:
+
+    /site.webmanifest       open      /wip                     closed
+    /apple-touch-icon.png   open      /api/dashboard           closed
+    /favicon.ico            open      /retention               closed
+    /robots.txt             open      /api/project/abc/report  closed
 
 
 CHECKS I RAN
 ------------
 - esbuild compile: 0 errors
-- import-graph check: clean
-- ran the spread against a real IncomingMessage to confirm headers are lost
-- grepped for { ...req } elsewhere: nowhere else
+- middleware still imports only next/server - it runs at the edge
+- confirmed the rule is in both lists
+- ran the pattern against six paths that must open and six that must stay closed
+- parsed site.webmanifest to confirm the file itself was never the problem
+
+My first attempt at this edit asserted and wrote nothing, because the anchor
+line appears TWICE in the file. That is the assert doing its job - it stopped me
+patching one list and leaving the other, which is the half-fix that would have
+left the Site App still broken.
 
 
-WHAT TO CHECK - the same test again
------------------------------------
-  1. Deploy this.
-  2. Console:  await (await fetch('/api/clear-cache', { method:'POST' })).json()
-  3. WITHOUT opening Project Financials, go to a project and Download Report.
+ONE FOR LATER, NOT NOW
+----------------------
+The manifest hardcodes "Rock Roofing" as the app name and points at Rock's
+icons. Under multi-tenancy every customer's Site App would install as "Rock
+Roofing" on their operatives' phones.
 
-It should pause while it rebuilds, then give you a spreadsheet.
+It needs to be served per customer rather than as a static file - a small API
+route reading the customer's name and logo. Not urgent, but it belongs on the
+list with the other per-customer branding.
 
-If it fails, the message will now name the reason - send it to me and it will be
-one step, not four.
+
+WHAT TO CHECK
+-------------
+1. Reload any page. The Manifest syntax error should be gone from the console.
+2. On your phone, on siteapp.rockroofing.co.uk, add it to the home screen. It
+   should now be called "Rock Roofing" with the proper icon.

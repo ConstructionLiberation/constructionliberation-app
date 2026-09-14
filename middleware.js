@@ -56,6 +56,10 @@ export async function middleware(req) {
     const passthrough =
       pathname.startsWith('/_next') ||
       pathname.startsWith('/favicon') ||
+      // See the note on the main list below. This one matters MORE: it is the
+      // Site App, and site.webmanifest is what an operative's phone fetches when
+      // they add it to their home screen.
+      /\.(webmanifest|ico|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|txt|xml)$/i.test(pathname) ||
       pathname === '/rock-logo.jpg' ||
       pathname.startsWith('/api/forms') ||
       pathname.startsWith('/api/cron') ||
@@ -122,6 +126,16 @@ export async function middleware(req) {
   const isOpen =
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
+    // STATIC FILES IN /public ARE NOT PRIVATE.
+    //
+    // The list covered /favicon and /rock-logo.jpg, one at a time, and missed
+    // the rest. /site.webmanifest was being redirected to /login, so the browser
+    // asked for JSON and got an HTML page - "Manifest: Line 1, column 1, Syntax
+    // error" on every page load. apple-touch-icon.png too.
+    //
+    // By extension rather than by filename, so the next icon or font added to
+    // /public does not need remembering. None of these can carry data.
+    /\.(webmanifest|ico|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|txt|xml)$/i.test(pathname) ||
     pathname === '/rock-logo.jpg' ||
     pathname === '/login' ||
     pathname === '/reset-password' ||
