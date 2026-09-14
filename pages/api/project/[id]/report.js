@@ -49,12 +49,40 @@ async function handler(req, res) {
   const redis = await getClient()
 
   // Stored as a BARE ARRAY, not { projects: [...] }.
+  //
+  // REBUILD IT RATHER THAN REFUSE.
+  //
+  // This used to return 503 "open Project Financials once, then download again"
+  // when the snapshot was cold - and the snapshot expires after four hours, so
+  // any download outside a working session hit it. The page then saved that JSON
+  // as a .xlsx and Excel reported a corrupt file.
+  //
+  // Asking somebody to visit another page to warm a cache is not a fix, it is a
+  // workaround with instructions. /api/dashboard builds the snapshot; calling it
+  // here does exactly what opening the page would have done, without the person
+  // needing to know that.
   let snap = null
   try { snap = await redis.get('dashboard:cache') } catch {}
-  const rows = Array.isArray(snap) ? snap : (snap && Array.isArray(snap.projects) ? snap.projects : [])
+  let rows = Array.isArray(snap) ? snap : (snap && Array.isArray(snap.projects) ? snap.projects : [])
+
+  if (!rows.length) {
+    try {
+      const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0]
+      const host = req.headers['x-forwarded-host'] || req.headers.host
+      // Same address the request arrived on, so it resolves to the same customer.
+      const r = await fetch(`${proto}://${host}/api/dashboard`, {
+        headers: { cookie: req.headers.cookie || '' },
+      })
+      if (r.ok) {
+        const d = await r.json()
+        rows = Array.isArray(d) ? d : (Array.isArray(d.projects) ? d.projects : [])
+      }
+    } catch {}
+  }
+
   if (!rows.length) {
     return res.status(503).json({
-      error: 'Financial data has not been built yet. Open Project Financials once, then download again.',
+      error: 'Could not build the financial data for this report. Open Project Financials and try again - if it still fails, tell James.',
     })
   }
 

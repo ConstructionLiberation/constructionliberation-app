@@ -251,13 +251,32 @@ export default function ProjectPage() {
     setGenerating(true)
     try {
       const res = await fetch(`/api/project/${id}/report`, { method: 'POST' })
+
+      // CHECK THE RESPONSE BEFORE SAVING IT AS A SPREADSHEET.
+      //
+      // This used to take res.blob() whatever came back. So when the server
+      // returned a JSON error - "Financial data has not been built yet" - the
+      // error was saved with an .xlsx extension, and Excel said the file was
+      // corrupt. The real message was inside the file nobody opened in a text
+      // editor.
+      //
+      // It looked project-specific because it depends on WHEN you click, not
+      // WHICH project: the dashboard snapshot expires after four hours, and a
+      // click while it is cold gets the error.
+      if (!res.ok) {
+        let msg = `Could not build the report (${res.status}).`
+        try { const d = await res.json(); if (d && d.error) msg = d.error } catch {}
+        alert(msg)
+        return
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `${project?.jobNo || id}_Report_${new Date().toISOString().slice(0, 10)}.xlsx`
       a.click()
-    } catch (e) { console.error(e) }
+      URL.revokeObjectURL(url)
+    } catch (e) { console.error(e); alert('Could not build the report: ' + (e?.message || 'request failed')) }
     setGenerating(false)
   }
 

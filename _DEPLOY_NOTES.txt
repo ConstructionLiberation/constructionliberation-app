@@ -1,104 +1,87 @@
-pkg891 - Variations default to not instructed, and the retention import stops
-              dropping rows silently
-==============================================================================
+pkg892 - The report that downloaded as a corrupt file
+=====================================================
 
-THREE FILES, none new.
-  pages/variations.js
-  pages/retention.js
-  pages/api/retention.js
+TWO FILES, neither new. Both folders use literal square brackets.
+  pages/project/[id].js
+  pages/api/project/[id]/report.js
 
 
-1. A MANUALLY ADDED VARIATION IS NOT INSTRUCTED
------------------------------------------------
-The Add dialog defaulted to instructed = yes. So anything typed straight into
-the tracker counted as AUTHORISED BY THE CUSTOMER the moment it was saved - into
-the AFA, the applications and the margin, without anyone having agreed it.
+WHAT WAS HAPPENING
+------------------
+Excel said "cannot open the file ... the file format or file extension is not
+valid".
 
-Worse, it was not easily undone: pages/api/project/[id]/settings.js refuses to
-delete or change an instructed variation, which is the guard you met on Sunday.
-So a mis-added row was stuck.
+The file was not corrupt. IT WAS A JSON ERROR MESSAGE SAVED WITH AN .xlsx
+EXTENSION. Open it in Notepad and it would have said:
 
-Not instructed is the honest starting point - it was raised, nobody has agreed
-it yet. Tick it when they have.
+    {"error":"Financial data has not been built yet. Open Project Financials
+    once, then download again."}
 
-The default existed in THREE places - the initial state, the reset after saving,
-and the reset when the dialog opens. There is now one constant used by all
-three, because three copies of a default is three chances to change two of them.
+Two separate faults, one on each side.
+
+NOT A RUSSELL HILL PROBLEM. It depends on WHEN you click, not WHICH project -
+which is why it worked on the retry, and why other projects looked fine.
 
 
-2. THE RETENTION IMPORT SILENTLY DROPPED ROWS
+1. THE PAGE SAVED AN ERROR AS A SPREADSHEET
+-------------------------------------------
+    const res = await fetch(...)
+    const blob = await res.blob()      // whatever came back
+    a.download = '...xlsx'; a.click()
+
+No check of res.ok. So any failure - 503, 500, 404 - became a file called
+.xlsx, and the actual message was inside a file nobody would think to open in a
+text editor.
+
+It now reads the response first and shows the message.
+
+
+2. THE REPORT REFUSED WHEN THE SNAPSHOT WAS COLD
+------------------------------------------------
+pkg857 made the report read the dashboard snapshot, so it cannot disagree with
+what Project Financials shows. That was right.
+
+But the snapshot EXPIRES AFTER FOUR HOURS, and the report returned 503 when it
+found none - telling the user to go and open another page first.
+
+Asking somebody to visit a different page to warm a cache is not a fix, it is a
+workaround with instructions. Anyone downloading a report outside an active
+working session hit it.
+
+It now rebuilds the snapshot itself by calling /api/dashboard - the same thing
+opening the page would have done, without the person needing to know that. It
+calls it on the SAME ADDRESS the request arrived on, so it resolves to the same
+customer, and forwards the session cookie.
+
+If that still produces nothing, the error is now honest about it rather than
+blaming the user's browsing order.
+
+
+WHY THIS MATTERED MORE THAN A BROKEN DOWNLOAD
 ---------------------------------------------
-You asked me to check the import and manual entry without testing them. This is
-what I found.
+The report was rewritten only two days ago and tested. It worked, because the
+snapshot was warm at the time. The failure needed a four-hour gap to appear -
+which is exactly the kind of fault that survives testing and reaches a customer.
 
-The import filters out every row with no ourRef, and says nothing:
-
-    const incoming = req.body.entries.filter(e => e && String(e.ourRef||'').trim())
-
-Import a hundred rows, twelve missing a reference, and the message said
-"88 added" with no mention of the twelve. Nobody counts rows afterwards, and a
-retention row that never arrived looks exactly like one that was never there.
-
-Rows are still skipped - ourRef is what rows are matched on, and a row without
-one could never be updated later. But the reply now returns a count AND the
-first twenty by name, and the page says:
-
-    Imported 100 rows - 85 added, 3 updated, 12 SKIPPED with no reference:
-    Gas Lane, Waungron, ...
-
-
-3. WHAT I CHECKED AND FOUND SOUND
----------------------------------
-  - The import NEVER DELETES. It only adds and merges, so a bad import cannot
-    empty the tracker.
-  - Existing rows are matched on ourRef, trimmed and lower-cased, and merged
-    with `{ ...existing, ...incoming, id: existing.id }` - so the id is
-    preserved and a re-import updates rather than duplicating.
-  - The manual entry path generates its own id and appends. Update merges by id.
-  - The read-modify-write window on the entries array is TIGHT - the read and
-    the write have no await between them. This is the same shape as the fault
-    that lost the Gas Lane application, but there it had a PDF build and an
-    email in the middle, several seconds wide. Here it is microseconds. Not
-    worth changing.
-  - Only comments are written back to the project record; everything else is
-    read-only from the project. So the tracker cannot corrupt a project.
-
-ONE THING I COULD NOT CHECK from here: whether a BLANK CELL in the spreadsheet
-overwrites an existing value with an empty string. That depends on how the page
-builds each row before sending. If you ever import a partial sheet - say just
-references and dates - and find other columns blanked, that is the cause and it
-is a one-line fix.
+Worth remembering when the module gates and provisioning get tested: "it worked
+when I tried it" and "it works" are different claims.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
+- esbuild compile on both: 0 errors
 - import-graph check: clean
-- confirmed 0 remaining 'yes' defaults for instructed, and one shared constant
+- confirmed the rebuild passes the incoming cookie, so the dashboard call is
+  authenticated as the same user
+- confirmed it uses x-forwarded-host, so under tenancy it resolves to the same
+  customer rather than the deployment URL
 
 
 WHAT TO CHECK
 -------------
-1. Variations > Add. The Instructed dropdown should default to No.
-2. Add one, confirm it shows as not instructed, then delete it - which now
-   works, because it is not instructed.
-3. Retention import, if you are willing: a sheet with one row missing its
-   reference should now say so.
-
-
-STILL OUTSTANDING FROM YOUR LIST
---------------------------------
-  - The Download Report error on Russell Hill. I need the ERROR TEXT - the
-    screenshot showed the page, not the message.
-  - The weekly Outstanding Invoices report. There is a built-in diagnostic that
-    runs the real gate and reports its decision. In the browser console:
-
-        await (await fetch('/api/outstanding-invoices', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'test-schedule' })
-        })).json()
-
-    Send me the diag block - it names the exact gate that is blocking it.
-  - The Monthly Invoicing chart labels overlapping on long projects.
-  - Manual contact entry when sending an application to a project with no
-    customer assigned.
+1. Download a report now - it should work.
+2. The real test needs a COLD snapshot: leave it four hours, or download first
+   thing tomorrow without opening Project Financials first. It should still
+   produce a spreadsheet.
+3. If it ever fails again you will now get a readable message instead of a file
+   Excel refuses.
