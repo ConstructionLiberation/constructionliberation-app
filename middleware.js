@@ -127,6 +127,20 @@ export async function middleware(req) {
     pathname === '/reset-password' ||
     pathname.startsWith('/go/') ||
     pathname === '/rams-approve' ||
+    // The variation instruction page. The link in the email is
+    // /instruct/<signed token> and it goes to a CUSTOMER - somebody with no
+    // portal account at all. The token in the address is the authentication,
+    // exactly as for the In Query and RAMS links below.
+    //
+    // This was never in this list. Anyone clicking that button without a portal
+    // session was bounced to /login, where they could do nothing. It went
+    // unnoticed because the people who click it in testing are always signed in
+    // already.
+    pathname.startsWith('/instruct/') ||
+    // ...and the endpoint that page calls. Opening the page without this just
+    // moves the failure one step later: the customer reaches the screen and
+    // then every button on it is refused.
+    pathname === '/api/variation-instruct' ||
     // The In Query review link goes to people with no portal account - somebody
     // added to the table by hand. The signed token in the address is the
     // authentication, and it scopes the response to that one email. Without these
