@@ -1,74 +1,78 @@
-pkg879 - Stop an endpoint printing Rock's database token
-========================================================
+pkg880 - URGENT. A stale cookie blocks the login that would replace it.
+=======================================================================
 
-ONE FILE.  pages/api/admin/tenant-setup.js  - not new.
+ONE FILE.  lib/withTenant.js  - not new.
 
-DEPLOY BEFORE RUNNING THE PRE-FLIGHT CHECK. I was about to ask you to open that
-endpoint and paste the output to me.
+DEPLOY THIS BEFORE ANYONE AT ROCK TRIES TO SIGN IN.
 
 
-WHAT IT WAS DOING
------------------
-The GET returned resolvedForThisHost as the RAW customer record - which carries
+WHAT HAPPENED
+-------------
+Tenancy is now ON, and every existing session is correctly rejected - sessions
+issued before pkg861 carry no customer, and assuming they were Rock's would have
+left the cross-tenant bypass open for the seven days they take to expire.
 
-    redis: { url, token }
+But the check runs on EVERY wrapped route, INCLUDING /api/portal-auth. So the
+stale cookie blocked the very request needed to replace it:
 
-So it would have printed Rock's database url and access token into a browser
-tab, and into anything that output was pasted into. Including this chat.
+    sign in  ->  refused  ->  still holding the same cookie  ->  refused
 
-Admin-only, so not exposed to the world. But a credential in a response is a
-credential in a screenshot, a support ticket, a scroll-back.
+The only way out was clearing cookies by hand or an incognito window. That is
+not something to ask eight people to work out on a Monday morning, and the
+message did not tell them to.
 
-pages/api/platform/tenants.js has ALWAYS stripped credentials - it has a safe()
-helper and uses it on every response. tenant-setup.js was written earlier and
-never got one. Same rule, two places, one of them wrong.
-
-That is the fault class this project keeps producing. This time it was
-credentials rather than a number.
+My fault, and the kind that only appears the moment it affects everyone at once.
 
 
 THE FIX
 -------
-A safeTenant() helper, applied before responding. The record still tells you
-everything useful - id, name, hosts, modules, timezone - plus
+The refusal now EXPIRES the cookie as well as returning 401:
 
-    databaseConfigured: true | false
+    Set-Cookie: rr_portal_session=; Max-Age=0
 
-which is the only thing anyone needs to know about the credentials.
+The browser drops it, the retry carries no cookie, and the login proceeds
+normally. One refusal, then a normal sign-in.
+
+Message shortened to "Please sign in again." - the old wording explained a cause
+nobody could act on.
 
 
 CHECKS I RAN
 ------------
 - esbuild compile: 0 errors
-- grepped every endpoint that reads a tenant record and checked each one either
-  strips before responding or uses the record internally only. Three internal
-  uses in platform/tenants.js, both responses already stripped, this one fixed.
+- confirmed the cookie name and attributes match exactly how portal-auth.js
+  clears it on logout - same Path, HttpOnly, SameSite, Secure, Max-Age=0. A
+  clear that does not match the original attributes does not clear anything.
 
 
-AFTER DEPLOYING - THE PRE-FLIGHT CHECK
---------------------------------------
-This is the last thing before the switch, and it is the one that matters.
+RIGHT NOW, BEFORE THIS IS LIVE
+------------------------------
+Use an incognito window, or clear cookies for app.rockroofing.co.uk, and sign in
+there. That works today.
 
-Open, as admin, on app.rockroofing.co.uk:
+AFTER DEPLOYING, tell anyone already signed in that they will be asked to sign in
+once. It will now just happen.
 
-    /api/admin/tenant-setup
 
-You are looking for FOUR things:
+THEN CHECK, IN THIS ORDER
+-------------------------
+1. Sign in normally, in a normal window, with the old cookie still present. You
+   should be asked to sign in and it should work.
+2. Project Financials - the numbers, against your baseline.
+3. Retention, WIP, the 13-week cash flow.
+4. The Site App on your phone at siteapp.rockroofing.co.uk. That address is the
+   second host on Rock's record, and this is the first time it has had to
+   resolve.
+5. Send a variation to yourself, and an application. Check the two FROM lines
+   against the emails already in your inbox:
 
-    controlDatabaseConfigured : true
-    tenancyEnabled            : false
-    identityOfCurrentDatabase : { id: "rock", name: "Rock Roofing Ltd", ... }
-    resolvedForThisHost       : { id: "rock", ..., databaseConfigured: true }
+       variation      Rock Roofing <notifications@send.rockroofing.co.uk>
+       application    Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>
 
-The last two are the two halves of the self-check, and this is the first time
-they can be compared.
+   That is the two-sender setup proving itself, and it is the check I would least
+   want skipped.
+6. HR and Management should now be GONE from the portal. Deliberate.
 
-    identityOfCurrentDatabase   what the DATABASE says it is
-    resolvedForThisHost         what the REGISTRY says this address is
-
-BOTH MUST SAY "rock". If they do, the mapping is right and the switch is safe.
-If resolvedForThisHost comes back null, the address in the registry does not
-match the address you are browsing - fixable in the platform page, and far
-better found now than after the switch, when every request would 404.
-
-Safe to paste the whole thing to me now.
+If anything is badly wrong: delete TENANCY_ENABLED in Vercel and redeploy.
+Ninety seconds back to single tenant. Nothing is written differently, so there
+is nothing to undo.
