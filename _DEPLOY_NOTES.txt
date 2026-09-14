@@ -1,130 +1,98 @@
-pkg884 - IMPORTANT. Most of the app was not reading the customer's database.
-============================================================================
+pkg885 - The guardrail. A missed route now breaks instead of leaking.
+=====================================================================
 
-TWO FILES, neither new.
-  lib/db.js
-  pages/api/admin/tenant-setup.js
+ONE FILE.  lib/db.js  - not new.
 
-WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING, because for Rock
-both databases are the same one. That is exactly why this went unnoticed.
+THIS ONE IS DESIGNED TO BREAK THINGS. That is the point. Deploy it when you can
+watch it, not last thing at night.
 
 
-THE PROBLEM
------------
-lib/db.js exports 20 named helpers - getProject, saveProject, get, set,
-getPortalUsers, getTokens and the rest. They are used by 164 FILES. Every one
-of them called getRedis(), which returned the GLOBAL client from the
-environment variables.
-
-Only the files converted in pkg843-852 to call getClient() were resolving the
-customer from the registry. Everything using a named helper - which is most of
-the application - was reading whatever the environment variables pointed at,
-regardless of which customer the request was for.
-
-With one customer that is invisible: both are Rock's database. With two it is
-one company seeing another's projects, and it would have been found by a
-customer rather than by us.
-
-Demonstrated, a named helper as 164 files call it:
-
-    BEFORE    inside zztest  ->  GLOBAL          <- Rock's database
-    AFTER     inside rock    ->  TENANT:rock
-              inside zztest  ->  TENANT:zztest
-
-
-THE FIX
--------
-getRedis() now resolves the customer, instead of getClient() doing it. It is
-the function every helper already calls, so all 20 follow automatically without
-touching any of the 164 files.
-
-That is the property the 49-file conversion was supposed to buy in the first
-place: one function knows which database, and everything else follows without
-knowing anything. I put the resolution one level too high and the conversion
-could not do its job.
-
-getClient() is now simply the client-shaped wrapper around getRedis(). Two
-functions each deciding which database is two rules that can disagree. There is
-one.
-
-The identity self-check runs on this path, so every read through a helper now
-also proves the database is the right customer's.
-
-
-ALSO: tenant-setup.js no longer depends on the global credentials
------------------------------------------------------------------
-It used to write the identity record to "whatever the environment variables
-point at". Fine with one database; a way to stamp the wrong company's database
-when there are several. And it blocks removing the globals, which is the next
-step.
-
-It now names its target explicitly, in this order:
-
-  1. credentials supplied in the request  - a new customer, not yet registered
-  2. the customer is already registered   - credentials from the registry
-  3. neither, and tenancy is off          - the ambient database
-
-So provisioning customer two works like this:
-
-    await (await fetch('/api/admin/tenant-setup', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'identity', id: 'zztest', name: 'ZZ Test Construction Ltd',
-        redis: { url: 'https://....upstash.io', token: '...' }
-      })
-    })).json()
-
-The reply says wroteTo, naming which database was stamped, so you can see it
-went where you meant.
-
-The GET also reads the identity from the registry's credentials rather than the
-environment, and reports identityReadFrom.
-
-
-AUDIT I RAN WHILE I WAS IN THERE
---------------------------------
-Every API route, checking which are wrapped:
-
-  pages/api/health-check.js          unwrapped, deliberate, touches no database
-  pages/api/cron/deliveries-notify.js  no default export - a module, called
-                                       inside hs-expiry-email, so a customer IS
-                                       in scope when it runs
-  pages/api/admin/tenant-setup.js    unwrapped, deliberate, now names its own
-                                       database
-  pages/api/platform/tenants.js      unwrapped, deliberate, uses the control
-                                       database which has its own credentials
-
-And every lib file, for database access at module scope - outside any function,
-where no customer can be in scope. NONE.
-
-So after this, nothing depends on the global credentials except the
-single-tenant fallback itself.
-
-
-CHECKS I RAN
+WHAT IT DOES
 ------------
-- esbuild compile on both: 0 errors
-- confirmed tenantRedis and assertIdentity are function DECLARATIONS, so
-  hoisting makes them safe to call from getRedis above them
-- ran a named helper under no tenant, under rock and under zztest, and against
-  the old behaviour for contrast - output above
-- ran it again with the globals removed, confirming the tenant path still works
-  and the no-tenant path has nothing to fall back to
+With tenancy on, if a request reaches the database without a customer having
+been resolved, getRedis() now THROWS instead of falling back to the global
+client.
+
+Before: an API route that was never wrapped in withTenant fell through and read
+ROCK'S database. It worked. It looked completely normal. Served to a different
+customer it would have produced plausible figures belonging to the wrong
+company, and nothing anywhere would have said so.
+
+After: that route is a broken page. Loud, immediate, one line to fix.
+
+This is the single most valuable step in the whole exercise, because it converts
+the one failure nobody can see into the one failure everybody can.
+
+Proven:
+
+    tenancy ON
+      wrapped route, customer resolved     -> TENANT:rock
+      UNWRAPPED route, no customer         -> THROWS
+
+    tenancy OFF (the rollback)
+      no customer, single tenant           -> GLOBAL       rollback still works
+
+    tenancy ON, globals also removed
+      wrapped route, customer resolved     -> TENANT:rock
+      UNWRAPPED route, no customer         -> THROWS
+
+It throws rather than falling back to the in-memory store, which was the other
+option. An empty store looks like "no data"; a throw looks like "this code is
+wrong", which is what it is.
 
 
-WHAT TO CHECK
--------------
-Everything, briefly. This changes how 164 files reach the database, even though
-the destination is identical.
+WHAT I CHECKED CANNOT HIT IT
+----------------------------
+  health-check.js            unwrapped, touches no database
+  tenant-setup.js            unwrapped, but names its own database since pkg884
+  platform/tenants.js        unwrapped, uses the control database's own
+                             credentials
+  deliveries-notify.js       a module, called inside hs-expiry-email, so a
+                             customer IS in scope
+  forEachTenant heartbeats   both inside the loop; and heartbeat() swallows its
+                             own errors, so it could not fail a job anyway
+  every lib file             checked for database access at module scope - none
 
-1. Project Financials, Retention, WIP, 13-week cash flow - numbers unchanged.
-2. Bookkeeping, CRM, Operations, Design - all load.
-3. The Site App on your phone.
-4. Sign out and back in - that path uses getPortalUsers, one of the 20.
-5. Send a variation to yourself.
+So nothing legitimate reaches the throw. Anything that does is a genuine miss.
 
-If ANY page fails to load, tell me which. It would mean the identity check is
-firing where it should not, and that is a one-line diagnosis.
 
-DO NOT remove the global credentials yet. That is the next package, and it
-should go on its own.
+THE ROLLBACK IS UNCHANGED
+-------------------------
+Delete TENANCY_ENABLED in Vercel and redeploy. The throw is gated on it, so
+single-tenant behaviour returns exactly as before. Ninety seconds.
+
+
+WHAT TO CHECK - and here you are LOOKING for breakage
+-----------------------------------------------------
+Click through everything. A 500 is a route that was never wrapped, which is
+exactly what this package exists to expose. Send me the route name and it is a
+one-line fix.
+
+  1. Sign out and back in
+  2. Project Financials - open a project, change a setting
+  3. Retention - add and delete an entry
+  4. WIP - open a month
+  5. 13-week cash flow
+  6. Bookkeeping, and the In Query table
+  7. CRM - open a deal
+  8. Operations - the planner, forms, a project
+  9. Design
+ 10. The Site App on your phone - forms, deliveries, issues
+ 11. Admin - staff, users
+ 12. Send a variation and an application
+
+Tomorrow morning, check /api/admin/cron-health. A cron that now fails will say
+so, and the error will name the cause.
+
+I would rather you find three broken pages today than none, because none would
+most likely mean the clicking was not thorough rather than that the code is
+clean.
+
+
+AFTER THIS IS CLEAN
+-------------------
+Remove the global credentials in Vercel - KV_REST_API_URL and
+KV_REST_API_TOKEN. By then they will be belt and braces rather than the
+guardrail, because the code already refuses to use them.
+
+Do that as its own step, after a clean run through the list above.
