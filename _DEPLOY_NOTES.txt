@@ -1,87 +1,98 @@
-pkg892 - The report that downloaded as a corrupt file
-=====================================================
+pkg890 - A cron that has stopped now tells you
+==============================================
 
-TWO FILES, neither new. Both folders use literal square brackets.
-  pages/project/[id].js
-  pages/api/project/[id]/report.js
+FIVE FILES.
+  lib/cronHealth.js                 <-- NEW, create by hand
+  pages/api/cron/health-alert.js    <-- NEW, create by hand
+  lib/forEachTenant.js
+  pages/api/admin/cron-health.js
+  vercel.json                       (repository root)
 
-
-WHAT WAS HAPPENING
-------------------
-Excel said "cannot open the file ... the file format or file extension is not
-valid".
-
-The file was not corrupt. IT WAS A JSON ERROR MESSAGE SAVED WITH AN .xlsx
-EXTENSION. Open it in Notepad and it would have said:
-
-    {"error":"Financial data has not been built yet. Open Project Financials
-    once, then download again."}
-
-Two separate faults, one on each side.
-
-NOT A RUSSELL HILL PROBLEM. It depends on WHEN you click, not WHICH project -
-which is why it worked on the retry, and why other projects looked fine.
+WHAT SHOULD LOOK DIFFERENT:  NOTHING, until something goes wrong.
 
 
-1. THE PAGE SAVED AN ERROR AS A SPREADSHEET
--------------------------------------------
-    const res = await fetch(...)
-    const blob = await res.blob()      // whatever came back
-    a.download = '...xlsx'; a.click()
+ITEMS 3 AND 4 FROM THE LIST
+---------------------------
+  3. a cron that FAILS now emails
+  4. a cron that has STOPPED now emails
 
-No check of res.ok. So any failure - 503, 500, 404 - became a file called
-.xlsx, and the actual message was inside a file nobody would think to open in a
-text editor.
-
-It now reads the response first and shows the message.
+Both use the reporter from pkg887, so they arrive looking like every other
+problem and need no separate sending setup.
 
 
-2. THE REPORT REFUSED WHEN THE SNAPSHOT WAS COLD
-------------------------------------------------
-pkg857 made the report read the dashboard snapshot, so it cannot disagree with
-what Project Financials shows. That was right.
+3. A FAILED CUSTOMER ITERATION EMAILS
+-------------------------------------
+forEachTenant already recorded a failure in that customer's heartbeat. A
+heartbeat is only read by somebody who goes looking.
 
-But the snapshot EXPIRES AFTER FOUR HOURS, and the report returned 503 when it
-found none - telling the user to go and open another page first.
-
-Asking somebody to visit a different page to warm a cache is not a fix, it is a
-workaround with instructions. Anyone downloading a report outside an active
-working session hit it.
-
-It now rebuilds the snapshot itself by calling /api/dashboard - the same thing
-opening the page would have done, without the person needing to know that. It
-calls it on the SAME ADDRESS the request arrived on, so it resolves to the same
-customer, and forwards the session cookie.
-
-If that still produces nothing, the error is now honest about it rather than
-blaming the user's browsing order.
+A cron failing at 02:30 and never being mentioned is a sync that has silently
+stopped for ONE customer while working for the rest - the exact failure the
+per-customer loop was built to expose, and it was still only visible on a page
+nobody opens.
 
 
-WHY THIS MATTERED MORE THAN A BROKEN DOWNLOAD
----------------------------------------------
-The report was rewritten only two days ago and tested. It worked, because the
-snapshot was warm at the time. The failure needed a four-hour gap to appear -
-which is exactly the kind of fault that survives testing and reaches a customer.
+4. A JOB THAT HAS STOPPED - a new nightly cron
+----------------------------------------------
+/api/cron/health-alert, 08:30 UTC, after hs-expiry-email at 08:00 so the
+morning's jobs are judged on a fresh run rather than yesterday's.
 
-Worth remembering when the module gates and provisioning get tested: "it worked
-when I tried it" and "it works" are different claims.
+It says NOTHING unless something is wrong.
+
+A cron that has stopped cannot report that it has stopped. The absence is the
+symptom, so something else has to notice. That is why this is a separate job
+rather than a check inside each one.
+
+vercel.json now has 17 crons, up from 16. You are on Pro, so no limit applies.
+
+
+"NOT CONFIGURED" IS NOT A FAILURE - and this matters
+----------------------------------------------------
+crm-call-volume returns { ok: false, error: 'Not configured. Missing in Vercel:
+EIGHTX8_...' } every night, because 8x8 has never been set up.
+
+Without handling that, this package would have emailed you THE SAME THING EVERY
+MORNING for as long as 8x8 stays on the backlog. An alert that always says the
+same thing is an alert people stop opening - which costs you the one morning it
+says something different.
+
+So "not configured" is now its own status, shown on the page and never alerted
+on. What actually alerts:
+
+    crm-call-volume    not configured    silent
+    wip-sync           not scheduled     silent
+    gp-snapshot        never run         silent
+    deep-sync          last run failed   EMAILS
+    crm-email-sync     ok                silent
+
+Only a job that has genuinely broken or genuinely stopped.
+
+
+THE LOGIC MOVED TO lib/cronHealth.js
+------------------------------------
+It was inside the admin endpoint. Two things need it now - the page and the
+alert - and two copies of "is this cron overdue" would drift. The copy that
+drifts would be the alert, which would then quietly stop alerting: a monitoring
+system that fails silently is worse than none, because it also removes the
+worry that made you check manually.
+
+pages/api/admin/cron-health.js is now four lines and returns what the library
+computes. Its output is unchanged apart from the new status.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on both: 0 errors
+- esbuild compile on all 5: 0 errors
+- vercel.json parsed and re-serialised as valid JSON, 17 crons confirmed
 - import-graph check: clean
-- confirmed the rebuild passes the incoming cookie, so the dashboard call is
-  authenticated as the same user
-- confirmed it uses x-forwarded-host, so under tenancy it resolves to the same
-  customer rather than the deployment URL
+- ran the alarm rules across five states, output above
 
 
 WHAT TO CHECK
 -------------
-1. Download a report now - it should work.
-2. The real test needs a COLD snapshot: leave it four hours, or download first
-   thing tomorrow without opening Project Financials first. It should still
-   produce a spreadsheet.
-3. If it ever fails again you will now get a readable message instead of a file
-   Excel refuses.
+1. /api/admin/cron-health still returns the same shape, with crm-call-volume now
+   reading "not configured" rather than "last run failed".
+2. Tomorrow after 08:30, health-alert should appear in the list with its own
+   heartbeat, and you should have received NO email - because nothing is
+   genuinely broken.
+
+If you DO get an email tomorrow, that is the system working. Send it to me.
