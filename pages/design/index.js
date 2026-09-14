@@ -32,7 +32,7 @@ export default function DesignHome() {
         </>}
         <span style={{ color: '#fff', fontSize: 13, fontWeight: 600, padding: '4px 10px' }}>Design</span>
         {!auth.isExternal && (auth.user?.role === 'admin' || auth.user?.role === 'management') && (
-          <a href="/admin/design-customers?from=design" style={{ color: '#c4b5fd', fontSize: 13, textDecoration: 'none', padding: '4px 10px' }}>Manage Customers</a>
+          <a href="/design/customers" style={{ color: '#c4b5fd', fontSize: 13, textDecoration: 'none', padding: '4px 10px' }}>Manage Customers</a>
         )}
         <div style={{ flex: 1, minWidth: 16 }} />
         <ReportImprovementLink />

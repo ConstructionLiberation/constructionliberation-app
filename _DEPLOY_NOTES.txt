@@ -1,63 +1,81 @@
-pkg899 - Tech Sub Builder hidden, and the back button goes where you came from
-==============================================================================
+pkg900 - Design Customers moves into Design. REPLACES pkg899.
+=============================================================
 
-THREE FILES, none new.
-  lib/designShell.js
-  pages/admin/design-customers.js
+FIVE FILES. Use this INSTEAD of pkg899 - it contains everything 899 did.
+
+  pages/design/customers.js        <-- NEW, create by hand
   pages/design/index.js
+  pages/admin/design-customers.js  (now a redirect)
+  pages/admin.js
+  lib/designShell.js               (the Tech Sub Builder change from 899)
 
 
-1. TECH SUB BUILDER HIDDEN
---------------------------
-HIDDEN, NOT DELETED - the page still exists, so remove `hidden: true` in
-lib/designShell.js to bring it back rather than rebuilding it.
+THE PAGE MOVES
+--------------
+    was   /admin/design-customers
+    now   /design/customers
 
-lib/designShell.js already had `internalOnly`, which hides builder tools from
-customers. It had no way to hide something from EVERYONE, so `hidden` is added
-and honoured alongside it - the same convention pkg898 added to
-components/OperationsNav.js, so both areas now hide the same way.
+It is a Design screen. Living under /admin made it feel like an Admin one, and
+forced its back button to GUESS whether to return to Admin or to Design - by
+role, which was right for one route in and wrong for the other, for everybody.
+
+Moving it removes the question instead of answering it. Back now always means
+Design, because that is where it is.
+
+  - Removed from the Admin menu.
+  - The Design portal's "Manage Customers" points at the new address.
+  - /admin/design-customers STAYS, as a redirect. That address will be in
+    bookmarks and old emails, and a 404 for somebody who has used the page for
+    months is a worse outcome than one extra file.
+
+
+WHY NOT REMOVE IT FROM DESIGN AND KEEP IT IN ADMIN
+--------------------------------------------------
+You suggested that and I would have advised against it, so it is worth writing
+down.
+
+The page allows admin AND management. But management cannot reach /admin at all -
+AREA_ACCESS.admin is admin-only. So the Design portal's link is their ONLY route
+in. Consolidating into Admin would have made you the one person able to add a
+design customer.
+
+Checked the other way too: AREA_ACCESS.design includes designer and
+post-contract, so they can reach /design - but the page guards itself at admin
+or management, and so does its API. So moving it does not widen access.
+
+
+ALSO IN HERE, from pkg899
+-------------------------
+Tech Sub Builder hidden from the Design tabs. HIDDEN, NOT DELETED - the page
+still exists; remove `hidden: true` in lib/designShell.js to bring it back.
+
+lib/designShell.js had `internalOnly`, which hides builder tools from customers,
+but no way to hide something from everyone. `hidden` added and honoured
+alongside - the same convention pkg898 added to components/OperationsNav.js, so
+both areas hide the same way.
 
 Design tabs after this: Handover Docs, RFIs, Tech Sub, Rock Drawings,
 Calculations, Leak Test Certs, Warranties, O&Ms.
 
 
-2. THE BACK BUTTON ON DESIGN CUSTOMERS
---------------------------------------
-It was decided by ROLE:
-
-    href={me.role === 'management' ? '/design' : '/admin'}
-
-But the page is reached from BOTH places - Admin lists it, and the Design portal
-has a "Manage Customers" link. So:
-
-    an admin arriving from Design      -> sent to Admin      wrong
-    an admin arriving from Admin       -> sent to Admin      right
-    a management user from Admin       -> sent to Design     wrong
-    a management user from Design      -> sent to Design     right
-
-Right for one route in and wrong for the other, for every role. Yours was the
-first case.
-
-It now follows the route actually taken: the Design portal's link carries
-?from=design, and the back button reads it. Where there is no marker - an old
-bookmark, or somebody typing the address - it falls back to the old role guess
-rather than picking arbitrarily.
-
-The label follows too, so it says "Design" when it goes to Design.
-
-
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
+- esbuild compile on all 5: 0 errors
 - import-graph check: clean
-- my edit declared `const router` a second time; the compile caught it and it
-  was already there. Removed.
+- grepped for any remaining link to /admin/design-customers: only the redirect
+  file itself
+- confirmed the page and its API both guard at admin/management, so nothing is
+  opened up by the move
 
 
 WHAT TO CHECK
 -------------
-1. Design portal > Manage Customers > back. Should return to the DESIGN portal.
-2. Admin > Design Customers > back. Should return to ADMIN.
-3. Design project tabs - no Tech Sub Builder. Tech Sub itself stays.
-4. A customer logging in should see the same tabs as before minus nothing -
-   Tech Sub Builder was already internal-only, so nothing changes for them.
+1. Design portal > Manage Customers. URL should be /design/customers, header
+   should say "Design Customers", back should say "Design" and go there.
+2. Admin - Design Customers should no longer be listed.
+3. Visit /admin/design-customers directly - it should redirect to the new
+   address rather than 404.
+4. Design project tabs - no Tech Sub Builder.
+
+STILL UNDEPLOYED: 896 and 898. 898 contains a NEW FILE, lib/pdfText.js, which
+five other files import - create it first or the build goes red.
