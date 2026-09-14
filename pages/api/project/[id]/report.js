@@ -87,18 +87,49 @@ async function handler(req, res) {
         setHeader() { return fakeRes },
         getHeader() { return undefined },
       }
-      await dashboardHandler({ ...req, method: 'GET', query: {} }, fakeRes)
+      // BUILD THE REQUEST EXPLICITLY. DO NOT SPREAD IT.
+      //
+      // { ...req } looks like it copies the request and does not. On a Node
+      // IncomingMessage, `headers` is a GETTER ON THE PROTOTYPE, and spread only
+      // copies own enumerable properties - so the copy had no headers at all.
+      //
+      // withTenant then saw no host, resolved no customer, and returned
+      // 404 Unknown address. Which this code read as "no projects" and reported
+      // as "could not build the financial data". Three layers between the cause
+      // and the message.
+      const innerReq = {
+        method: 'GET',
+        query: {},
+        url: '/api/dashboard',
+        headers: req.headers,
+        cookies: req.cookies,
+      }
+      await dashboardHandler(innerReq, fakeRes)
       const d = cap.body
       rows = Array.isArray(d) ? d : (d && Array.isArray(d.projects) ? d.projects : [])
+
+      // SAY WHY, rather than "could not build it".
+      //
+      // The first version returned a flat 503 when the rebuild produced nothing,
+      // which told nobody anything - the dashboard has three different failure
+      // replies (401 no Xero connection, 500 with a message, or simply no
+      // projects) and they need completely different responses.
+      //
+      // Guessing between them from a screenshot is how an evening disappears.
+      if (!rows.length) {
+        const why = cap.body && cap.body.error
+          ? `${cap.statusCode}: ${cap.body.error}`
+          : `${cap.statusCode}: returned ${cap.body === null ? 'nothing' : typeof cap.body}, no projects`
+        throw new Error(`Rebuilding the financial data produced no projects - ${why}`)
+      }
     } catch (e) {
-      // Reported by the wrapper, but named here so the email says which step.
-      throw new Error('Could not rebuild the financial data for this report: ' + (e && e.message))
+      throw new Error('Could not rebuild the financial data for this report. ' + (e && e.message))
     }
   }
 
   if (!rows.length) {
     return res.status(503).json({
-      error: 'Could not build the financial data for this report. Open Project Financials and try again - if it still fails, tell James.',
+      error: 'There is no financial data to build this report from.',
     })
   }
 

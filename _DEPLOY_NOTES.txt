@@ -1,83 +1,80 @@
-pkg894 - Error emails to Construction Liberation, and the 503 they reported
-===========================================================================
+pkg895 - The cold-snapshot report. Spreading a request does not copy it.
+========================================================================
 
-THREE FILES, none new.
-  lib/errorReport.js
-  lib/withTenant.js
-  pages/api/project/[id]/report.js
+ONE FILE.  pages/api/project/[id]/report.js  (literal square brackets)
 
-
-FIRST: THE REPORTING WORKS
---------------------------
-Your screenshot is the first real proof - route, customer, address, timestamp,
-stack, sent within a minute. That endpoint was one middleware line away from
-silently reporting nothing, so it was worth seeing rather than assuming.
+REPLACES the pkg894 version. Deploy pkg894 first if you have not - it has the
+error-email changes - then this over the top.
 
 
-1. ERROR EMAILS GET THEIR OWN ADDRESS
--------------------------------------
-    ERROR_REPORT_EMAIL = james@constructionliberation.com
+WHAT HAPPENED
+-------------
+You cleared the cache and downloaded a report. It said:
 
-Add it in Vercel. Production and Preview. Config, not Secret - you will want to
-read it back.
+    Could not build the financial data for this report.
 
-It is a SEPARATE variable rather than changing ALERT_EMAIL, because ALERT_EMAIL
-is also where a user's "Report a problem" goes. Those want different people: a
-problem report goes to whoever runs the portal for that customer; a stack trace
-goes to whoever maintains the software.
-
-Under multi-tenancy that is exactly the difference between the customer and
-Construction Liberation, so it should not be one setting.
-
-Falls back to ALERT_EMAIL if unset, so nothing stops working before you add it.
+The rebuild ran, produced nothing, and could not say why. Three layers between
+the cause and the message.
 
 
-2. THE EMAIL NOW SAYS WHAT THE ROUTE SAID
------------------------------------------
-Yours said only:
+THE CAUSE
+---------
+pkg894 called the dashboard handler directly instead of over HTTP - right idea -
+and passed it a copy of the request:
 
-    Error    Handler returned 503
+    await dashboardHandler({ ...req, method: 'GET', query: {} }, fakeRes)
 
-Which is not enough to act on - the report route alone has two different 503s,
-and I could not tell you which one you had hit.
+{ ...req } LOOKS LIKE IT COPIES THE REQUEST AND DOES NOT.
 
-The body the route actually sent now travels with the report, under "What the
-route said". Captured by wrapping res.json, because by the time the status code
-is checked the body has already gone.
+On a Node IncomingMessage, `headers` is a GETTER ON THE PROTOTYPE. Spread copies
+only own enumerable properties, so the copy had no headers at all. Demonstrated:
+
+    const req = new http.IncomingMessage()
+    req.headers = { host: 'app.rockroofing.co.uk' }
+    ({ ...req }).headers        ->  undefined
+    ({ headers: req.headers })  ->  present
+
+So withTenant saw no host, resolved no customer, and returned 404 Unknown
+address - which my code read as "no projects" and reported as "could not build
+the financial data".
+
+The tenant check worked perfectly. It refused a request with no address, exactly
+as designed. It was my request that was broken.
 
 
-3. THE 503 ITSELF
------------------
-That was the report route on J190 - the download that failed, then worked.
+THE FIX
+-------
+The inner request is now built explicitly - method, query, url, headers,
+cookies - rather than spread. Checked: this pattern appears nowhere else in the
+codebase.
 
-pkg892 made it rebuild the financial snapshot rather than refuse. It did that
-with fetch() to our own deployment - which works, but is a function calling
-ITSELF: a second cold start, a second serverless slot, the session cookie
-forwarded by hand, and one timeout budget shared between the two. Under load
-that is exactly the kind of call that fails occasionally and looks random.
 
-It now calls the dashboard handler DIRECTLY, in the customer scope it is already
-in. No second request, no cookie forwarding, no shared timeout.
+ALSO: THE FAILURE NOW NAMES ITSELF
+----------------------------------
+The rebuild produced nothing and returned a flat 503. The dashboard has three
+different failure replies - 401 not connected to Xero, 500 with a message, or
+genuinely no projects - and they need completely different responses.
 
-And if the rebuild does fail, it now throws with the reason rather than
-returning a bare 503 - so the email names the step instead of the status code.
+If it fails again the error now says which, with the status code and the
+dashboard's own message. Guessing between them from a screenshot is how an
+evening disappears.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
+- esbuild compile: 0 errors
 - import-graph check: clean
-- confirmed no circular import: dashboard.js does not import the report
+- ran the spread against a real IncomingMessage to confirm headers are lost
+- grepped for { ...req } elsewhere: nowhere else
 
 
-WHAT TO CHECK
--------------
-1. Add ERROR_REPORT_EMAIL in Vercel, redeploy.
-2. Download the Russell Hill report - it should work, and keep working
-   tomorrow morning when the snapshot is cold. THAT is the real test; today it
-   will pass either way because the snapshot is warm.
-3. Next time an error email arrives it should carry "What the route said", and
-   go to the Construction Liberation address.
+WHAT TO CHECK - the same test again
+-----------------------------------
+  1. Deploy this.
+  2. Console:  await (await fetch('/api/clear-cache', { method:'POST' })).json()
+  3. WITHOUT opening Project Financials, go to a project and Download Report.
 
-IF THE 503 HAPPENS AGAIN, send me the email - it will now tell us which of the
-two it is, which is the thing I could not determine from the last one.
+It should pause while it rebuilds, then give you a spreadsheet.
+
+If it fails, the message will now name the reason - send it to me and it will be
+one step, not four.
