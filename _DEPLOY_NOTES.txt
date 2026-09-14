@@ -1,91 +1,74 @@
-pkg878 - Nothing is always on, and the form stops lying
-=======================================================
+pkg879 - Stop an endpoint printing Rock's database token
+========================================================
 
-TWO FILES, neither new.
-  lib/modules.js
-  pages/platform/index.js
+ONE FILE.  pages/api/admin/tenant-setup.js  - not new.
 
-DEPLOY pkg877 AND THIS BEFORE SAVING ROCK'S RECORD. pkg877 adds the per-kind
-sender fields Rock needs; this fixes the modules and the form.
+DEPLOY BEFORE RUNNING THE PRE-FLIGHT CHECK. I was about to ask you to open that
+endpoint and paste the output to me.
 
 
-1. NOTHING IS FORCED ON
------------------------
-I had Operations, HR and Lessons Learnt as "always on", on my assumption that
-the portal had no coherent shape without them.
+WHAT IT WAS DOING
+-----------------
+The GET returned resolvedForThisHost as the RAW customer record - which carries
 
-That was a guess about YOUR PRODUCT, not a technical constraint, and it was not
-mine to make. A customer buying Design only is a perfectly good sale.
+    redis: { url, token }
 
-All nine are now selectable, none forced. Tested:
+So it would have printed Rock's database url and access token into a browser
+tab, and into anything that output was pasted into. Including this chat.
 
-    Design + Operations   ok
-    Design with no Ops    REFUSED: design needs operations
-    HR only               ok
-    Nothing selected      allowed - an empty customer, which is a real state
-                          while someone is being set up
+Admin-only, so not exposed to the world. But a credential in a response is a
+credential in a screenshot, a support ticket, a scroll-back.
 
-The DEPENDENCIES still hold, because those are real: Commercial and Design need
-Operations projects to hang off, Business Financials reads what Bookkeeping
-produces. Those are not preferences.
+pages/api/platform/tenants.js has ALWAYS stripped credentials - it has a safe()
+helper and uses it on every response. tenant-setup.js was written earlier and
+never got one. Same rule, two places, one of them wrong.
 
-
-2. THE REPLY-TO FIELD WAS MISLABELLED
--------------------------------------
-You said reply-to is often the logged-in user. You are right, and the code
-already does that - I checked all 14 places that set it:
-
-    reply_to: b.sentBy     variations and applications - the person who sent it
-    reply_to: REPLY_TO     password resets, login details, pre-start
-                           notifications, operative invitations, problem reports
-
-So the customer-level setting is a FALLBACK for emails with no sending user, not
-an override. The form said "Reply-to (their own address)", which reads like it
-applies to everything.
-
-Relabelled "Reply-to for system emails", with a note listing which ones and
-saying plainly that variations and applications are unaffected.
+That is the fault class this project keeps producing. This time it was
+credentials rather than a number.
 
 
-3. THE BROWSER WAS FILLING IN THE FORM
---------------------------------------
-Your screenshot had james@rockroofing.co.uk in the Id field and something
-autofilled into the DATABASE TOKEN. Both your password manager, neither you.
+THE FIX
+-------
+A safeTenant() helper, applied before responding. The record still tells you
+everything useful - id, name, hosts, modules, timezone - plus
 
-The Id one my validation would have caught. THE TOKEN ONE IT WOULD NOT. A
-password manager quietly filling a customer's database credentials with
-something else is a genuinely bad way to spend an evening - Rock would have been
-pointed at a database that does not exist, and every check would have passed
-because the form was filled in.
+    databaseConfigured: true | false
 
-autoComplete="off" on all 10 inputs.
-
-CHECK IT ANYWAY when you add a customer. The browser does not always obey, and
-this is the one form where a wrong value is expensive.
+which is the only thing anyone needs to know about the credentials.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on both: 0 errors. It caught a real one: my edit wrote escaped
-  quotes into the JSX, which would have failed the build. Fixed and recompiled.
-- import-graph check: clean
-- ran the module rules with nothing forced on, output above
-- removed the now-unused CORE_MODULES import - 0 references left in the page
+- esbuild compile: 0 errors
+- grepped every endpoint that reads a tenant record and checked each one either
+  strips before responding or uses the record internally only. Three internal
+  uses in platform/tenants.js, both responses already stripped, this one fixed.
 
 
-WHEN YOU ADD ROCK
------------------
-    Id                  rock            <- NOT your email address
-    Company name        Rock Roofing Ltd
-    Web addresses       app.rockroofing.co.uk, siteapp.rockroofing.co.uk
-    Modules             all nine, if Rock uses all nine
-    Sender name         Rock Roofing
-    Sending address     notifications@send.rockroofing.co.uk
-    Applications        Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>
-    Reply-to            for system emails only
-    Timezone            Europe/London
-    Database url        the value of KV_REST_API_URL
-    Database token      the value of KV_REST_API_TOKEN   <- CLEAR IT FIRST, then
-                                                            paste deliberately
+AFTER DEPLOYING - THE PRE-FLIGHT CHECK
+--------------------------------------
+This is the last thing before the switch, and it is the one that matters.
 
-Nothing reads the record until TENANCY_ENABLED is set. Still do not set it.
+Open, as admin, on app.rockroofing.co.uk:
+
+    /api/admin/tenant-setup
+
+You are looking for FOUR things:
+
+    controlDatabaseConfigured : true
+    tenancyEnabled            : false
+    identityOfCurrentDatabase : { id: "rock", name: "Rock Roofing Ltd", ... }
+    resolvedForThisHost       : { id: "rock", ..., databaseConfigured: true }
+
+The last two are the two halves of the self-check, and this is the first time
+they can be compared.
+
+    identityOfCurrentDatabase   what the DATABASE says it is
+    resolvedForThisHost         what the REGISTRY says this address is
+
+BOTH MUST SAY "rock". If they do, the mapping is right and the switch is safe.
+If resolvedForThisHost comes back null, the address in the registry does not
+match the address you are browsing - fixable in the platform page, and far
+better found now than after the switch, when every request would 404.
+
+Safe to paste the whole thing to me now.

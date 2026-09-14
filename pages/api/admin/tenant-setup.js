@@ -19,6 +19,14 @@ import { saveTenant, tenantForHost, allTenants, registryConfigured, tenancyEnabl
 //
 // Not wired to any page. Called by hand, once per customer, until provisioning
 // replaces it.
+// Never return a customer's database credentials. There is no screen that needs
+// them and a response that carries them is a response that can be pasted.
+function safeTenant(t) {
+  if (!t) return null
+  const { redis, ...rest } = t
+  return { ...rest, databaseConfigured: !!(redis && redis.url && redis.token) }
+}
+
 export default async function handler(req, res) {
   if (!requireRole(req, res, ['admin'])) return
 
@@ -37,9 +45,17 @@ export default async function handler(req, res) {
       tenancyEnabled: tenancyEnabled(),
       identityOfCurrentDatabase: identity,
       registeredTenants: registered,
-      resolvedForThisHost: registryConfigured()
-        ? ((await tenantForHost(req.headers.host).catch(() => null)) || null)
-        : null,
+      // STRIPPED. This returned the RAW customer record, which carries the
+      // database url and token. Admin-only, but it would have printed Rock's
+      // credentials into a browser tab - and into anything that output was
+      // pasted into.
+      //
+      // The platform endpoint has always stripped them. This one was written
+      // earlier and never did. Same rule, two places, one of them wrong: the
+      // fault class this project keeps producing, this time with credentials.
+      resolvedForThisHost: registryConfigured() ? safeTenant(
+        await tenantForHost(req.headers.host).catch(() => null)
+      ) : null,
     })
   }
 
