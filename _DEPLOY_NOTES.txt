@@ -1,101 +1,83 @@
-pkg897 - The planner error, pre-starts in Completed Forms, and 50 per page
-==========================================================================
+pkg896 - The manifest error on every page load
+==============================================
 
-THREE FILES, none new.
-  pages/api/planning.js
-  pages/api/submissions.js
-  pages/operations/forms-missing.js
+ONE FILE.  middleware.js  (repository root)
 
 
-1. THE PLANNER ERROR YOUR EMAIL CAUGHT
---------------------------------------
-    POST /api/planning
-    Cannot read properties of undefined (reading '2026-09-25')
+WHAT IT WAS
+-----------
+    Manifest: Line: 1, column: 1, Syntax error.    /site.webmanifest:1
 
-Clearing the LAST remaining day on a project. The handler does:
+The file is fine. It exists in /public and it is valid JSON - I parsed it.
 
-    delete alloc[key][date]
-    if (!Object.keys(alloc[key]).length) delete alloc[key]    // project gone
-    ...
-    return res.json({ ok: true, day: alloc[key][date] || null })   // reads it back
+MIDDLEWARE WAS INTERCEPTING IT. The open list allowed /favicon and
+/rock-logo.jpg, one filename at a time, and missed everything else. So the
+browser's request for site.webmanifest had no session, was redirected to /login,
+and the browser got an HTML page where it expected JSON.
 
-When that day was the project's only one, alloc[key] is deleted and the line
-below reads a date off an object that no longer exists.
-
-AND IT THREW AFTER saveAlloc. So the change SAVED, and the person was told it
-had failed. They reload, see it worked after all, and never mention it - which
-is why this has never been reported despite being reachable any time somebody
-clears a project's last day.
-
-Found because the error email told us the route and the message. Without that it
-would have needed somebody to notice and describe it.
-
-I checked for the same read-after-delete pattern elsewhere in the file: the only
-other candidate is an if/else where just one branch runs.
+/apple-touch-icon.png had exactly the same problem.
 
 
-2. PRE-STARTS NOW SHOW IN COMPLETED FORMS
------------------------------------------
-They were never in that list. Pre-Start Minutes are not a Site App form - they
-live at ops:prestart:{projectNo}, filled in from the project page, and nothing
-ever wrote one into the submission index that Completed Forms reads.
+WHY IT IS WORTH FIXING RATHER THAN IGNORING
+-------------------------------------------
+Day to day it is a console warning nobody reads.
 
-lib/preStartDone.js already documents exactly this confusion, found from the
-Forms Missing side:
+But site.webmanifest is the file that decides WHAT THE SITE APP IS CALLED and
+WHICH ICON IT GETS when an operative adds it to their phone's home screen. That
+has been silently failing for every operative who has ever tried - they would
+have got a generic browser icon and the page title, with nothing to explain why.
 
-    "Nothing ever writes a Pre-Start there, so that test could only ever return
-     false."
-
-This is the other half of the same gap.
-
-They are PRESENTED in the list rather than stored as submissions - no duplicate
-record, no migration of the ones already done, and one source of truth for a
-Pre-Start.
-
-DONE MEANS SENT, using isPreStartDone from that same file rather than a second
-rule. A Pre-Start that has been saved but not issued does not appear, which
-matches the Forms Missing page and the Monday chaser exactly.
-
-If the lookup fails it is caught: a Pre-Start problem must not empty the
-Completed Forms list.
+apple-touch-icon.png is the iPhone equivalent, and was equally blocked.
 
 
-3. FORMS MISSING: 50 PER PAGE
------------------------------
-Every required form for every project across the whole range came out in one
-table. Previous/Next, with "Showing 1-50 of 312".
+THE FIX
+-------
+Static files are allowed by EXTENSION rather than one filename at a time:
 
-The page resets to 1 whenever a filter changes - otherwise changing a filter
-could leave you on page 6 of a 2-page list, looking at nothing and concluding
-there is nothing there.
+    /\.(webmanifest|ico|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|txt|xml)$/i
 
-Controls only appear when there is more than one page.
+Added to BOTH lists - the main one and the Site App passthrough. The Site App one
+matters more, since siteapp.rockroofing.co.uk is where an operative actually
+installs from, and it was missing it too.
+
+By extension so the next icon or font added to /public does not need remembering.
+None of these file types can carry data.
+
+Checked it does not open anything it should not:
+
+    /site.webmanifest       open      /wip                     closed
+    /apple-touch-icon.png   open      /api/dashboard           closed
+    /favicon.ico            open      /retention               closed
+    /robots.txt             open      /api/project/abc/report  closed
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
-- import-graph check: clean
-- confirmed the new hooks sit before the component's only return, so hook order
-  cannot change between renders
-- checked planning.js for other read-after-delete pairs
+- esbuild compile: 0 errors
+- middleware still imports only next/server - it runs at the edge
+- confirmed the rule is in both lists
+- ran the pattern against six paths that must open and six that must stay closed
+- parsed site.webmanifest to confirm the file itself was never the problem
+
+My first attempt at this edit asserted and wrote nothing, because the anchor
+line appears TWICE in the file. That is the assert doing its job - it stopped me
+patching one list and leaving the other, which is the half-fix that would have
+left the Site App still broken.
+
+
+ONE FOR LATER, NOT NOW
+----------------------
+The manifest hardcodes "Rock Roofing" as the app name and points at Rock's
+icons. Under multi-tenancy every customer's Site App would install as "Rock
+Roofing" on their operatives' phones.
+
+It needs to be served per customer rather than as a static file - a small API
+route reading the customer's name and logo. Not urgent, but it belongs on the
+list with the other per-customer branding.
 
 
 WHAT TO CHECK
 -------------
-1. Planner: put one operative on a project for a single day, then clear it. It
-   should succeed rather than erroring. That is the exact case that failed.
-2. Site App > Completed Forms: Pre-Start Minutes should now appear for every
-   project where one has been SENT.
-3. A project where the Pre-Start is saved but NOT sent should NOT appear - that
-   is the rule working, not a miss.
-4. Operations > Forms Missing: 50 rows, with paging underneath. Change a filter
-   and confirm it returns to page 1.
-
-
-STILL OUTSTANDING
------------------
-  - You asked for a deep dive on the Pre-Start section. I have done the part
-    that touches Completed Forms. The section itself - the form, the PDF, the
-    send, the lock - is its own piece of work and worth doing properly rather
-    than at the end of a long session.
+1. Reload any page. The Manifest syntax error should be gone from the console.
+2. On your phone, on siteapp.rockroofing.co.uk, add it to the home screen. It
+   should now be called "Rock Roofing" with the proper icon.
