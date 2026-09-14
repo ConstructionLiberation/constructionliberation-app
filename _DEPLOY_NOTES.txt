@@ -1,120 +1,104 @@
-pkg889 - Deep dive: eleven settings frozen at module load, and a shared flag
-============================================================================
+pkg891 - Variations default to not instructed, and the retention import stops
+              dropping rows silently
+==============================================================================
 
-TWELVE FILES, none new.
-
-WHAT SHOULD LOOK DIFFERENT:  NOTHING. For Rock every value resolves to what it
-already was. These are faults that only appear with a second customer, which is
-why they are worth finding now.
-
-
-THIS IS THE DEEP DIVE YOU ASKED FOR
------------------------------------
-A deliberate hunt for the mechanical patterns that cause cross-customer leaks,
-rather than a general read. Six searches:
-
-  1. module-scope mutable state          11 found, 2 real
-  2. globalThis / global                 none
-  3. timers outliving a request          none server-side
-  4. Redis clients outside lib/db.js     none
-  5. per-customer settings resolved at   ELEVEN
-     module load
-  6. import-graph to server-only modules clean
+THREE FILES, none new.
+  pages/variations.js
+  pages/retention.js
+  pages/api/retention.js
 
 
-FINDING 1 - ELEVEN SETTINGS FROZEN AT MODULE LOAD
--------------------------------------------------
-    lib/designEmail.js          FROM, REPLY_TO, APP_URL
-    lib/designRfiNotify.js      FROM, REPLY_TO, APP_URL
-    lib/crmEmailVolume.js       INTERNAL_DOMAIN
-    pages/api/design-oms.js     APP_URL, LOGO_URL
-    pages/api/ops-users.js      FORMS_URL
-    pages/api/project-process.js FROM, APP_URL
+1. A MANUALLY ADDED VARIATION IS NOT INSTRUCTED
+-----------------------------------------------
+The Add dialog defaulted to instructed = yes. So anything typed straight into
+the tracker counted as AUTHORISED BY THE CUSTOMER the moment it was saved - into
+the AFA, the applications and the margin, without anyone having agreed it.
 
-A module is evaluated ONCE, when first imported. At that moment there is no
-request and therefore NO CUSTOMER IN SCOPE. So each of these froze to whatever
-the environment variables said.
+Worse, it was not easily undone: pages/api/project/[id]/settings.js refuses to
+delete or change an instructed variation, which is the guard you met on Sunday.
+So a mis-added row was stuck.
 
-Every customer's design emails, RFI notices, OM notices, operative invitations
-and process emails would have come from ROCK'S address with links to ROCK'S
-portal - permanently, whatever their own settings said.
+Not instructed is the honest starting point - it was raised, nobody has agreed
+it yet. Tick it when they have.
 
-MY FAULT, from pkg868. That conversion replaced the call sites but did not
-notice that eleven of them sit at module scope rather than inside a function. It
-looked complete and achieved nothing in those eleven places.
-
-lib/ramsNotify.js already had it right - `const FROM = () => fromEmail('forms')`
-- and that was the shape to copy. All eleven are now functions, evaluated per
-request with the customer resolved.
-
-APP_URL is EXPORTED from designEmail and imported by four other files, so those
-were updated too: design-calculations, design-techsubs, design-rfis,
-design-rock-drawings.
-
-WHY THIS MATTERED MORE THAN IT LOOKS: it would have survived the leak hunt. It
-produces a WRONG SENDER, not wrong data on a screen. Nobody searching a database
-for ZZTEST would ever have found it.
+The default existed in THREE places - the initial state, the reset after saving,
+and the reset when the dialog opens. There is now one constant used by all
+three, because three copies of a default is three chances to change two of them.
 
 
-FINDING 2 - A FLAG WRITTEN BY ONE REQUEST AND READ BY ANOTHER
--------------------------------------------------------------
-pages/api/crm.js had:
+2. THE RETENTION IMPORT SILENTLY DROPPED ROWS
+---------------------------------------------
+You asked me to check the import and manual entry without testing them. This is
+what I found.
 
-    let LAST_DEALS_WERE_SEED = false     // module scope
+The import filters out every row with no ourRef, and says nothing:
 
-set inside loadDeals() and read later when building the response. A warm
-instance serves many requests:
+    const incoming = req.body.entries.filter(e => e && String(e.ourRef||'').trim())
 
-    request A (a customer with deals)   sets it false
-    request B (a customer with none)    sets it true
-    request A's response reads it       -> true
+Import a hundred rows, twelve missing a reference, and the message said
+"88 added" with no mention of the twelve. Nobody counts rows afterwards, and a
+retention row that never arrived looks exactly like one that was never there.
 
-and A is told it is looking at sample data when it is not. TWO PEOPLE ON THE
-PORTAL AT ONCE was enough to do it - this was a live bug before tenancy, not
-only after.
+Rows are still skipped - ourRef is what rows are matched on, and a row without
+one could never be updated later. But the reply now returns a count AND the
+first twenty by name, and the page says:
 
-The flag now travels with the array it describes, as a non-enumerable property,
-so it cannot be overwritten by somebody else's request and cannot leak into
-anything that serialises the deals.
-
-
-FINDING 3 - THE ERROR THROTTLE IGNORED THE CUSTOMER
----------------------------------------------------
-pkg887's throttle keyed on route and message only, so one company's error would
-suppress another company's identical error on the same route for half an hour.
-"The same error on two customers" is exactly the thing worth hearing twice. Now
-keyed by customer as well.
+    Imported 100 rows - 85 added, 3 updated, 12 SKIPPED with no reference:
+    Gas Lane, Waungron, ...
 
 
-WHAT I DID NOT FIND - worth stating
------------------------------------
-  - No globalThis or global state anywhere
-  - No setInterval server-side (the three in pages/crm.js are browser-side and
-    per-tab, which is correct)
-  - No Redis client created outside lib/db.js and lib/tenants.js
-  - No lib file touching the database at module scope
-  - After these fixes, the ONLY mutable module-scope state left in the whole
-    server codebase is the registry cache in lib/tenants.js - shared by design,
-    identical for everyone, holds no customer data
+3. WHAT I CHECKED AND FOUND SOUND
+---------------------------------
+  - The import NEVER DELETES. It only adds and merges, so a bad import cannot
+    empty the tracker.
+  - Existing rows are matched on ourRef, trimmed and lower-cased, and merged
+    with `{ ...existing, ...incoming, id: existing.id }` - so the id is
+    preserved and a re-import updates rather than duplicating.
+  - The manual entry path generates its own id and appends. Update merges by id.
+  - The read-modify-write window on the entries array is TIGHT - the read and
+    the write have no await between them. This is the same shape as the fault
+    that lost the Gas Lane application, but there it had a PDF build and an
+    email in the middle, several seconds wide. Here it is microseconds. Not
+    worth changing.
+  - Only comments are written back to the project record; everything else is
+    read-only from the project. So the tracker cannot corrupt a project.
+
+ONE THING I COULD NOT CHECK from here: whether a BLANK CELL in the spreadsheet
+overwrites an existing value with an empty string. That depends on how the page
+builds each row before sending. If you ever import a partial sheet - say just
+references and dates - and find other columns blanked, that is the cause and it
+is a one-line fix.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 12: 0 errors
+- esbuild compile on all 3: 0 errors
 - import-graph check: clean
-- re-ran the module-load sweep after the fix: 0 remaining
-- checked for double-calls introduced by the conversion - FROM()() and similar:
-  none
-- checked for leftover bare uses in template literals - ${APP_URL} etc: none
+- confirmed 0 remaining 'yes' defaults for instructed, and one shared constant
 
 
 WHAT TO CHECK
 -------------
-1. Design area - open a project, add an RFI comment, confirm the notification
-   arrives and its link works. That exercises designEmail and designRfiNotify.
-2. CRM loads and the deals are your real ones, not the sample set.
-3. Operations - invite an operative, confirm the Site App link in the email.
-4. A project process card notification, if you can raise one easily.
+1. Variations > Add. The Instructed dropdown should default to No.
+2. Add one, confirm it shows as not instructed, then delete it - which now
+   works, because it is not instructed.
+3. Retention import, if you are willing: a sheet with one row missing its
+   reference should now say so.
 
-The links in those emails are the thing to look at - they are built from the
-values that were frozen.
+
+STILL OUTSTANDING FROM YOUR LIST
+--------------------------------
+  - The Download Report error on Russell Hill. I need the ERROR TEXT - the
+    screenshot showed the page, not the message.
+  - The weekly Outstanding Invoices report. There is a built-in diagnostic that
+    runs the real gate and reports its decision. In the browser console:
+
+        await (await fetch('/api/outstanding-invoices', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'test-schedule' })
+        })).json()
+
+    Send me the diag block - it names the exact gate that is blocking it.
+  - The Monthly Invoicing chart labels overlapping on long projects.
+  - Manual contact entry when sending an application to a project with no
+    customer assigned.

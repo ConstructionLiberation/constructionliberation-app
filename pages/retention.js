@@ -512,7 +512,16 @@ export default function RetentionPage() {
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Import failed')
       setEntries(d.entries || [])
-      setImportMsg(`Imported ${entries.length} row${entries.length === 1 ? '' : 's'} — ${d.added} added, ${d.updated} updated.`)
+      // Say what was SKIPPED as well as what landed. The old message counted the
+      // rows it sent and the rows the server accepted, and quietly ignored the
+      // gap between them.
+      const skipped = d.skipped || 0
+      setImportMsg(
+        `Imported ${entries.length} row${entries.length === 1 ? '' : 's'} — ${d.added} added, ${d.updated} updated`
+        + (skipped
+            ? `, ${skipped} SKIPPED with no reference${(d.skippedRows || []).length ? ': ' + d.skippedRows.join(', ') : ''}`
+            : '.')
+      )
     } catch (e) {
       setImportMsg(`Could not import that file. ${e.message || ''}`.trim())
     }

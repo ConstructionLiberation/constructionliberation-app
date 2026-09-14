@@ -23,7 +23,19 @@ async function handler(req, res) {
     // Matched on REF. Re-uploading the same file updates those rows rather than creating
     // a second set - the commonest reason to upload again is that a figure was wrong.
     if (Array.isArray(req.body?.entries)) {
-      const incoming = req.body.entries.filter(e => e && String(e.ourRef || '').trim())
+      // ROWS WITHOUT A REFERENCE ARE SKIPPED - AND NOW SAID SO.
+      //
+      // This filter silently dropped every row with no ourRef. Import a hundred
+      // rows, twelve of them missing a reference, and the reply said "88 added"
+      // with no mention of the twelve. Nobody counts the rows afterwards, so
+      // they are simply gone - and a retention row that never arrived looks
+      // exactly like one that was never there.
+      //
+      // Still skipped, because ourRef is what rows are matched on and a row
+      // without one cannot be updated later. But now reported.
+      const all_incoming = req.body.entries.filter(Boolean)
+      const incoming = all_incoming.filter(e => String(e.ourRef || '').trim())
+      const skipped = all_incoming.length - incoming.length
       let all = []
       try { const d = await redis.get(KEY); if (d) all = d } catch {}
 
@@ -39,7 +51,14 @@ async function handler(req, res) {
       }
       await redis.set(KEY, all)
       try { await redis.del('dashboard:cache') } catch {}
-      return res.json({ entries: all, added, updated })
+      return res.json({
+        entries: all, added, updated, skipped,
+        // Named so the page can say which ones, rather than only how many.
+        skippedRows: skipped
+          ? all_incoming.filter(e => !String(e.ourRef || '').trim())
+              .map(e => e.projectName || e.customer || e.description || '(blank row)').slice(0, 20)
+          : [],
+      })
     }
 
     const { entry } = req.body

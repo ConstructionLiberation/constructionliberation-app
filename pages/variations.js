@@ -215,7 +215,21 @@ export default function VariationTracker() {
   // Add variation modal
   const [showAdd, setShowAdd] = useState(false)
   const [addProjectId, setAddProjectId] = useState('')
-  const [addForm, setAddForm] = useState({ varNumber: '', description: '', instructed: 'yes', materials: '', labour: '', profit: '' })
+  // A MANUALLY ADDED VARIATION IS NOT INSTRUCTED.
+//
+// The default was 'yes', so anything typed straight into the tracker counted as
+// authorised by the customer the moment it was saved - it went into the AFA, the
+// applications and the margin without anyone having agreed it.
+//
+// And an instructed variation cannot be deleted or edited afterwards
+// (pages/api/project/[id]/settings.js refuses), so the mistake was not easily
+// undone either.
+//
+// Not instructed is the honest starting point: it was raised, nobody has agreed
+// it yet. Tick it when they have.
+const NEW_VARIATION = { varNumber: '', description: '', instructed: 'no', materials: '', labour: '', profit: '' }
+
+const [addForm, setAddForm] = useState({ ...NEW_VARIATION })
 
   // Edit variation modal
   const [editModal, setEditModal] = useState(null) // { projectId, varIndex, form }
@@ -389,7 +403,7 @@ export default function VariationTracker() {
 
       await loadProjects()
       setShowAdd(false)
-      setAddForm({ varNumber: '', description: '', instructed: 'yes', materials: '', labour: '', profit: '' })
+      setAddForm({ ...NEW_VARIATION })
       setAddProjectId('')
     } catch (e) { console.error(e) }
     setSaving(false)
@@ -545,7 +559,7 @@ export default function VariationTracker() {
             {/* Pushes Add Variation to the right-hand end of the box. marginLeft:auto
                 rather than a spacer div, so it still lands right when the filters wrap
                 onto two lines on a narrow screen. */}
-            <button onClick={() => { setShowAdd(true); setAddForm({ varNumber: '', description: '', instructed: 'yes', materials: '', labour: '', profit: '' }); setAddProjectId('') }}
+            <button onClick={() => { setShowAdd(true); setAddForm({ ...NEW_VARIATION }); setAddProjectId('') }}
               style={{ marginLeft: 'auto', background: '#e63946', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 22px', cursor: 'pointer', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: '0 1px 3px rgba(230,57,70,0.35)' }}>
               + Add Variation
             </button>

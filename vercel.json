@@ -64,6 +64,10 @@
     {
       "path": "/api/cron/variation-reminders",
       "schedule": "0 9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/health-alert",
+      "schedule": "30 8 * * *"
     }
   ]
 }
