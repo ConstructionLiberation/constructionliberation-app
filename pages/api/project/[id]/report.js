@@ -1,5 +1,6 @@
 import withTenant from '../../../../lib/withTenant'
 import { getClient } from '../../../../lib/db'
+import dashboardHandler from '../../dashboard'
 import { projectVariations, varNumberOf } from '../../../../lib/variationInstruct'
 import { isInstructed } from '../../../../lib/applications'
 import ExcelJS from 'exceljs'
@@ -66,18 +67,33 @@ async function handler(req, res) {
   let rows = Array.isArray(snap) ? snap : (snap && Array.isArray(snap.projects) ? snap.projects : [])
 
   if (!rows.length) {
+    // CALL THE HANDLER, DO NOT MAKE AN HTTP REQUEST TO OURSELVES.
+    //
+    // pkg892 did this with fetch() to our own deployment. It works, but it is a
+    // function calling itself: a second cold start, a second serverless slot,
+    // the session cookie forwarded by hand, and a timeout budget shared between
+    // the two. Under load it is exactly the kind of call that fails
+    // occasionally and looks random.
+    //
+    // dashboardHandler is the same code the page calls. Invoked here with a
+    // capturing response, inside the customer scope we are already in.
     try {
-      const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0]
-      const host = req.headers['x-forwarded-host'] || req.headers.host
-      // Same address the request arrived on, so it resolves to the same customer.
-      const r = await fetch(`${proto}://${host}/api/dashboard`, {
-        headers: { cookie: req.headers.cookie || '' },
-      })
-      if (r.ok) {
-        const d = await r.json()
-        rows = Array.isArray(d) ? d : (Array.isArray(d.projects) ? d.projects : [])
+      const cap = { statusCode: 200, body: null }
+      const fakeRes = {
+        status(c) { cap.statusCode = c; return fakeRes },
+        json(b) { cap.body = b; return fakeRes },
+        send(b) { cap.body = b; return fakeRes },
+        end() { return fakeRes },
+        setHeader() { return fakeRes },
+        getHeader() { return undefined },
       }
-    } catch {}
+      await dashboardHandler({ ...req, method: 'GET', query: {} }, fakeRes)
+      const d = cap.body
+      rows = Array.isArray(d) ? d : (d && Array.isArray(d.projects) ? d.projects : [])
+    } catch (e) {
+      // Reported by the wrapper, but named here so the email says which step.
+      throw new Error('Could not rebuild the financial data for this report: ' + (e && e.message))
+    }
   }
 
   if (!rows.length) {

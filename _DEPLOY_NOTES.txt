@@ -1,78 +1,83 @@
-pkg893 - Type a recipient, and a chart that fits a long project
-===============================================================
+pkg894 - Error emails to Construction Liberation, and the 503 they reported
+===========================================================================
 
-TWO FILES, neither new. The project folder uses literal square brackets.
-  pages/applications.js
-  pages/project/[id].js
-
-
-1. TYPE AN ADDRESS WHEN THERE IS NOBODY TO PICK
------------------------------------------------
-The TO field on "Send application to customer" was a dropdown built from the
-project's own contacts and the portal users. A project with NO CUSTOMER ASSIGNED
-offered nothing but "Select a recipient", and there was no way past it.
-
-So the application could not be sent at all until somebody went and edited the
-project first. Reasonable to want to do eventually; ridiculous to be forced into
-at the moment you are trying to send.
-
-There is now a "Type an address..." option at the bottom of the list, which
-swaps the dropdown for a text box. On a project with NO contacts it starts in
-that mode already, so the field is usable straight away rather than after
-working out that the dropdown is empty.
-
-A TYPED address is validated; a picked one is not, because it came from a list
-and is already known good. An application that silently goes nowhere because of
-a missing dot is worse than one that refuses to send.
-
-CC is unchanged - it already had a free-text box.
+THREE FILES, none new.
+  lib/errorReport.js
+  lib/withTenant.js
+  pages/api/project/[id]/report.js
 
 
-2. THE MONTHLY INVOICING CHART ON A LONG PROJECT
-------------------------------------------------
-The width was fixed at 420px and the months divided it up. Russell Hill spans 22
-months, so each got about 17px - the value labels and the month labels both
-overlapped into the smear in your screenshot.
+FIRST: THE REPORTING WORKS
+--------------------------
+Your screenshot is the first real proof - route, customer, address, timestamp,
+stack, sent within a minute. That endpoint was one middleware line away from
+silently reporting nothing, so it was worth seeing rather than assuming.
 
-Shrinking the font would have made it unreadable a different way. Each month now
-gets a minimum of 46px and the chart scrolls sideways when there are more than
-fit:
 
-     3 months ->  420px wide, 118px per month
-     6 months ->  420px wide,  59px per month
-    12 months ->  618px wide,  46px per month
-    22 months -> 1078px wide,  46px per month
-    30 months -> 1446px wide,  46px per month
+1. ERROR EMAILS GET THEIR OWN ADDRESS
+-------------------------------------
+    ERROR_REPORT_EMAIL = james@constructionliberation.com
 
-A short project looks EXACTLY as it did - the width only grows once 46px per
-month no longer fits in 420. So nothing changes for most projects.
+Add it in Vercel. Production and Preview. Config, not Secret - you will want to
+read it back.
+
+It is a SEPARATE variable rather than changing ALERT_EMAIL, because ALERT_EMAIL
+is also where a user's "Report a problem" goes. Those want different people: a
+problem report goes to whoever runs the portal for that customer; a stack trace
+goes to whoever maintains the software.
+
+Under multi-tenancy that is exactly the difference between the customer and
+Construction Liberation, so it should not be one setting.
+
+Falls back to ALERT_EMAIL if unset, so nothing stops working before you add it.
+
+
+2. THE EMAIL NOW SAYS WHAT THE ROUTE SAID
+-----------------------------------------
+Yours said only:
+
+    Error    Handler returned 503
+
+Which is not enough to act on - the report route alone has two different 503s,
+and I could not tell you which one you had hit.
+
+The body the route actually sent now travels with the report, under "What the
+route said". Captured by wrapping res.json, because by the time the status code
+is checked the body has already gone.
+
+
+3. THE 503 ITSELF
+-----------------
+That was the report route on J190 - the download that failed, then worked.
+
+pkg892 made it rebuild the financial snapshot rather than refuse. It did that
+with fetch() to our own deployment - which works, but is a function calling
+ITSELF: a second cold start, a second serverless slot, the session cookie
+forwarded by hand, and one timeout budget shared between the two. Under load
+that is exactly the kind of call that fails occasionally and looks random.
+
+It now calls the dashboard handler DIRECTLY, in the customer scope it is already
+in. No second request, no cookie forwarding, no shared timeout.
+
+And if the rebuild does fail, it now throws with the reason rather than
+returning a bare 503 - so the email names the step instead of the status code.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on both: 0 errors
+- esbuild compile on all 3: 0 errors
 - import-graph check: clean
-- ran the width calculation across five project lengths, above
+- confirmed no circular import: dashboard.js does not import the report
 
 
 WHAT TO CHECK
 -------------
-1. Russell Hill > Income. The chart should scroll sideways and every month
-   should be readable.
-2. A short project - three or four months - should look unchanged.
-3. Send an application on a project WITH contacts: the dropdown works as before
-   and now has "Type an address..." at the bottom.
-4. Send one on a project with NO customer assigned: it should open straight into
-   the text box.
-5. Type something that is not an address and confirm it refuses.
+1. Add ERROR_REPORT_EMAIL in Vercel, redeploy.
+2. Download the Russell Hill report - it should work, and keep working
+   tomorrow morning when the snapshot is cold. THAT is the real test; today it
+   will pass either way because the snapshot is warm.
+3. Next time an error email arrives it should carry "What the route said", and
+   go to the Construction Liberation address.
 
-
-STILL OUTSTANDING
------------------
-  - Remove KV_REST_API_URL and KV_REST_API_TOKEN in Vercel. Leave
-    KV_REST_API_READ_ONLY_TOKEN, KV_URL and REDIS_URL alone - nothing uses them,
-    and deleting untraced things is how a quiet dependency surfaces badly.
-  - sendWeeklyOverdueReport returning { ok: false } tells nobody and retries
-    hourly for ever. Now that the reporter exists, it should email.
-  - Nothing in the app reads back whether an email ARRIVED - only that Resend
-    accepted it. A variation that bounced looks identical to one that was read.
+IF THE 503 HAPPENS AGAIN, send me the email - it will now tell us which of the
+two it is, which is the thing I could not determine from the last one.
