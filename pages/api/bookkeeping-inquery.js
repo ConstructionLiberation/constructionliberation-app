@@ -20,7 +20,23 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&
 const money = (n) => `\u00A3${(Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 async function handler(req, res) {
-  const session = requireRole(req, res, ['post-contract', 'management', 'admin'])
+  // ROLES MATCH THE REST OF THE BOOKKEEPING AREA.
+  //
+  // This allowed post-contract and NOT accounts, while every other endpoint the
+  // Bookkeeping page calls allows accounts:
+  //
+  //     bookkeeping.js         accounts, management, admin
+  //     import-bills-bulk.js   accounts, management, admin
+  //     bookkeeping-inquery    post-contract, management, admin   <- the odd one
+  //
+  // So the bookkeeper could open the In Query table and not use it - assigning
+  // someone returned "You do not have access to this." The list looks copied
+  // from a commercial endpoint rather than chosen.
+  //
+  // post-contract is kept as well as added-back accounts: In Query items get
+  // assigned to Contracts Managers, who are post-contract, and they need to
+  // reach their own list.
+  const session = requireRole(req, res, ['accounts', 'post-contract', 'management', 'admin'])
   if (!session) return
 
   let state = {}

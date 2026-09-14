@@ -1,54 +1,60 @@
-pkg882 - Stop telling customers their link expired when it did not
-==================================================================
+pkg883 - The bookkeeper can use the In Query table
+==================================================
 
-ONE FILE.  pages/instruct/[token].js   (folder uses literal square brackets)
+ONE FILE.  pages/api/bookkeeping-inquery.js  - not new.
 
-Deploy AFTER pkg881, which is the actual fix. This is the message.
+Nothing to do with tenancy. A role list that was wrong, and has been.
 
 
-WHY
----
-Your screenshot showed:
+WHAT WAS WRONG
+--------------
+Every endpoint the Bookkeeping page calls allows the accounts role. Except one:
 
-    Please sign in again.
-    This link may have expired. Please reply to the email it came from and we
-    will send a new one.
+    bookkeeping.js            accounts, management, admin
+    import-bills-bulk.js      accounts, management, admin
+    bookkeeping-inquery.js    post-contract, management, admin   <- the odd one
 
-The first line was the real error, from our own session check. The second was
-the page's blanket explanation, shown for ANY failure.
+So your bookkeeper could OPEN the In Query table and not USE it. Assigning
+someone returned "You do not have access to this."
 
-So a customer hitting a fault at our end is told their link expired and asked to
-request a replacement - which would have failed in exactly the same way. They
-try twice, give up, and ring Joe.
+It gets odder. lib/roles.js says:
 
-A wrong explanation is worse than no explanation, because it sends people down a
-road that cannot work.
+    'bookkeeping': ['accounts', 'management', 'admin']
 
-Now the "reply for a new link" line only appears when the error really is about
-the link - expired, invalid, not found. Anything else says plainly that the
-problem is at our end and to reply so we can sort it.
+post-contract cannot reach the bookkeeping AREA at all. So this endpoint was
+allowing a role that can never open the page, and refusing the only role that
+can. The list looks copied from a commercial endpoint rather than chosen.
+
+The In Query table appears on exactly one page - pages/bookkeeping.js - so there
+is no other route by which a post-contract user would reach it.
+
+
+THE FIX
+-------
+    accounts, post-contract, management, admin
+
+accounts added, which is the point. post-contract KEPT rather than removed: it
+is almost certainly dead, since that role cannot reach the area, but removing a
+permission on a hunch is how you break something at 8am on a Monday. It costs
+nothing to leave.
 
 
 CHECKS I RAN
 ------------
 - esbuild compile: 0 errors
-- import-graph check: clean
+- listed every endpoint pages/bookkeeping.js and components/InQueryTable.js
+  call, with their role lists - this was the only one out of step
+- checked AREA_ACCESS to confirm accounts genuinely belongs there
+- confirmed InQueryTable is used on one page only
 
 
 WHAT TO CHECK
 -------------
-With pkg881 deployed, this should be hard to see at all - which is the point.
-Send a variation, open the link in an INCOGNITO window, and confirm you get the
-variation rather than any error.
+1. Have the bookkeeper open Bookkeeping > In Query and assign an item to
+   someone. It should work.
+2. "Send list" as well - same endpoint, same guard.
+3. Confirm the person assigned receives the email and their link works.
 
-
-STILL OUTSTANDING FROM TONIGHT
-------------------------------
-- Applied For differs. Probably Gas Lane's lost application. Worth confirming
-  the gap is roughly that application's value rather than assuming.
-- The Site App on your phone at siteapp.rockroofing.co.uk - first time that host
-  has had to resolve through the registry, and it is the one your operatives
-  use. Not yet checked.
-- The two FROM lines on a variation and an application, against the emails
-  already in your inbox. That is the only check that proves the per-customer
-  settings are being read rather than the environment variables.
+If anything else in that area says "You do not have access to this", tell me the
+action - the same copied-list mistake may be elsewhere and I would rather find
+the rest of them now.
