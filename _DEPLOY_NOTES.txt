@@ -1,91 +1,90 @@
-pkg887 - Error reporting, both halves. REPLACES pkg886.
-=======================================================
+pkg888 - Pre-Contract can send variations to the customer
+=========================================================
 
-FIVE FILES. Use this INSTEAD of pkg886 if you have not deployed it yet.
+ONE FILE.  pages/variation-builder.js  - not new.
 
-  lib/errorReport.js            <-- NEW, create by hand
-  pages/api/client-error.js     <-- NEW, create by hand
-  lib/withTenant.js
-  components/PageErrorBoundary.js
-  middleware.js                 (repository root)
-
-DEPLOY BEFORE pkg885. pkg885 makes routes throw; this is what tells you.
+Nothing to do with tenancy.
 
 
-WHAT pkg886 MISSED, measured
-----------------------------
-pkg886 caught routes that THROW. Then I counted what that leaves:
+WHAT WAS HAPPENING
+------------------
+Press "Raise & send to customer" on the Pre-Contract Variation Builder and the
+page appeared to refresh. The variation reached the tracker as a draft, no send
+modal opened, and no email went to anyone - not even the person who raised it.
 
-    148 places across 105 files return a 500 deliberately
-        res.status(500).json({ error })   - no exception, so no catch sees it
-
-    287 silent catches in pages and components
-
-Graceful failure is the COMMON case in this codebase, not the rare one. So
-pkg886 would have covered the crashes and missed most of the quiet failures -
-which are precisely the ones nobody reports.
+It looked like a deliberate rule that Pre-Contract raises and Commercial sends.
+It was not.
 
 
-1. ANY 5xx IS REPORTED, thrown or returned
-------------------------------------------
-withTenant now checks the status code on the way out as well as catching
-exceptions. All 148 deliberate 500s are now heard.
+WHY
+---
+The page rendered the builder like this:
+
+    {loading
+      ? <div>Loading projects…</div>
+      : <VariationBuilder projects={projects} onSaved={load} />}
+
+So:
+
+    press Raise and send  ->  save() writes the variation
+                          ->  save() awaits onSaved(), which IS load()
+                          ->  load() sets loading = true
+                          ->  THE BUILDER IS SWAPPED OUT AND UNMOUNTS
+                          ->  save() returns true, setSendOpen(true) runs on a
+                              component that no longer exists
+                          ->  load() finishes, the builder remounts empty
+
+The "refresh" you saw was the component being torn down and rebuilt mid-save,
+not a page reload.
+
+pages/variations.js - the Commercial tracker - renders the SAME component
+unconditionally. That is the only difference, and it is why the same button has
+always worked there.
+
+A component that unmounts itself by calling back into its own parent's loading
+state. Nothing about that line looks wrong.
 
 
-2. BROWSER ERRORS ARE REPORTED
-------------------------------
-components/PageErrorBoundary.js already caught render failures and showed them
-on screen. That fixed the DIAGNOSIS problem - the person looking can see what
-went wrong. It did nothing for DETECTION: they refresh, work around it, and say
-nothing. A page that white-screens for one person on a Tuesday was invisible.
+THE FIX
+-------
+The builder now renders unconditionally, exactly as Commercial does, and the
+refresh happens underneath it. The spinner moved to the heading, where it cannot
+tear anything down.
 
-It now also posts to /api/client-error, which hands it to the same reporter.
-
-That endpoint is deliberately minimal and deliberately open:
-
-  - NOT wrapped in withTenant. A page that broke BECAUSE a customer could not be
-    resolved must still be able to say so.
-  - NO session required, and added to middleware's open list. A page that breaks
-    during sign-in would otherwise be silent - and after pkg880, a stale session
-    being rejected is a thing that happens.
-  - Touches no database. Returns 204 whatever happens. A page that has already
-    broken must not then have to handle a failure from the thing reporting it.
-
-The customer is taken from the ADDRESS rather than resolved, so the email still
-says which site it happened on without depending on the registry.
+Pre-Contract now behaves identically to Commercial: raise, the send modal opens,
+the email goes.
 
 
-WHAT YOU GET
-------------
-    Portal error: /api/wip                        a server failure
-    Portal error: [browser] https://app.../wip    a page that broke in the browser
+I CHECKED FOR THE SAME TRAP ELSEWHERE
+-------------------------------------
+Six other pages pass a reloading callback into a child component AND have a
+loading conditional somewhere on the page:
 
-Both to ALERT_EMAIL, throttled per route and message for 30 minutes.
+    pages/variations.js                          VariationBuilder
+    pages/operations/projects.js                 ProjectDetails
+    pages/business-financials/invoice-finance.js SyncButton
+    pages/business-financials/retentions-due.js  SyncButton
+    pages/business-financials/invoices.js        SyncButton
+    pages/business-financials/budgets.js         SyncButton
+
+In every one, the component sits OUTSIDE the loading branch. variation-builder.js
+was the only page where it sat inside. So this is fixed, not merely patched.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 5: 0 errors
-- import-graph check: clean - PageErrorBoundary is client-side, so this mattered
-- confirmed middleware would have 401'd /api/client-error, and opened it. Worth
-  saying plainly: without that check this package would have silently reported
-  nothing, and looked like it was working.
-- throttle tested across five scenarios in pkg886, unchanged here
-
-
-STILL NOT COVERED - the next package
-------------------------------------
-  3. Cron failures. Recorded in heartbeats and visible in cron-health, but over
-     a week you will not look daily.
-  4. A cron that has STOPPED. Different from failing - nothing currently tells
-     you, you have to go and look.
-
-Both use the reporter that now exists. Say the word.
+- esbuild compile: 0 errors
+- confirmed the builder is now rendered the same way on both pages
+- confirmed it copes with an empty projects list on first render - the initial
+  state is [] and the component does (projects || [])
+- checked the six other candidate pages, as above
 
 
 WHAT TO CHECK
 -------------
-1. Deploy, then visit a page and confirm the app behaves normally. This changes
-   nothing a user sees.
-2. To prove it works end to end, ask me for a deliberately broken test route -
-   I would rather you SEE an email arrive than assume one would.
+1. Pre-Contract > Variation Builder. Raise a variation. The send modal should
+   open, exactly as it does in Commercial.
+2. Send it. Confirm the email arrives and the instruction link works.
+3. Confirm it appears in the Commercial tracker as SENT rather than draft.
+4. Raise one and CANCEL the send modal - it should stay as a draft, and the
+   project list should still be usable underneath.

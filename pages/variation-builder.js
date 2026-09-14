@@ -52,10 +52,32 @@ export default function PreContractVariationBuilder() {
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
         <PreContractNav active="variation-builder" />
         <div style={{ padding: 24 }}>
-          <h1 style={{ margin: '0 0 18px', fontSize: 20, fontWeight: 700, color: '#1a1a2e' }}>Variation Builder</h1>
-          {loading
-            ? <div style={{ color: '#aaa', padding: 40 }}>Loading projects…</div>
-            : <VariationBuilder projects={projects} onSaved={load} />}
+          <h1 style={{ margin: '0 0 18px', fontSize: 20, fontWeight: 700, color: '#1a1a2e' }}>
+            Variation Builder
+            {loading && <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 500, color: '#aaa' }}>refreshing projects...</span>}
+          </h1>
+          {/* NEVER UNMOUNT THE BUILDER TO SHOW A LOADING STATE.
+
+              This used to be {loading ? Loading : VariationBuilder}, which looked
+              harmless and broke sending entirely:
+
+                press Raise and send -> save() writes the variation
+                                     -> save() awaits onSaved(), which is load()
+                                     -> load() sets loading = true
+                                     -> THE BUILDER IS SWAPPED OUT AND UNMOUNTS
+                                     -> save() returns, setSendOpen(true) runs on
+                                        a component that no longer exists
+                                     -> load() finishes, the builder remounts empty
+
+              The variation still reached the tracker, so it looked like a
+              deliberate rule that Pre-Contract raises and Commercial sends. It
+              was not. pages/variations.js renders this component
+              unconditionally, which is exactly why the same button works there.
+
+              The builder now stays mounted and the refresh happens underneath.
+              The spinner moved to the heading, where it cannot tear anything
+              down. */}
+          <VariationBuilder projects={projects} onSaved={load} />
         </div>
       </div>
     </>
