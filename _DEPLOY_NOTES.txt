@@ -1,98 +1,78 @@
-pkg890 - A cron that has stopped now tells you
-==============================================
+pkg893 - Type a recipient, and a chart that fits a long project
+===============================================================
 
-FIVE FILES.
-  lib/cronHealth.js                 <-- NEW, create by hand
-  pages/api/cron/health-alert.js    <-- NEW, create by hand
-  lib/forEachTenant.js
-  pages/api/admin/cron-health.js
-  vercel.json                       (repository root)
-
-WHAT SHOULD LOOK DIFFERENT:  NOTHING, until something goes wrong.
+TWO FILES, neither new. The project folder uses literal square brackets.
+  pages/applications.js
+  pages/project/[id].js
 
 
-ITEMS 3 AND 4 FROM THE LIST
----------------------------
-  3. a cron that FAILS now emails
-  4. a cron that has STOPPED now emails
+1. TYPE AN ADDRESS WHEN THERE IS NOBODY TO PICK
+-----------------------------------------------
+The TO field on "Send application to customer" was a dropdown built from the
+project's own contacts and the portal users. A project with NO CUSTOMER ASSIGNED
+offered nothing but "Select a recipient", and there was no way past it.
 
-Both use the reporter from pkg887, so they arrive looking like every other
-problem and need no separate sending setup.
+So the application could not be sent at all until somebody went and edited the
+project first. Reasonable to want to do eventually; ridiculous to be forced into
+at the moment you are trying to send.
 
+There is now a "Type an address..." option at the bottom of the list, which
+swaps the dropdown for a text box. On a project with NO contacts it starts in
+that mode already, so the field is usable straight away rather than after
+working out that the dropdown is empty.
 
-3. A FAILED CUSTOMER ITERATION EMAILS
--------------------------------------
-forEachTenant already recorded a failure in that customer's heartbeat. A
-heartbeat is only read by somebody who goes looking.
+A TYPED address is validated; a picked one is not, because it came from a list
+and is already known good. An application that silently goes nowhere because of
+a missing dot is worse than one that refuses to send.
 
-A cron failing at 02:30 and never being mentioned is a sync that has silently
-stopped for ONE customer while working for the rest - the exact failure the
-per-customer loop was built to expose, and it was still only visible on a page
-nobody opens.
-
-
-4. A JOB THAT HAS STOPPED - a new nightly cron
-----------------------------------------------
-/api/cron/health-alert, 08:30 UTC, after hs-expiry-email at 08:00 so the
-morning's jobs are judged on a fresh run rather than yesterday's.
-
-It says NOTHING unless something is wrong.
-
-A cron that has stopped cannot report that it has stopped. The absence is the
-symptom, so something else has to notice. That is why this is a separate job
-rather than a check inside each one.
-
-vercel.json now has 17 crons, up from 16. You are on Pro, so no limit applies.
+CC is unchanged - it already had a free-text box.
 
 
-"NOT CONFIGURED" IS NOT A FAILURE - and this matters
-----------------------------------------------------
-crm-call-volume returns { ok: false, error: 'Not configured. Missing in Vercel:
-EIGHTX8_...' } every night, because 8x8 has never been set up.
+2. THE MONTHLY INVOICING CHART ON A LONG PROJECT
+------------------------------------------------
+The width was fixed at 420px and the months divided it up. Russell Hill spans 22
+months, so each got about 17px - the value labels and the month labels both
+overlapped into the smear in your screenshot.
 
-Without handling that, this package would have emailed you THE SAME THING EVERY
-MORNING for as long as 8x8 stays on the backlog. An alert that always says the
-same thing is an alert people stop opening - which costs you the one morning it
-says something different.
+Shrinking the font would have made it unreadable a different way. Each month now
+gets a minimum of 46px and the chart scrolls sideways when there are more than
+fit:
 
-So "not configured" is now its own status, shown on the page and never alerted
-on. What actually alerts:
+     3 months ->  420px wide, 118px per month
+     6 months ->  420px wide,  59px per month
+    12 months ->  618px wide,  46px per month
+    22 months -> 1078px wide,  46px per month
+    30 months -> 1446px wide,  46px per month
 
-    crm-call-volume    not configured    silent
-    wip-sync           not scheduled     silent
-    gp-snapshot        never run         silent
-    deep-sync          last run failed   EMAILS
-    crm-email-sync     ok                silent
-
-Only a job that has genuinely broken or genuinely stopped.
-
-
-THE LOGIC MOVED TO lib/cronHealth.js
-------------------------------------
-It was inside the admin endpoint. Two things need it now - the page and the
-alert - and two copies of "is this cron overdue" would drift. The copy that
-drifts would be the alert, which would then quietly stop alerting: a monitoring
-system that fails silently is worse than none, because it also removes the
-worry that made you check manually.
-
-pages/api/admin/cron-health.js is now four lines and returns what the library
-computes. Its output is unchanged apart from the new status.
+A short project looks EXACTLY as it did - the width only grows once 46px per
+month no longer fits in 420. So nothing changes for most projects.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 5: 0 errors
-- vercel.json parsed and re-serialised as valid JSON, 17 crons confirmed
+- esbuild compile on both: 0 errors
 - import-graph check: clean
-- ran the alarm rules across five states, output above
+- ran the width calculation across five project lengths, above
 
 
 WHAT TO CHECK
 -------------
-1. /api/admin/cron-health still returns the same shape, with crm-call-volume now
-   reading "not configured" rather than "last run failed".
-2. Tomorrow after 08:30, health-alert should appear in the list with its own
-   heartbeat, and you should have received NO email - because nothing is
-   genuinely broken.
+1. Russell Hill > Income. The chart should scroll sideways and every month
+   should be readable.
+2. A short project - three or four months - should look unchanged.
+3. Send an application on a project WITH contacts: the dropdown works as before
+   and now has "Type an address..." at the bottom.
+4. Send one on a project with NO customer assigned: it should open straight into
+   the text box.
+5. Type something that is not an address and confirm it refuses.
 
-If you DO get an email tomorrow, that is the system working. Send it to me.
+
+STILL OUTSTANDING
+-----------------
+  - Remove KV_REST_API_URL and KV_REST_API_TOKEN in Vercel. Leave
+    KV_REST_API_READ_ONLY_TOKEN, KV_URL and REDIS_URL alone - nothing uses them,
+    and deleting untraced things is how a quiet dependency surfaces badly.
+  - sendWeeklyOverdueReport returning { ok: false } tells nobody and retries
+    hourly for ever. Now that the reporter exists, it should email.
+  - Nothing in the app reads back whether an email ARRIVED - only that Resend
+    accepted it. A variation that bounced looks identical to one that was read.

@@ -1488,6 +1488,10 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
   const byEmail = (e) => everyone.find(x => x.email.toLowerCase() === (e || '').toLowerCase())
 
   const [to, setTo] = useState(() => custContacts[0]?.email || '')
+  // True when the address is being typed rather than picked. Starts on when the
+  // project has no contacts at all, so the field is usable straight away rather
+  // than after working out that the dropdown is empty.
+  const [manualTo, setManualTo] = useState(() => !custContacts.length)
   // Auto-CC the sending portal user (yourself) by default.
   const [ccSel, setCcSel] = useState(() => (me?.email ? { [me.email]: true } : {}))
   const [ccExtra, setCcExtra] = useState('')
@@ -1532,7 +1536,14 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
   const resetTemplate = () => { setSubject(defaultSubject); setBody(defaultBody) }
 
   async function send() {
-    if (!to) { setErr('Choose one "To" recipient.'); return }
+    if (!to) { setErr('Choose one "To" recipient, or type an address.'); return }
+    // A typed address gets checked. A picked one came from a list and is already
+    // known good; a typed one is somebody at a keyboard, and an application that
+    // silently goes nowhere because of a missing dot is worse than one that
+    // refuses to send.
+    if (manualTo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(to).trim())) {
+      setErr('That does not look like an email address.'); return
+    }
     if (isSent && !confirm('Are you sure you want to send this application to the customer again?')) return
     const ccChosen = Object.keys(ccSel).filter(e => ccSel[e])
     const ccExtras = ccExtra.split(/[;,\s]+/).map(s => s.trim()).filter(Boolean)
@@ -1563,14 +1574,38 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
 
         {/* To (one only) */}
         <div style={{ fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 6 }}>TO (one recipient)</div>
-        <select value={to} onChange={e => setTo(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid #d5d9e0', borderRadius: 7, fontSize: 13, marginBottom: 14, background: '#fff', boxSizing: 'border-box' }}>
+        {/* TYPE AN ADDRESS WHEN THERE IS NOBODY TO PICK.
+            
+            The list is built from the project's own contacts and the portal
+            users. A project with no customer assigned offered nothing but
+            "Select a recipient", and there was no way past it - so the
+            application could not be sent at all until somebody went and edited
+            the project.
+            
+            That is a reasonable thing to want to do eventually, and a
+            ridiculous thing to be forced to do at the moment you are trying to
+            send an application. */}
+        <select
+          value={manualTo ? '__manual__' : to}
+          onChange={e => {
+            if (e.target.value === '__manual__') { setManualTo(true); setTo('') }
+            else { setManualTo(false); setTo(e.target.value) }
+          }}
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid #d5d9e0', borderRadius: 7, fontSize: 13, marginBottom: manualTo ? 6 : 14, background: '#fff', boxSizing: 'border-box' }}>
           <option value="">— Select a recipient —</option>
           {optGroups.map(g => g.items.length ? (
             <optgroup key={g.label} label={g.label}>
               {g.items.map(x => <option key={x.email} value={x.email}>{x.name} — {x.email}</option>)}
             </optgroup>
           ) : null)}
+          <option value="__manual__">Type an address…</option>
         </select>
+        {manualTo && (
+          <input
+            type="email" autoFocus value={to} onChange={e => setTo(e.target.value)}
+            placeholder="name@company.co.uk"
+            style={{ width: '100%', padding: '8px 10px', border: '1px solid #d5d9e0', borderRadius: 7, fontSize: 13, marginBottom: 14, boxSizing: 'border-box' }} />
+        )}
 
         {/* CC (many) */}
         <div style={{ fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 6 }}>CC (optional)</div>

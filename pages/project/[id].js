@@ -1188,7 +1188,18 @@ function IncomeTab({ invoiceLines, atDate }) {
   }
   const monthlyData = Array.from(monthlyMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([key, value]) => ({ key, label: new Date(key + '-01').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), value }))
   const maxVal = Math.max(...monthlyData.map(d => d.value), 1)
-  const w = 420, h = 140, padL = 50, padB = 28, padT = 24, padR = 16
+  // THE CHART GROWS WITH THE PROJECT, AND SCROLLS.
+  //
+  // The width was fixed at 420 and the months divided it up, so a two-year
+  // project got about 17px per month - the value labels and the month labels
+  // both overlapped into an unreadable smear. Russell Hill spans 22 months.
+  //
+  // Squeezing the font would have made it unreadable in a different way. Each
+  // month now gets the room it needs and the chart scrolls sideways when there
+  // are too many to fit. A short project looks exactly as it did.
+  const MIN_SLOT = 46
+  const h = 140, padL = 50, padB = 28, padT = 24, padR = 16
+  const w = Math.max(420, padL + padR + (monthlyData.length || 1) * MIN_SLOT)
   const chartW = w - padL - padR
   const chartH = h - padT - padB
   const barW = Math.max(8, Math.min(32, chartW / (monthlyData.length || 1) - 6))
@@ -1217,7 +1228,9 @@ function IncomeTab({ invoiceLines, atDate }) {
             </div>
           </div>
           {monthlyData.length > 0 ? (
-            <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible' }}>
+            /* overflowX so a long project scrolls rather than squashing. */
+            <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+            <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible', display: 'block' }}>
               {yTicks.map((t, i) => (
                 <g key={i}>
                   <line x1={padL} y1={t.y} x2={w - padR} y2={t.y} stroke="#f0f0f0" strokeWidth={1} />
@@ -1243,6 +1256,7 @@ function IncomeTab({ invoiceLines, atDate }) {
               })}
               <line x1={padL} y1={padT + chartH} x2={w - padR} y2={padT + chartH} stroke="#e0e0e0" strokeWidth={1} />
             </svg>
+            </div>
           ) : <div style={{ textAlign: 'center', color: '#888', padding: 20 }}>No data</div>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
