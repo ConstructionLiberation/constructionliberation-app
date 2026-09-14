@@ -1,105 +1,91 @@
-pkg886 - Email me when a page breaks
-====================================
+pkg887 - Error reporting, both halves. REPLACES pkg886.
+=======================================================
 
-TWO FILES.
-  lib/errorReport.js     <-- NEW, create by hand in GitHub
+FIVE FILES. Use this INSTEAD of pkg886 if you have not deployed it yet.
+
+  lib/errorReport.js            <-- NEW, create by hand
+  pages/api/client-error.js     <-- NEW, create by hand
   lib/withTenant.js
+  components/PageErrorBoundary.js
+  middleware.js                 (repository root)
 
-DEPLOY THIS BEFORE pkg885, not after. pkg885 is the package that makes routes
-throw; this is the one that tells you when they do. In the other order you find
-out by clicking.
+DEPLOY BEFORE pkg885. pkg885 makes routes throw; this is what tells you.
 
 
-WHY
------
-A failing route used to tell the user something unhelpful and tell nobody else
-anything. You found out when somebody mentioned it days later - if they
-mentioned it. Most people refresh, work around it, and say nothing.
+WHAT pkg886 MISSED, measured
+----------------------------
+pkg886 caught routes that THROW. Then I counted what that leaves:
 
-That matters far more now. pkg885 makes an unwrapped route throw rather than
-quietly read the wrong customer's database. A loud failure nobody hears is only
-half a guardrail.
+    148 places across 105 files return a 500 deliberately
+        res.status(500).json({ error })   - no exception, so no catch sees it
 
-It also makes your "leave it a week and see what the team hits" plan actually
-work. Without this you would be relying on eight people to notice and report a
-transient error. With it, every one is an email with the route name in the
-subject.
+    287 silent catches in pages and components
+
+Graceful failure is the COMMON case in this codebase, not the rare one. So
+pkg886 would have covered the crashes and missed most of the quiet failures -
+which are precisely the ones nobody reports.
+
+
+1. ANY 5xx IS REPORTED, thrown or returned
+------------------------------------------
+withTenant now checks the status code on the way out as well as catching
+exceptions. All 148 deliberate 500s are now heard.
+
+
+2. BROWSER ERRORS ARE REPORTED
+------------------------------
+components/PageErrorBoundary.js already caught render failures and showed them
+on screen. That fixed the DIAGNOSIS problem - the person looking can see what
+went wrong. It did nothing for DETECTION: they refresh, work around it, and say
+nothing. A page that white-screens for one person on a Tuesday was invisible.
+
+It now also posts to /api/client-error, which hands it to the same reporter.
+
+That endpoint is deliberately minimal and deliberately open:
+
+  - NOT wrapped in withTenant. A page that broke BECAUSE a customer could not be
+    resolved must still be able to say so.
+  - NO session required, and added to middleware's open list. A page that breaks
+    during sign-in would otherwise be silent - and after pkg880, a stale session
+    being rejected is a thing that happens.
+  - Touches no database. Returns 204 whatever happens. A page that has already
+    broken must not then have to handle a failure from the thing reporting it.
+
+The customer is taken from the ADDRESS rather than resolved, so the email still
+says which site it happened on without depending on the registry.
 
 
 WHAT YOU GET
 ------------
-Subject:  Portal error: /api/wip
+    Portal error: /api/wip                        a server failure
+    Portal error: [browser] https://app.../wip    a page that broke in the browser
 
-  Route      GET /api/wip
-  Customer   rock          (or "none resolved", which is the interesting one)
-  Address    app.rockroofing.co.uk
-  When       timestamp
-  Error      the message
-  Stack      first 8 lines
-
-Sent to ALERT_EMAIL, which is already set in your project.
-
-The user still gets a 500. This only adds the telling.
-
-
-THE ONE RULE THIS OBEYS
------------------------
-The reporter must not depend on anything that might be broken.
-
-  - It does NOT use lib/db.js. The error being reported is frequently a database
-    error, and a reporter that needs the database to report a database failure
-    reports nothing.
-  - It does NOT use lib/tenantSettings.js. That THROWS when a customer is not
-    resolved - which is exactly the error most worth hearing about.
-  - It reads plain environment variables and posts straight to Resend.
-  - Every failure inside it is swallowed. A reporter that can break a working
-    request is worse than no reporter.
-
-
-THROTTLING - so it is useful rather than unbearable
----------------------------------------------------
-Held in memory per running instance, not in the database, for the reason above.
-Keyed on route AND message, 30 minutes.
-
-Tested:
-
-  the same fault 400 times in a minute        -> 1 email
-  a DIFFERENT fault on the same route         -> sent
-  the same fault on a different route         -> sent
-  the same fault again 31 minutes later       -> sent
-  100 failures across 5 broken routes         -> 5 emails, one per route
-
-So a click-through that finds five broken routes gives you five emails naming
-them, not four hundred.
-
-A cold start forgets the throttle and may re-send. That is the right way round:
-over-reporting is noise, under-reporting is the thing this exists to prevent.
+Both to ALERT_EMAIL, throttled per route and message for 30 minutes.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on both: 0 errors
-- import-graph check: clean
-- ran the throttle across five scenarios, output above
-- confirmed all three paths through withTenant now go through the same guarded
-  call - the platform host, the resolved customer, and the dormant single-tenant
-  path - so there is one place errors are caught rather than three
+- esbuild compile on all 5: 0 errors
+- import-graph check: clean - PageErrorBoundary is client-side, so this mattered
+- confirmed middleware would have 401'd /api/client-error, and opened it. Worth
+  saying plainly: without that check this package would have silently reported
+  nothing, and looked like it was working.
+- throttle tested across five scenarios in pkg886, unchanged here
 
 
-WHAT THIS DOES NOT COVER YET
-----------------------------
-  - Crons. They record failures in their heartbeat and show in cron-health, but
-    do not email. Worth adding once you have seen a week of what arrives.
-  - Client-side errors. A page that breaks in the browser rather than the API
-    still tells you nothing. components/PageErrorBoundary.js already catches
-    them and could report - that is its own package.
-  - health-check, tenant-setup and platform/tenants are not wrapped, so are not
-    covered. Deliberate, and all three are yours rather than your team's.
+STILL NOT COVERED - the next package
+------------------------------------
+  3. Cron failures. Recorded in heartbeats and visible in cron-health, but over
+     a week you will not look daily.
+  4. A cron that has STOPPED. Different from failing - nothing currently tells
+     you, you have to go and look.
+
+Both use the reporter that now exists. Say the word.
 
 
-ORDER
------
-  1. Deploy this (pkg886)
-  2. Deploy pkg885 - the package that makes routes throw
-  3. Click through the whole app
-  4. Every broken route emails you with its name in the subject
+WHAT TO CHECK
+-------------
+1. Deploy, then visit a page and confirm the app behaves normally. This changes
+   nothing a user sees.
+2. To prove it works end to end, ask me for a deliberately broken test route -
+   I would rather you SEE an email arrive than assume one would.

@@ -151,6 +151,11 @@ export async function middleware(req) {
     pathname === '/api/rams-approvals' ||
     pathname === '/api/download' ||
     pathname === '/api/portal-auth' ||
+    // Browser error reports. Open on purpose: a page that breaks during sign-in,
+    // or because a session was rejected, must still be able to say so. Requiring
+    // a session here would silence exactly the errors most worth hearing.
+    // It writes nothing and returns 204 whatever happens.
+    pathname === '/api/client-error' ||
     pathname.startsWith('/xero-callback') ||
     pathname.startsWith('/api/xero')
   if (isOpen) return NextResponse.next()

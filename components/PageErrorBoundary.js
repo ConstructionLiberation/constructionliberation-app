@@ -22,6 +22,29 @@ export default class PageErrorBoundary extends Component {
     this.setState({ error, info })
     // Still logged, so it reaches Vercel's function logs as well as the screen.
     console.error('Page error:', error, info)
+
+    // AND REPORTED, so somebody hears about it.
+    //
+    // Showing the error on screen fixed the diagnosis problem - the person
+    // looking at it can see what went wrong. It did not fix the DETECTION
+    // problem: they refresh, work around it, and say nothing. A page that
+    // white-screens for one person on a Tuesday was invisible.
+    //
+    // Fire and forget, and its own failure is swallowed. A page that has
+    // already broken must not then have to handle a failure from the thing
+    // reporting it.
+    try {
+      fetch('/api/client-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: String(error?.message || error || 'Unknown'),
+          stack: String(info?.componentStack || error?.stack || '').split('\n').slice(0, 10).join('\n'),
+          url: typeof window !== 'undefined' ? window.location.href : '',
+        }),
+        keepalive: true,
+      }).catch(() => {})
+    } catch {}
   }
 
   render() {
