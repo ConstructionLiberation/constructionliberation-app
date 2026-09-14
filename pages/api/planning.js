@@ -334,7 +334,17 @@ async function handler(req, res) {
           delete alloc[key][date]; if (!Object.keys(alloc[key]).length) delete alloc[key]
         }
         await saveAlloc(alloc)
-        return res.json({ ok: true, day: alloc[key][date] || null })
+        // READ IT BACK SAFELY. The branch above may have deleted alloc[key]
+        // entirely - that happens when the day being cleared was the project's
+        // LAST one - and this line then read a date off an object that no longer
+        // existed:
+        //
+        //   Cannot read properties of undefined (reading '2026-09-25')
+        //
+        // It threw AFTER saveAlloc, so the change was saved and the person was
+        // told it had failed. They would reload, see it had worked after all,
+        // and never mention it.
+        return res.json({ ok: true, day: (alloc[key] && alloc[key][date]) || null })
       }
 
       // ── Water Ingress visits (separate model; multiple jobs per day) ──

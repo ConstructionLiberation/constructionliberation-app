@@ -1,3 +1,5 @@
+import { getOpsProjects } from '../../lib/db'
+import { loadPreStarts, isPreStartDone, preStartSentAt } from '../../lib/preStartDone'
 import {
   getSubmissionIndex, saveSubmissionIndex,
   getSubmission, saveSubmission, deleteSubmission,
@@ -21,9 +23,51 @@ async function handler(req, res) {
       return res.json({ submission })
     }
     const idx = await getSubmissionIndex()
+
+    // PRE-STARTS BELONG IN THIS LIST TOO.
+    //
+    // Pre-Start Minutes are not a Site App form. They live in their own store,
+    // one record per project at ops:prestart:{projectNo}, filled in from the
+    // project page rather than submitted through the Forms App.
+    //
+    // So nothing ever wrote one into the submission index, and Completed Forms -
+    // which reads exactly this - could never show one however many had been
+    // done. lib/preStartDone.js already documents the same confusion from the
+    // Forms Missing side; this is the other half of it.
+    //
+    // Presented as index entries rather than stored as submissions: no duplicate
+    // record, no migration of the ones already done, and one source of truth
+    // for a Pre-Start. isPreStartDone is the SAME rule the Forms Missing page
+    // and the Monday chaser use - a Pre-Start counts as done when it has been
+    // SENT, not merely saved.
+    let preStarts = []
+    try {
+      const projects = await getOpsProjects()
+      const nos = projects.map(p => p.projectNo || p.jobNo).filter(Boolean)
+      const recs = await loadPreStarts(nos)
+      preStarts = Object.entries(recs)
+        .filter(([, rec]) => isPreStartDone(rec))
+        .map(([no, rec]) => ({
+          id: `prestart:${no}`,
+          formId: 'pre-start',
+          formTitle: 'Pre-Start Minutes',
+          projectNo: no,
+          projectName: (projects.find(p => (p.projectNo || p.jobNo) === no) || {}).name || no,
+          operative: rec.preparedBy || rec.chairedBy || '',
+          submittedAt: preStartSentAt(rec),
+          flags: [],
+          // So the page can route to the project's pre-start rather than a
+          // submission that does not exist.
+          isPreStart: true,
+        }))
+    } catch {
+      // A Pre-Start lookup failing must not empty the Completed Forms list.
+    }
+
+    const all = [...idx, ...preStarts]
     // newest first
-    idx.sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0))
-    return res.json({ submissions: idx })
+    all.sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0))
+    return res.json({ submissions: all })
   }
 
   if (req.method === 'POST') {

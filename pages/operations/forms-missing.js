@@ -90,6 +90,22 @@ export default function FormsMissingPage() {
     })
   }, [data, showOnly, fForm, fPerson])
 
+  // FIFTY AT A TIME.
+  //
+  // Every required form for every project for the whole range came out in one
+  // table - hundreds of rows on a long range, which is slow to render and
+  // impossible to read. The filters above narrow it, but the default view is the
+  // one people land on.
+  //
+  // Page resets whenever the filters change, so changing a filter cannot leave
+  // you looking at page 6 of a 2-page list and concluding there is nothing there.
+  const PAGE_SIZE = 50
+  const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [showOnly, fForm, fPerson, data])
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageRows = rows.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+
   return (
     <OperationsShell active="forms:missing" section="forms" title="Forms — Missing" wide>
       <PageHeading title="Forms — Missing" sub="Required vs completed tracked forms for the selected weeks, with the person responsible." />
@@ -187,7 +203,7 @@ export default function FormsMissingPage() {
               </thead>
               <tbody>
                 {rows.length === 0 && <tr><td colSpan={5} style={{ ...td, color: '#aaa', textAlign: 'center', padding: 20 }}>No required forms for this range/filters.</td></tr>}
-                {rows.map((r, i) => (
+                {pageRows.map((r, i) => (
                   <tr key={i} style={{ borderTop: '1px solid #f2f2f2', background: r.upcoming ? '#f5fbff' : (r.done ? '#fff' : '#fffaf7') }}>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{(() => {
                       const d = (r.done ? (r.doneDate || r.dueDate) : r.dueDate) || ''
@@ -220,6 +236,20 @@ export default function FormsMissingPage() {
               </tbody>
             </table>
           </div>
+          {rows.length > PAGE_SIZE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 4px', fontSize: 13 }}>
+              <div style={{ color: '#777' }}>
+                Showing {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, rows.length)} of {rows.length}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
+                  style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #ddd', background: '#fff', cursor: safePage === 0 ? 'default' : 'pointer', opacity: safePage === 0 ? 0.45 : 1 }}>Previous</button>
+                <span style={{ color: '#777' }}>Page {safePage + 1} of {pageCount}</span>
+                <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={safePage >= pageCount - 1}
+                  style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #ddd', background: '#fff', cursor: safePage >= pageCount - 1 ? 'default' : 'pointer', opacity: safePage >= pageCount - 1 ? 0.45 : 1 }}>Next</button>
+              </div>
+            </div>
+          )}
           {drill !== null && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3vh 2vw' }}>
               <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 'min(1100px, 96vw)', maxHeight: '94vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
