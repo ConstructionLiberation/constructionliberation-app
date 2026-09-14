@@ -1,109 +1,63 @@
-pkg898 - One PDF text rule, the Pre-Start write, and three pages hidden
-=======================================================================
+pkg899 - Tech Sub Builder hidden, and the back button goes where you came from
+==============================================================================
 
-EIGHT FILES.
-  lib/pdfText.js            <-- NEW, create by hand
-  lib/applicationPdf.js
-  lib/handoverPdf.js
-  lib/weeklyLabourPdf.js
-  lib/variationPdf.js
-  lib/preStartPdf.js
-  components/OperationsNav.js
-  pages/api/pre-start.js
+THREE FILES, none new.
+  lib/designShell.js
+  pages/admin/design-customers.js
+  pages/design/index.js
 
 
-1. HIDE RAMS BUILDER, SUB-CONTRACTOR ONBOARDING AND PQQs
----------------------------------------------------------
-HIDDEN, NOT DELETED. The pages still exist - remove `hidden: true` to bring one
-back. Deleting them would lose the work and make returning to it a rebuild
-rather than a decision.
+1. TECH SUB BUILDER HIDDEN
+--------------------------
+HIDDEN, NOT DELETED - the page still exists, so remove `hidden: true` in
+lib/designShell.js to bring it back rather than rebuilding it.
 
-`hidden` was already the convention (Negotiating uses it) but was only honoured
-at the TOP level. Marking a sub-tab hidden did nothing, so the only way to take
-one off the nav was to delete it. Now honoured on children too.
+lib/designShell.js already had `internalOnly`, which hides builder tools from
+customers. It had no way to hide something from EVERYONE, so `hidden` is added
+and honoured alongside it - the same convention pkg898 added to
+components/OperationsNav.js, so both areas now hide the same way.
 
-H&S sub-tabs after this: RAMS Matrix, H&S Matrix, Operatives.
-
-
-2. FOUR PDF SANITISERS THAT DISAGREED, AND ONE MISSING
-------------------------------------------------------
-pdf-lib's standard fonts use WinAnsi. Hand it a character outside that range and
-drawText THROWS - the PDF fails, so the download fails, or the email that was
-going to carry it never sends.
-
-Five builders need the rule. What was actually there:
-
-  applicationPdf   kept £, but replaced every ACCENTED character with a space
-  variationPdf     kept £, same accent problem
-  handoverPdf      DROPPED £ entirely (\\x20-\\x7E)
-  weeklyLabourPdf  correct - kept everything Latin-1, plus a droplet rule
-  preStartPdf      NONE AT ALL
-
-So a name like Jose Nunez came out mangled on an application and on a variation -
-documents that go to the customer. And a curly quote pasted into a Pre-Start
-field made the send fail outright.
-
-I reported earlier that variationPdf had no sanitiser. WRONG - it has one called
-`san`, and my search looked for the word "sanit". Second time today a search
-pattern produced a confident false answer. Both are corrected here.
-
-Now one rule in lib/pdfText.js, used by all five. Tested across fourteen cases:
-
-    pound sign            Total £1,234.56      kept
-    curly apostrophe      James'               kept as '
-    smart quotes          "Pre-Start"          kept as "
-    em dash               J190 - Russell Hill
-    ellipsis              and so on...
-    non-breaking space    J190 Russell
-    water droplet         WI: Leak at Gas Lane
-    emoji                 removed
-    accented name         Dori Balog, José Núñez   KEPT
-    degree symbol         15°C on the roof         KEPT
-    tick                  Y complete
-    plain text            unchanged
-
-    failures: 0     every output WinAnsi-safe: true
-
-My first version of the shared rule turned "James' site" into "James site" - it
-missed U+02BC, an apostrophe some keyboards produce, so it was stripped rather
-than replaced. A DROPPED apostrophe is worse than a wrong one: nobody reads it
-as an encoding problem, they read it as a typo we made. Caught by the test,
-fixed, retested.
+Design tabs after this: Handover Docs, RFIs, Tech Sub, Rock Drawings,
+Calculations, Leak Test Certs, Warranties, O&Ms.
 
 
-3. THE PRE-START WRITE MERGES INSTEAD OF REPLACING
---------------------------------------------------
-pages/api/pre-start.js wrote { ...data } straight over the stored record, so
-anything the client did not send back was erased - including sentAt,
-sentManually, recipients and statuses, which are the PROOF a Pre-Start was
-issued.
+2. THE BACK BUTTON ON DESIGN CUSTOMERS
+--------------------------------------
+It was decided by ROLE:
 
-It has not bitten, because the autosave stops once the record is sent and both
-save paths send a complete payload. But that is a guard in a DIFFERENT FILE
-holding this one up. A third caller, or a change to that guard, and a Pre-Start
-that was issued reads as never issued: it reappears in Forms Missing and the
-Monday chaser emails the Contracts Manager about it again.
+    href={me.role === 'management' ? '/design' : '/admin'}
 
-Same shape as the write that lost the Gas Lane application.
+But the page is reached from BOTH places - Admin lists it, and the Design portal
+has a "Manage Customers" link. So:
+
+    an admin arriving from Design      -> sent to Admin      wrong
+    an admin arriving from Admin       -> sent to Admin      right
+    a management user from Admin       -> sent to Design     wrong
+    a management user from Design      -> sent to Design     right
+
+Right for one route in and wrong for the other, for every role. Yours was the
+first case.
+
+It now follows the route actually taken: the Design portal's link carries
+?from=design, and the back button reads it. Where there is no marker - an old
+bookmark, or somebody typing the address - it falls back to the old role guess
+rather than picking arbitrarily.
+
+The label follows too, so it says "Design" when it goes to Design.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 8: 0 errors
+- esbuild compile on all 3: 0 errors
 - import-graph check: clean
-- the sanitiser across 14 cases, and confirmed every output is WinAnsi-safe
-- confirmed the only page.drawText in preStartPdf that bypasses the shared
-  helper is a fixed literal, so no user text reaches it
-- confirmed the H&S nav now filters hidden children
+- my edit declared `const router` a second time; the compile caught it and it
+  was already there. Removed.
 
 
 WHAT TO CHECK
 -------------
-1. Operations > H&S - three sub-tabs: RAMS Matrix, H&S Matrix, Operatives.
-2. Download a variation PDF and an application PDF. They should look exactly as
-   before. If a name with an accent appears anywhere, it should now be spelled
-   properly rather than gapped.
-3. Pre-Start: paste a curly quote or an em-dash into a field, save, and send.
-   It should work - that is the case that used to fail.
-4. The weekly labour sheet, if one is due - the droplet rule moved files and
-   should still print "WI:" on a leak visit.
+1. Design portal > Manage Customers > back. Should return to the DESIGN portal.
+2. Admin > Design Customers > back. Should return to ADMIN.
+3. Design project tabs - no Tech Sub Builder. Tech Sub itself stays.
+4. A customer logging in should see the same tabs as before minus nothing -
+   Tech Sub Builder was already internal-only, so nothing changes for them.

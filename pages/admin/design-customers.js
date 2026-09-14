@@ -12,6 +12,11 @@ const link = { background: 'none', border: 'none', color: '#7c3aed', cursor: 'po
 export default function DesignCustomers() {
   const router = useRouter()
   const [me, setMe] = useState(null)
+  // Where the back link goes. Set from ?from=, so it follows the route the person
+  // actually took rather than the one their role implies.
+  const cameFromDesign = router.query.from === 'design'
+  const backHref = cameFromDesign ? '/design' : (me && me.role === 'management' ? '/design' : '/admin')
+  const backLabel = backHref === '/design' ? '\u2039 Design' : '\u2039 Admin'
   const [users, setUsers] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -98,7 +103,19 @@ export default function DesignCustomers() {
     <>
       <Head><title>Design Customers — Admin</title></Head>
       <div style={{ background: '#1a1a19', color: '#fff', padding: '16px 24px' }}>
-        <a href={me && me.role === 'management' ? '/design' : '/admin'} style={{ color: '#bbb', fontSize: 13, textDecoration: 'none' }}>{me && me.role === 'management' ? '\u2039 Design' : '\u2039 Admin'}</a>
+        {/* GO BACK WHERE YOU CAME FROM, not where your role suggests.
+            
+            This was decided by ROLE: management went to /design, everyone else
+            to /admin. But the page is reached from BOTH - Admin lists it, and
+            the Design portal has a "Manage Customers" link. So an admin who
+            arrived from Design was sent to Admin, and a management user who
+            arrived from Admin was sent to Design. Right for one route in, wrong
+            for the other, for every role.
+            
+            ?from=design on the link is what decides it. Falls back to the old
+            role guess when there is no marker - an old bookmark, or somebody
+            typing the address. */}
+        <a href={backHref} style={{ color: '#bbb', fontSize: 13, textDecoration: 'none' }}>{backLabel}</a>
         <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>Design Customers</div>
         <div style={{ color: '#999', fontSize: 13, marginTop: 2 }}>External customer / design-team logins for the Design portal. Each is scoped to specific projects and can only view, comment, approve and download.</div>
       </div>
