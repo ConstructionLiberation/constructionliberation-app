@@ -17,7 +17,7 @@ const btn = { background: '#1a1a2e', color: '#fff', border: 'none', borderRadius
 
 const EMPTY = {
   id: '', name: '', hosts: '', modules: [...CORE_MODULES],
-  senderName: '', sendingAddress: '', replyTo: '', logoUrl: '',
+  senderName: '', sendingAddress: '', replyTo: '', logoUrl: '', senders: {},
   timezone: 'Europe/London', currency: 'GBP', locale: 'UK',
   redis: { url: '', token: '' }, active: true,
 }
@@ -202,6 +202,35 @@ export default function PlatformPage() {
             <label style={label}>Sending address</label>
             <input style={input} value={form.sendingAddress} onChange={e => set('sendingAddress', e.target.value)}
               placeholder="notifications@constructionliberation.com" />
+
+            <div style={{ fontSize: 11, color: '#888', marginTop: -6, marginBottom: 12 }}>
+              Used for every email unless overridden below.
+            </div>
+
+            <label style={label}>
+              Different senders for particular emails (optional)
+            </label>
+            <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+              Full address including the name, e.g.
+              {' '}Rock Roofing Accounts &lt;accountsreceivable@rockroofing.co.uk&gt;.
+              Leave blank to use the sender above. Rock needs one here for
+              applications, because its customers already know that address.
+            </div>
+            {[
+              ['notify', 'Notifications and variations'],
+              ['commercial', 'Applications'],
+              ['forms', 'Forms, pre-start and reports'],
+              ['accounts', 'Chase emails'],
+            ].map(([k, lbl]) => (
+              <div key={k} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: '#666', marginBottom: 3 }}>{lbl}</div>
+                <input style={{ ...input, marginBottom: 0 }}
+                  value={(form.senders && form.senders[k]) || ''}
+                  onChange={e => set('senders', { ...(form.senders || {}), [k]: e.target.value })}
+                  placeholder="(uses the sender above)" />
+              </div>
+            ))}
+            <div style={{ height: 12 }} />
 
             <label style={label}>Reply-to (their own address)</label>
             <input style={input} value={form.replyTo} onChange={e => set('replyTo', e.target.value)}

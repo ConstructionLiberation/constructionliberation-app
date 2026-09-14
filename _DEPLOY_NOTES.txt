@@ -1,92 +1,103 @@
-pkg876 - Make the platform domain usable
-========================================
+pkg877 - A customer can have more than one sending identity
+===========================================================
 
-TWO FILES, neither new.
-  lib/withTenant.js
-  middleware.js          (repository root, not in a folder)
+THREE FILES, none new.
+  lib/tenantSettings.js
+  pages/api/platform/tenants.js
+  pages/platform/index.js
 
-WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING.
-PLATFORM_HOSTS is unset, so none of it is reachable yet.
-
-
-A DOOR LOCKED FROM THE INSIDE
------------------------------
-You asked whether you could move the platform to its own domain first. You
-could not, and the reason is a fault in what I built.
-
-withTenant demanded a platform SESSION before letting anything through on a
-platform host. But the login route is itself wrapped. So:
-
-    no session -> cannot reach login -> cannot get a session
-
-Point a domain at the project today and you would have been locked out of it
-with no way in except editing an environment variable back out again.
-
-Fixed: no session is required to REACH the platform host. Authorisation is done
-where it belongs - requireRole plus the PLATFORM_ADMINS check inside the
-platform route.
+WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING, except three new
+optional fields on the customer form.
 
 
-A SECOND PROBLEM, WORSE
------------------------
-Pointing a domain at this Vercel project makes it serve the WHOLE app. So
-admin.constructionliberation.com would also have answered /crm, /wip, /retention
-and every other route - and, having no customer database of its own, would have
-fallen back to reading ROCK'S.
+WHY THIS HAD TO COME BEFORE THE SWITCH
+--------------------------------------
+When you tested the emails earlier, the two that arrived came from DIFFERENT
+addresses:
 
-One address quietly serving another company's portal is the exact thing this
-entire exercise exists to prevent, and I would have handed it to you as a
-feature.
+    variation      Rock Roofing <notifications@send.rockroofing.co.uk>
+    application    Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>
 
-Now, on a platform host, only two things are reachable:
+Both real, both what Watkin Jones and the rest already recognise.
 
-    /api/portal-auth     signing in
-    /api/platform/*      the platform itself
+The customer record held ONE sender. So the moment TENANCY_ENABLED was set,
+applications would have started arriving from the notifications address -
+deliverable, plausible, and quietly wrong on the document your customers pay
+against.
 
-Everything else is 404. Not 403 - a 403 confirms the route exists.
-
-And middleware redirects any other PAGE on that host to /platform, so the screen
-matches the API rather than drawing a portal that then fails every call.
+Nobody would have noticed for weeks.
 
 
-WHAT THIS MEANS FOR YOUR LOGIN - read this before setting PLATFORM_HOSTS
-------------------------------------------------------------------------
-The platform host has no user store of its own, so signing in there
-authenticates against ROCK'S user records - the same username and password you
-use today.
+THE FIX
+-------
+An optional override per kind, falling back to the customer's default sender:
 
-That is interim and it is not where this should end up. A platform login should
-live in the control database, independent of any customer, so that Construction
-Liberation is not administered through Rock Roofing's user list. That is its own
-package and it matters more once the account ownership question you raised is
-settled.
+    Notifications and variations      notify
+    Applications                      commercial
+    Forms, pre-start and reports      forms
+    Chase emails                      accounts
 
-Worth knowing now so you are not surprised: moving the platform to its own
-domain does NOT yet move the login off Rock.
+Most customers set the default and never touch these. Rock needs one, for
+applications.
+
+Proven:
+
+    rock   notify      -> Rock Roofing <notifications@send.rockroofing.co.uk>
+    rock   commercial  -> Rock Roofing Accounts <accountsreceivable@...>
+    rock   forms       -> Rock Roofing <notifications@send.rockroofing.co.uk>
+
+    wilson notify      -> Wilson Construction <notifications@...>
+    wilson commercial  -> Wilson Construction <notifications@...>
+
+A customer with no overrides gets their one sender everywhere, which is the
+simple case and stays simple.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on both: 0 errors
-- confirmed middleware still imports only next/server - it runs at the edge and
-  a node import there breaks the build
-- confirmed sessionBelongsTo is still used for the CUSTOMER branch, which is
-  where the cross-tenant session check lives. Only the platform branch changed.
+- esbuild compile on all 3: 0 errors
+- import-graph check: clean
+- ran the resolver for both a customer WITH an override and one without,
+  across all five sender kinds
 
 
-TO SET THE DOMAIN UP, when you want it
---------------------------------------
-  1. Add the domain to the Vercel project - admin.constructionliberation.com or
-     whatever you choose.
-  2. Add the environment variable:
+NOW REGISTER ROCK
+-----------------
+Two steps, in this order. Identity FIRST, so nothing is ever pointed at a
+database that cannot prove who it is.
 
-         PLATFORM_HOSTS = admin.constructionliberation.com
+STEP 1 - stamp Rock's identity. This is a POST, so it needs the browser console
+rather than the address bar. On app.rockroofing.co.uk press F12, go to Console,
+and paste:
 
-  3. Redeploy.
-  4. Visit it. You should land on /platform, and be asked to sign in with your
-     Rock credentials.
-  5. Check that app.rockroofing.co.uk/platform ALSO still works - it will, until
-     TENANCY_ENABLED is set. After that, only the platform domain will.
+    await (await fetch('/api/admin/tenant-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'identity', id: 'rock', name: 'Rock Roofing Ltd' })
+    })).json()
 
-None of this is required before registering Rock. It can wait until after, and
-registering Rock is the more useful thing to get done.
+Expect { ok: true, identity: { id: 'rock', ... } }.
+
+STEP 2 - on /platform, press "Add a customer":
+
+    Id                  rock
+    Company name        Rock Roofing Ltd
+    Web addresses       app.rockroofing.co.uk, siteapp.rockroofing.co.uk
+                        BOTH - the Site App breaks without the second
+    Modules             all of them
+    Sender name         Rock Roofing
+    Sending address     notifications@send.rockroofing.co.uk
+    Applications        Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>
+    Reply-to            wherever replies should go
+    Timezone            Europe/London
+    Database url        the value of KV_REST_API_URL
+    Database token      the value of KV_REST_API_TOKEN
+
+    Those last two are ROCK'S existing database - NOT the CONTROL_REDIS pair,
+    which points at the registry itself.
+
+STEP 3 - reload /platform. Rock should be listed, with Database "set".
+
+NOTHING READS THAT RECORD until TENANCY_ENABLED is set, so this is safe to do
+and check at your own pace. Do NOT set the switch yet - there is one more thing
+I want to verify first, and I would rather look at it than find out afterwards.

@@ -159,6 +159,13 @@ export default async function handler(req, res) {
     locale: body.locale || (existing && existing.locale) || 'UK',
     senderName: body.senderName != null ? String(body.senderName).trim() : (existing && existing.senderName) || '',
     sendingAddress: body.sendingAddress != null ? String(body.sendingAddress).trim() : (existing && existing.sendingAddress) || '',
+    // Optional full from-strings per kind, e.g.
+    //   { commercial: 'Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>' }
+    // Anything not listed falls back to senderName + sendingAddress above.
+    senders: (body.senders && typeof body.senders === 'object')
+      ? Object.fromEntries(Object.entries(body.senders)
+          .map(([k, v]) => [k, String(v || '').trim()]).filter(([, v]) => v))
+      : (existing && existing.senders) || {},
     replyTo: body.replyTo != null ? String(body.replyTo).trim() : (existing && existing.replyTo) || '',
     logoUrl: body.logoUrl != null ? String(body.logoUrl).trim() : (existing && existing.logoUrl) || '',
     active: body.active !== false,
