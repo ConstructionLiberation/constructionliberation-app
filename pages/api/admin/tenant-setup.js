@@ -1,6 +1,6 @@
 import { requireRole } from '../../../lib/portalAuth'
-import { getClient } from '../../../lib/db'
-import { saveTenant, tenantForHost, allTenants, registryConfigured, tenancyEnabled } from '../../../lib/tenants'
+import { getClient, clientForCredentials } from '../../../lib/db'
+import { saveTenant, tenantForHost, tenantById, allTenants, registryConfigured, tenancyEnabled } from '../../../lib/tenants'
 
 // TENANT SETUP - admin only, and deliberately manual for now.
 //
@@ -31,9 +31,27 @@ export default async function handler(req, res) {
   if (!requireRole(req, res, ['admin'])) return
 
   if (req.method === 'GET') {
-    const redis = await getClient()
+    // Read the identity from the database belonging to whichever customer this
+    // ADDRESS resolves to, using credentials from the registry - not from
+    // whatever happens to be in the environment.
+    //
+    // This endpoint is not wrapped in withTenant (it has to work before a
+    // customer exists), so there is no ambient customer to fall back on. Once
+    // the global credentials are removed there will be nothing to fall back TO,
+    // which is the point of this change.
     let identity = null
-    try { identity = await redis.get('tenant:identity') } catch {}
+    let identityFrom = null
+    try {
+      const t = registryConfigured() ? await tenantForHost(req.headers.host) : null
+      if (t && t.redis) {
+        identityFrom = t.id
+        identity = await (await clientForCredentials(t.redis)).get('tenant:identity')
+      } else if (!tenancyEnabled()) {
+        // Still single tenant: the ambient client is the only database there is.
+        identity = await (await getClient()).get('tenant:identity')
+        identityFrom = '(ambient)'
+      }
+    } catch (e) { identity = { error: e.message } }
     let registered = []
     if (registryConfigured()) {
       try { registered = (await allTenants()).map(t => ({ id: t.id, name: t.name, hosts: t.hosts, modules: t.modules })) } catch (e) {
@@ -44,6 +62,7 @@ export default async function handler(req, res) {
       controlDatabaseConfigured: registryConfigured(),
       tenancyEnabled: tenancyEnabled(),
       identityOfCurrentDatabase: identity,
+      identityReadFrom: identityFrom,
       registeredTenants: registered,
       // STRIPPED. This returned the RAW customer record, which carries the
       // database url and token. Admin-only, but it would have printed Rock's
@@ -66,7 +85,42 @@ export default async function handler(req, res) {
   // Stamp the database this request is already talking to.
   if (action === 'identity') {
     if (!id) return res.status(400).json({ error: 'id required' })
-    const redis = await getClient()
+
+    // WHICH DATABASE AM I STAMPING?
+    //
+    // Three ways, in order of preference:
+    //
+    //   1. credentials given in the body  - a brand new customer whose database
+    //      exists but who is not registered yet. This is the normal path.
+    //   2. the customer is already registered - take their credentials from the
+    //      registry.
+    //   3. neither, and tenancy is off - the ambient database, which is how
+    //      Rock's own identity was stamped.
+    //
+    // What it no longer does is silently write to whatever database the
+    // environment variables happen to point at. That was fine when there was
+    // one, and is a way to stamp the wrong company's database when there are
+    // several.
+    let redis = null
+    let target = null
+    const creds = req.body && req.body.redis
+    if (creds && creds.url && creds.token) {
+      redis = await clientForCredentials(creds)
+      target = 'credentials supplied in this request'
+    } else {
+      const known = registryConfigured() ? await tenantById(String(id).toLowerCase()).catch(() => null) : null
+      if (known && known.redis) {
+        redis = await clientForCredentials(known.redis)
+        target = `the registered database for "${known.id}"`
+      } else if (!tenancyEnabled()) {
+        redis = await getClient()
+        target = 'the ambient database'
+      } else {
+        return res.status(400).json({
+          error: `No database to stamp. Either register "${id}" first, or supply redis: { url, token } in this request.`,
+        })
+      }
+    }
     const existing = await redis.get('tenant:identity').catch(() => null)
     if (existing && existing.id && String(existing.id) !== String(id)) {
       // Changing an identity re-points a database at a different customer. That
@@ -75,9 +129,9 @@ export default async function handler(req, res) {
         error: `This database already identifies as "${existing.id}". Refusing to change it to "${id}".`,
       })
     }
-    const rec = { id: String(id), name: name || String(id), setAt: new Date().toISOString() }
+    const rec = { id: String(id).toLowerCase(), name: name || String(id), setAt: new Date().toISOString() }
     await redis.set('tenant:identity', rec)
-    return res.json({ ok: true, identity: rec })
+    return res.json({ ok: true, identity: rec, wroteTo: target })
   }
 
   // Write a customer into the control database.

@@ -1,60 +1,130 @@
-pkg883 - The bookkeeper can use the In Query table
-==================================================
+pkg884 - IMPORTANT. Most of the app was not reading the customer's database.
+============================================================================
 
-ONE FILE.  pages/api/bookkeeping-inquery.js  - not new.
+TWO FILES, neither new.
+  lib/db.js
+  pages/api/admin/tenant-setup.js
 
-Nothing to do with tenancy. A role list that was wrong, and has been.
+WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING, because for Rock
+both databases are the same one. That is exactly why this went unnoticed.
 
 
-WHAT WAS WRONG
---------------
-Every endpoint the Bookkeeping page calls allows the accounts role. Except one:
+THE PROBLEM
+-----------
+lib/db.js exports 20 named helpers - getProject, saveProject, get, set,
+getPortalUsers, getTokens and the rest. They are used by 164 FILES. Every one
+of them called getRedis(), which returned the GLOBAL client from the
+environment variables.
 
-    bookkeeping.js            accounts, management, admin
-    import-bills-bulk.js      accounts, management, admin
-    bookkeeping-inquery.js    post-contract, management, admin   <- the odd one
+Only the files converted in pkg843-852 to call getClient() were resolving the
+customer from the registry. Everything using a named helper - which is most of
+the application - was reading whatever the environment variables pointed at,
+regardless of which customer the request was for.
 
-So your bookkeeper could OPEN the In Query table and not USE it. Assigning
-someone returned "You do not have access to this."
+With one customer that is invisible: both are Rock's database. With two it is
+one company seeing another's projects, and it would have been found by a
+customer rather than by us.
 
-It gets odder. lib/roles.js says:
+Demonstrated, a named helper as 164 files call it:
 
-    'bookkeeping': ['accounts', 'management', 'admin']
-
-post-contract cannot reach the bookkeeping AREA at all. So this endpoint was
-allowing a role that can never open the page, and refusing the only role that
-can. The list looks copied from a commercial endpoint rather than chosen.
-
-The In Query table appears on exactly one page - pages/bookkeeping.js - so there
-is no other route by which a post-contract user would reach it.
+    BEFORE    inside zztest  ->  GLOBAL          <- Rock's database
+    AFTER     inside rock    ->  TENANT:rock
+              inside zztest  ->  TENANT:zztest
 
 
 THE FIX
 -------
-    accounts, post-contract, management, admin
+getRedis() now resolves the customer, instead of getClient() doing it. It is
+the function every helper already calls, so all 20 follow automatically without
+touching any of the 164 files.
 
-accounts added, which is the point. post-contract KEPT rather than removed: it
-is almost certainly dead, since that role cannot reach the area, but removing a
-permission on a hunch is how you break something at 8am on a Monday. It costs
-nothing to leave.
+That is the property the 49-file conversion was supposed to buy in the first
+place: one function knows which database, and everything else follows without
+knowing anything. I put the resolution one level too high and the conversion
+could not do its job.
+
+getClient() is now simply the client-shaped wrapper around getRedis(). Two
+functions each deciding which database is two rules that can disagree. There is
+one.
+
+The identity self-check runs on this path, so every read through a helper now
+also proves the database is the right customer's.
+
+
+ALSO: tenant-setup.js no longer depends on the global credentials
+-----------------------------------------------------------------
+It used to write the identity record to "whatever the environment variables
+point at". Fine with one database; a way to stamp the wrong company's database
+when there are several. And it blocks removing the globals, which is the next
+step.
+
+It now names its target explicitly, in this order:
+
+  1. credentials supplied in the request  - a new customer, not yet registered
+  2. the customer is already registered   - credentials from the registry
+  3. neither, and tenancy is off          - the ambient database
+
+So provisioning customer two works like this:
+
+    await (await fetch('/api/admin/tenant-setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'identity', id: 'zztest', name: 'ZZ Test Construction Ltd',
+        redis: { url: 'https://....upstash.io', token: '...' }
+      })
+    })).json()
+
+The reply says wroteTo, naming which database was stamped, so you can see it
+went where you meant.
+
+The GET also reads the identity from the registry's credentials rather than the
+environment, and reports identityReadFrom.
+
+
+AUDIT I RAN WHILE I WAS IN THERE
+--------------------------------
+Every API route, checking which are wrapped:
+
+  pages/api/health-check.js          unwrapped, deliberate, touches no database
+  pages/api/cron/deliveries-notify.js  no default export - a module, called
+                                       inside hs-expiry-email, so a customer IS
+                                       in scope when it runs
+  pages/api/admin/tenant-setup.js    unwrapped, deliberate, now names its own
+                                       database
+  pages/api/platform/tenants.js      unwrapped, deliberate, uses the control
+                                       database which has its own credentials
+
+And every lib file, for database access at module scope - outside any function,
+where no customer can be in scope. NONE.
+
+So after this, nothing depends on the global credentials except the
+single-tenant fallback itself.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile: 0 errors
-- listed every endpoint pages/bookkeeping.js and components/InQueryTable.js
-  call, with their role lists - this was the only one out of step
-- checked AREA_ACCESS to confirm accounts genuinely belongs there
-- confirmed InQueryTable is used on one page only
+- esbuild compile on both: 0 errors
+- confirmed tenantRedis and assertIdentity are function DECLARATIONS, so
+  hoisting makes them safe to call from getRedis above them
+- ran a named helper under no tenant, under rock and under zztest, and against
+  the old behaviour for contrast - output above
+- ran it again with the globals removed, confirming the tenant path still works
+  and the no-tenant path has nothing to fall back to
 
 
 WHAT TO CHECK
 -------------
-1. Have the bookkeeper open Bookkeeping > In Query and assign an item to
-   someone. It should work.
-2. "Send list" as well - same endpoint, same guard.
-3. Confirm the person assigned receives the email and their link works.
+Everything, briefly. This changes how 164 files reach the database, even though
+the destination is identical.
 
-If anything else in that area says "You do not have access to this", tell me the
-action - the same copied-list mistake may be elsewhere and I would rather find
-the rest of them now.
+1. Project Financials, Retention, WIP, 13-week cash flow - numbers unchanged.
+2. Bookkeeping, CRM, Operations, Design - all load.
+3. The Site App on your phone.
+4. Sign out and back in - that path uses getPortalUsers, one of the 20.
+5. Send a variation to yourself.
+
+If ANY page fails to load, tell me which. It would mean the identity check is
+firing where it should not, and that is a one-line diagnosis.
+
+DO NOT remove the global credentials yet. That is the next package, and it
+should go on its own.
