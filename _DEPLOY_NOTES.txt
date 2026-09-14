@@ -1,90 +1,120 @@
-pkg888 - Pre-Contract can send variations to the customer
-=========================================================
+pkg889 - Deep dive: eleven settings frozen at module load, and a shared flag
+============================================================================
 
-ONE FILE.  pages/variation-builder.js  - not new.
+TWELVE FILES, none new.
 
-Nothing to do with tenancy.
-
-
-WHAT WAS HAPPENING
-------------------
-Press "Raise & send to customer" on the Pre-Contract Variation Builder and the
-page appeared to refresh. The variation reached the tracker as a draft, no send
-modal opened, and no email went to anyone - not even the person who raised it.
-
-It looked like a deliberate rule that Pre-Contract raises and Commercial sends.
-It was not.
+WHAT SHOULD LOOK DIFFERENT:  NOTHING. For Rock every value resolves to what it
+already was. These are faults that only appear with a second customer, which is
+why they are worth finding now.
 
 
-WHY
----
-The page rendered the builder like this:
+THIS IS THE DEEP DIVE YOU ASKED FOR
+-----------------------------------
+A deliberate hunt for the mechanical patterns that cause cross-customer leaks,
+rather than a general read. Six searches:
 
-    {loading
-      ? <div>Loading projects…</div>
-      : <VariationBuilder projects={projects} onSaved={load} />}
-
-So:
-
-    press Raise and send  ->  save() writes the variation
-                          ->  save() awaits onSaved(), which IS load()
-                          ->  load() sets loading = true
-                          ->  THE BUILDER IS SWAPPED OUT AND UNMOUNTS
-                          ->  save() returns true, setSendOpen(true) runs on a
-                              component that no longer exists
-                          ->  load() finishes, the builder remounts empty
-
-The "refresh" you saw was the component being torn down and rebuilt mid-save,
-not a page reload.
-
-pages/variations.js - the Commercial tracker - renders the SAME component
-unconditionally. That is the only difference, and it is why the same button has
-always worked there.
-
-A component that unmounts itself by calling back into its own parent's loading
-state. Nothing about that line looks wrong.
+  1. module-scope mutable state          11 found, 2 real
+  2. globalThis / global                 none
+  3. timers outliving a request          none server-side
+  4. Redis clients outside lib/db.js     none
+  5. per-customer settings resolved at   ELEVEN
+     module load
+  6. import-graph to server-only modules clean
 
 
-THE FIX
--------
-The builder now renders unconditionally, exactly as Commercial does, and the
-refresh happens underneath it. The spinner moved to the heading, where it cannot
-tear anything down.
+FINDING 1 - ELEVEN SETTINGS FROZEN AT MODULE LOAD
+-------------------------------------------------
+    lib/designEmail.js          FROM, REPLY_TO, APP_URL
+    lib/designRfiNotify.js      FROM, REPLY_TO, APP_URL
+    lib/crmEmailVolume.js       INTERNAL_DOMAIN
+    pages/api/design-oms.js     APP_URL, LOGO_URL
+    pages/api/ops-users.js      FORMS_URL
+    pages/api/project-process.js FROM, APP_URL
 
-Pre-Contract now behaves identically to Commercial: raise, the send modal opens,
-the email goes.
+A module is evaluated ONCE, when first imported. At that moment there is no
+request and therefore NO CUSTOMER IN SCOPE. So each of these froze to whatever
+the environment variables said.
+
+Every customer's design emails, RFI notices, OM notices, operative invitations
+and process emails would have come from ROCK'S address with links to ROCK'S
+portal - permanently, whatever their own settings said.
+
+MY FAULT, from pkg868. That conversion replaced the call sites but did not
+notice that eleven of them sit at module scope rather than inside a function. It
+looked complete and achieved nothing in those eleven places.
+
+lib/ramsNotify.js already had it right - `const FROM = () => fromEmail('forms')`
+- and that was the shape to copy. All eleven are now functions, evaluated per
+request with the customer resolved.
+
+APP_URL is EXPORTED from designEmail and imported by four other files, so those
+were updated too: design-calculations, design-techsubs, design-rfis,
+design-rock-drawings.
+
+WHY THIS MATTERED MORE THAN IT LOOKS: it would have survived the leak hunt. It
+produces a WRONG SENDER, not wrong data on a screen. Nobody searching a database
+for ZZTEST would ever have found it.
 
 
-I CHECKED FOR THE SAME TRAP ELSEWHERE
--------------------------------------
-Six other pages pass a reloading callback into a child component AND have a
-loading conditional somewhere on the page:
+FINDING 2 - A FLAG WRITTEN BY ONE REQUEST AND READ BY ANOTHER
+-------------------------------------------------------------
+pages/api/crm.js had:
 
-    pages/variations.js                          VariationBuilder
-    pages/operations/projects.js                 ProjectDetails
-    pages/business-financials/invoice-finance.js SyncButton
-    pages/business-financials/retentions-due.js  SyncButton
-    pages/business-financials/invoices.js        SyncButton
-    pages/business-financials/budgets.js         SyncButton
+    let LAST_DEALS_WERE_SEED = false     // module scope
 
-In every one, the component sits OUTSIDE the loading branch. variation-builder.js
-was the only page where it sat inside. So this is fixed, not merely patched.
+set inside loadDeals() and read later when building the response. A warm
+instance serves many requests:
+
+    request A (a customer with deals)   sets it false
+    request B (a customer with none)    sets it true
+    request A's response reads it       -> true
+
+and A is told it is looking at sample data when it is not. TWO PEOPLE ON THE
+PORTAL AT ONCE was enough to do it - this was a live bug before tenancy, not
+only after.
+
+The flag now travels with the array it describes, as a non-enumerable property,
+so it cannot be overwritten by somebody else's request and cannot leak into
+anything that serialises the deals.
+
+
+FINDING 3 - THE ERROR THROTTLE IGNORED THE CUSTOMER
+---------------------------------------------------
+pkg887's throttle keyed on route and message only, so one company's error would
+suppress another company's identical error on the same route for half an hour.
+"The same error on two customers" is exactly the thing worth hearing twice. Now
+keyed by customer as well.
+
+
+WHAT I DID NOT FIND - worth stating
+-----------------------------------
+  - No globalThis or global state anywhere
+  - No setInterval server-side (the three in pages/crm.js are browser-side and
+    per-tab, which is correct)
+  - No Redis client created outside lib/db.js and lib/tenants.js
+  - No lib file touching the database at module scope
+  - After these fixes, the ONLY mutable module-scope state left in the whole
+    server codebase is the registry cache in lib/tenants.js - shared by design,
+    identical for everyone, holds no customer data
 
 
 CHECKS I RAN
 ------------
-- esbuild compile: 0 errors
-- confirmed the builder is now rendered the same way on both pages
-- confirmed it copes with an empty projects list on first render - the initial
-  state is [] and the component does (projects || [])
-- checked the six other candidate pages, as above
+- esbuild compile on all 12: 0 errors
+- import-graph check: clean
+- re-ran the module-load sweep after the fix: 0 remaining
+- checked for double-calls introduced by the conversion - FROM()() and similar:
+  none
+- checked for leftover bare uses in template literals - ${APP_URL} etc: none
 
 
 WHAT TO CHECK
 -------------
-1. Pre-Contract > Variation Builder. Raise a variation. The send modal should
-   open, exactly as it does in Commercial.
-2. Send it. Confirm the email arrives and the instruction link works.
-3. Confirm it appears in the Commercial tracker as SENT rather than draft.
-4. Raise one and CANCEL the send modal - it should stay as a draft, and the
-   project list should still be usable underneath.
+1. Design area - open a project, add an RFI comment, confirm the notification
+   arrives and its link works. That exercises designEmail and designRfiNotify.
+2. CRM loads and the deals are your real ones, not the sample set.
+3. Operations - invite an operative, confirm the Site App link in the email.
+4. A project process card notification, if you can raise one easily.
+
+The links in those emails are the thing to look at - they are built from the
+values that were frozen.

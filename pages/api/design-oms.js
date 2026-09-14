@@ -16,8 +16,22 @@ import withTenant from '../../lib/withTenant'
 //   downloads: { <userId>: { name, company, at } } }
 // Each manual: { url, builtAt, builtBy, sections, projectName, projectNo, revision }
 const OKEY = (no) => `design:oms-manual:${no}`
-const APP_URL = baseUrl('APP_URL')
-const LOGO_URL = `${APP_URL}/rock-logo.jpg`
+// RESOLVED AT SEND TIME, NOT AT MODULE LOAD.
+//
+// These were `const X = fromEmail(...)` at module scope. A module is evaluated
+// ONCE, when the file is first imported, and at that moment NO CUSTOMER IS IN
+// SCOPE - there is no request. So the value froze to whatever the environment
+// variables said, and every customer would have got Rock's sender and Rock's
+// links, for ever, whatever their own settings said.
+//
+// The pkg868 conversion replaced the call sites but did not notice that some of
+// them were at module scope rather than inside a function. It looked complete
+// and did nothing here.
+//
+// Functions, so they are evaluated per request with the customer resolved.
+// lib/ramsNotify.js already did it this way - that was the shape to copy.
+const APP_URL = () => baseUrl('APP_URL')
+const LOGO_URL = () => `${APP_URL()}/rock-logo.jpg`
 
 const ROCK = {
   name: 'Rock Roofing Ltd',
@@ -200,7 +214,7 @@ async function handler(req, res) {
       const ids = []
       for (const p of people) { if (!p.name || p.id === acc.user.id) continue; const re = new RegExp('@' + p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w])', 'i'); if (re.test(html)) ids.push(p.id) }
       const pname = await projectDisplayName(no)
-      const link = `${APP_URL}/design/${encodeURIComponent(no)}/oms`
+      const link = `${APP_URL()}/design/${encodeURIComponent(no)}/oms`
       for (const id of [...new Set(ids)]) {
         const p = people.find(x => x.id === id); if (!p || !p.email) continue
         notify.mentioned++
@@ -235,7 +249,7 @@ async function handler(req, res) {
     try {
       bytes = await buildOMManual({
         project: { projectName: meta.projectName, projectNo: meta.projectNo, projectAddress: meta.projectAddress },
-        sections, logoUrl: LOGO_URL, rockRoofing: ROCK, mainContractor: meta.mainContractor, revision: nextRev,
+        sections, logoUrl: LOGO_URL(), rockRoofing: ROCK, mainContractor: meta.mainContractor, revision: nextRev,
       })
     } catch (e) {
       return res.status(500).json({ error: 'Could not build the manual: ' + (e.message || 'error') })
@@ -267,7 +281,7 @@ async function handler(req, res) {
     const chosen = customers.filter(c => ids.includes(c.id))
     if (!chosen.length) return res.status(400).json({ error: 'No valid recipients.' })
     const meta = await projectMeta(no)
-    const omLink = `${APP_URL}/design/${encodeURIComponent(no)}/oms`
+    const omLink = `${APP_URL()}/design/${encodeURIComponent(no)}/oms`
     let sent = 0
     const failed = []
     for (const c of chosen) {

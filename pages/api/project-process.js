@@ -12,8 +12,22 @@ import withTenant from '../../lib/withTenant'
 //                                 projects that appear AFTER the board is first set up.
 const BOARD_KEY = 'ops:project-process'
 const SEEN_KEY = 'ops:project-process-seen'
-const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
-const APP_URL = baseUrl('PORTAL_URL')
+// RESOLVED AT SEND TIME, NOT AT MODULE LOAD.
+//
+// These were `const X = fromEmail(...)` at module scope. A module is evaluated
+// ONCE, when the file is first imported, and at that moment NO CUSTOMER IS IN
+// SCOPE - there is no request. So the value froze to whatever the environment
+// variables said, and every customer would have got Rock's sender and Rock's
+// links, for ever, whatever their own settings said.
+//
+// The pkg868 conversion replaced the call sites but did not notice that some of
+// them were at module scope rather than inside a function. It looked complete
+// and did nothing here.
+//
+// Functions, so they are evaluated per request with the customer resolved.
+// lib/ramsNotify.js already did it this way - that was the shape to copy.
+const FROM = () => process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
+const APP_URL = () => baseUrl('PORTAL_URL')
 
 function readCookie(req, name) {
   const raw = req.headers.cookie || ''
@@ -69,7 +83,7 @@ async function sendEmail(to, subject, html) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+      body: JSON.stringify({ from: FROM(), to: [to], subject, html }),
     })
     if (!r.ok) return { ok: false, reason: `resend ${r.status}` }
     return { ok: true }
@@ -207,7 +221,7 @@ async function handler(req, res) {
 
       // Email each mentioned user.
       const colRec = col(body.projectNo)
-      const link = `${APP_URL}/operations/project-process?project=${encodeURIComponent(body.projectNo)}&card=${encodeURIComponent(body.cardId)}`
+      const link = `${APP_URL()}/operations/project-process?project=${encodeURIComponent(body.projectNo)}&card=${encodeURIComponent(body.cardId)}`
       const results = []
       for (const mid of mentionIds) {
         const pu = portal.find(p => p.id === mid)

@@ -15,7 +15,21 @@ import withTenant from '../../lib/withTenant'
 // POST   { action:'reset-pin', id }             -> admin resets to a new temp PIN, emails it
 // DELETE { id }                                 -> remove
 
-const FORMS_URL = siteAppUrl()
+// RESOLVED AT SEND TIME, NOT AT MODULE LOAD.
+//
+// These were `const X = fromEmail(...)` at module scope. A module is evaluated
+// ONCE, when the file is first imported, and at that moment NO CUSTOMER IS IN
+// SCOPE - there is no request. So the value froze to whatever the environment
+// variables said, and every customer would have got Rock's sender and Rock's
+// links, for ever, whatever their own settings said.
+//
+// The pkg868 conversion replaced the call sites but did not notice that some of
+// them were at module scope rather than inside a function. It looked complete
+// and did nothing here.
+//
+// Functions, so they are evaluated per request with the customer resolved.
+// lib/ramsNotify.js already did it this way - that was the shape to copy.
+const FORMS_URL = () => siteAppUrl()
 const MAX_ATTEMPTS = 5           // failed logins before lockout
 const LOCKOUT_MINUTES = 15
 const LOCKOUT_MS = LOCKOUT_MINUTES * 60 * 1000
@@ -52,11 +66,11 @@ async function sendInviteEmail({ to, firstName, pin, isReset }) {
       <div style="font-size:32px;font-weight:700;letter-spacing:6px;background:#faf9f7;border:1px solid #eee;border-radius:12px;padding:16px;text-align:center;margin:12px 0">${pin}</div>
       <p>Open the Site App and log in with your <strong>mobile number</strong> and this PIN. You'll be asked to choose your own PIN the first time.</p>
       <p style="text-align:center;margin:24px 0">
-        <a href="${FORMS_URL}" style="background:#ca8a04;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;display:inline-block">Open Rock Roofing Site App</a>
+        <a href="${FORMS_URL()}" style="background:#ca8a04;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;display:inline-block">Open Rock Roofing Site App</a>
       </p>
       <p style="font-size:13px;color:#666">Tip: once it opens, add it to your phone's home screen so you can get to it quickly:
         on iPhone tap Share → "Add to Home Screen"; on Android tap the ⋮ menu → "Add to Home screen".</p>
-      <p style="font-size:13px;color:#666">Link: <a href="${FORMS_URL}">${FORMS_URL}</a></p>
+      <p style="font-size:13px;color:#666">Link: <a href="${FORMS_URL()}">${FORMS_URL()}</a></p>
     </div>`
   try {
     const r = await fetch('https://api.resend.com/emails', {

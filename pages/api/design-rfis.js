@@ -85,7 +85,7 @@ async function peopleWithEmail(projectNo) {
 
 async function projectName(projectNo) {
   try {
-    const d = await fetch(`${APP_URL}/api/planning`).then(r => r.json())
+    const d = await fetch(`${APP_URL()}/api/planning`).then(r => r.json())
     const p = (d.projects || []).find(x => String(x.projectNo || x.jobNo || '') === String(projectNo))
     return p ? (p.name || '') : ''
   } catch { return '' }
@@ -104,7 +104,7 @@ function mentionedIds(html, people) {
   return [...new Set(ids)]
 }
 
-const rfiLinkFor = (projectNo, rfiId) => `${APP_URL}/design/${encodeURIComponent(projectNo)}/rfis?open=${encodeURIComponent(rfiId)}`
+const rfiLinkFor = (projectNo, rfiId) => `${APP_URL()}/design/${encodeURIComponent(projectNo)}/rfis?open=${encodeURIComponent(rfiId)}`
 
 async function handler(req, res) {
   if (req.method === 'GET') {

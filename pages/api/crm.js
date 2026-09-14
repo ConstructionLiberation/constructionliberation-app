@@ -80,14 +80,30 @@ function requireAccess(req) {
 
 // True when the deals shown are the built-in preview sample rather than your imported
 // data. Surfaced to the page so a mismatch is obvious instead of looking like a bug.
-let LAST_DEALS_WERE_SEED = false
-
+//
+// THIS USED TO BE A MODULE-SCOPE `let`, WRITTEN BY ONE REQUEST AND READ BY
+// ANOTHER. A warm instance serves many requests, so:
+//
+//   request A (a customer with deals)      sets it false
+//   request B (a customer with none)       sets it true
+//   request A's response reads it          -> true
+//
+// and A is told it is looking at sample data when it is not. Two people on the
+// portal at the same time was enough to do it; two customers made it certain.
+//
+// It now travels with the value it describes, so it cannot be overwritten by
+// somebody else's request.
 async function loadDeals() {
   const saved = await get(DEALS_KEY)
-  LAST_DEALS_WERE_SEED = !Array.isArray(saved)
-  if (Array.isArray(saved)) return saved
+  if (Array.isArray(saved)) {
+    Object.defineProperty(saved, '_wereSeed', { value: false, enumerable: false })
+    return saved
+  }
   // First run: seed from the sample deals (deep-ish copy).
-  return (SEED_DEALS || []).map(d => ({ ...d, fields: { ...d.fields }, history: [...(d.history || [])], activities: [...(d.activities || [])], notes: [...(d.notes || [])] }))
+  const seeded = (SEED_DEALS || []).map(d => ({ ...d, fields: { ...d.fields }, history: [...(d.history || [])], activities: [...(d.activities || [])], notes: [...(d.notes || [])] }))
+  // Non-enumerable so it cannot leak into anything that serialises the array.
+  Object.defineProperty(seeded, '_wereSeed', { value: true, enumerable: false })
+  return seeded
 }
 async function loadSchema() {
   const saved = await get(SCHEMA_KEY)
@@ -142,7 +158,7 @@ async function handler(req, res) {
       activitySummary: actSum || {},
       noteSummary: noteSum || {},
       openActivities: Array.isArray(openActs) ? openActs : [],
-      dealsAreSeed: LAST_DEALS_WERE_SEED,
+      dealsAreSeed: deals && deals._wereSeed === true,
       // Who is logged in. The page never knew, which is why "Assign to (current user)"
       // saved an activity with nobody on it.
       // The real portal users - the single source of truth for who can own an activity.

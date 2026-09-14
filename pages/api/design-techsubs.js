@@ -67,7 +67,7 @@ const revLetter = (n) => {
   while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26) }
   return s
 }
-const tsLink = (no, id) => `${APP_URL}/design/${encodeURIComponent(no)}/tech-sub?open=${encodeURIComponent(id)}`
+const tsLink = (no, id) => `${APP_URL()}/design/${encodeURIComponent(no)}/tech-sub?open=${encodeURIComponent(id)}`
 const rid = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
 // Email the assigned customer approver that a Tech Sub needs their review/approval.

@@ -68,7 +68,7 @@ function mentionedIds(html, people) {
 
 const revLetter = (n) => { let s = ''; n = n + 1; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26) } return s }
 const isImg = (f) => (f.contentType || '').startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(f.name || '')
-const calcLink = (no, id) => `${APP_URL}/design/${encodeURIComponent(no)}/calculations?open=${encodeURIComponent(id)}`
+const calcLink = (no, id) => `${APP_URL()}/design/${encodeURIComponent(no)}/calculations?open=${encodeURIComponent(id)}`
 const rid = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 const esc0 = (s) => String(s == null ? '' : s).replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -243,7 +243,7 @@ async function handler(req, res) {
       try {
         const people = await peopleFor(no)
         const pname = await projectDisplayName(no)
-        const link = `${APP_URL}/design/${encodeURIComponent(no)}/calculations`
+        const link = `${APP_URL()}/design/${encodeURIComponent(no)}/calculations`
         const names = approvedNow.map(d => `${d.title} (Rev ${d.revision})`).join(', ')
         for (const p of people) { if (p.external || !p.email) continue; await sendRfiCommentNotice({ to: p.email, recipientName: p.name, projectNo: no, projectName: pname, rfiNumber: `${approvedNow.length} calculation${approvedNow.length === 1 ? '' : 's'}`, authorName: ext.name || acc.user.name || 'Customer', commentHtml: `<strong>Approved.</strong> ${esc0(names)} approved by ${ext.name || 'the customer'}${ext.company ? ` (${ext.company})` : ''}.`, rfiLink: link, mentioned: false, cta: 'Review Calculations' }) }
       } catch (e) { /* ignore */ }
@@ -388,7 +388,7 @@ async function handler(req, res) {
     const approverIds = Array.isArray(body.approverIds) ? body.approverIds : []
     const people = await peopleFor(no)
     const pname = await projectDisplayName(no)
-    const link = `${APP_URL}/design/${encodeURIComponent(no)}/calculations`
+    const link = `${APP_URL()}/design/${encodeURIComponent(no)}/calculations`
     let sent = 0
     for (const p of people) {
       if (!p.email) continue
