@@ -1,81 +1,54 @@
-pkg881 - The variation instruction link, for people who have no account
-=======================================================================
+pkg882 - Stop telling customers their link expired when it did not
+==================================================================
 
-TWO FILES, neither new.
-  middleware.js          (repository root)
-  lib/withTenant.js
+ONE FILE.  pages/instruct/[token].js   (folder uses literal square brackets)
 
-
-WHAT YOU FOUND
---------------
-You clicked an instruction link and were asked to sign in. You said you should
-not have to. You are right, and there were TWO separate reasons - one of them
-older than tenancy.
+Deploy AFTER pkg881, which is the actual fix. This is the message.
 
 
-1. THE PAGE WAS NEVER PUBLIC
-----------------------------
-The link in the email is /instruct/<signed token>, and pages/instruct/[token].js
-was NOT in middleware's open list. Nor was /api/variation-instruct, which that
-page calls.
+WHY
+---
+Your screenshot showed:
 
-So a customer with no portal account - which is every customer - clicking that
-button was bounced to /login, where they can do nothing.
+    Please sign in again.
+    This link may have expired. Please reply to the email it came from and we
+    will send a new one.
 
-THIS IS NOT NEW. It predates all of today's work. It went unnoticed because
-everyone who clicks it while testing is already signed in, so the redirect never
-fires for them.
+The first line was the real error, from our own session check. The second was
+the page's blanket explanation, shown for ANY failure.
 
-That means it has been failing for real recipients. Worth asking Joe or Nathan
-whether customers have ever said the Instruct button did not work - if they have,
-this is why.
+So a customer hitting a fault at our end is told their link expired and asked to
+request a replacement - which would have failed in exactly the same way. They
+try twice, give up, and ring Joe.
 
-Both the page and its endpoint are now open, alongside the RAMS and In Query
-links which were already there for exactly this reason.
+A wrong explanation is worse than no explanation, because it sends people down a
+road that cannot work.
 
-
-2. A STALE COOKIE BLOCKED IT
-----------------------------
-Separately, with tenancy on, withTenant refused any request carrying a session
-that did not match the resolved customer - including these token links.
-
-That is wrong twice over: it asks a CUSTOMER to sign in to a portal they have no
-account for, and it blocks the one thing the link exists to do.
-
-These routes are authenticated by the TOKEN, not by a session, and the token
-already carries its own customer and is checked against the resolved one inside
-the handler. So a stale cookie is simply irrelevant. It is now ignored rather
-than fatal, for:
-
-    /instruct/                  /api/variation-instruct
-    /api/inquery-review         /api/rams-token
-    /api/rams-approvals         /api/download
-    /go/
+Now the "reply for a new link" line only appears when the error really is about
+the link - expired, invalid, not found. Anything else says plainly that the
+problem is at our end and to reply so we can sort it.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on both: 0 errors
-- middleware still imports only next/server - it runs at the edge
-- traced what the instruct PAGE calls and confirmed that endpoint is covered
-  too. Opening the page alone would only have moved the failure one step later:
-  the customer reaches the screen and then every button on it is refused.
-- reviewed the full open list, printed in this package for the record
+- esbuild compile: 0 errors
+- import-graph check: clean
 
 
 WHAT TO CHECK
 -------------
-1. Send a variation to yourself and open the instruction link in an INCOGNITO
-   window - no session at all. That is what your customer actually experiences,
-   and it is the only way to test it properly.
-2. Instruct it. Confirm Project Financials picks up the AFA change.
-3. Then open a link in your normal window, signed in. Should also work, with no
-   sign-in prompt.
+With pkg881 deployed, this should be hard to see at all - which is the point.
+Send a variation, open the link in an INCOGNITO window, and confirm you get the
+variation rather than any error.
 
 
-ON APPLIED FOR
---------------
-Likely Gas Lane, as you say - that application contributed to Applied For and it
-is gone. Worth confirming the difference is roughly the application's value
-rather than assuming. If it is a long way off, tell me, because then it is
-something else.
+STILL OUTSTANDING FROM TONIGHT
+------------------------------
+- Applied For differs. Probably Gas Lane's lost application. Worth confirming
+  the gap is roughly that application's value rather than assuming.
+- The Site App on your phone at siteapp.rockroofing.co.uk - first time that host
+  has had to resolve through the registry, and it is the one your operatives
+  use. Not yet checked.
+- The two FROM lines on a variation and an application, against the emails
+  already in your inbox. That is the only check that proves the per-customer
+  settings are being read rather than the environment variables.

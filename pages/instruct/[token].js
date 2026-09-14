@@ -85,9 +85,21 @@ export default function InstructVariation() {
         ) : state.error ? (
           <div style={{ ...box, color: '#b91c1c' }}>
             <strong>{state.error}</strong>
-            <div style={{ fontSize: 13, color: '#666', marginTop: 8 }}>
-              This link may have expired. Please reply to the email it came from and we will send a new one.
-            </div>
+            {/* Only offer "reply for a new link" when the link really is the
+                problem. Saying it every time sent customers to ask for a
+                replacement that would have failed in exactly the same way -
+                which is what happened when the fault was actually a session
+                check on our side. A wrong explanation is worse than none. */}
+            {/expired|invalid|not found|no longer/i.test(String(state.error || '')) ? (
+              <div style={{ fontSize: 13, color: '#666', marginTop: 8 }}>
+                Please reply to the email it came from and we will send a new one.
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: '#666', marginTop: 8 }}>
+                Something went wrong at our end rather than with your link.
+                Please reply to the email it came from and we will sort it out.
+              </div>
+            )}
           </div>
         ) : state.instructed ? (
           <div style={box}>
