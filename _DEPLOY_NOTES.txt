@@ -1,103 +1,91 @@
-pkg877 - A customer can have more than one sending identity
-===========================================================
+pkg878 - Nothing is always on, and the form stops lying
+=======================================================
 
-THREE FILES, none new.
-  lib/tenantSettings.js
-  pages/api/platform/tenants.js
+TWO FILES, neither new.
+  lib/modules.js
   pages/platform/index.js
 
-WHAT SHOULD LOOK DIFFERENT AFTER DEPLOYING THIS:  NOTHING, except three new
-optional fields on the customer form.
+DEPLOY pkg877 AND THIS BEFORE SAVING ROCK'S RECORD. pkg877 adds the per-kind
+sender fields Rock needs; this fixes the modules and the form.
 
 
-WHY THIS HAD TO COME BEFORE THE SWITCH
+1. NOTHING IS FORCED ON
+-----------------------
+I had Operations, HR and Lessons Learnt as "always on", on my assumption that
+the portal had no coherent shape without them.
+
+That was a guess about YOUR PRODUCT, not a technical constraint, and it was not
+mine to make. A customer buying Design only is a perfectly good sale.
+
+All nine are now selectable, none forced. Tested:
+
+    Design + Operations   ok
+    Design with no Ops    REFUSED: design needs operations
+    HR only               ok
+    Nothing selected      allowed - an empty customer, which is a real state
+                          while someone is being set up
+
+The DEPENDENCIES still hold, because those are real: Commercial and Design need
+Operations projects to hang off, Business Financials reads what Bookkeeping
+produces. Those are not preferences.
+
+
+2. THE REPLY-TO FIELD WAS MISLABELLED
+-------------------------------------
+You said reply-to is often the logged-in user. You are right, and the code
+already does that - I checked all 14 places that set it:
+
+    reply_to: b.sentBy     variations and applications - the person who sent it
+    reply_to: REPLY_TO     password resets, login details, pre-start
+                           notifications, operative invitations, problem reports
+
+So the customer-level setting is a FALLBACK for emails with no sending user, not
+an override. The form said "Reply-to (their own address)", which reads like it
+applies to everything.
+
+Relabelled "Reply-to for system emails", with a note listing which ones and
+saying plainly that variations and applications are unaffected.
+
+
+3. THE BROWSER WAS FILLING IN THE FORM
 --------------------------------------
-When you tested the emails earlier, the two that arrived came from DIFFERENT
-addresses:
+Your screenshot had james@rockroofing.co.uk in the Id field and something
+autofilled into the DATABASE TOKEN. Both your password manager, neither you.
 
-    variation      Rock Roofing <notifications@send.rockroofing.co.uk>
-    application    Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>
+The Id one my validation would have caught. THE TOKEN ONE IT WOULD NOT. A
+password manager quietly filling a customer's database credentials with
+something else is a genuinely bad way to spend an evening - Rock would have been
+pointed at a database that does not exist, and every check would have passed
+because the form was filled in.
 
-Both real, both what Watkin Jones and the rest already recognise.
+autoComplete="off" on all 10 inputs.
 
-The customer record held ONE sender. So the moment TENANCY_ENABLED was set,
-applications would have started arriving from the notifications address -
-deliverable, plausible, and quietly wrong on the document your customers pay
-against.
-
-Nobody would have noticed for weeks.
-
-
-THE FIX
--------
-An optional override per kind, falling back to the customer's default sender:
-
-    Notifications and variations      notify
-    Applications                      commercial
-    Forms, pre-start and reports      forms
-    Chase emails                      accounts
-
-Most customers set the default and never touch these. Rock needs one, for
-applications.
-
-Proven:
-
-    rock   notify      -> Rock Roofing <notifications@send.rockroofing.co.uk>
-    rock   commercial  -> Rock Roofing Accounts <accountsreceivable@...>
-    rock   forms       -> Rock Roofing <notifications@send.rockroofing.co.uk>
-
-    wilson notify      -> Wilson Construction <notifications@...>
-    wilson commercial  -> Wilson Construction <notifications@...>
-
-A customer with no overrides gets their one sender everywhere, which is the
-simple case and stays simple.
+CHECK IT ANYWAY when you add a customer. The browser does not always obey, and
+this is the one form where a wrong value is expensive.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
+- esbuild compile on both: 0 errors. It caught a real one: my edit wrote escaped
+  quotes into the JSX, which would have failed the build. Fixed and recompiled.
 - import-graph check: clean
-- ran the resolver for both a customer WITH an override and one without,
-  across all five sender kinds
+- ran the module rules with nothing forced on, output above
+- removed the now-unused CORE_MODULES import - 0 references left in the page
 
 
-NOW REGISTER ROCK
+WHEN YOU ADD ROCK
 -----------------
-Two steps, in this order. Identity FIRST, so nothing is ever pointed at a
-database that cannot prove who it is.
-
-STEP 1 - stamp Rock's identity. This is a POST, so it needs the browser console
-rather than the address bar. On app.rockroofing.co.uk press F12, go to Console,
-and paste:
-
-    await (await fetch('/api/admin/tenant-setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'identity', id: 'rock', name: 'Rock Roofing Ltd' })
-    })).json()
-
-Expect { ok: true, identity: { id: 'rock', ... } }.
-
-STEP 2 - on /platform, press "Add a customer":
-
-    Id                  rock
+    Id                  rock            <- NOT your email address
     Company name        Rock Roofing Ltd
     Web addresses       app.rockroofing.co.uk, siteapp.rockroofing.co.uk
-                        BOTH - the Site App breaks without the second
-    Modules             all of them
+    Modules             all nine, if Rock uses all nine
     Sender name         Rock Roofing
     Sending address     notifications@send.rockroofing.co.uk
     Applications        Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>
-    Reply-to            wherever replies should go
+    Reply-to            for system emails only
     Timezone            Europe/London
     Database url        the value of KV_REST_API_URL
-    Database token      the value of KV_REST_API_TOKEN
+    Database token      the value of KV_REST_API_TOKEN   <- CLEAR IT FIRST, then
+                                                            paste deliberately
 
-    Those last two are ROCK'S existing database - NOT the CONTROL_REDIS pair,
-    which points at the registry itself.
-
-STEP 3 - reload /platform. Rock should be listed, with Database "set".
-
-NOTHING READS THAT RECORD until TENANCY_ENABLED is set, so this is safe to do
-and check at your own pace. Do NOT set the switch yet - there is one more thing
-I want to verify first, and I would rather look at it than find out afterwards.
+Nothing reads the record until TENANCY_ENABLED is set. Still do not set it.

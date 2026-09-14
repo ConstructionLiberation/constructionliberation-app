@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
-import { MODULES, CORE_MODULES, validateModules } from '../../lib/modules'
+import { MODULES, validateModules } from '../../lib/modules'
 
 // PLATFORM ADMIN - the customer list. James only.
 //
@@ -16,7 +16,7 @@ const input = { width: '100%', padding: '8px 10px', border: '1px solid #d8d6cd',
 const btn = { background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
 
 const EMPTY = {
-  id: '', name: '', hosts: '', modules: [...CORE_MODULES],
+  id: '', name: '', hosts: '', modules: [],
   senderName: '', sendingAddress: '', replyTo: '', logoUrl: '', senders: {},
   timezone: 'Europe/London', currency: 'GBP', locale: 'UK',
   redis: { url: '', token: '' }, active: true,
@@ -43,7 +43,6 @@ export default function PlatformPage() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const toggleModule = (id) => {
-    if (CORE_MODULES.includes(id)) return
     setForm(f => ({
       ...f,
       modules: f.modules.includes(id) ? f.modules.filter(m => m !== id) : [...f.modules, id],
@@ -160,31 +159,30 @@ export default function PlatformPage() {
             </div>
 
             <label style={label}>Id (appears in web addresses, cannot be changed later)</label>
-            <input style={input} value={form.id} disabled={!!form.createdAt}
+            <input style={input} autoComplete="off" value={form.id} disabled={!!form.createdAt}
               onChange={e => set('id', e.target.value)} placeholder="wilson" />
 
             <label style={label}>Company name</label>
-            <input style={input} value={form.name} onChange={e => set('name', e.target.value)}
+            <input style={input} autoComplete="off" value={form.name} onChange={e => set('name', e.target.value)}
               placeholder="Wilson Construction Ltd" />
 
             <label style={label}>Web addresses (comma separated)</label>
-            <input style={input} value={form.hosts} onChange={e => set('hosts', e.target.value)}
+            <input style={input} autoComplete="off" value={form.hosts} onChange={e => set('hosts', e.target.value)}
               placeholder="wilson.constructionliberation.com" />
 
             <label style={label}>Modules</label>
             <div style={{ marginBottom: 12 }}>
               {MODULES.map(m => {
                 const on = form.modules.includes(m.id)
-                const core = CORE_MODULES.includes(m.id)
                 return (
-                  <button key={m.id} onClick={() => toggleModule(m.id)} disabled={core}
+                  <button key={m.id} onClick={() => toggleModule(m.id)}
                     style={{
                       margin: '0 6px 6px 0', padding: '6px 12px', borderRadius: 20, fontSize: 12,
                       border: '1px solid ' + (on ? '#1a1a2e' : '#d8d6cd'),
                       background: on ? '#1a1a2e' : '#fff', color: on ? '#fff' : '#555',
-                      cursor: core ? 'default' : 'pointer', opacity: core ? 0.65 : 1,
+                      cursor: 'pointer',
                     }}>
-                    {m.label}{core ? ' (always on)' : ''}
+                    {m.label}
                   </button>
                 )
               })}
@@ -196,11 +194,11 @@ export default function PlatformPage() {
             )}
 
             <label style={label}>Sender name on their emails</label>
-            <input style={input} value={form.senderName} onChange={e => set('senderName', e.target.value)}
+            <input style={input} autoComplete="off" value={form.senderName} onChange={e => set('senderName', e.target.value)}
               placeholder="Wilson Construction" />
 
             <label style={label}>Sending address</label>
-            <input style={input} value={form.sendingAddress} onChange={e => set('sendingAddress', e.target.value)}
+            <input style={input} autoComplete="off" value={form.sendingAddress} onChange={e => set('sendingAddress', e.target.value)}
               placeholder="notifications@constructionliberation.com" />
 
             <div style={{ fontSize: 11, color: '#888', marginTop: -6, marginBottom: 12 }}>
@@ -224,7 +222,7 @@ export default function PlatformPage() {
             ].map(([k, lbl]) => (
               <div key={k} style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 11, color: '#666', marginBottom: 3 }}>{lbl}</div>
-                <input style={{ ...input, marginBottom: 0 }}
+                <input style={{ ...input, marginBottom: 0 }} autoComplete="off"
                   value={(form.senders && form.senders[k]) || ''}
                   onChange={e => set('senders', { ...(form.senders || {}), [k]: e.target.value })}
                   placeholder="(uses the sender above)" />
@@ -232,12 +230,17 @@ export default function PlatformPage() {
             ))}
             <div style={{ height: 12 }} />
 
-            <label style={label}>Reply-to (their own address)</label>
-            <input style={input} value={form.replyTo} onChange={e => set('replyTo', e.target.value)}
+            <label style={label}>Reply-to for system emails</label>
+            <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>
+              Password resets, login details, pre-start notifications, operative
+              invitations. Variations and applications already reply to whoever
+              sent them, so this does not affect those.
+            </div>
+            <input style={input} autoComplete="off" value={form.replyTo} onChange={e => set('replyTo', e.target.value)}
               placeholder="accounts@wilsonconstruction.co.uk" />
 
             <label style={label}>Timezone</label>
-            <input style={input} value={form.timezone} onChange={e => set('timezone', e.target.value)}
+            <input style={input} autoComplete="off" value={form.timezone} onChange={e => set('timezone', e.target.value)}
               placeholder="Europe/London" />
 
             <div style={{ borderTop: '1px solid #eee', margin: '8px 0 14px' }} />
@@ -245,9 +248,9 @@ export default function PlatformPage() {
               Their database - REST url and token.
               {form.createdAt ? ' Leave blank to keep the current one.' : ''}
             </label>
-            <input style={input} value={form.redis.url}
+            <input style={input} autoComplete="off" value={form.redis.url}
               onChange={e => set('redis', { ...form.redis, url: e.target.value })} placeholder="https://....upstash.io" />
-            <input style={input} type="password" value={form.redis.token}
+            <input style={input} autoComplete="off" type="password" value={form.redis.token}
               onChange={e => set('redis', { ...form.redis, token: e.target.value })} placeholder="token" />
             <div style={{ fontSize: 11, color: '#888', marginTop: -6, marginBottom: 12 }}>
               Never shown again once saved. Create the database empty - never by copying another customer's.
