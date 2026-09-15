@@ -446,7 +446,9 @@ function ProjectSection({ p, month, onChange, onBusy, readOnly = false }) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <span style={{ fontSize: 11, color: '#888' }}>Project WIP </span>
-          <span style={{ fontSize: 18, fontWeight: 800, color: '#16a34a' }}>{fmtC(p.wipValue)}</span>
+          {/* Red when negative. It was green whatever the number, so a
+              write-down would have read as a gain at a glance. */}
+          <span style={{ fontSize: 18, fontWeight: 800, color: (Number(p.wipValue) || 0) < 0 ? '#dc2626' : '#16a34a' }}>{fmtC(p.wipValue)}</span>
           {readOnly ? (
             <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
               Margin {p.margin != null ? (p.margin * 100).toFixed(1) + '%' : '—'}

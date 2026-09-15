@@ -1,94 +1,79 @@
-pkg906 - Five email functions that threw the moment they ran
-============================================================
+pkg907 - WIP can be negative. It was floored at zero.
+=====================================================
 
-FIVE FILES, none new.
-  lib/crmDailyActivityEmail.js
-  lib/crmMentions.js
-  lib/hsRenewalNotify.js
-  lib/forEachTenant.js
-  pages/api/project/[id]/cost-comments.js
+TWO FILES, neither new.
+  lib/wipCalc.js
+  pages/wip.js
 
 
-THE ERROR YOUR EMAIL CAUGHT
----------------------------
-    GET cron/crm-daily-activities
-    Cannot access 'i' before initialization
+WHAT WAS WRONG
+--------------
+lib/wipCalc.js line 49:
 
-MY FAULT, from pkg868. That package converted hardcoded URLs and addresses to
-the per-customer accessors, and in five places it wrote:
+    wipValue = Math.max(0, wipValue)
 
-    const baseUrl = baseUrl('PORTAL_BASE_URL')
-    const replyTo = replyTo()
+Any project whose adjustments exceeded its post-valuation costs reported 0.00.
 
-A const SHADOWS the import for the whole function INCLUDING ITS OWN RIGHT-HAND
-SIDE. So the call resolves to the variable being declared, which is not
-initialised yet. Minified, that reads "Cannot access 'i' before initialization".
+J244 Waungron, from your screenshot:
 
-Five of them, every one in a function that sends an email:
+    post-val costs        1,234.48
+    adjustments          -4,500.00     (+6,500 materials, -11,000 labour)
+    wip cost             -3,265.52
 
-    lib/crmDailyActivityEmail.js   x2   the daily CRM activity emails
-    lib/crmMentions.js                  mention notifications
-    lib/hsRenewalNotify.js              H&S renewal reminders
-    cost-comments.js                    cost comment notifications
+    WIP was (floored)         0.00     profit  3,265.52
+    WIP now              -4,060.21     profit   -794.69
 
-EVERY ONE THREW THE MOMENT IT RAN. Those emails have not been going out.
-
-Every check I have passed it: it compiles, the import graph is clean, and
-`npm run build` never executes a function body. Only running it fails.
+The 3,265.52 "profit" existed ONLY because the floor had moved the value while
+leaving the cost alone. Profit is wipValue minus wipCost, so flooring the value
+manufactured a profit exactly equal to the cost it was hiding.
 
 
-WHY IT STAYED HIDDEN FOR WEEKS - the more important half
---------------------------------------------------------
-crm-daily-activities is scheduled at 06:00 AND 07:00 UTC, because only one of
-those is 07:00 London whichever side of the clock change you are on. The other
-exits immediately with { skipped: ... }.
+WHY IT MATTERS
+--------------
+A negative WIP is not an error to be tidied away. It is a WRITE-DOWN - cost you
+have decided you will not recover, or work over-valued in an earlier month being
+pulled back. It is precisely the adjustment somebody has gone to the trouble of
+entering.
 
-The heartbeat recorded the LAST run. In BST that is always the skip.
-
-So cron health showed:
-
-    crm-daily-activities   ok   1ms
-
-every single day, while the real run at 06:00 had been throwing. The failure was
-not unnoticed - it was noticed and then overwritten half an hour later.
-
-Fixed: a skipped run no longer overwrites the record of a real one. If the
-stored heartbeat is a genuine run, a skip leaves it alone.
-
-I spotted this behaviour yesterday and described it as cosmetic. It was not - it
-was actively hiding a broken job. That was a bad call.
+Flooring it to zero hid the entry AND invented a profit from it. On a page that
+feeds the monthly figures.
 
 
-WHAT ACTUALLY FOUND IT
-----------------------
-pkg890, which made a failed cron iteration email you. It went in yesterday
-evening; this arrived at 06:00 this morning - the first real run since.
+ALSO: NEGATIVE WIP NOW SHOWS RED
+--------------------------------
+pages/wip.js rendered the figure in green whatever the number, so a write-down
+would have read as a gain at a glance.
 
-The fault was weeks old. The reporting is one day old.
+
+CHECKED DOWNSTREAM
+------------------
+  pages/api/wip.js        totalWip += wipValue - negatives now correctly reduce
+                          the total rather than being silently dropped
+  cm-project-financials   invoicedIncWip = grossToDate + wipValue - a negative
+                          now correctly reduces it
+  the Zero button         adds -wipValue to cancel a project exactly; works
+                          unchanged with a negative
+
+Nothing assumed the value was positive.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 5: 0 errors
+- esbuild compile on both: 0 errors
 - import-graph check: clean
-- swept every file in the repo for the same shadowing pattern across all 11
-  settings accessors: no remaining collisions
-- reproduced the throw and confirmed the rename fixes it
+- reproduced your exact figures with the floor in place - 0.00 and 3,265.52 -
+  and without it
 
 
 WHAT TO CHECK
 -------------
-1. Tomorrow at 07:00 UK, crm-daily-activities should run and SUCCEED - and the
-   CRM activity emails should arrive for the first time in weeks. Ask whoever
-   should be receiving them whether they ever did.
-2. Cron health should show a real duration for it, not 1ms.
-3. H&S renewal reminders and mention notifications should also start working.
-   Same fault, same package.
-4. If any of them fails you will get an email naming it.
+1. J244 Waungron should now read about -£4,060.21 in red, with a profit of
+   about -£794.69.
+2. Total WIP on the page will DROP by roughly the amount of any negative
+   projects that were being read as zero. That is a correction, not a loss.
+3. Look for any other project that has been reading exactly 0.00 with
+   adjustments entered against it - each one was hiding the same thing.
 
-
-WORTH ASKING
-------------
-Has anyone mentioned not receiving CRM daily activity emails, H&S renewal
-reminders, or notifications when they were mentioned on a deal? If they have and
-it was put down to something else, this is why.
+THAT LAST POINT IS WORTH A MINUTE. Any project showing 0.00 WIP with
+adjustments against it has been under-reporting a write-down, and the monthly
+figures will have been overstated by the total of them.
