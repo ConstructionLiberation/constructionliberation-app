@@ -4,6 +4,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
 import SyncBar from '../components/SyncBar'
+import { calcRetentionOwed, calcReleaseHalf, released1, released2 } from '../lib/retentionCalc'
 
 // The register is ~26 columns wide. The table used width:100%, which made it SHRINK to
 // fit its container rather than overflow it - so there was nothing to scroll, columns
@@ -212,43 +213,11 @@ function calcTotalDue(entry) {
 //
 // Both figures are already resolved by the time a row is rendered. Deriving from them
 // means the three cells can be read across, and there is one rule instead of two.
-export function calcRetentionOwed(entry) {
-  const pct = parseFloat(entry.retentionPct || 0) || 0
-  const base = parseFloat(entry.appliedFor || 0) || 0
-  if (pct <= 0 || base <= 0) return 0
-  // Whole numbers on tracker rows (5), fractions on project records (0.05).
-  return base * (pct > 1 ? pct / 100 : pct)
-}
+// calcRetentionOwed and calcReleaseHalf moved to lib/retentionCalc.js, so
+// Business Financials > Retentions Due uses the SAME rule instead of its own
+// mirror. Re-exported here because other modules import them from this page.
+export { calcRetentionOwed, calcReleaseHalf }
 
-// EACH RELEASE HALF = HALF THE RETENTION OWED.
-//
-// The imported spreadsheet values were stale: J147 carried 289.03 a half, which is half
-// of the App 1 deduction of 578.05 - the only application that existed when the sheet was
-// built. Nothing recalculated them as later applications added retention, and an imported
-// value beat the computed one because release1Value was never in the merge's override
-// list.
-//
-// Computed from the row now, so the two halves always sum to Retention Owed. J147 becomes
-// 559.09 each against 1,118.19 owed.
-// FLAGGED, NOT CHANGED - the basis here contradicts the column tooltip.
-//
-// This returns half of retention on APPLIED FOR (work certified to date). The tooltip
-// on both release columns says "half of the retention on the FINAL ACCOUNT", and
-// lib/applications.js computes halfRetention = finalSubTotal x ret% / 2, which is what
-// the certificate releases. pkg782 set the final-account basis deliberately; pkg785-787
-// rebased Retention Owed onto Applied for and this followed it, which reverted that
-// decision as a side effect rather than as a choice.
-//
-// Both are MCD-correct - Applied for and finalSubTotal each honour the placement flags -
-// so this is not an MCD fault. It is a base fault, and it only shows mid-contract: the
-// two converge once the job is fully applied for.
-//
-// The final-account figure is already on the row as entry.retentionOnFinalAccount, so
-// switching is one line. Not done unasked, because it moves the halves on every live
-// project.
-export function calcReleaseHalf(entry) {
-  return calcRetentionOwed(entry) / 2
-}
 
 function calcAccountRemaining(entry) {
   const fa = accountValue(entry)
@@ -282,16 +251,6 @@ const isClosed = (entry) => retStatusOf(entry) === 'complete'
 // The manual mark is an explicit true/false, so it can also UNDO an automatic one - if
 // the application says released and it never actually was, somebody has to be able to
 // say so. undefined means "nobody has said", and only then does the application decide.
-function released1(entry) {
-  if (entry.release1Manual === true) return true
-  if (entry.release1Manual === false) return false
-  return !!entry.appRelease1
-}
-function released2(entry) {
-  if (entry.release2Manual === true) return true
-  if (entry.release2Manual === false) return false
-  return !!entry.appRelease2
-}
 function releaseSource(entry, half) {
   const man = half === 1 ? entry.release1Manual : entry.release2Manual
   const app = half === 1 ? entry.appRelease1 : entry.appRelease2
@@ -1407,9 +1366,9 @@ export default function RetentionPage() {
                         ['Ret %', 'center', 'Retention percentage from project details.', 'retPct'],
                         ['PC Type', 'left', 'Main PC or Sub PC, from Edit Project Details.', 'pcType'],
                         ['QS', 'left', 'Quantity Surveyor from Edit Project Details. Blank means none has been set on that project.', 'qs'],
-                        ['1st Value \u2013 click to release', 'right', 'First retention release - half of the retention on the FINAL ACCOUNT (Gross AFA less MCD x retention %), which is what the contract holds and what an application certificate releases. CLICK THE CELL to confirm this half has been released; click again to undo. A half ticked in the retention section of an application marks itself. Amber = still to confirm, blue = Xero looks paid so it probably has been, green = released.', null],
+                        ['1st Value \u2013 click to release', 'right', 'First retention release - half of the retention on APPLIED FOR (Applied for x retention %). Retention comes from the application - it is deducted on what has been applied for - so that is the source of truth. It converges on the Final Account as the job completes. CLICK THE CELL to confirm this half has been released; click again to undo. A half ticked in the retention section of an application marks itself. Amber = still to confirm, blue = Xero looks paid so it probably has been, green = released.', null],
                         ['1st Date', 'left', 'Due date of the first retention release (manual).', 'r1date'],
-                        ['2nd Value \u2013 click to release', 'right', 'Second retention release - half of the retention on the FINAL ACCOUNT (Gross AFA less MCD x retention %), which is what the contract holds and what an application certificate releases. CLICK THE CELL to confirm this half has been released; click again to undo. A half ticked in the retention section of an application marks itself. Amber = still to confirm, blue = Xero looks paid so it probably has been, green = released.', null],
+                        ['2nd Value \u2013 click to release', 'right', 'Second retention release - half of the retention on APPLIED FOR (Applied for x retention %). Retention comes from the application - it is deducted on what has been applied for - so that is the source of truth. It converges on the Final Account as the job completes. CLICK THE CELL to confirm this half has been released; click again to undo. A half ticked in the retention section of an application marks itself. Amber = still to confirm, blue = Xero looks paid so it probably has been, green = released.', null],
                         ['2nd Date', 'left', 'Due date of the second retention release (manual).', 'r2date'],
                         ['VAT', 'right', 'VAT on the Final Account = Final Account × VAT-type rate. Reverse charge / 0% = £0.', null],
                         ['VAT Type', 'left', 'VAT treatment from Xero: reverse charge, 5%, 20%, zero-rated, etc.', null],

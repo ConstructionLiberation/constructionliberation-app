@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { BizNav, INK, GOLD, gbp, gbpK, monthLbl, fmtDate, Card, SyncButton } from '../../components/BizNav'
+import { calcOutstanding, outstandingReleases, released1, released2 } from '../../lib/retentionCalc'
 
 const monthKey = (s) => (s || '').slice(0, 7)
 const pad = (n) => String(n).padStart(2, '0')
@@ -22,22 +23,6 @@ const retStatusOf = (e) => e.retStatus || (e.markedComplete ? 'complete' : 'live
 // The manual mark is an explicit true/false so it can also override an application that
 // says released when it was not. undefined means nobody has said, and only then does the
 // application decide.
-function released1(e) {
-  if (e.release1Manual === true) return true
-  if (e.release1Manual === false) return false
-  return !!e.appRelease1
-}
-function released2(e) {
-  if (e.release2Manual === true) return true
-  if (e.release2Manual === false) return false
-  return !!e.appRelease2
-}
-function calcBalance(e) {
-  const r1 = parseFloat(e.release1Value || 0) || 0
-  const r2 = parseFloat(e.release2Value || 0) || 0
-  const received = (released1(e) ? r1 : 0) + (released2(e) ? r2 : 0)
-  return (r1 + r2) - received
-}
 
 export default function RetentionsDue() {
   const router = useRouter()
@@ -74,13 +59,20 @@ export default function RetentionsDue() {
       const xeroEntries = visibleProjects.map(p => ({
         id: p.xeroId, xeroId: p.xeroId,
         ourRef: p.jobNo || '', customerName: p.customer || '', projectName: p.name || '',
+        // appliedFor and retentionPct are what the shared rule works from.
+        // retentionOwed is kept for display only - it is NOT what the halves are
+        // computed from any more.
+        appliedFor: p.appliedForLatest ? String(p.appliedForLatest) : '',
         retentionOwed: p.totalRetention || 0,
         retention612Allocated: p.retention612Allocated || 0,
         finalAccount: p.afa || 0, projectValue: p.contractValue || 0,
         retentionPct: (p.retentionPct || 0) * 100,
         completionDate: p.completionDate || p.pcDate || '',
-        release1Value: (p.totalRetention || 0) / 2 || 0, release1Date: '',
-        release2Value: (p.totalRetention || 0) / 2 || 0, release2Date: '',
+        // release1Value / release2Value are NO LONGER USED for the figures.
+        // They were totalRetention / 2 - retention on INVOICED - which is what
+        // made this page disagree with the tracker on almost every project.
+        // Kept only so existing saved rows still carry their dates.
+        release1Date: '', release2Date: '',
         // A half ticked on the project's latest application releases it automatically,
         // exactly as on the tracker.
         appRelease1: !!p.appRelease1, appRelease2: !!p.appRelease2,
@@ -94,6 +86,9 @@ export default function RetentionsDue() {
           return {
             ...e,
             retentionOwed: x.retentionOwed, retention612Allocated: x.retention612Allocated,
+            // The application figure the retention is computed from. Taken from
+            // the project, exactly as the tracker does it.
+            appliedFor: x.appliedFor || e.appliedFor || '',
             appRelease1: x.appRelease1, appRelease2: x.appRelease2,
             finalAccount: e.finalAccount || x.finalAccount,
             projectValue: e.projectValue || x.projectValue,
@@ -127,16 +122,22 @@ export default function RetentionsDue() {
       // would want chasing, and silently dropping it would lose it from this page AND
       // break the balance check against the tracker, which counts it.
       const name = `${e.ourRef ? e.ourRef + ' - ' : ''}${e.customerName || e.projectName || 'Project'}`
-      const r1 = parseFloat(e.release1Value || 0) || 0
-      const r2 = parseFloat(e.release2Value || 0) || 0
-      if (r1 && !released1(e)) out.push({ ref: e.ourRef || '', name, project: e.projectName || '', which: '1st release', date: e.release1Date || '', amount: r1, id: (e.id || e.xeroId) + '-r1' })
-      if (r2 && !released2(e)) out.push({ ref: e.ourRef || '', name, project: e.projectName || '', which: '2nd release', date: e.release2Date || '', amount: r2, id: (e.id || e.xeroId) + '-r2' })
+      // ONE RULE, from lib/retentionCalc.js. This used to read the stored
+      // release1Value / release2Value, which were retention on INVOICED and
+      // went stale the moment an application moved.
+      for (const rel of outstandingReleases(e)) {
+        out.push({
+          ref: e.ourRef || '', name, project: e.projectName || '',
+          which: rel.which, date: rel.date, amount: rel.amount,
+          id: (e.id || e.xeroId) + (rel.which === '1st release' ? '-r1' : '-r2'),
+        })
+      }
     }
     return out
   }, [entries])
 
   // Balancing check: total of releases here must equal sum of tracker balances.
-  const trackerOutstanding = useMemo(() => entries.reduce((s, e) => s + calcBalance(e), 0), [entries])
+  const trackerOutstanding = useMemo(() => entries.reduce((s, e) => s + calcOutstanding(e), 0), [entries])
   const releasesTotal = useMemo(() => releases.reduce((s, r) => s + r.amount, 0), [releases])
   const balanced = Math.abs(trackerOutstanding - releasesTotal) < 1
 

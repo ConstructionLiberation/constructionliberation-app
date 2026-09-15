@@ -1,88 +1,106 @@
-pkg902 - The Retention Tracker total now matches Business Financials
-====================================================================
+pkg903 - One retention rule. The two pages now agree.
+=====================================================
 
-ONE FILE.  pages/retention.js  - not new.
+THREE FILES.
+  lib/retentionCalc.js                        <-- NEW, create by hand
+  pages/retention.js
+  pages/business-financials/retentions-due.js
+
+DEPLOY WITH pkg902 (or after it). 902 fixed the status filter; this fixes the
+arithmetic underneath it. Both were needed.
 
 
-THE 4K
-------
-The tracker totalled allEntries - what is on screen AFTER the status filter. And
-the filter defaults to:
+WHAT WAS WRONG
+--------------
+Three different bases were in use:
 
-    useState(() => new Set(['live']))     Live Project only
+    tracker    retention on APPLIED FOR     correct
+    BF         retention on INVOICED        wrong under any reading
+    tooltip    retention on FINAL ACCOUNT   wrong, and contradicted the code
 
-Business Financials > Retentions Due totals everything. So the two disagreed by
-exactly the retention sitting in Defects Liability, and neither page said why.
+Confirmed against your own rows:
 
-Retention in Defects Liability is money owed - that is precisely the stage where
-it sits waiting for the first release. Leaving it out of a card headed
-"Retention Outstanding" was wrong however the filter was set.
+    ref    tracker half   BF half    what BF was doing
+    J190      7,845.91    7,993.00   319,728.17 invoiced x 5% / 2
+    J197      6,914.35    6,435.00   257,390.47 invoiced x 5% / 2
+    J242      6,121.68    5,657.00
+    J228      2,104.11    1,429.00
+    J229      1,891.83    1,892.00   applied for and invoiced nearly equal
 
-Worked through:
+That last row is how this survived: on the handful of jobs where applied for and
+invoiced happen to match, the two pages agreed. Spot-check three of those and
+everything looks fine.
 
-    BF (everything)                  13,000
-    tracker BEFORE (live only)        8,000
-    tracker AFTER  (everything)      13,000
-
-    the gap was the defects row       4,000
-    plus a complete row with a half unreleased   1,000
-
-That last line is worth noting: a project marked Complete whose second half was
-never released still holds money. BF counts it deliberately - there is a comment
-there saying so - and the tracker did not.
+BF also read STORED release1Value / release2Value, which went stale the moment
+another application was sent. So it was the wrong base AND a frozen copy of it.
 
 
 THE FIX
 -------
-Retention Outstanding and Remaining to Claim now total the WHOLE register, so
-they do not move when somebody ticks a filter.
+lib/retentionCalc.js holds the rules, and both pages import them. Same pattern
+as lib/wipCalc.js for WIP and lib/preStartDone.js for Pre-Starts - the two
+places this project has already had to do it.
 
-The tracker's own code already knew this principle. Two lines below, the defects
-and live COUNTS deliberately use everyEntry, with a comment: "how many projects
-are live should not change because somebody ticked a filter." It was never
-applied to the money.
+    calcRetentionOwed     applied for x retention %
+    calcReleaseHalf       half of that, COMPUTED, never read from a stored value
+    released1 / released2  manual tick beats the application
+    calcOutstanding       owed less the halves released
+    outstandingReleases   the unreleased halves as dated events
 
-The filtered figure is not lost. When the filter is hiding rows, the card shows
-the on-screen total underneath in small grey - so the headline is the business
-number and the filtered one is still there when that is what you want.
+The list and the total come from the same function, so the cash-in list and the
+outstanding figure cannot disagree by construction.
 
-The old tooltip said "Ties to the totals row when all three status filters are
-on", which was an admission rather than an explanation. Both tooltips rewritten
-to say plainly that the figure covers every project and does not change with the
-filters.
+After this:
+
+    ref   BF was      BF now      tracker
+    J190  £7,993.00   £7,845.91   £7,845.91
+    J197  £6,435.00   £6,914.35   £6,914.35
+    J242  £5,657.00   £6,121.68   £6,121.68
+    J228  £1,429.00   £2,104.11   £2,104.11
+    J229  £1,892.00   £1,891.83   £1,891.83
+
+
+THE TOOLTIPS WERE WRONG TOO
+---------------------------
+Both release columns said "half of the retention on the FINAL ACCOUNT ... which
+is what the contract holds and what an application certificate releases."
+
+That is not what the code did and, per your rule, not what it should do.
+Retention is deducted on what has been applied for, so the application is the
+source of truth; it converges on the Final Account as the job completes. Both
+tooltips now say that.
+
+There is a note in the old code saying pkg782 set a final-account basis
+deliberately and pkg785-787 rebased it onto Applied for "as a side effect rather
+than as a choice". On your instruction the Applied for basis is now the choice,
+and the tooltip agrees with it.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile: 0 errors
+- esbuild compile on all 3: 0 errors
 - import-graph check: clean
-- worked the arithmetic through four rows across all three statuses, above
+- ran the arithmetic against five of your real rows, above
+- confirmed no leftover use of calcBalance or release1Value for any figure
 
 
 WHAT TO CHECK
 -------------
-1. Retention Tracker with the default filter (Live only). Retention Outstanding
-   should now MATCH Business Financials > Retentions Due, and show a smaller
-   "on screen" figure underneath.
-2. Tick all three statuses. The headline should not move; the "on screen" line
-   should disappear.
-3. If the two pages STILL differ, tell me - the remaining difference would be
-   the second thing I found: the tracker derives the owed figure and the halves
-   live via calcRetentionOwed and calcReleaseHalf, while BF uses the stored
-   release1Value and release2Value. Those agree unless a stored half is stale.
-   That is a separate fix and needs one shared rule, the way lib/wipCalc.js
-   works for WIP.
+1. Retention Tracker - the halves should be UNCHANGED. The tracker was already
+   right; only its filter behaviour changed, in pkg902.
+2. Business Financials > Retentions Due - every release amount should now match
+   the tracker row for row.
+3. The two totals should agree. The note at the bottom of the BF page claims
+   they always do; now they will.
+4. Spot-check J190: 1st and 2nd release should both read £7,845.91, not £7,993.
 
 
-STILL OPEN FROM TONIGHT
------------------------
-The VAT figure. fetchVatPosition BREAKS OUT of its paging loop on any HTTP
-error and returns what it has - a partial result. The guard that is supposed to
-protect the cache only checks whether ANY data came back, not whether the pull
-finished, so a partial figure overwrites a good one silently.
+ONE THING I HAVE NOT TOUCHED
+----------------------------
+lib/applications.js computes halfRetention from finalSubTotal - the final
+account - which is a THIRD place this rule lives, and it is what actually goes
+on the certificate you send. It now disagrees with both pages.
 
-Send me the diag from:
-
-    await (await fetch('/api/business-financials?view=vat&from=2026-08-01&to=2026-08-31')).json()
-
-If lastError is set, that is your 18k becoming 366, and the fix is small.
+I have not changed it, because it affects documents already issued and it needs
+your word on what an application certificate should release. Worth looking at
+before the next application goes out.
