@@ -929,7 +929,31 @@ export default function RetentionPage() {
     // Straight subtraction now: Retention Owed less the halves released. A card you can
     // check against the totals row is worth more than one that quietly absorbs an odd
     // row, and where the releases are right the two agree by definition.
-    outstanding: allEntries.reduce((s, e) => {
+    //
+    // THE WHOLE REGISTER, NOT THE FILTERED VIEW.
+    //
+    // This totalled allEntries - what is on screen after the status filter,
+    // which defaults to Live Project only. Business Financials > Retentions Due
+    // totals everything, so the two disagreed by exactly the retention sitting
+    // in Defects Liability. About 4k, and neither page said why.
+    //
+    // Retention in Defects Liability is money owed: that is precisely the stage
+    // where it sits waiting for the first release. Leaving it out of a card
+    // headed "Outstanding" was wrong however the filter was set.
+    //
+    // The same reasoning was already applied two lines below - the defects and
+    // live counts deliberately use everyEntry, because "how many projects are
+    // live" should not change because somebody ticked a filter. It was never
+    // applied to the money.
+    outstanding: everyEntry.reduce((s, e) => {
+      const owed = calcRetentionOwed(e)
+      const rel = (released1(e) ? calcReleaseHalf(e) : 0) + (released2(e) ? calcReleaseHalf(e) : 0)
+      return s + (owed - rel)
+    }, 0),
+    // The same figure for what IS on screen, so the filtered view is still
+    // readable. Shown next to the headline only when a filter is hiding
+    // something - see the card below.
+    outstandingFiltered: allEntries.reduce((s, e) => {
       const owed = calcRetentionOwed(e)
       const rel = (released1(e) ? calcReleaseHalf(e) : 0) + (released2(e) ? calcReleaseHalf(e) : 0)
       return s + (owed - rel)
@@ -943,7 +967,13 @@ export default function RetentionPage() {
     // Final Account minus Invoiced comes from Xero on one side and the application on the
     // other, so it is live without anybody maintaining it. Same figure as the Account
     // Remaining column, summed.
-    remaining: allEntries.reduce((s, e) => s + calcAccountRemaining(e), 0),
+    // Whole register too, for the same reason.
+    remaining: everyEntry.reduce((s, e) => s + calcAccountRemaining(e), 0),
+    remainingFiltered: allEntries.reduce((s, e) => s + calcAccountRemaining(e), 0),
+    // True when the filter is hiding rows, so the cards can say so rather than
+    // quietly showing a number that means something narrower than its label.
+    filterHidesRows: everyEntry.length !== allEntries.length,
+    hiddenByFilter: everyEntry.length - allEntries.length,
     // These two count the whole register, NOT the filtered view - see everyEntry above.
     defects: everyEntry.filter(e => retStatusOf(e) === 'defects').length,
     live: everyEntry.filter(e => retStatusOf(e) === 'live').length,
@@ -1216,9 +1246,11 @@ export default function RetentionPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, flex: 1 }}>
               {[
                 { label: 'Retention Outstanding', value: fmtC(totals.outstanding), color: totals.outstanding > 1 ? '#dc2626' : '#16a34a',
-                  tip: 'Total Retention Owed across all projects, less any 1st or 2nd Value marked released - by clicking the cell or by a half ticked on an application. Ties to the totals row when all three status filters are on.' },
+                  sub: totals.filterHidesRows ? `${fmtC(totals.outstandingFiltered)} on screen` : '',
+                  tip: 'Total Retention Owed across EVERY project on the register - Live, Defects Liability and Complete - less any 1st or 2nd Value marked released. Does not change with the filters, so it always matches Business Financials > Retentions Due. When a filter is hiding rows, the figure for what is on screen is shown underneath.' },
                 { label: 'Remaining to Claim', value: fmtC(totals.remaining), color: totals.remaining > 1 ? '#dc2626' : '#16a34a',
-                  tip: 'Final Account minus Applied for, excluding VAT, across the projects shown. What is still to be claimed - the sum of the Account Remaining column.' },
+                  sub: totals.filterHidesRows ? `${fmtC(totals.remainingFiltered)} on screen` : '',
+                  tip: 'Final Account minus Applied for, excluding VAT, across every project on the register. What is still to be claimed - the sum of the Account Remaining column. Does not change with the filters.' },
                 { label: 'In Defects Liability', value: totals.defects, raw: true, color: '#ca8a04',
                   tip: 'Every project on the register at Defects Liability. Does not change with the filters.' },
                 { label: 'Live Projects', value: totals.live, raw: true,
@@ -1227,6 +1259,10 @@ export default function RetentionPage() {
                 <div key={card.label} title={card.tip || undefined} style={{ background: '#fff', borderRadius: 8, padding: '10px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: card.tip ? 'help' : 'default' }}>
                   <div style={{ fontSize: 10.5, color: '#888', marginBottom: 2 }}>{card.label}</div>
                   <div style={{ fontSize: card.raw ? 20 : 16, fontWeight: 700, color: card.color }}>{card.value}</div>
+                  {/* The on-screen figure, only when the filter is hiding rows. So the
+                      headline is always the business number and the filtered one is
+                      still there when it is the one you want. */}
+                  {card.sub && <div style={{ fontSize: 10.5, color: '#999', marginTop: 1 }}>{card.sub}</div>}
                 </div>
               ))}
             </div>

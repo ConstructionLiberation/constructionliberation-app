@@ -1,96 +1,88 @@
-pkg901 - Remove a cost store nothing reads, mark two crons nothing runs
-=======================================================================
+pkg902 - The Retention Tracker total now matches Business Financials
+====================================================================
 
-FIVE FILES, none new.
-  pages/api/upload-bills.js
-  pages/api/xero/sync.js
-  pages/api/reset-costs.js
-  pages/api/cron/deep-sync.js      (comment only)
-  pages/api/cron/wip-sync.js       (comment only)
-
-NO FIGURE ANYWHERE CHANGES. That is the point - the store being removed was
-read by nothing.
+ONE FILE.  pages/retention.js  - not new.
 
 
-WHAT I GOT WRONG FIRST, since it shaped this
---------------------------------------------
-I told you a corrected bill in Xero would never be picked up, because
-costs:labour and costs:materials only ever ADD. You pushed back: the app mirrors
-Xero, and the totals should be the sum of what the app holds.
+THE 4K
+------
+The tracker totalled allEntries - what is on screen AFTER the status filter. And
+the filter defaults to:
 
-You were right and I was looking at the wrong store.
+    useState(() => new Set(['live']))     Live Project only
 
-    costs:labour / costs:materials    running totals per job. READ BY NOTHING.
-    costs:bills:<id> / costs:wages:<id>  per project, WITH their lines
-         -> merged by lib/mergeCosts.js into
-    costs:latest:<id>  the totals    costs:lines:<id>  the lines behind them
+Business Financials > Retentions Due totals everything. So the two disagreed by
+exactly the retention sitting in Defects Liability, and neither page said why.
 
-The figures you see come from the second set, where the total is summed from the
-same records that supply the list. Exactly as you described it.
+Retention in Defects Liability is money owed - that is precisely the stage where
+it sits waiting for the first release. Leaving it out of a card headed
+"Retention Outstanding" was wrong however the filter was set.
 
-Four references to costs:labour existed in the whole codebase, and all four were
-these two files reading their own total in order to add to it.
+Worked through:
 
+    BF (everything)                  13,000
+    tracker BEFORE (live only)        8,000
+    tracker AFTER  (everything)      13,000
 
-1. THE DEAD STORE IS GONE
--------------------------
-Left in place it was worse than useless. A future reader finds a store called
-costs:labour being carefully maintained and assumes it matters - and because it
-only ever added, its numbers drift further from the real ones with every upload.
-Anyone who started trusting it would be reading something wrong.
+    the gap was the defects row       4,000
+    plus a complete row with a half unreleased   1,000
 
-reset-costs.js still DELETES those keys. Deliberate: any values already stored
-get cleared if it is ever run, rather than sitting in the database for ever
-looking meaningful.
-
-Checked that labourByJob and materialsByJob are still used in both files - they
-feed the response summary, so nothing is orphaned.
+That last line is worth noting: a project marked Complete whose second half was
+never released still holds money. BF counts it deliberately - there is a comment
+there saying so - and the tracker did not.
 
 
-2. deep-sync AND wip-sync MARKED AS UNREACHABLE
------------------------------------------------
-You asked whether deep-sync is used. It is not:
+THE FIX
+-------
+Retention Outstanding and Remaining to Claim now total the WHOLE register, so
+they do not move when somebody ticks a filter.
 
-  - no entry in vercel.json
-  - no button, no link anywhere - grepped across pages, components and lib
-  - cron health has never recorded a heartbeat for it
+The tracker's own code already knew this principle. Two lines below, the defects
+and live COUNTS deliberately use everyEntry, with a comment: "how many projects
+are live should not change because somebody ticked a filter." It was never
+applied to the money.
 
-Same for wip-sync.
+The filtered figure is not lost. When the filter is hiding rows, the card shows
+the on-screen total underneath in small grey - so the headline is the business
+number and the filtered one is still there when that is what you want.
 
-KEPT, NOT DELETED, with a header at the top of each saying so plainly. deep-sync
-pulls invoices, bills and wages from Xero; if the manual Bills upload path ever
-gaps, that is the thing to reach for. Deleting working code you might want is
-harder to undo than leaving a file alone, and they cost nothing sitting there
-because they never run.
-
-Both are still reachable by typing the URL, so they can be run deliberately.
-
-
-A CONSEQUENCE WORTH KNOWING
----------------------------
-Because deep-sync never runs, its mergeWindow function - which keeps an existing
-line and discards a changed one with the same key - never executes either. So
-the "a corrected bill is not picked up" problem I raised does not exist in
-practice.
-
-import-bills-bulk, which IS what your manual upload uses, REPLACES the lines per
-project. So correcting a bill in Xero and re-uploading the spreadsheet does
-update it. Your mental model was right throughout.
+The old tooltip said "Ties to the totals row when all three status filters are
+on", which was an admission rather than an explanation. Both tooltips rewritten
+to say plainly that the figure covers every project and does not change with the
+filters.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 5: 0 errors
+- esbuild compile: 0 errors
 - import-graph check: clean
-- grepped for every remaining reference to costs:labour and costs:materials:
-  only the explanatory comments and the deletes in reset-costs
+- worked the arithmetic through four rows across all three statuses, above
 
 
 WHAT TO CHECK
 -------------
-Nothing should look different. If you want to satisfy yourself:
+1. Retention Tracker with the default filter (Live only). Retention Outstanding
+   should now MATCH Business Financials > Retentions Due, and show a smaller
+   "on screen" figure underneath.
+2. Tick all three statuses. The headline should not move; the "on screen" line
+   should disappear.
+3. If the two pages STILL differ, tell me - the remaining difference would be
+   the second thing I found: the tracker derives the owed figure and the halves
+   live via calcRetentionOwed and calcReleaseHalf, while BF uses the stored
+   release1Value and release2Value. Those agree unless a stored half is stale.
+   That is a separate fix and needs one shared rule, the way lib/wipCalc.js
+   works for WIP.
 
-  1. Upload Bills with a real file. The response figures should be as before.
-  2. Project Financials - Total Spent unchanged on a project you know.
-  3. Sync from Business Financials, then compare Commercial and Bookkeeping -
-     they read the same store, so they should agree.
+
+STILL OPEN FROM TONIGHT
+-----------------------
+The VAT figure. fetchVatPosition BREAKS OUT of its paging loop on any HTTP
+error and returns what it has - a partial result. The guard that is supposed to
+protect the cache only checks whether ANY data came back, not whether the pull
+finished, so a partial figure overwrites a good one silently.
+
+Send me the diag from:
+
+    await (await fetch('/api/business-financials?view=vat&from=2026-08-01&to=2026-08-31')).json()
+
+If lastError is set, that is your 18k becoming 366, and the fix is small.
