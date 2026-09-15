@@ -118,6 +118,17 @@ export default function VatRefund() {
     <>
       <Head><title>VAT Refund - Rock Roofing</title></Head>
       <BizNav />
+
+      {/* AN INCOMPLETE ESTIMATE MUST SAY SO.
+          The figures behind this were silently replaced by a partial pull once -
+          Xero timed out on purchase bills and every month flipped from a refund
+          to a payable. The numbers are no longer overwritten, but the person
+          looking at them still needs to know the sync did not finish. */}
+      {data?.incomplete && (
+        <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderLeft: '4px solid #ea580c', borderRadius: 8, padding: '10px 14px', margin: '0 0 14px', fontSize: 13, color: '#7c2d12' }}>
+          <strong>These figures are not current.</strong> {data.incompleteReason}
+        </div>
+      )}
       <div style={{ maxWidth: '100%', padding: '24px 32px 80px' }}>
         <div style={{ marginBottom: 18 }}>
           <h1 style={{ margin: 0, color: INK, fontSize: 26 }}>Anticipated VAT Refund</h1>

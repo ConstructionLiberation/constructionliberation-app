@@ -468,14 +468,40 @@ async function handler(req, res) {
       try { const nt = await refreshXeroToken(tokens.refresh_token); if (nt?.access_token) { tokens = { ...tokens, ...nt }; await saveTokens(tokens) } } catch {}
       const est = await fetchVatPosition(tokens.access_token, tokens.tenant_id, from, to)
       months = est.months; meta = est.meta
-      // Only overwrite the cache if we actually got data - never clobber good data with an empty/errored pull.
+      // NEVER OVERWRITE A GOOD FIGURE WITH A PARTIAL PULL.
+      //
+      // This checked whether ANY data came back, not whether the pull FINISHED.
+      // A fetch that died halfway still returns months full of figures, so the
+      // guard passed and the partial result replaced the good one.
+      //
+      // That is exactly what happened: purchaseBills returned 504 Gateway
+      // Time-out with 0 of them loaded, and because input VAT is the whole
+      // refund side, every month flipped from a refund of 17k-50k to a small
+      // payable. August read 366 instead of roughly 18k, and nothing anywhere
+      // said the pull had failed.
+      //
+      // meta.lastError was sitting right there, already populated, already
+      // being stored alongside. Nothing looked at it.
+      //
+      // A VAT figure that is silently wrong is worse than one that is missing.
       const gotData = months && Object.keys(months).length > 0
-      if (gotData) {
+      const complete = !meta.lastError
+      if (gotData && complete) {
         await redis2.set('vat:estimate', { months, meta, updatedAt: new Date().toISOString(), from, to })
       } else {
         const prev = (await redis2.get('vat:estimate').catch(() => null)) || null
         if (prev) months = prev.months
-        return res.json({ months, filed, estimateUpdatedAt: prev?.updatedAt || null, diag: { ...meta, note: 'no data from Xero - kept previous cache' } })
+        return res.json({
+          months, filed,
+          estimateUpdatedAt: prev?.updatedAt || null,
+          // Said plainly, and surfaced on the page, so an incomplete estimate
+          // cannot be mistaken for a current one.
+          incomplete: true,
+          incompleteReason: meta.lastError
+            ? `The sync did not finish: ${meta.lastError}. Showing the previous figures.`
+            : 'No data came back from Xero. Showing the previous figures.',
+          diag: { ...meta, note: complete ? 'no data from Xero - kept previous cache' : 'PARTIAL PULL REFUSED - kept previous cache' },
+        })
       }
     }
     return res.json({ months, filed, estimateUpdatedAt: new Date().toISOString(), diag: meta })

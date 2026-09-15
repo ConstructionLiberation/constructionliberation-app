@@ -1,94 +1,86 @@
-pkg904 - REPLACES pkg903. A release half is half the FINAL ACCOUNT retention.
-=============================================================================
+pkg905 - The VAT estimate. Every month was wrong, not just August.
+==================================================================
 
-THREE FILES. Use this INSTEAD of pkg903 - same files, corrected.
-  lib/retentionCalc.js                        <-- NEW, create by hand
-  pages/retention.js
-  pages/business-financials/retentions-due.js
-
-DEPLOY pkg902 AS WELL if you have not - that one fixes the status filter and is
-separate.
+THREE FILES, none new.
+  lib/xero.js
+  pages/api/business-financials.js
+  pages/business-financials/vat-refund.js
 
 
-WHAT I GOT WRONG IN pkg903
+WHAT THE DIAGNOSTIC SHOWED
 --------------------------
-You said retention comes from the application, and I collapsed two different
-things into one rule. They are not the same:
+    lastError: purchaseBills HTTP 504: Gateway Time-out
+    counts:    salesInvoices 196, salesCreditNotes 36,
+               purchaseBills 0, purchaseCreditNotes 45
 
-    retention HELD     accrues as you apply      applied for x ret%
-    a release HALF     contractual, fixed        final account x ret% / 2
+ZERO purchase bills loaded. Input VAT is the entire refund side, so the estimate
+was sales VAT with no purchases.
 
-pkg903 made the halves half of the HELD figure. That would have made the portal
-disagree with the certificates your customers receive, which is the wrong way
-round - the certificate is the document that matters.
-
-Your own codebase already says so, in pages/api/dashboard.js:
-
-    "A half falling due at 70% applied for is still half of the WHOLE retention -
-     which is what the application certificate releases, and the tracker was
-     showing half of retention-to-date instead. On a 580k account at 5% MCD and
-     3% retention that was 6,227 a half against the 8,265 the application
-     actually claims."
-
-lib/applications.js has always computed it this way. pkg903 would have moved
-both pages away from it.
+And it was not only August. EVERY month in the table read "payable" with refund
+0, while your filed history shows refunds of 17k to 50k every single month. The
+whole estimate was wrong and had been since that sync at 00:28.
 
 
-WHAT THIS DOES
---------------
-    calcRetentionOwed    applied for x ret%              retention HELD
-    calcReleaseHalf      retentionOnFinalAccount / 2     CONTRACTUAL half
+WHY IT TIMED OUT - the actual cause
+-----------------------------------
+The Xero query filtered by TYPE and not by DATE:
 
-retentionOnFinalAccount is computed on the project record as Gross AFA less MCD
-times the retention percentage - the same base lib/applications.js uses, so the
-portal and the certificate now agree. Both pages now carry that field onto their
-rows; neither did before, so both would have fallen back to a less accurate
-calculation.
+    where=Type=="ACCPAY"
 
-Worked against your real rows:
+So it asked for every bill Rock has ever had, page by page, and threw away
+everything outside the month in JavaScript. 136 pages before Xero gave up.
 
-    ref    held (applied)   half (final acct)   pkg903 would have shown
-    J190      15,691.81         10,041.59              7,845.91
-    J197      13,828.70          7,760.78              6,914.35
-    J228       4,208.23          2,104.11              2,104.11
-    J244       4,581.33         10,940.30              2,290.66
-
-J228 is fully applied for, so the two bases agree - which is exactly how the
-original fault hid.
-
-J244 is the extreme: 21% applied for, so a contractual half of 10,940 against
-2,291 of accrued retention.
+Purchase bills is the biggest table you have, and it is the FOURTH of four
+pulls, so it is the one that runs out of patience. Sales invoices - a smaller
+table, pulled first - always completed. That is why output VAT looked fine and
+input VAT was empty.
 
 
-A CONSEQUENCE, STATED PLAINLY
------------------------------
-Because the two sides use different bases ON PURPOSE, mid-contract a released
-half can exceed what has accrued, and Outstanding can read lower than the
-remaining halves suggest.
+THREE FIXES
+-----------
+1. ASK XERO FOR THE PERIOD.
 
-That is the real commercial position, not an error: you have claimed a
-contractual half against retention not yet fully accrued. The two converge as
-the job completes, because applied for converges on the final account. Written
-into lib/retentionCalc.js so the next person does not "fix" it.
+       Type=="ACCPAY" && Date>=DateTime(2026,08,01) && Date<=DateTime(2026,08,31)
 
+   A fraction of the data, a fraction of the pages. This is the real fix; the
+   other two are for when it still fails.
 
-CHECKS I RAN
-------------
-- esbuild compile on all 3: 0 errors
-- import-graph check: clean
-- ran the arithmetic against four real rows including the extreme case
-- my edit script asserted and wrote NOTHING when it found the mapping line twice
-  in retention.js - there are two project mappings and I had only accounted for
-  one. Both now carry the field. That is the assert doing its job.
+2. RETRY A TIMEOUT. 504, 503 and 429 are Xero being busy, not a refusal. Backs
+   off 2, 4, 6 seconds and asks again, three times, before giving up.
+
+3. REFUSE TO CACHE A PARTIAL PULL. The guard checked whether ANY data came back,
+   not whether the pull FINISHED - and a half-dead fetch still returns months
+   full of figures, so it passed and overwrote the good data.
+
+   meta.lastError was sitting right there, already populated, already being
+   stored alongside. Nothing looked at it.
+
+   Now: if lastError is set, the previous figures are kept and the page says so
+   in an amber banner - "These figures are not current. The sync did not finish:
+   purchaseBills HTTP 504 ...".
+
+   A VAT figure that is silently wrong is worse than one that is missing.
 
 
 WHAT TO CHECK
 -------------
-1. Retention Tracker - the 1st and 2nd Value columns. On a job not fully applied
-   for they should go UP. J190 should read £10,041.59 a half, not £7,845.91.
-2. Business Financials > Retentions Due - every amount should match the tracker
-   row for row.
-3. The BF total should equal the tracker's Retention Outstanding.
-4. Compare a half against the retention section of a recent application PDF for
-   the same project. They should now be the same number - that is the check that
-   matters most.
+1. Deploy, open the VAT page, press Refresh.
+2. August should come back to roughly 18k as a REFUND.
+3. Every earlier month should show a refund too, matching your filed history far
+   more closely than "payable 366".
+4. diag.counts.purchaseBills should be a real number, not 0.
+5. If it times out again you will see the amber banner and the OLD figures,
+   rather than new wrong ones.
+
+SEND ME THE DIAG AGAIN after refreshing. If purchaseBills is still 0, the date
+filter is not being accepted and I want to see the error rather than assume.
+
+
+WORTH SAYING
+------------
+This was found because you said the number looked wrong. Nothing in the app
+flagged it - the sync reported success, the page rendered cleanly, and every
+month had a plausible small figure on it.
+
+The same silent-partial shape will exist in other Xero pulls. Worth a sweep of
+every fetch that breaks out of a loop on error, once the tenancy work is done.
