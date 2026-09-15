@@ -1,63 +1,96 @@
-pkg899 - Tech Sub Builder hidden, and the back button goes where you came from
-==============================================================================
+pkg901 - Remove a cost store nothing reads, mark two crons nothing runs
+=======================================================================
 
-THREE FILES, none new.
-  lib/designShell.js
-  pages/admin/design-customers.js
-  pages/design/index.js
+FIVE FILES, none new.
+  pages/api/upload-bills.js
+  pages/api/xero/sync.js
+  pages/api/reset-costs.js
+  pages/api/cron/deep-sync.js      (comment only)
+  pages/api/cron/wip-sync.js       (comment only)
 
-
-1. TECH SUB BUILDER HIDDEN
---------------------------
-HIDDEN, NOT DELETED - the page still exists, so remove `hidden: true` in
-lib/designShell.js to bring it back rather than rebuilding it.
-
-lib/designShell.js already had `internalOnly`, which hides builder tools from
-customers. It had no way to hide something from EVERYONE, so `hidden` is added
-and honoured alongside it - the same convention pkg898 added to
-components/OperationsNav.js, so both areas now hide the same way.
-
-Design tabs after this: Handover Docs, RFIs, Tech Sub, Rock Drawings,
-Calculations, Leak Test Certs, Warranties, O&Ms.
+NO FIGURE ANYWHERE CHANGES. That is the point - the store being removed was
+read by nothing.
 
 
-2. THE BACK BUTTON ON DESIGN CUSTOMERS
---------------------------------------
-It was decided by ROLE:
+WHAT I GOT WRONG FIRST, since it shaped this
+--------------------------------------------
+I told you a corrected bill in Xero would never be picked up, because
+costs:labour and costs:materials only ever ADD. You pushed back: the app mirrors
+Xero, and the totals should be the sum of what the app holds.
 
-    href={me.role === 'management' ? '/design' : '/admin'}
+You were right and I was looking at the wrong store.
 
-But the page is reached from BOTH places - Admin lists it, and the Design portal
-has a "Manage Customers" link. So:
+    costs:labour / costs:materials    running totals per job. READ BY NOTHING.
+    costs:bills:<id> / costs:wages:<id>  per project, WITH their lines
+         -> merged by lib/mergeCosts.js into
+    costs:latest:<id>  the totals    costs:lines:<id>  the lines behind them
 
-    an admin arriving from Design      -> sent to Admin      wrong
-    an admin arriving from Admin       -> sent to Admin      right
-    a management user from Admin       -> sent to Design     wrong
-    a management user from Design      -> sent to Design     right
+The figures you see come from the second set, where the total is summed from the
+same records that supply the list. Exactly as you described it.
 
-Right for one route in and wrong for the other, for every role. Yours was the
-first case.
+Four references to costs:labour existed in the whole codebase, and all four were
+these two files reading their own total in order to add to it.
 
-It now follows the route actually taken: the Design portal's link carries
-?from=design, and the back button reads it. Where there is no marker - an old
-bookmark, or somebody typing the address - it falls back to the old role guess
-rather than picking arbitrarily.
 
-The label follows too, so it says "Design" when it goes to Design.
+1. THE DEAD STORE IS GONE
+-------------------------
+Left in place it was worse than useless. A future reader finds a store called
+costs:labour being carefully maintained and assumes it matters - and because it
+only ever added, its numbers drift further from the real ones with every upload.
+Anyone who started trusting it would be reading something wrong.
+
+reset-costs.js still DELETES those keys. Deliberate: any values already stored
+get cleared if it is ever run, rather than sitting in the database for ever
+looking meaningful.
+
+Checked that labourByJob and materialsByJob are still used in both files - they
+feed the response summary, so nothing is orphaned.
+
+
+2. deep-sync AND wip-sync MARKED AS UNREACHABLE
+-----------------------------------------------
+You asked whether deep-sync is used. It is not:
+
+  - no entry in vercel.json
+  - no button, no link anywhere - grepped across pages, components and lib
+  - cron health has never recorded a heartbeat for it
+
+Same for wip-sync.
+
+KEPT, NOT DELETED, with a header at the top of each saying so plainly. deep-sync
+pulls invoices, bills and wages from Xero; if the manual Bills upload path ever
+gaps, that is the thing to reach for. Deleting working code you might want is
+harder to undo than leaving a file alone, and they cost nothing sitting there
+because they never run.
+
+Both are still reachable by typing the URL, so they can be run deliberately.
+
+
+A CONSEQUENCE WORTH KNOWING
+---------------------------
+Because deep-sync never runs, its mergeWindow function - which keeps an existing
+line and discards a changed one with the same key - never executes either. So
+the "a corrected bill is not picked up" problem I raised does not exist in
+practice.
+
+import-bills-bulk, which IS what your manual upload uses, REPLACES the lines per
+project. So correcting a bill in Xero and re-uploading the spreadsheet does
+update it. Your mental model was right throughout.
 
 
 CHECKS I RAN
 ------------
-- esbuild compile on all 3: 0 errors
+- esbuild compile on all 5: 0 errors
 - import-graph check: clean
-- my edit declared `const router` a second time; the compile caught it and it
-  was already there. Removed.
+- grepped for every remaining reference to costs:labour and costs:materials:
+  only the explanatory comments and the deletes in reset-costs
 
 
 WHAT TO CHECK
 -------------
-1. Design portal > Manage Customers > back. Should return to the DESIGN portal.
-2. Admin > Design Customers > back. Should return to ADMIN.
-3. Design project tabs - no Tech Sub Builder. Tech Sub itself stays.
-4. A customer logging in should see the same tabs as before minus nothing -
-   Tech Sub Builder was already internal-only, so nothing changes for them.
+Nothing should look different. If you want to satisfy yourself:
+
+  1. Upload Bills with a real file. The response figures should be as before.
+  2. Project Financials - Total Spent unchanged on a project you know.
+  3. Sync from Business Financials, then compare Commercial and Bookkeeping -
+     they read the same store, so they should agree.
