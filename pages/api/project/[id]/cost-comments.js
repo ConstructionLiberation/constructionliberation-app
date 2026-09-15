@@ -94,7 +94,18 @@ async function handler(req, res) {
     let notified = { sent: 0, names: [] }
     try {
       const users = await getMentionableUsersForRoles(MENTION_ROLES)
-      const baseUrl = baseUrl('PORTAL_BASE_URL')
+  // NOT `const baseUrl = baseUrl(...)`.
+  //
+  // A const shadows the import for the WHOLE function, including its own
+  // right-hand side - so the call resolved to the variable being declared,
+  // which is not initialised yet. Minified, that reads:
+  //
+  //     Cannot access 'i' before initialization
+  //
+  // It compiles, the import graph is clean, and `npm run build` never executes
+  // it. It only fails when the function actually RUNS, which for this one is
+  // once a day.
+      const portalUrl = baseUrl('PORTAL_BASE_URL')
       const projLabel = await resolveProjectLabel(id, clean(req.body?.projectLabel, 120))
       notified = await notifyMentions({
         body,
@@ -102,7 +113,7 @@ async function handler(req, res) {
         users,
         what: 'a cost comment',
         context: comment.label ? `${projLabel} - ${comment.label}` : projLabel,
-        link: `${baseUrl}/project/${encodeURIComponent(id)}?tab=costs`,
+        link: `${portalUrl}/project/${encodeURIComponent(id)}?tab=costs`,
         cta: 'Open the costs',
       })
     } catch (e) {

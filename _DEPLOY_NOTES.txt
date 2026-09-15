@@ -1,86 +1,94 @@
-pkg905 - The VAT estimate. Every month was wrong, not just August.
-==================================================================
+pkg906 - Five email functions that threw the moment they ran
+============================================================
 
-THREE FILES, none new.
-  lib/xero.js
-  pages/api/business-financials.js
-  pages/business-financials/vat-refund.js
-
-
-WHAT THE DIAGNOSTIC SHOWED
---------------------------
-    lastError: purchaseBills HTTP 504: Gateway Time-out
-    counts:    salesInvoices 196, salesCreditNotes 36,
-               purchaseBills 0, purchaseCreditNotes 45
-
-ZERO purchase bills loaded. Input VAT is the entire refund side, so the estimate
-was sales VAT with no purchases.
-
-And it was not only August. EVERY month in the table read "payable" with refund
-0, while your filed history shows refunds of 17k to 50k every single month. The
-whole estimate was wrong and had been since that sync at 00:28.
+FIVE FILES, none new.
+  lib/crmDailyActivityEmail.js
+  lib/crmMentions.js
+  lib/hsRenewalNotify.js
+  lib/forEachTenant.js
+  pages/api/project/[id]/cost-comments.js
 
 
-WHY IT TIMED OUT - the actual cause
------------------------------------
-The Xero query filtered by TYPE and not by DATE:
+THE ERROR YOUR EMAIL CAUGHT
+---------------------------
+    GET cron/crm-daily-activities
+    Cannot access 'i' before initialization
 
-    where=Type=="ACCPAY"
+MY FAULT, from pkg868. That package converted hardcoded URLs and addresses to
+the per-customer accessors, and in five places it wrote:
 
-So it asked for every bill Rock has ever had, page by page, and threw away
-everything outside the month in JavaScript. 136 pages before Xero gave up.
+    const baseUrl = baseUrl('PORTAL_BASE_URL')
+    const replyTo = replyTo()
 
-Purchase bills is the biggest table you have, and it is the FOURTH of four
-pulls, so it is the one that runs out of patience. Sales invoices - a smaller
-table, pulled first - always completed. That is why output VAT looked fine and
-input VAT was empty.
+A const SHADOWS the import for the whole function INCLUDING ITS OWN RIGHT-HAND
+SIDE. So the call resolves to the variable being declared, which is not
+initialised yet. Minified, that reads "Cannot access 'i' before initialization".
+
+Five of them, every one in a function that sends an email:
+
+    lib/crmDailyActivityEmail.js   x2   the daily CRM activity emails
+    lib/crmMentions.js                  mention notifications
+    lib/hsRenewalNotify.js              H&S renewal reminders
+    cost-comments.js                    cost comment notifications
+
+EVERY ONE THREW THE MOMENT IT RAN. Those emails have not been going out.
+
+Every check I have passed it: it compiles, the import graph is clean, and
+`npm run build` never executes a function body. Only running it fails.
 
 
-THREE FIXES
------------
-1. ASK XERO FOR THE PERIOD.
+WHY IT STAYED HIDDEN FOR WEEKS - the more important half
+--------------------------------------------------------
+crm-daily-activities is scheduled at 06:00 AND 07:00 UTC, because only one of
+those is 07:00 London whichever side of the clock change you are on. The other
+exits immediately with { skipped: ... }.
 
-       Type=="ACCPAY" && Date>=DateTime(2026,08,01) && Date<=DateTime(2026,08,31)
+The heartbeat recorded the LAST run. In BST that is always the skip.
 
-   A fraction of the data, a fraction of the pages. This is the real fix; the
-   other two are for when it still fails.
+So cron health showed:
 
-2. RETRY A TIMEOUT. 504, 503 and 429 are Xero being busy, not a refusal. Backs
-   off 2, 4, 6 seconds and asks again, three times, before giving up.
+    crm-daily-activities   ok   1ms
 
-3. REFUSE TO CACHE A PARTIAL PULL. The guard checked whether ANY data came back,
-   not whether the pull FINISHED - and a half-dead fetch still returns months
-   full of figures, so it passed and overwrote the good data.
+every single day, while the real run at 06:00 had been throwing. The failure was
+not unnoticed - it was noticed and then overwritten half an hour later.
 
-   meta.lastError was sitting right there, already populated, already being
-   stored alongside. Nothing looked at it.
+Fixed: a skipped run no longer overwrites the record of a real one. If the
+stored heartbeat is a genuine run, a skip leaves it alone.
 
-   Now: if lastError is set, the previous figures are kept and the page says so
-   in an amber banner - "These figures are not current. The sync did not finish:
-   purchaseBills HTTP 504 ...".
+I spotted this behaviour yesterday and described it as cosmetic. It was not - it
+was actively hiding a broken job. That was a bad call.
 
-   A VAT figure that is silently wrong is worse than one that is missing.
+
+WHAT ACTUALLY FOUND IT
+----------------------
+pkg890, which made a failed cron iteration email you. It went in yesterday
+evening; this arrived at 06:00 this morning - the first real run since.
+
+The fault was weeks old. The reporting is one day old.
+
+
+CHECKS I RAN
+------------
+- esbuild compile on all 5: 0 errors
+- import-graph check: clean
+- swept every file in the repo for the same shadowing pattern across all 11
+  settings accessors: no remaining collisions
+- reproduced the throw and confirmed the rename fixes it
 
 
 WHAT TO CHECK
 -------------
-1. Deploy, open the VAT page, press Refresh.
-2. August should come back to roughly 18k as a REFUND.
-3. Every earlier month should show a refund too, matching your filed history far
-   more closely than "payable 366".
-4. diag.counts.purchaseBills should be a real number, not 0.
-5. If it times out again you will see the amber banner and the OLD figures,
-   rather than new wrong ones.
-
-SEND ME THE DIAG AGAIN after refreshing. If purchaseBills is still 0, the date
-filter is not being accepted and I want to see the error rather than assume.
+1. Tomorrow at 07:00 UK, crm-daily-activities should run and SUCCEED - and the
+   CRM activity emails should arrive for the first time in weeks. Ask whoever
+   should be receiving them whether they ever did.
+2. Cron health should show a real duration for it, not 1ms.
+3. H&S renewal reminders and mention notifications should also start working.
+   Same fault, same package.
+4. If any of them fails you will get an email naming it.
 
 
-WORTH SAYING
+WORTH ASKING
 ------------
-This was found because you said the number looked wrong. Nothing in the app
-flagged it - the sync reported success, the page rendered cleanly, and every
-month had a plausible small figure on it.
-
-The same silent-partial shape will exist in other Xero pulls. Worth a sweep of
-every fetch that breaks out of a loop on error, once the tenancy work is done.
+Has anyone mentioned not receiving CRM daily activity emails, H&S renewal
+reminders, or notifications when they were mentioned on a deal? If they have and
+it was put down to something else, this is why.
