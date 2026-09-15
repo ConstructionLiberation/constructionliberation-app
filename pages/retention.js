@@ -529,6 +529,10 @@ export default function RetentionPage() {
         projectValue: p.contractValue || 0,
         finalAccount: p.afa || 0,
         retentionPct: (p.retentionPct || 0) * 100,
+        // The CONTRACTUAL retention - Gross AFA less MCD x ret%, computed on the
+        // project record. A release half is half of THIS, not half of what has
+        // accrued. See lib/retentionCalc.js.
+        retentionOnFinalAccount: p.retentionOnFinalAccount || 0,
         completionDate: p.completionDate || p.pcDate || '',
         // Same as the main list below - no estimator fallback.
         qsName: p.qsName || '',
@@ -554,6 +558,10 @@ export default function RetentionPage() {
           projectValue: p.contractValue || 0,
           finalAccount: p.afa || 0,
           retentionPct: (p.retentionPct || 0) * 100,
+          // The CONTRACTUAL retention - Gross AFA less MCD x ret%, computed on the
+          // project record. A release half is half of THIS, not half of what has
+          // accrued. See lib/retentionCalc.js.
+          retentionOnFinalAccount: p.retentionOnFinalAccount || 0,
           completionDate: p.completionDate || p.pcDate || '',
           pcType: p.pcType || '',
           // NO fallback to the estimator. It used to read `p.qsName || p.estimator`,
@@ -735,6 +743,7 @@ export default function RetentionPage() {
         // their latest certificate. A manual figure is now only used where there is no
         // sent application to take it from.
         appliedFor: x.appliedForLatest ? String(x.appliedForLatest) : (e.appliedFor || ''),
+        retentionOnFinalAccount: x.retentionOnFinalAccount || e.retentionOnFinalAccount || 0,
         // CERTIFIED = the "Previously certified (gross)" box on the latest SENT
         // application. Tested on certifiedSetOnApp, not on the value being truthy: a
         // first application legitimately holds 0 and must show 0.00 rather than falling

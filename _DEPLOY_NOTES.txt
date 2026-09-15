@@ -1,106 +1,94 @@
-pkg903 - One retention rule. The two pages now agree.
-=====================================================
+pkg904 - REPLACES pkg903. A release half is half the FINAL ACCOUNT retention.
+=============================================================================
 
-THREE FILES.
+THREE FILES. Use this INSTEAD of pkg903 - same files, corrected.
   lib/retentionCalc.js                        <-- NEW, create by hand
   pages/retention.js
   pages/business-financials/retentions-due.js
 
-DEPLOY WITH pkg902 (or after it). 902 fixed the status filter; this fixes the
-arithmetic underneath it. Both were needed.
+DEPLOY pkg902 AS WELL if you have not - that one fixes the status filter and is
+separate.
 
 
-WHAT WAS WRONG
+WHAT I GOT WRONG IN pkg903
+--------------------------
+You said retention comes from the application, and I collapsed two different
+things into one rule. They are not the same:
+
+    retention HELD     accrues as you apply      applied for x ret%
+    a release HALF     contractual, fixed        final account x ret% / 2
+
+pkg903 made the halves half of the HELD figure. That would have made the portal
+disagree with the certificates your customers receive, which is the wrong way
+round - the certificate is the document that matters.
+
+Your own codebase already says so, in pages/api/dashboard.js:
+
+    "A half falling due at 70% applied for is still half of the WHOLE retention -
+     which is what the application certificate releases, and the tracker was
+     showing half of retention-to-date instead. On a 580k account at 5% MCD and
+     3% retention that was 6,227 a half against the 8,265 the application
+     actually claims."
+
+lib/applications.js has always computed it this way. pkg903 would have moved
+both pages away from it.
+
+
+WHAT THIS DOES
 --------------
-Three different bases were in use:
+    calcRetentionOwed    applied for x ret%              retention HELD
+    calcReleaseHalf      retentionOnFinalAccount / 2     CONTRACTUAL half
 
-    tracker    retention on APPLIED FOR     correct
-    BF         retention on INVOICED        wrong under any reading
-    tooltip    retention on FINAL ACCOUNT   wrong, and contradicted the code
+retentionOnFinalAccount is computed on the project record as Gross AFA less MCD
+times the retention percentage - the same base lib/applications.js uses, so the
+portal and the certificate now agree. Both pages now carry that field onto their
+rows; neither did before, so both would have fallen back to a less accurate
+calculation.
 
-Confirmed against your own rows:
+Worked against your real rows:
 
-    ref    tracker half   BF half    what BF was doing
-    J190      7,845.91    7,993.00   319,728.17 invoiced x 5% / 2
-    J197      6,914.35    6,435.00   257,390.47 invoiced x 5% / 2
-    J242      6,121.68    5,657.00
-    J228      2,104.11    1,429.00
-    J229      1,891.83    1,892.00   applied for and invoiced nearly equal
+    ref    held (applied)   half (final acct)   pkg903 would have shown
+    J190      15,691.81         10,041.59              7,845.91
+    J197      13,828.70          7,760.78              6,914.35
+    J228       4,208.23          2,104.11              2,104.11
+    J244       4,581.33         10,940.30              2,290.66
 
-That last row is how this survived: on the handful of jobs where applied for and
-invoiced happen to match, the two pages agreed. Spot-check three of those and
-everything looks fine.
+J228 is fully applied for, so the two bases agree - which is exactly how the
+original fault hid.
 
-BF also read STORED release1Value / release2Value, which went stale the moment
-another application was sent. So it was the wrong base AND a frozen copy of it.
-
-
-THE FIX
--------
-lib/retentionCalc.js holds the rules, and both pages import them. Same pattern
-as lib/wipCalc.js for WIP and lib/preStartDone.js for Pre-Starts - the two
-places this project has already had to do it.
-
-    calcRetentionOwed     applied for x retention %
-    calcReleaseHalf       half of that, COMPUTED, never read from a stored value
-    released1 / released2  manual tick beats the application
-    calcOutstanding       owed less the halves released
-    outstandingReleases   the unreleased halves as dated events
-
-The list and the total come from the same function, so the cash-in list and the
-outstanding figure cannot disagree by construction.
-
-After this:
-
-    ref   BF was      BF now      tracker
-    J190  £7,993.00   £7,845.91   £7,845.91
-    J197  £6,435.00   £6,914.35   £6,914.35
-    J242  £5,657.00   £6,121.68   £6,121.68
-    J228  £1,429.00   £2,104.11   £2,104.11
-    J229  £1,892.00   £1,891.83   £1,891.83
+J244 is the extreme: 21% applied for, so a contractual half of 10,940 against
+2,291 of accrued retention.
 
 
-THE TOOLTIPS WERE WRONG TOO
----------------------------
-Both release columns said "half of the retention on the FINAL ACCOUNT ... which
-is what the contract holds and what an application certificate releases."
+A CONSEQUENCE, STATED PLAINLY
+-----------------------------
+Because the two sides use different bases ON PURPOSE, mid-contract a released
+half can exceed what has accrued, and Outstanding can read lower than the
+remaining halves suggest.
 
-That is not what the code did and, per your rule, not what it should do.
-Retention is deducted on what has been applied for, so the application is the
-source of truth; it converges on the Final Account as the job completes. Both
-tooltips now say that.
-
-There is a note in the old code saying pkg782 set a final-account basis
-deliberately and pkg785-787 rebased it onto Applied for "as a side effect rather
-than as a choice". On your instruction the Applied for basis is now the choice,
-and the tooltip agrees with it.
+That is the real commercial position, not an error: you have claimed a
+contractual half against retention not yet fully accrued. The two converge as
+the job completes, because applied for converges on the final account. Written
+into lib/retentionCalc.js so the next person does not "fix" it.
 
 
 CHECKS I RAN
 ------------
 - esbuild compile on all 3: 0 errors
 - import-graph check: clean
-- ran the arithmetic against five of your real rows, above
-- confirmed no leftover use of calcBalance or release1Value for any figure
+- ran the arithmetic against four real rows including the extreme case
+- my edit script asserted and wrote NOTHING when it found the mapping line twice
+  in retention.js - there are two project mappings and I had only accounted for
+  one. Both now carry the field. That is the assert doing its job.
 
 
 WHAT TO CHECK
 -------------
-1. Retention Tracker - the halves should be UNCHANGED. The tracker was already
-   right; only its filter behaviour changed, in pkg902.
-2. Business Financials > Retentions Due - every release amount should now match
-   the tracker row for row.
-3. The two totals should agree. The note at the bottom of the BF page claims
-   they always do; now they will.
-4. Spot-check J190: 1st and 2nd release should both read £7,845.91, not £7,993.
-
-
-ONE THING I HAVE NOT TOUCHED
-----------------------------
-lib/applications.js computes halfRetention from finalSubTotal - the final
-account - which is a THIRD place this rule lives, and it is what actually goes
-on the certificate you send. It now disagrees with both pages.
-
-I have not changed it, because it affects documents already issued and it needs
-your word on what an application certificate should release. Worth looking at
-before the next application goes out.
+1. Retention Tracker - the 1st and 2nd Value columns. On a job not fully applied
+   for they should go UP. J190 should read £10,041.59 a half, not £7,845.91.
+2. Business Financials > Retentions Due - every amount should match the tracker
+   row for row.
+3. The BF total should equal the tracker's Retention Outstanding.
+4. Compare a half against the retention section of a recent application PDF for
+   the same project. They should now be the same number - that is the check that
+   matters most.

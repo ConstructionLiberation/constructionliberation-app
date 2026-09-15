@@ -67,6 +67,9 @@ export default function RetentionsDue() {
         retention612Allocated: p.retention612Allocated || 0,
         finalAccount: p.afa || 0, projectValue: p.contractValue || 0,
         retentionPct: (p.retentionPct || 0) * 100,
+        // See lib/retentionCalc.js - a release half is half of the CONTRACTUAL
+        // retention, not half of what has accrued.
+        retentionOnFinalAccount: p.retentionOnFinalAccount || 0,
         completionDate: p.completionDate || p.pcDate || '',
         // release1Value / release2Value are NO LONGER USED for the figures.
         // They were totalRetention / 2 - retention on INVOICED - which is what
@@ -89,6 +92,7 @@ export default function RetentionsDue() {
             // The application figure the retention is computed from. Taken from
             // the project, exactly as the tracker does it.
             appliedFor: x.appliedFor || e.appliedFor || '',
+            retentionOnFinalAccount: x.retentionOnFinalAccount || e.retentionOnFinalAccount || 0,
             appRelease1: x.appRelease1, appRelease2: x.appRelease2,
             finalAccount: e.finalAccount || x.finalAccount,
             projectValue: e.projectValue || x.projectValue,
