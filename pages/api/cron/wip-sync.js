@@ -1,3 +1,19 @@
+// ===========================================================================
+// NOT IN USE. Nothing calls this.
+//
+// No entry in vercel.json, no button, no link anywhere in the app - checked by
+// grep across pages, components and lib. Cron health has never recorded a
+// heartbeat for it, which is the same answer from the other direction.
+//
+// KEPT ON PURPOSE rather than deleted. It refreshes the WIP cost and invoice
+// figures from Xero.
+// If the manual path ever gaps, this is the thing to reach for - and deleting
+// working code you might want is harder to undo than leaving a file alone.
+//
+// It is reachable by typing the URL, so it can be run deliberately. Just do not
+// assume it has been running.
+// ===========================================================================
+
 import forEachTenant from '../../../lib/forEachTenant'
 import { getTokens, saveTokens, getAllProjectSettings, getEffectiveValuationDate, getWipEndDate } from '../../../lib/db'
 import { getClient } from '../../../lib/db'

@@ -59,21 +59,9 @@ async function handler(req, res) {
     }
 
     if (redis) {
-      const existingLabour = await redis.get('costs:labour') || {}
-      const existingMaterials = await redis.get('costs:materials') || {}
-
-      const mergedLabour = { ...existingLabour }
-      const mergedMaterials = { ...existingMaterials }
-
-      for (const [job, amount] of Object.entries(labourByJob)) {
-        mergedLabour[job] = (mergedLabour[job] || 0) + amount
-      }
-      for (const [job, amount] of Object.entries(materialsByJob)) {
-        mergedMaterials[job] = (mergedMaterials[job] || 0) + amount
-      }
-
-      await redis.set('costs:labour', mergedLabour)
-      await redis.set('costs:materials', mergedMaterials)
+      // costs:labour and costs:materials REMOVED - see the note in
+      // pages/api/upload-bills.js. Read by nothing; maintained by these two
+      // files alone.
       await redis.set('uploaded:invoices', { ...processedInvoices, ...newInvoiceNumbers })
       await redis.set('sync:lastDate', new Date().toISOString().split('T')[0])
       await redis.del('dashboard:cache')

@@ -96,21 +96,23 @@ async function handler(req, res) {
     }
 
     if (redis) {
-      const existingLabour = await redis.get('costs:labour') || {}
-      const existingMaterials = await redis.get('costs:materials') || {}
-
-      const mergedLabour = { ...existingLabour }
-      const mergedMaterials = { ...existingMaterials }
-
-      for (const [job, amount] of Object.entries(labourByJob)) {
-        mergedLabour[job] = (mergedLabour[job] || 0) + amount
-      }
-      for (const [job, amount] of Object.entries(materialsByJob)) {
-        mergedMaterials[job] = (mergedMaterials[job] || 0) + amount
-      }
-
-      await redis.set('costs:labour', mergedLabour)
-      await redis.set('costs:materials', mergedMaterials)
+      // costs:labour and costs:materials REMOVED.
+      //
+      // They were running totals per job, maintained here and in
+      // pages/api/xero/sync.js - and read by NOTHING. Not the dashboard, not
+      // Project Financials, not WIP, not any report. Four references in the
+      // whole codebase, all of them these two files reading their own total in
+      // order to add to it.
+      //
+      // The figures you actually see come from costs:bills:<id> and
+      // costs:wages:<id>, merged by lib/mergeCosts.js into costs:latest:<id>,
+      // where the total and the lines behind it come from the same record.
+      //
+      // Left in place, this was worse than useless: a future reader finds a
+      // store called costs:labour being carefully maintained and assumes it
+      // matters. And because it only ever ADDED, its numbers drift further from
+      // the real ones every upload - so anyone who did start trusting it would
+      // be reading something wrong.
       await redis.set('uploaded:invoices', { ...processedInvoices, ...newInvoiceNumbers })
       await redis.del('dashboard:cache')
     }
