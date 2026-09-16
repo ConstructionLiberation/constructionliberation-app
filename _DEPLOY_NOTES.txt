@@ -1,41 +1,68 @@
-pkg908 - Applications list stale after create and delete
-========================================================
+pkg909 - Cash flow: supersede drops SALES only, and the warning stands down on review
+=====================================================================================
 
 REPLACE (1 file, existing - no new files to create):
 
-  pages/api/applications.js
+  pages/project-cashflow.js
 
-WHAT WAS WRONG
---------------
-commit() re-reads the project, applies the change, saves, and returns the
-record it wrote. Three actions threw that return value away and responded
-with `project.applications` - the copy read at the TOP of the handler,
-before the write.
 
-So the server saved correctly and then reported the pre-write state:
+CHANGE 1 - the fault found while specifying change 2
+----------------------------------------------------
+Superseding was all-or-nothing. When an application was raised, the whole
+forecast for that period was skipped - including its LABOUR and MATERIALS.
 
-  create          responded without the new application  -> nothing appeared
-  delete          responded still holding the deleted row -> nothing vanished
-  set-hidden-pos  same shape (you may not have noticed this one)
+An application is a sales certificate. It carries no spend figure at all,
+because there is no spend event in it: operatives are paid weekly whatever is
+certified, and material invoices fall due on their own terms.
 
-The data in Redis was always right. Only the response was stale, which is
-why a refresh has been fixing it.
+So every time an application landed, that period's planned outflow silently
+left the cash flow and the position read BETTER than it was. Same shape as the
+WIP floor - no error, plausible arithmetic, missing input.
 
-WHAT CHANGED
-------------
-All three now capture commit()'s return and respond from it.
-No other file touched. No new imports. Import graph unchanged.
+Now: the certificate replaces the forecast's INCOME only. Labour and materials
+stay on their own dates and are adjusted by hand, which is the only place the
+real figure exists.
+
+
+CHANGE 2 - "CASH FLOW TO BE UPDATED" now clears when you update
+---------------------------------------------------------------
+Two triggers raise it. The first - "an application was raised since this
+forecast was saved" - already cleared on save.
+
+The second - "a period ended without an application" - did not, because the
+period ending is a fact and re-saving does not change it. It now asks whether
+anybody has LOOKED since: an updatedAt later than the period end counts as the
+review and the flag stands down.
+
+Opening the forecast and saving recomputes it against the latest application,
+deducting what has actually been claimed. So the review is real work, not a
+dismiss button.
+
+A LATER period elapsing raises it again. Nothing is permanently silenced.
+
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Applications page, pick a project with locked contracted rates.
-2. Create an application. It should appear in the list with NO refresh.
-3. Delete a draft. It should vanish with NO refresh.
-4. Hide a PO in the materials picker - takes effect immediately.
+1. A project with an application raised against a forecast period: the
+   labour and materials bars for that period should still be in the cash
+   flow. Before this they vanished.
+2. Money Out for the affected weeks will go UP. That is the fix, not a
+   regression - it was understated.
+3. Open a forecast showing CASH FLOW TO BE UPDATED, save it, and the flag
+   should clear without a page refresh.
 
-NOT FIXED, DELIBERATELY
------------------------
-'save' and 'submit' write the whole `apps` array back from the stale read.
-Same family, wider blast radius, and they return the updated row so the UI
-is correct today. Worth a narrow rewrite, but not blind and not at the same
-time as this.
+
+NOT CHANGED, DELIBERATELY
+-------------------------
+Business Financials applies the same supersede rule in three more places
+(business-financials/cashflow.js, monthly.js, reconciliation.js) and DROPS the
+whole forecast there too. That is correct in those pages and must not be
+"fixed" to match: they carry an actual-cost feed (bank:outstanding-bills,
+wages, CIS), so once an application is raised the real cost has arrived and
+counting the forecast spend as well WOULD double it.
+
+The project cash flow has no actual-cost feed. That is the whole difference.
+
+Worth knowing: the rule now exists in four places off two different sources
+(appActuals here, dashboard cache latestAppEnd there). Extraction candidate,
+but the copies are not identical in intent, so it is not a mechanical merge.

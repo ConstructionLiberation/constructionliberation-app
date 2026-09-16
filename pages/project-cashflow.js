@@ -203,7 +203,23 @@ export default function ProjectCashflow() {
       if (lastApp.t && newestSave && lastApp.t > newestSave) {
         reasons.push(`Application ${lastApp.a.appNumber || lastApp.a.seq || ''} raised since this forecast was saved`.replace('  ', ' '))
       }
-      const elapsed = (list || []).filter(f => f.to && f.to < todayKey && !supersededIds.has(f.id))
+      // REVIEWED SINCE IT ELAPSED.
+      //
+      // The period ending without an application is a fact and does not change. What
+      // changes is whether anybody has looked at it since. Opening the forecast and
+      // saving recomputes it against the latest application - deducting what has
+      // actually been claimed and leaving the remaining work - so an updatedAt later
+      // than the period end IS the review. The flag stands down.
+      //
+      // A LATER period elapsing raises it again, because that period's updatedAt is
+      // its own. Nothing is permanently silenced.
+      const elapsed = (list || []).filter(f => {
+        if (!f.to || f.to >= todayKey || supersededIds.has(f.id)) return false
+        const reviewed = f.updatedAt || f.createdAt || 0
+        const periodEnd = Date.parse(`${f.to}T23:59:59`)
+        if (reviewed && periodEnd && reviewed > periodEnd) return false
+        return true
+      })
       if (elapsed.length) reasons.push(`${elapsed.length} period${elapsed.length === 1 ? '' : 's'} ended without an application`)
       if (reasons.length) out[pk] = reasons
     }
@@ -300,9 +316,25 @@ export default function ProjectCashflow() {
         : `${pk.slice(2)} (negotiated)`
       if (!keep(pk)) continue
       for (const fc of (list || [])) {
-        // Overtaken by a real application - its cash is already in from the actual above.
-        if (supersededIds.has(fc.id)) continue
-        if (Array.isArray(fc.salesSchedule) && fc.salesSchedule.length) {
+        // SUPERSEDED BY A REAL APPLICATION - SALES ONLY.
+        //
+        // The certificate replaces the forecast's INCOME. That cash is already in from
+        // the actual above, so counting both would claim it twice.
+        //
+        // It does NOT replace the forecast's SPEND, and this used to skip the whole
+        // forecast. An application is a sales certificate: it carries no labour or
+        // materials figure at all, because there is no spend event in it. Operatives are
+        // paid weekly whatever is certified and material invoices fall due on their own
+        // terms. So dropping the forecast wholesale deleted planned outflow from the cash
+        // flow every time an application landed, and the position read BETTER than it
+        // was - the same silent shape as the WIP floor.
+        //
+        // Spend now stays on its own dates and is adjusted by hand, which is the only
+        // place the real figure exists.
+        const salesSuperseded = supersededIds.has(fc.id)
+        if (salesSuperseded) {
+          // no sales contribution - fall through to labour and materials below
+        } else if (Array.isArray(fc.salesSchedule) && fc.salesSchedule.length) {
           for (const s of fc.salesSchedule) { add(s.date, 'forecastIn', s.amount || 0); note(s.appDate || monthEnd(s.month) || fc.to, s.date, 'forecast', `${fcLabel} forecast`, s.amount || 0, salesValue(s.amount || 0, fc.retentionPct)) }
         } else if (fc.salesDate) { add(fc.salesDate, 'forecastIn', fc.revenueThisPeriod || 0); note(fc.to, fc.salesDate, 'forecast', `${fcLabel} forecast`, fc.revenueThisPeriod || 0, salesValue(fc.revenueThisPeriod || 0, fc.retentionPct)) }
         for (const s of (fc.labourSchedule || [])) add(s.date, 'labourOut', s.amount || 0)
