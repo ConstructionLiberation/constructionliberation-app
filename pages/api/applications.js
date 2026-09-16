@@ -346,8 +346,12 @@ async function handler(req, res) {
         createdAt: Date.now(),
         createdBy: req.body.author || '',
       }
-      await commit(projectId, 'create', (f) => { f.applications = [...(Array.isArray(f.applications) ? f.applications : apps), app] })
-      return res.json({ ok: true, application: app, applications: project.applications })
+      // RETURN WHAT WAS WRITTEN, NOT WHAT WAS READ.
+      // `project` is the copy read at the top of this handler, before commit()
+      // re-read and saved. Returning it told the client the new application did
+      // not exist, so the list only corrected itself on a refresh.
+      const written = await commit(projectId, 'create', (f) => { f.applications = [...(Array.isArray(f.applications) ? f.applications : apps), app] })
+      return res.json({ ok: true, application: app, applications: written.applications || [] })
     }
 
     if (action === 'save') {
@@ -415,14 +419,17 @@ async function handler(req, res) {
       if (target && target.status && target.status !== 'draft' && !allowSent) {
         return res.status(400).json({ error: 'Only draft applications can be deleted (pass allowSent to override).' })
       }
-      await commit(projectId, 'delete', (f) => { f.applications = apps.filter(a => a.id !== id) })
-      return res.json({ ok: true, applications: project.applications })
+      // Same reason as create: the stale copy still held the deleted row.
+      const written = await commit(projectId, 'delete', (f) => { f.applications = apps.filter(a => a.id !== id) })
+      return res.json({ ok: true, applications: written.applications || [] })
     }
 
     // Persist the project's hidden-PO list (PO numbers hidden from the materials picker).
     if (action === 'set-hidden-pos') {
-      await commit(projectId, 'set-hidden-pos', (f) => { f.hiddenPOs = Array.isArray(req.body.hiddenPOs) ? req.body.hiddenPOs : [] })
-      return res.json({ ok: true, hiddenPOs: project.hiddenPOs })
+      // Third instance of the same fault. Fixed alongside create and delete so a
+      // fourth is not written from the pattern of the other three.
+      const written = await commit(projectId, 'set-hidden-pos', (f) => { f.hiddenPOs = Array.isArray(req.body.hiddenPOs) ? req.body.hiddenPOs : [] })
+      return res.json({ ok: true, hiddenPOs: written.hiddenPOs || [] })
     }
 
     // Dismiss an application month for a project (nothing to apply for).

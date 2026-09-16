@@ -1,79 +1,41 @@
-pkg907 - WIP can be negative. It was floored at zero.
-=====================================================
+pkg908 - Applications list stale after create and delete
+========================================================
 
-TWO FILES, neither new.
-  lib/wipCalc.js
-  pages/wip.js
+REPLACE (1 file, existing - no new files to create):
 
+  pages/api/applications.js
 
 WHAT WAS WRONG
 --------------
-lib/wipCalc.js line 49:
+commit() re-reads the project, applies the change, saves, and returns the
+record it wrote. Three actions threw that return value away and responded
+with `project.applications` - the copy read at the TOP of the handler,
+before the write.
 
-    wipValue = Math.max(0, wipValue)
+So the server saved correctly and then reported the pre-write state:
 
-Any project whose adjustments exceeded its post-valuation costs reported 0.00.
+  create          responded without the new application  -> nothing appeared
+  delete          responded still holding the deleted row -> nothing vanished
+  set-hidden-pos  same shape (you may not have noticed this one)
 
-J244 Waungron, from your screenshot:
+The data in Redis was always right. Only the response was stale, which is
+why a refresh has been fixing it.
 
-    post-val costs        1,234.48
-    adjustments          -4,500.00     (+6,500 materials, -11,000 labour)
-    wip cost             -3,265.52
-
-    WIP was (floored)         0.00     profit  3,265.52
-    WIP now              -4,060.21     profit   -794.69
-
-The 3,265.52 "profit" existed ONLY because the floor had moved the value while
-leaving the cost alone. Profit is wipValue minus wipCost, so flooring the value
-manufactured a profit exactly equal to the cost it was hiding.
-
-
-WHY IT MATTERS
---------------
-A negative WIP is not an error to be tidied away. It is a WRITE-DOWN - cost you
-have decided you will not recover, or work over-valued in an earlier month being
-pulled back. It is precisely the adjustment somebody has gone to the trouble of
-entering.
-
-Flooring it to zero hid the entry AND invented a profit from it. On a page that
-feeds the monthly figures.
-
-
-ALSO: NEGATIVE WIP NOW SHOWS RED
---------------------------------
-pages/wip.js rendered the figure in green whatever the number, so a write-down
-would have read as a gain at a glance.
-
-
-CHECKED DOWNSTREAM
-------------------
-  pages/api/wip.js        totalWip += wipValue - negatives now correctly reduce
-                          the total rather than being silently dropped
-  cm-project-financials   invoicedIncWip = grossToDate + wipValue - a negative
-                          now correctly reduces it
-  the Zero button         adds -wipValue to cancel a project exactly; works
-                          unchanged with a negative
-
-Nothing assumed the value was positive.
-
-
-CHECKS I RAN
+WHAT CHANGED
 ------------
-- esbuild compile on both: 0 errors
-- import-graph check: clean
-- reproduced your exact figures with the floor in place - 0.00 and 3,265.52 -
-  and without it
+All three now capture commit()'s return and respond from it.
+No other file touched. No new imports. Import graph unchanged.
 
+AFTER DEPLOYING - CHECK
+-----------------------
+1. Applications page, pick a project with locked contracted rates.
+2. Create an application. It should appear in the list with NO refresh.
+3. Delete a draft. It should vanish with NO refresh.
+4. Hide a PO in the materials picker - takes effect immediately.
 
-WHAT TO CHECK
--------------
-1. J244 Waungron should now read about -£4,060.21 in red, with a profit of
-   about -£794.69.
-2. Total WIP on the page will DROP by roughly the amount of any negative
-   projects that were being read as zero. That is a correction, not a loss.
-3. Look for any other project that has been reading exactly 0.00 with
-   adjustments entered against it - each one was hiding the same thing.
-
-THAT LAST POINT IS WORTH A MINUTE. Any project showing 0.00 WIP with
-adjustments against it has been under-reporting a write-down, and the monthly
-figures will have been overstated by the total of them.
+NOT FIXED, DELIBERATELY
+-----------------------
+'save' and 'submit' write the whole `apps` array back from the stale read.
+Same family, wider blast radius, and they return the updated row so the UI
+is correct today. Worth a narrow rewrite, but not blind and not at the same
+time as this.
