@@ -194,6 +194,16 @@ async function handler(req, res) {
               // When the money is actually due. Off the application itself, which beats
               // any forecast payment term - it is the contractual date.
               dueDate: a.finalDate || a.paymentDate || '',
+              // WHEN THIS APPLICATION WAS RAISED, as a timestamp.
+              //
+              // The "forecast predates an application" check needs to compare like with
+              // like: when was it raised, against when was the forecast last saved. It
+              // was reading a.createdAt, which this feed never sent, and falling back to
+              // endDate - the VALUATION date. Valuations are usually month end and so
+              // often in the FUTURE, which made "raised since you saved" permanently
+              // true and the warning impossible to clear by saving.
+              sentAt: a.sentAt || 0,
+              createdAt: a.createdAt || 0,
               thisCert,
               thisCertGross,
               // Cumulative gross after this application - what the NEXT certificate has

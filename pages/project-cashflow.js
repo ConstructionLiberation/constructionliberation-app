@@ -195,8 +195,15 @@ export default function ProjectCashflow() {
       const apps = (xid && appActuals[xid]) || []
       const reasons = []
       // Latest application, by the date it was created or its period end.
+      // WHEN IT WAS RAISED, not what period it values. These are different dates and
+      // conflating them is why this warning could not be cleared: a month-end valuation
+      // is frequently in the future, so it always beat "when did you last save".
+      //
+      // endDate survives only as a fallback for records predating sentAt, and is clamped
+      // to now so a future valuation date can never win.
       const lastApp = apps.reduce((m, a) => {
-        const t = a.createdAt || (a.endDate ? Date.parse(a.endDate) : 0)
+        const t = a.sentAt || a.createdAt
+          || (a.endDate ? Math.min(Date.parse(a.endDate) || 0, Date.now()) : 0)
         return t > (m.t || 0) ? { t, a } : m
       }, {})
       const newestSave = (list || []).reduce((m, f) => Math.max(m, f.updatedAt || f.createdAt || 0), 0)
