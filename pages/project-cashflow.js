@@ -49,6 +49,12 @@ export default function ProjectCashflow() {
   const [modal, setModal] = useState(null)           // { projectKey, projectName, xeroId, from, to }
   const [hypCounts, setHypCounts] = useState({})     // projectKey -> number of saved hyp apps
   const [allForecasts, setAllForecasts] = useState({}) // projectKey -> forecast apps[] (gantt bands)
+  const [dashProjects, setDashProjects] = useState([])  // the Project Financials register, from Xero
+  const [hiddenProjects, setHiddenProjects] = useState([])
+  const [manual, setManual] = useState([])              // projects added by hand
+  const [addOpen, setAddOpen] = useState(false)
+  const [addDraft, setAddDraft] = useState({ name: '', customer: '' })
+  const [rowMsg, setRowMsg] = useState('')
   const [appActuals, setAppActuals] = useState({})           // xeroId -> real applications[]
   const [retention, setRetention] = useState([])       // retention tracker entries
   const dragging = useRef(false)
@@ -79,14 +85,34 @@ export default function ProjectCashflow() {
         }
       }
       setXeroMap(m); setProjectNames(nm); setRetFin(rf)
+      setDashProjects(Array.isArray(d.projects) ? d.projects : [])
     }).catch(() => {})
+    // THE SAME HIDE LIST PROJECT FINANCIALS USES, not a second one. A project hidden
+    // there is hidden here, and one list means they cannot drift.
+    fetch('/api/hidden-projects').then(r => r.json())
+      .then(d => setHiddenProjects(Array.isArray(d.hidden) ? d.hidden : [])).catch(() => {})
     loadAllForecasts()
     fetch('/api/retention').then(r => r.json()).then(d => setRetention(d.entries || [])).catch(() => {})
   }, [])
 
+  async function manualPost(body) {
+    setRowMsg('')
+    try {
+      const d = await fetch('/api/project-cashflow', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        // projectKey is required by the handler for every action; the manual ones do
+        // not use it, so a placeholder keeps the guard honest rather than loosening it.
+        body: JSON.stringify({ projectKey: body.key || 'manual', ...body }),
+      }).then(r => r.json())
+      if (d.error) { setRowMsg(d.error); return null }
+      if (Array.isArray(d.manual)) setManual(d.manual)
+      return d
+    } catch (e) { setRowMsg(e.message || 'Failed'); return null }
+  }
+
   function loadAllForecasts() {
     fetch('/api/project-cashflow?all=1').then(r => r.json())
-      .then(d => { setAllForecasts(d.all || {}); setAppActuals(d.actuals || {}) }).catch(() => {})
+      .then(d => { setAllForecasts(d.all || {}); setAppActuals(d.actuals || {}); setManual(Array.isArray(d.manual) ? d.manual : []) }).catch(() => {})
   }
 
   useEffect(() => {
@@ -243,6 +269,15 @@ export default function ProjectCashflow() {
   }, [xeroMap])
   const labelOfXeroId = (xid) => projectNames[String(xid)] || jobNoOfXeroId[String(xid)] || String(xid).slice(0, 8)
 
+  // Hand-added projects, by key. Built here rather than read off allRows because this
+  // memo runs before the row lists exist - and without it a negotiated row labels
+  // itself with the raw generated id, which names nothing to anybody.
+  const manualNames = useMemo(() => {
+    const out = {}
+    for (const m of (manual || [])) out[m.key] = m.name || ''
+    return out
+  }, [manual])
+
   const cashByDay = useMemo(() => {
     // FOCUS ON ONE PROJECT. Click a forecast bar and the horizontal rows above show only
     // that project's money - sales in, retention in, labour out, materials out - so you
@@ -320,7 +355,7 @@ export default function ProjectCashflow() {
       // a live project. A negotiated one has no Xero record, so its key is all there is.
       const fcLabel = pk.startsWith('L:')
         ? labelOfXeroId(xeroMap[pk.slice(2)] || '') || pk.slice(2)
-        : `${pk.slice(2)} (negotiated)`
+        : `${manualNames[pk] || pk.slice(2)} (negotiated)`
       if (!keep(pk)) continue
       for (const fc of (list || [])) {
         // SUPERSEDED BY A REAL APPLICATION - SALES ONLY.
@@ -377,7 +412,7 @@ export default function ProjectCashflow() {
     // month called "__detai" carrying every figure twice.
     Object.defineProperty(map, '__detail', { value: detail, enumerable: false })
     return map
-  }, [allForecasts, retention, appActuals, supersededIds, jobNoOfXeroId, projectNames, xeroMap, retFin, focusKey])
+  }, [allForecasts, retention, appActuals, supersededIds, jobNoOfXeroId, projectNames, xeroMap, retFin, focusKey, manualNames])
 
   const shift = (deltaWeeks) => setAnchorMonday(m => mondayOf(addDays(m, deltaWeeks * 7)))
 
@@ -393,10 +428,48 @@ export default function ProjectCashflow() {
     )
   }
 
-  const live = (data.projects || []).filter(p => p.type === 'live')
-  const negotiated = (data.projects || []).filter(p => p.type === 'negotiated')
   const allocations = data.allocations || {}
   const metaAll = data.meta || {}
+
+  // WHERE THE PROJECT LIST COMES FROM.
+  //
+  // Xero, through the same register Project Financials reads - not the Operations
+  // planner. A job could be set up in Xero and commercial and never exist in Ops, and
+  // it then had no row here at all; an old job left active in Ops sat here forever.
+  // Neither was visible as a fault, because a missing row looks like nothing.
+  //
+  // Hidden is the SHARED hide list, so pruning a dead job on Project Financials prunes
+  // it here too.
+  //
+  // The planner is still read, but only to SHADE the rows - who is on site, and the
+  // planned start. A project the planner has never heard of simply gets no shading,
+  // which is exactly what a Commercial-only customer would see.
+  const planByKey = {}
+  for (const p of (data.projects || [])) planByKey[p.key] = p
+
+  const hideSet = new Set((hiddenProjects || []).map(String))
+  const live = (dashProjects || [])
+    .filter(p => p && p.jobNo && !hideSet.has(String(p.xeroId)))
+    .map(p => {
+      const key = `L:${p.jobNo}`
+      const fromPlan = planByKey[key] || {}
+      return {
+        key, type: 'live',
+        projectNo: String(p.jobNo),
+        name: p.name || '',
+        customer: p.customer || fromPlan.customer || '',
+        location: fromPlan.location || '',
+      }
+    })
+    .sort((a, b) => String(b.projectNo).localeCompare(String(a.projectNo), undefined, { numeric: true }))
+
+  // Added by hand. No longer every deal sitting at Negotiating in the CRM - a stage
+  // change used to move the cash flow underneath you.
+  const negotiated = (manual || []).map(m => ({
+    key: m.key, type: 'negotiated', projectNo: '', name: m.name || '', customer: m.customer || '', location: '',
+  }))
+
+  const allRows = [...live, ...negotiated]
 
   const countOnDay = (p, dateKey) => cellCount((allocations[p.key] || {})[dateKey])
 
@@ -421,11 +494,11 @@ export default function ProjectCashflow() {
     for (let dd = new Date(parseISO(lo)); dd <= parseISO(hi); dd = addDays(dd, 1)) dates.add(iso(dd))
     setSel({ key, dates })
   }
-  const projName = (k) => { const p = (data.projects || []).find(x => x.key === k); return p ? `${p.projectNo ? p.projectNo + ' — ' : ''}${p.name}` : k }
+  const projName = (k) => { const p = allRows.find(x => x.key === k); return p ? `${p.projectNo ? p.projectNo + ' — ' : ''}${p.name}` : k }
 
   // Open a saved forecast for viewing/editing.
   function openForecast(projectKey, fc) {
-    const p = (data.projects || []).find(x => x.key === projectKey)
+    const p = allRows.find(x => x.key === projectKey)
     const xeroId = p && p.projectNo ? (xeroMap[String(p.projectNo)] || '') : ''
     setModal({ projectKey, projectName: projName(projectKey), xeroId, from: fc.from, to: fc.to, editId: fc.id })
   }
@@ -474,7 +547,7 @@ export default function ProjectCashflow() {
               <button style={{ background: '#ca8a04', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
                 title="Build a forecasted application for this period"
                 onClick={() => {
-                  const p = (data.projects || []).find(x => x.key === sel.key)
+                  const p = allRows.find(x => x.key === sel.key)
                   const xeroId = p && p.projectNo ? (xeroMap[String(p.projectNo)] || '') : ''
                   setModal({ projectKey: sel.key, projectName: projName(sel.key), xeroId, from: selRange.from, to: selRange.to })
                 }}>Build application →</button>
@@ -523,7 +596,7 @@ export default function ProjectCashflow() {
                   <div style={{ position: 'sticky', left: 0, zIndex: 6, background: '#eef4ff', border: '1px solid #c7d7f5', borderRadius: 8, padding: '6px 12px', margin: '0 0 6px', fontSize: 12, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 10, width: 'fit-content' }}>
                     <strong>Showing {focusKey.startsWith('L:')
                       ? (labelOfXeroId(Object.keys(jobNoOfXeroId).find(x => jobNoOfXeroId[x] === focusKey.slice(2)) || '') || focusKey.slice(2))
-                      : `${focusKey.slice(2)} (negotiated)`} only</strong>
+                      : `${manualNames[focusKey] || focusKey.slice(2)} (negotiated)`} only</strong>
                     <span style={{ color: '#5b7085' }}>Sales, retention, labour and materials below are this project alone.</span>
                     <button onClick={() => setFocusKey(null)} style={{ background: '#fff', border: '1px solid #c7d7f5', borderRadius: 6, padding: '2px 10px', fontSize: 11.5, cursor: 'pointer' }}>Show all</button>
                   </div>
@@ -660,8 +733,39 @@ export default function ProjectCashflow() {
                 {live.map(p => <Row key={p.key} p={p} days={days} weekGroups={weekGroups} view={view} data={data} meta={metaAll[p.key] || {}}
                   countOnDay={countOnDay} sel={sel} onCellDown={cellDown} onCellEnter={cellEnter} todayKey={todayKey} forecasts={allForecasts[p.key] || []} superseded={supersededIds} stale={needsUpdate[p.key] || null} focusKey={focusKey} onFocus={setFocusKey} onView={openForecast} />)}
 
-                {negotiated.length > 0 && <SectionLabel>Negotiated projects</SectionLabel>}
+                <SectionLabel>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span>Negotiated projects</span>
+                    <button onClick={() => { setAddOpen(o => !o); setRowMsg('') }}
+                      style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '3px 9px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: '#555' }}>
+                      {addOpen ? 'Cancel' : '+ Add project'}
+                    </button>
+                  </span>
+                </SectionLabel>
+                {addOpen && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', background: '#fffdf5', borderBottom: '1px solid #f2f2f2', flexWrap: 'wrap' }}>
+                    <input autoFocus value={addDraft.name} onChange={e => setAddDraft(d => ({ ...d, name: e.target.value }))}
+                      placeholder="Project name"
+                      style={{ padding: '6px 9px', fontSize: 12.5, border: '1px solid #ddd', borderRadius: 6, fontFamily: 'inherit', minWidth: 220 }} />
+                    <input value={addDraft.customer} onChange={e => setAddDraft(d => ({ ...d, customer: e.target.value }))}
+                      placeholder="Customer (optional)"
+                      style={{ padding: '6px 9px', fontSize: 12.5, border: '1px solid #ddd', borderRadius: 6, fontFamily: 'inherit', minWidth: 180 }} />
+                    <button
+                      onClick={async () => {
+                        if (!addDraft.name.trim()) { setRowMsg('Give the project a name.'); return }
+                        const d = await manualPost({ action: 'add-manual', name: addDraft.name, customer: addDraft.customer })
+                        if (d) { setAddDraft({ name: '', customer: '' }); setAddOpen(false) }
+                      }}
+                      style={{ background: '#1c704f', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      Add
+                    </button>
+                  </div>
+                )}
+                {rowMsg && (
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '7px 11px', fontSize: 12.5 }}>{rowMsg}</div>
+                )}
                 {negotiated.map(p => <Row key={p.key} p={p} days={days} weekGroups={weekGroups} view={view} data={data} meta={metaAll[p.key] || {}}
+                  onRemove={() => manualPost({ action: 'remove-manual', key: p.key })}
                   countOnDay={countOnDay} sel={sel} onCellDown={cellDown} onCellEnter={cellEnter} todayKey={todayKey} forecasts={allForecasts[p.key] || []} superseded={supersededIds} stale={needsUpdate[p.key] || null} focusKey={focusKey} onFocus={setFocusKey} onView={openForecast} neg />)}
               </div>
             </div>
@@ -678,7 +782,7 @@ export default function ProjectCashflow() {
   )
 }
 
-function Row({ p, days, weekGroups, view, data, meta, countOnDay, sel, onCellDown, onCellEnter, todayKey, forecasts = [], superseded, stale, focusKey, onFocus, onView, neg }) {
+function Row({ p, days, weekGroups, view, data, meta, countOnDay, sel, onCellDown, onCellEnter, todayKey, forecasts = [], superseded, stale, focusKey, onFocus, onView, neg, onRemove }) {
   const complD = parseISO(meta.completionDate || '')
   const projDays = (data.allocations || {})[p.key] || {}
   let plannedStart = ''
@@ -694,8 +798,17 @@ function Row({ p, days, weekGroups, view, data, meta, countOnDay, sel, onCellDow
   return (
     <div style={{ display: 'flex', borderBottom: '1px solid #f2f2f2', minHeight: ROW_H, alignItems: 'stretch' }}>
       <Frozen w={NAME_W} style={{ background: neg ? '#fbfaf8' : '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: neg ? '#8a6d1a' : INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: NAME_W - 16 }}>
-          {p.projectNo ? `${p.projectNo} — ` : ''}{p.name}
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: neg ? '#8a6d1a' : INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: NAME_W - 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.projectNo ? `${p.projectNo} — ` : ''}{p.name}</span>
+          {/* Only on hand-added rows. A Xero project is removed by hiding it on Project
+              Financials, which is the one hide list. The server refuses this while the
+              project still has forecasts rather than orphaning them. */}
+          {onRemove && (
+            <button onClick={onRemove} title="Remove this project"
+              style={{ background: 'none', border: 'none', color: '#bbb', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0, fontFamily: 'inherit' }}>
+              &times;
+            </button>
+          )}
         </div>
         {/* The bar going dark red says something is wrong; this says WHAT and that it is
             on you to fix. A superseded period disappearing silently is how a plan quietly

@@ -17,6 +17,67 @@ const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
 
 const HKEY = (key) => `cashflow:hyp-apps:${key}`
 
+// PROJECTS ADDED BY HAND.
+//
+// The forecast used to take its negotiated rows straight from the CRM - every deal at
+// the Negotiating stage appeared, whether or not anybody wanted to forecast it, and a
+// deal moving stage silently changed the cash flow. Now they are added deliberately.
+//
+// Kept under the "N:" prefix rather than a new one, so every forecast already saved
+// against a negotiated project keeps its key and its history. The prefix now means
+// "not a Xero project" rather than "from the CRM".
+const MANUAL_KEY = 'cashflow:manual-projects'
+
+// ONE-TIME SEED, so switching over does not orphan work already done.
+//
+// Runs only when the store has never existed - null, not an empty array. An empty
+// array is a deliberate "I removed them all" and must not be re-filled. After this
+// has run once the CRM is never read here again.
+async function readManual(redis) {
+  let list = null
+  try { list = await redis.get(MANUAL_KEY) } catch { list = null }
+  if (Array.isArray(list)) return list
+
+  const seeded = []
+  try {
+    // Which negotiated projects actually have forecasts against them - those are the
+    // only ones worth carrying over. A deal nobody forecast is not lost by being left.
+    const keys = []
+    let cursor = 0
+    do {
+      const [next, batch] = await redis.scan(cursor, { match: 'cashflow:hyp-apps:N:*', count: 200 })
+      cursor = Number(next)
+      for (const k of (batch || [])) keys.push(k)
+    } while (cursor)
+
+    const names = {}
+    try {
+      const deals = (await redis.get('crm:deals')) || []
+      const flat = Array.isArray(deals) ? deals : []
+      for (const d of flat) {
+        if (d && d.id != null) names[String(d.id)] = { name: d.title || '', customer: d.organizationName || '' }
+      }
+    } catch {}
+
+    for (const k of keys) {
+      const key = k.replace('cashflow:hyp-apps:', '')
+      const forecasts = (await redis.get(k).catch(() => [])) || []
+      if (!Array.isArray(forecasts) || !forecasts.length) continue
+      const dealId = key.slice(2)
+      const hit = names[String(dealId)] || {}
+      seeded.push({
+        key,
+        name: hit.name || `Negotiated ${dealId}`,
+        customer: hit.customer || '',
+        addedAt: Date.now(),
+        seeded: true,
+      })
+    }
+    await redis.set(MANUAL_KEY, seeded)
+  } catch { return [] }
+  return seeded
+}
+
 // Resolve a project's contracted rates from the right store:
 //  - Negotiated ("N:<dealId>")  -> crates:negotiated:<dealId>
 //  - Live/draft ("L:<projectNo>") -> the project record is keyed by Xero id, which the
@@ -341,7 +402,9 @@ async function handler(req, res) {
         }
       }
 
-      return res.json({ all: out, actuals })
+      let manual = []
+      try { manual = await readManual(redis) } catch { manual = [] }
+      return res.json({ all: out, actuals, manual })
     }
     if (!projectKey) return res.status(400).json({ error: 'projectKey required' })
     // One read of the project record, used for both the rates and the applications.
@@ -410,6 +473,44 @@ async function handler(req, res) {
       if (!Array.isArray(hypApps)) return res.status(400).json({ error: 'hypApps array required' })
       await redis.set(HKEY(projectKey), hypApps)
       return res.json({ ok: true, hypApps })
+    }
+
+    if (action === 'add-manual') {
+      const name = String(req.body?.name || '').trim().slice(0, 120)
+      const customer = String(req.body?.customer || '').trim().slice(0, 120)
+      if (!name) return res.status(400).json({ error: 'Give the project a name.' })
+      const list = await readManual(redis)
+      // Own id, not a CRM one. Nothing here points back at a deal any more.
+      const key = `N:m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+      list.push({ key, name, customer, addedAt: Date.now() })
+      await redis.set(MANUAL_KEY, list)
+      return res.json({ ok: true, manual: list, key })
+    }
+
+    if (action === 'remove-manual') {
+      const key = String(req.body?.key || '')
+      if (!key) return res.status(400).json({ error: 'Missing key' })
+      // REFUSES WHILE FORECASTS EXIST.
+      //
+      // Removing the row would leave cashflow:hyp-apps:<key> in Redis with nothing on
+      // screen pointing at it - still counted by Business Financials, invisible here.
+      // Delete the forecasts first, deliberately, or keep the project.
+      const fc = (await redis.get(HKEY(key)).catch(() => [])) || []
+      if (Array.isArray(fc) && fc.length) {
+        return res.status(400).json({ error: `That project still has ${fc.length} forecast${fc.length === 1 ? '' : 's'}. Delete those first.` })
+      }
+      const list = (await readManual(redis)).filter(m => m.key !== key)
+      await redis.set(MANUAL_KEY, list)
+      return res.json({ ok: true, manual: list })
+    }
+
+    if (action === 'rename-manual') {
+      const key = String(req.body?.key || '')
+      const name = String(req.body?.name || '').trim().slice(0, 120)
+      if (!key || !name) return res.status(400).json({ error: 'Missing key or name' })
+      const list = (await readManual(redis)).map(m => m.key === key ? { ...m, name, customer: String(req.body?.customer ?? m.customer ?? '').trim().slice(0, 120) } : m)
+      await redis.set(MANUAL_KEY, list)
+      return res.json({ ok: true, manual: list })
     }
 
     if (action === 'delete-hyp') {

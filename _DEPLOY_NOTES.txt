@@ -1,41 +1,60 @@
-pkg912 - WIP does not load for the bookkeeper
-==============================================
+pkg913 - Cash flow project list comes from Xero, and negotiated projects are added by hand
+===========================================================================================
 
 REPLACE (2 files, both existing - no new files to create):
 
-  pages/wip.js
-  pages/api/wip.js
+  pages/project-cashflow.js
+  pages/api/project-cashflow.js
 
 NOTE: same filename in two folders. Both must be replaced.
 
 
-WHAT WAS WRONG
---------------
-/api/wip allowed post-contract, management and admin. Not accounts.
+CHANGE 1 - the live list is now the Project Financials register
+---------------------------------------------------------------
+Was: Operations projects with status active or draft.
+Now: every Xero project the dashboard returns, minus the SHARED hide list
+     (config:hidden-projects - the same one Project Financials uses).
 
-The PAGE guard already allowed accounts for the read-only embed - it says so
-in a comment - and wip-pdf allowed accounts too. Only the endpoint that
-serves the actual figures did not. That is the signature of a role list
-copied from a commercial endpoint rather than chosen.
+So a project set up in Xero and commercial but never created in Ops now has
+a row; an old job left active in Ops no longer sits here forever. Hide a
+dead job on Project Financials and it goes from both.
 
-So the bookkeeper opened Bookkeeping > WIP, passed the page guard, and the
-figures came back 403. The page swallowed it in a bare `catch {}` and
-rendered an empty table, silently - which is why it looked like "WIP does
-not work for accounts" rather than "accounts is not on the allowlist".
+NO KEY CHANGE AND NO MIGRATION. Forecast keys were already "L:<jobNo>" and
+the page already joined job numbers to Xero ids to resolve names - that join
+has been load-bearing all along, which is why the names on this page have
+always been right.
+
+The planner is still read, but only to SHADE rows - who is on site, planned
+start. A project the planner has never heard of gets no shading and is
+otherwise normal.
 
 
-WHAT CHANGED
-------------
-1. /api/wip now allows accounts.
-2. The page checks res.ok and shows why it is empty, in the embed as well as
-   the full page. A blank frame inside somebody else's tab is the worst place
-   for a silent failure.
+CHANGE 2 - negotiated projects are added by hand
+-------------------------------------------------
+Was: every CRM deal at the Negotiating stage, automatically. A deal changing
+     stage silently changed the cash flow.
+Now: "+ Add project" next to the Negotiated heading. Name, optional customer.
+     An x on each hand-added row removes it.
 
-wip-lock still does NOT allow accounts, deliberately. Reading the month is
-not signing it off.
+Removing REFUSES while forecasts exist against it, rather than leaving
+cashflow:hyp-apps:<key> in Redis with nothing on screen pointing at it -
+invisible here, still counted by Business Financials.
+
+ONE-TIME SEED SO NOTHING IS LOST. The first time the new code runs it scans
+for negotiated forecasts that already exist, names them from the CRM, and
+writes them into the new store. After that the CRM is never read here again.
+It only runs when the store has never existed - an empty list is a
+deliberate "I removed them all" and is not re-filled.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-Have the bookkeeper open Bookkeeping > WIP. Figures should load.
-They should NOT be able to edit adjustments or sign the month off.
+1. The live list. Expect MORE projects than before, possibly many more -
+   every non-hidden Xero project now appears, including completed ones.
+   Prune with the hide list on Project Financials, not here.
+2. Your existing negotiated projects should still be there, under Negotiated,
+   with their forecasts intact. THIS IS THE ONE TO CHECK FIRST.
+3. Add a project, confirm it appears, save a forecast against it.
+4. Try to remove a project that has a forecast - it should refuse and say so.
+5. Any project you were forecasting that has now vanished means its job
+   number is hidden, or it is not in Xero. Tell me which one.
