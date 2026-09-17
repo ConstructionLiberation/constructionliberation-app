@@ -1,4 +1,4 @@
-import { fromEmail } from '../../../lib/tenantSettings'
+import { fromEmail, baseUrl } from '../../../lib/tenantSettings'
 import { currentTenantId } from '../../../lib/tenantContext'
 import forEachTenant from '../../../lib/forEachTenant'
 import { getAllProjectSettings, saveProject, getProject, get } from '../../../lib/db'
@@ -28,9 +28,24 @@ async function handler(req, res) {
 
     let cache = []
     try { cache = (await get('dashboard:cache')) || [] } catch {}
+    let registry = {}
+    try { registry = (await get('projects:registry')) || {} } catch {}
+    if (!registry || typeof registry !== 'object' || Array.isArray(registry)) registry = {}
 
-    const proto = req.headers['x-forwarded-proto'] || 'https'
-    const origin = `${proto}://${req.headers.host}`
+    // THE CUSTOMER'S OWN ADDRESS, NOT THE HOST THIS REQUEST ARRIVED ON.
+    //
+    // A cron is invoked by Vercel against the DEPLOYMENT url - rock-3k4sdnhn9-rock-
+    // roofing.vercel.app - not the custom domain. Vercel puts Deployment Protection in
+    // front of those, so every instruct link this job has ever sent led a customer to a
+    // Vercel sign-in page. Before the app ran at all, so nothing here could help them.
+    //
+    // The first send works because a person clicks it on app.rockroofing.co.uk. Only the
+    // chase was broken, for every customer, since this job was written.
+    //
+    // baseUrl() resolves the tenant's own first host and was built for exactly this -
+    // its comment says every link in an outgoing email must come from the customer's
+    // address, never from the request. The design emails already use it.
+    const origin = baseUrl()
     const RESEND_KEY = process.env.RESEND_API_KEY
     const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
 
@@ -50,8 +65,26 @@ async function handler(req, res) {
         const dueAt = addWorkingDays(new Date(b.firstSentAt), 3).getTime()
         if (!force && now < dueAt) { out.skipped++; continue }
 
+        // WHICH PROJECT THIS IS - WITH SOMEWHERE TO FALL BACK TO.
+        //
+        // dashboard:cache has a 4-hour TTL, so a cron running on a cold cache found
+        // nothing and sent "Reminder: Variation V03 - " with the project name simply
+        // missing, to a customer. Nothing errored; the label was just empty.
+        //
+        // projects:registry is our own permanent record of every project Xero has
+        // returned, so it is there whether or not the cache is warm. Settings come last
+        // because they are keyed by tracking option id OR job number, so the id we have
+        // may be either.
         const row = Array.isArray(cache) ? cache.find(p => String(p.xeroId) === String(projectId)) : null
-        const project = { ...proj, jobNo: row?.jobNo || '', name: row?.name || '' }
+        let jobNo = row?.jobNo || ''
+        let name = row?.name || ''
+        if (!jobNo && !name) {
+          const reg = registry[String(projectId)]
+            || Object.values(registry).find(r => r && String(r.jobNo) === String(projectId))
+          jobNo = reg?.jobNo || proj?.jobNo || ''
+          name = reg?.name || proj?.name || proj?.projectName || ''
+        }
+        const project = { ...proj, jobNo, name }
         const label = projectLabel(project.jobNo, project.name)
         const value = (parseFloat(v.materials) || 0) + (parseFloat(v.labour) || 0) + (parseFloat(v.profit) || 0)
         const money = '£' + value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
