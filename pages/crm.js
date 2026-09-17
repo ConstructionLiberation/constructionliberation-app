@@ -1999,7 +1999,7 @@ function DealSearch({ deals, currentId, onOpenDeal }) {
   );
 }
 
-function DealView({ deal, allDeals, orgsData = [], contactsData = [], today, schema, me, users, onSetLostReason, onBack, onOpenDeal, onMove, onSetStatus, onAddNote, onCommentNote, onEditComment, onDeleteComment, onEditHistory, onEditHistoryActivity, onDeleteHistory, onPinHistory, onRenameDeal, onReopenActivity, onAddActivity, onEditActivity, onCompleteActivity, onDeleteActivity, onEditField, onManageFields, onDeleteDeal }) {
+function DealView({ deal, allDeals, orgsData = [], contactsData = [], today, schema, me, users, onSetLostReason, onBack, onOpenDeal, onMove, onSetStatus, onAddNote, onCommentNote, onEditComment, onDeleteComment, onEditHistory, onEditHistoryActivity, onDeleteHistory, onPinHistory, onRenameDeal, onReopenActivity, onAddActivity, onEditActivity, onCompleteActivity, onDeleteActivity, onEditField, onClearContactField, onManageFields, onDeleteDeal }) {
   const [mapFor, setMapFor] = useState('');
   const [orgHistoryFor, setOrgHistoryFor] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -2086,6 +2086,19 @@ function DealView({ deal, allDeals, orgsData = [], contactsData = [], today, sch
     if (v != null && String(v).trim() !== '' && String(v).trim() !== '-') return v;
     return dealContact?.[key] ?? '';
   };
+  // SAVING A CUSTOMER CONTACT FIELD.
+  //
+  // Setting a value writes to the deal, as before. CLEARING one also clears it on the
+  // contact record - otherwise contactVal falls back to the contact and puts the old
+  // value straight back on screen, which reads as "delete does not work".
+  const savePersonField = (key, val) => {
+    const blank = val == null || String(val).trim() === '' || String(val).trim() === '-';
+    onEditField(deal.id, key, blank ? '' : val);
+    if (blank && onClearContactField && dealContact && String(dealContact[key] ?? '').trim() !== '') {
+      onClearContactField(dealContact.name, key);
+    }
+  };
+
   const orgVal = (key) => {
     const v = deal.fields?.[key];
     if (v != null && String(v).trim() !== '' && String(v).trim() !== '-') return v;
@@ -2251,7 +2264,7 @@ function DealView({ deal, allDeals, orgsData = [], contactsData = [], today, sch
             {groupFields('person').filter((f) => f.key !== 'contact_person').map((f) => (
               <div key={f.key + f.label} style={sideRow}>
                 <span style={sideKey}>{f.label}</span>
-                <EditableField field={f} value={contactVal(f.key)} onSave={(k, v) => onEditField(deal.id, k, v)} users={users} />
+                <EditableField field={f} value={contactVal(f.key)} onSave={(k, v) => savePersonField(k, v)} users={users} />
               </div>
             ))}
             {dealContact && <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>Blank fields filled from the contact record.</div>}
@@ -3888,6 +3901,28 @@ function CRMPageInner() {
     } catch { /* as above */ }
   }
 
+  // CLEAR ONE FIELD ON THE CONTACT RECORD.
+  //
+  // Deleting a phone number on a deal has to reach the contact, because the deal panel
+  // falls back to the contact whenever its own copy is blank - so clearing it locally
+  // only ever redisplayed the same number. Blanking it on the person is what the user
+  // means by deleting it, and it is the person's phone number, not the deal's.
+  //
+  // upsertContact cannot do this: it skips blanks on purpose so a half-filled form
+  // cannot wipe imported detail. Hence a separate, explicit action.
+  async function clearContactField(name, field) {
+    const n = String(name || '').trim();
+    if (!n || !field) return;
+    setContactsData((prev) => prev.map((c) =>
+      String(c.name || '').trim().toLowerCase() === n.toLowerCase() ? { ...c, [field]: '' } : c));
+    try {
+      await fetch('/api/crm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear-contact-field', name: n, field }),
+      });
+    } catch { /* the on-screen list still updates; it re-syncs on the next load */ }
+  }
+
   // Delete a project outright. Removes the deal AND its activities and notes, which live in
   // their own per-deal stores - otherwise those would be left behind as orphans that
   // nothing can ever read or clear.
@@ -4226,7 +4261,7 @@ function CRMPageInner() {
         <FontLoader />
         {confetti && <Confetti onDone={() => setConfetti(false)} />}
         {showFieldMgr && <FieldManager schema={schema} onClose={() => setShowFieldMgr(false)} onAdd={addField} onRemove={removeField} />}
-        <DealView deal={live} allDeals={deals} orgsData={orgsData} contactsData={contactsData} onSetLostReason={setLostReason} today={today} schema={schema} me={me} users={users} onBack={closeDeal} onOpenDeal={openDealById} onMove={moveDeal} onSetStatus={setStatus} onAddNote={addNote} onCommentNote={commentNote} onEditComment={editComment} onDeleteComment={deleteComment} onEditHistory={editHistory} onEditHistoryActivity={editHistoryActivity} onDeleteHistory={deleteHistory} onPinHistory={pinHistory} onRenameDeal={renameDeal} onReopenActivity={reopenActivity} onAddActivity={addActivity} onEditActivity={editActivity} onCompleteActivity={completeActivity} onDeleteActivity={deleteActivity} onEditField={editField} onManageFields={() => setShowFieldMgr(true)} onDeleteDeal={deleteDeal} />
+        <DealView deal={live} allDeals={deals} orgsData={orgsData} contactsData={contactsData} onSetLostReason={setLostReason} today={today} schema={schema} me={me} users={users} onBack={closeDeal} onOpenDeal={openDealById} onMove={moveDeal} onSetStatus={setStatus} onAddNote={addNote} onCommentNote={commentNote} onEditComment={editComment} onDeleteComment={deleteComment} onEditHistory={editHistory} onEditHistoryActivity={editHistoryActivity} onDeleteHistory={deleteHistory} onPinHistory={pinHistory} onRenameDeal={renameDeal} onReopenActivity={reopenActivity} onAddActivity={addActivity} onEditActivity={editActivity} onCompleteActivity={completeActivity} onDeleteActivity={deleteActivity} onEditField={editField} onClearContactField={clearContactField} onManageFields={() => setShowFieldMgr(true)} onDeleteDeal={deleteDeal} />
       </div>
     );
   }

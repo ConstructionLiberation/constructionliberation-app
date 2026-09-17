@@ -250,6 +250,34 @@ async function handler(req, res) {
       return res.json({ ok: true, list })
     }
 
+    // CLEARING ONE FIELD ON A CONTACT OR AN ORGANISATION.
+    //
+    // Its own action, deliberately, because upsert REFUSES to let a blank overwrite
+    // something already recorded - and that guard is right: a half-filled project form
+    // must not wipe details that came from the import. But it also made a deliberate
+    // deletion impossible. The user cleared the phone number, the merge skipped the
+    // blank, and it came straight back.
+    //
+    // So: upsert still never blanks anything by accident, and this says "blank it" in
+    // so many words. One named field at a time - never a whole record.
+    if (body.action === 'clear-contact-field' || body.action === 'clear-org-field') {
+      const isOrg = body.action === 'clear-org-field'
+      const key = isOrg ? ORGS_KEY : CONTACTS_KEY
+      const name = String(body.name || '').trim()
+      const field = String(body.field || '').trim()
+      if (!name || !field) return res.status(400).json({ error: 'Name and field required' })
+      // The identity fields are what the record is found by. Blanking one orphans it.
+      if (['name', 'first_name', 'last_name'].includes(field)) {
+        return res.status(400).json({ error: 'That field identifies the record and cannot be cleared.' })
+      }
+      const list = Array.isArray(await get(key)) ? await get(key) : []
+      const i = list.findIndex(x => String(x?.name || '').trim().toLowerCase() === name.toLowerCase())
+      if (i < 0) return res.status(404).json({ error: 'Not found' })
+      list[i] = { ...list[i], [field]: '' }
+      await set(key, list)
+      return res.json({ ok: true, list })
+    }
+
     // Store the rebuilt outstanding-activity list so the Activities tab does not have to
     // reconstruct it from hundreds of per-deal keys on every single page load.
     // ONE STORE FOR ACTIVITIES.

@@ -1,48 +1,67 @@
-pkg915 - Retention tracker: "Gross AFA" renamed to "Proj. Final Account"
-=========================================================================
+pkg916 - CRM: clearing a customer contact's phone number actually clears it
+============================================================================
 
-REPLACE (1 file, existing - no new files to create):
+REPLACE (2 files, both existing - no new files to create):
 
-  pages/retention.js
+  pages/crm.js
+  pages/api/crm.js
 
-DEPLOY AFTER pkg914, which renames the matching label on the Applications
-page and the PDF. Either order works, but together they are the change.
+NOTE: same filename in two folders. Both must be replaced.
 
 
-WHAT AND WHY
+WHAT WAS WRONG
+--------------
+The delete was working. The redisplay was putting it back.
+
+The Customer Contact panel falls back to the contact record whenever the
+deal's own copy is blank:
+
+    if (v != null && trim(v) !== '' && trim(v) !== '-') return v
+    return dealContact?.[key] ?? ''
+
+So clearing the phone wrote '' to the deal, that read as "nothing here",
+and the contact record's number went straight back on screen. There was no
+way to say "deliberately blank" - empty and cleared looked identical.
+
+Writing through to the contact would not have worked either: upsert-contact
+skips blanks on purpose, so a half-filled project form cannot wipe details
+that came from the import. That guard is right and stays.
+
+
+WHAT CHANGED
 ------------
-It was one figure under two names. "Gross AFA" on the tracker and "Proj.
-Final Account" on the Applications page are the same number on the same
-basis - measured contract sum plus variations at final value, before MCD.
+1. New API action, clear-contact-field: blanks ONE named field on ONE
+   contact. Explicit, so upsert keeps its guard. Refuses name, first_name
+   and last_name - those identify the record, and blanking one orphans it.
 
-Renamed everywhere it is visible: the column header, its tooltip, the
-"where it comes from" drill-down heading, the three rows inside it and the
-sentence that compares it to project details.
+2. Clearing a Customer Contact field on a deal now clears it on the contact
+   record as well. The phone belongs to the person, not the deal, so it goes
+   from every deal and from the Contacts page.
 
-The column NEXT to it is still "Final Account" and still means something
-different - that one is after MCD, and it is the figure retention is
-calculated on. Its tooltip now reads "Proj. Final Account less MCD" so the
-relationship between the two columns is stated on screen.
-
-
-IMPORTS STILL WORK
-------------------
-The CSV importer now accepts "Proj. Final Account", "Gross AFA" and
-"afaGross" for the same field. Spreadsheets already in circulation carry the
-old header, and an import that quietly reads null does not fail - it wipes
-the figure.
+Setting a value is unchanged - it still writes to the deal only.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Retention tracker: first money column reads "Proj. Final Account", same
-   figures as before. J178 should still show 351,649.77.
-2. Open the drill-down on a project and confirm nothing still says Gross AFA.
-3. Compare J178 against its application: Proj. Final Account should be the
-   same number on both pages. That is the point of the change.
+1. Open the deal, clear the phone on Dan Kearney. It should stay cleared,
+   with no refresh.
+2. Reload the page. Still cleared.
+3. Open another deal with the same contact - also cleared, which is the
+   point.
+4. Check the Contacts list - the number is gone there too.
+5. Type a new number on a deal. It saves as before.
 
 
-NOT CHANGED
------------
-Nothing calculates differently. Internal field names (afaGross) are
-untouched - renaming a stored key is a migration, and this is a label.
+FOUND WHILE IN HERE - NOT FIXED, DIFFERENT AREA
+------------------------------------------------
+pages/api/crm.js imports sendTestMention from lib/crmMentions.js.
+THAT FUNCTION DOES NOT EXIST - crmMentions exports six things and that is
+not one of them.
+
+SWC compiles a missing named import to undefined rather than failing, so it
+builds and deploys clean. But the "send test mention" button on
+pages/crm-scores.js calls action 'mention-test-send', which calls it, and
+that throws a 500 every time.
+
+Left out of this package deliberately - different area, and the fix needs a
+decision about what the test send should actually do.
