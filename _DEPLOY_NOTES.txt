@@ -1,81 +1,38 @@
-pkg924 - Variation chase emails sent customers to a Vercel login page
-======================================================================
+pkg925 - crm-daily-activities has failed every day since it was written
+=======================================================================
 
 REPLACE (1 file, existing - no new files to create):
 
-  pages/api/cron/variation-reminders.js
-
-Note the folder: pages/api/cron/
+  lib/crmDailyActivityEmail.js
 
 
-FAULT 1 - THE LINK (this is the one Jason hit)
------------------------------------------------
-The instruct link was built from the host the request arrived on:
+THE REAL FAULT
+--------------
+    ReferenceError: portalUrl is not defined
 
-    const origin = `${proto}://${req.headers.host}`
+buildEmail's third parameter was named `baseUrl`, which SHADOWED the
+imported baseUrl() at the top of the file. The template inside it referenced
+`portalUrl` - a name that exists in two other functions in that same file,
+but not in this one. And the caller passed `baseUrl` (the function) rather
+than `portalUrl` (the resolved string it had already worked out two lines
+earlier).
 
-A cron is invoked by Vercel against the DEPLOYMENT url, not your custom
-domain - which is why the link read:
+A half-finished rename, in both directions at once.
 
-    https://rock-3k4sdnhn9-rock-roofing.vercel.app/instruct/...
+It compiles. The import graph is clean. npm run build never executes it. It
+only fails when the function actually RUNS - which is once a day, at 06:00
+and 07:00 UTC.
 
-Vercel puts Deployment Protection in front of deployment urls, so the
-customer got a Vercel sign-in page. That happens BEFORE the app runs, so
-nothing in the portal could have helped him.
+So the CRM daily activity emails have NEVER been sent. Not once. pkg906
+fixed the heartbeat that was hiding this, which is why it is now surfacing
+as "last run failed" rather than silently succeeding.
 
-The first send has always worked, because a person clicks Send on
-app.rockroofing.co.uk. ONLY THE CHASE WAS BROKEN - for every customer, since
-this job was written.
-
-Now uses baseUrl() from lib/tenantSettings, which resolves the customer's own
-host. Its comment says exactly this: every link in an outgoing email is built
-from the customer's address, never from the request. The design emails
-already use it.
-
-
-FAULT 2 - THE MISSING PROJECT NAME
------------------------------------
-The same email said "Reminder: Variation V03 - " and "Following up on
-variation V03 for ,". The project name was blank.
-
-It reads dashboard:cache, which has a 4-hour TTL. A cron running on a cold
-cache found nothing and sent the email anyway with an empty label. Nothing
-errored.
-
-Now falls back to projects:registry - our own permanent record of every
-project Xero has returned, warm cache or not - and then to the project's own
-settings. Handles settings keyed by tracking option id OR job number, since
-either can be the key.
-
-
-IMMEDIATE, BEFORE OR AFTER DEPLOYING
--------------------------------------
-Jason's link works if the domain is swapped. Same token:
-
-https://app.rockroofing.co.uk/instruct/eyJwIjoiYmVmMTE3MzMtZDg3YS00NDNlLWI3ZTEtMTRkYTg2MmJiYjcyIiwidiI6IlYwMyIsImUiOiJqYXNvbkBiZHBjb25zdHJ1Y3Rpb24uY28udWsiLCJ0Ijoicm9jayIsImV4cCI6MTgwMDAwMzYwNzIzMn0.vzOEGyvFbkP-w4F6kDBYLpPQl_-BGOrh2_eceC3dNy8
+Worth asking Edita and anyone else expecting them to confirm they start
+arriving - that is the only proof.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-/api/cron/variation-reminders?dry=1 reports what it WOULD send without
-sending anything. It will not show the link, so to prove the fix, find a
-variation due a chase and use ?force=1 on one you are willing to email -
-or simply check the next real chase that goes out.
-
-The subject line should carry the job number and project name.
-
-
-STILL BROKEN, SAME SHAPE, NOT IN THIS PACKAGE
-----------------------------------------------
-Every emailed link built from req.headers.host has this fault whenever a cron
-generates it. Human-initiated sends are fine because they come from the right
-domain. The list: application-send, pre-start-send, pre-start-notify-send,
-issue-notify, issue-send-customer, rams-approvals, portal-auth (password
-resets), ops-scorecards, bookkeeping-inquery.
-
-Worth a package of its own. Not bundled here because this one is a live
-customer problem and should go out on its own.
-
-A related one worth knowing: PDFs built by crons fetch the logo from the same
-deployment url, and Deployment Protection blocks that too - so cron-generated
-PDFs may be missing the logo. Cosmetic, same cause.
+Tomorrow morning: /api/admin/cron-health should show crm-daily-activities
+with a real duration and no failure, and the people with activities due
+should have an email.
