@@ -14,7 +14,15 @@ const prevMonthKey = (mk) => { const [y, m] = mk.split('-').map(Number); const d
 // valuation date → end of month), credit notes against the project, this month's
 // manual adjustments, and last month's adjustments (for information only).
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  // ACCOUNTS INCLUDED - the Bookkeeping page embeds this page read-only, and the
+  // embed's own guard has always allowed accounts. This endpoint did not, so the
+  // bookkeeper loaded the page and then got a 403 for the figures: a blank table and
+  // no explanation. wip-pdf already allowed accounts, which is the giveaway that this
+  // list was copied from a commercial endpoint rather than chosen.
+  //
+  // wip-lock deliberately does NOT allow accounts. Reading the month is not signing
+  // it off, and the two must not be collapsed.
+  if (!requireRole(req, res, ['post-contract', 'management', 'admin', 'accounts'])) return
   const redis = await getClient()
 
   const now = new Date()

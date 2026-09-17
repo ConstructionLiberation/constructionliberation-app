@@ -134,9 +134,25 @@ export default function WipPage() {
     setLocking(false)
   }
 
+  // SAY WHY IT IS EMPTY.
+  //
+  // This used to be `catch {}` around a fetch that was returning 403 for the
+  // bookkeeper. The page rendered an empty table and reported nothing, so the fault
+  // looked like "WIP does not load for accounts" rather than "accounts is not on the
+  // allowlist" - which is a different question and a much longer hunt.
+  //
+  // A response that is not ok is a failure even though fetch does not throw on it.
+  const [loadErr, setLoadErr] = useState('')
+
   async function load() {
     setLoading(true)
-    try { const d = await fetch(`/api/wip?month=${month}`).then(r => r.json()); setData(d) } catch {}
+    setLoadErr('')
+    try {
+      const r = await fetch(`/api/wip?month=${month}`)
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setLoadErr(d.error || `Could not load WIP (${r.status}).`); setData(null) }
+      else setData(d)
+    } catch (e) { setLoadErr(e.message || 'Could not load WIP.'); setData(null) }
     setLoading(false)
   }
 
@@ -168,7 +184,14 @@ export default function WipPage() {
 
   async function refresh() {
     setBusy(b => b + 1)
-    try { const d = await fetch(`/api/wip?month=${month}`).then(r => r.json()); setData(d) } catch {}
+    try {
+      const r = await fetch(`/api/wip?month=${month}`)
+      const d = await r.json().catch(() => ({}))
+      // A failed refresh leaves the figures on screen rather than blanking them - they
+      // were right a moment ago - but it must not do so in silence.
+      if (!r.ok) setLoadErr(d.error || `Could not refresh WIP (${r.status}).`)
+      else { setLoadErr(''); setData(d) }
+    } catch (e) { setLoadErr(e.message || 'Could not refresh WIP.') }
     setBusy(b => Math.max(0, b - 1))
   }
   useEffect(() => { if (ok) load() }, [ok, month])
@@ -190,6 +213,15 @@ export default function WipPage() {
         <div style={embed
           ? { padding: '12px 14px' }
           : { padding: 24, maxWidth: 1400, margin: '0 auto' }}>
+
+          {/* Shown in the embed as well as the full page. The embed is exactly where a
+              silent failure is hardest to diagnose: a blank frame inside somebody
+              else's tab, with nothing to say whose fault it is. */}
+          {loadErr && (
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 12 }}>
+              {loadErr}
+            </div>
+          )}
 
           {/* Header: total WIP + month filter */}
           {/* The title and the Total WIP card are dropped in the embed - Bookkeeping has

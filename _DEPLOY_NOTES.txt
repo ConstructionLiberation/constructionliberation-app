@@ -1,74 +1,41 @@
-pkg911 - In Query: a Project column, on the table, in the email and on the link page
-=====================================================================================
+pkg912 - WIP does not load for the bookkeeper
+==============================================
 
-REPLACE (5 files, all existing - no new files to create):
+REPLACE (2 files, both existing - no new files to create):
 
-  lib/inquery.js
-  components/InQueryTable.js
-  pages/inquery-review.js
-  pages/api/bookkeeping-inquery.js
-  pages/api/inquery-review.js
+  pages/wip.js
+  pages/api/wip.js
 
-NOTE: inquery-review.js exists in TWO folders - pages/ and pages/api/.
-Both are in this package and both must be replaced.
+NOTE: same filename in two folders. Both must be replaced.
 
 
-WHAT IT DOES
+WHAT WAS WRONG
+--------------
+/api/wip allowed post-contract, management and admin. Not accounts.
+
+The PAGE guard already allowed accounts for the read-only embed - it says so
+in a comment - and wip-pdf allowed accounts too. Only the endpoint that
+serves the actual figures did not. That is the signature of a role list
+copied from a commercial endpoint rather than chosen.
+
+So the bookkeeper opened Bookkeeping > WIP, passed the page guard, and the
+figures came back 403. The page swallowed it in a bare `catch {}` and
+rendered an empty table, silently - which is why it looked like "WIP does
+not work for accounts" rather than "accounts is not on the allowlist".
+
+
+WHAT CHANGED
 ------------
-Every In Query invoice now carries a project, set by hand because Xero cannot
-tell you - the cost being untagged is the whole reason it is on this tab.
+1. /api/wip now allows accounts.
+2. The page checks res.ok and shows why it is empty, in the embed as well as
+   the full page. A blank frame inside somebody else's tab is the worst place
+   for a silent failure.
 
-  Bookkeeping > In Query   new sortable "Project" column with a picker on
-                           each row. Amber while unset.
-  The email                new Project column, showing "not set" in amber
-                           where nobody has said yet.
-  The review link page     a Project picker on each invoice card, editable
-                           by the person who was asked.
-
-Setting or changing it writes a line into the comment thread - "Project set
-to J240 - Market Drayton." - so it reads as a history rather than a value
-that silently appeared between one email and the next.
-
-Nothing re-tags anything in Xero. This records the ANSWER; re-tagging in
-Xero is still what moves the cost off the tab.
-
-
-HOW IT IS BUILT
----------------
-ONE project list, in lib/inquery.js, called by both APIs. Two lists that
-drift is how a reviewer picks a project the bookkeeper cannot see.
-
-Source is projects:registry - our own record of every project Xero has ever
-returned. One Redis read, survives a deleted tracking option, and the review
-page still never touches Xero, which matters because the person holding that
-link may be outside the business.
-
-Excluded from the list: anything in config:hidden-projects, plus the four
-tracking options that are not projects (In Query, Old Projects, Internal,
-Head Office Cost). Offering "In Query" as the answer to "which job is this
-In Query cost for" is the obvious own goal.
-
-The email reads the project off the stored record, not off what the browser
-posted, so what goes out is what is saved.
+wip-lock still does NOT allow accounts, deliberately. Reading the month is
+not signing it off.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Bookkeeping > In Query. The Project column shows, amber and "Not set".
-2. Pick a project on one row. It saves immediately - no save button - and a
-   line appears in that invoice's comments.
-3. Sort by Project. Rows group by job number.
-4. Send the list to yourself. The email has a Project column.
-5. Open the link from the email, change the project there, then go back to
-   the Bookkeeping table and confirm it followed.
-6. Approve something on the link page and confirm the project SURVIVES -
-   approving must not wipe it.
-
-
-ONE THING TO BE AWARE OF
-------------------------
-The review page now shows the project list to whoever holds the link. For
-Contracts Managers and site staff that is nothing; if you ever send an In
-Query item to somebody outside the business, they can see your job numbers
-and names. Say the word and it becomes a free-text box for external
-reviewers instead.
+Have the bookkeeper open Bookkeeping > WIP. Figures should load.
+They should NOT be able to edit adjustments or sign the month off.
