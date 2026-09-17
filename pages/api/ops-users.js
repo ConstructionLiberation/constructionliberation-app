@@ -265,6 +265,11 @@ async function handler(req, res) {
       trades: Array.isArray(user.trades) ? user.trades : [],
       active: user.active !== false,
       projectAccess: user.projectAccess === 'all' || user.projectAccess == null ? 'all' : (Array.isArray(user.projectAccess) ? user.projectAccess : 'all'),
+      // SEES EVERY PROJECT ON THE CM SCREENS. Written explicitly rather than left
+      // undefined so the record says what it means, and === true so nothing else a
+      // client might send can turn it on by accident. Editing spreads the payload, so
+      // the update path needs nothing.
+      allProjects: user.allProjects === true,
       pin: tempPin,
       mustResetPin: true,
       createdAt: Date.now(),

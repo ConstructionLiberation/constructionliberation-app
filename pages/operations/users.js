@@ -126,7 +126,7 @@ export default function UsersPage() {
     // table.
     <OperationsShell active="/operations/users" title="Site App Users" allow={['management', 'admin']} wide>
       <PageHeading title="Site App Users" sub="People who can log into the Site App"
-        action={<button onClick={() => { setNotice(''); setForm({ firstName: '', lastName: '', role: '', accessLevel: 'operative', phone: '', email: '', company: '', trades: [], active: true }) }} style={primaryBtn}>+ Add user</button>} />
+        action={<button onClick={() => { setNotice(''); setForm({ firstName: '', lastName: '', role: '', accessLevel: 'operative', phone: '', email: '', company: '', trades: [], active: true, allProjects: false }) }} style={primaryBtn}>+ Add user</button>} />
 
       {notice && (
         <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13.5, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
@@ -177,7 +177,14 @@ export default function UsersPage() {
                     : <span style={{ background: '#f0f4f8', color: '#475569', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 600 }}>Operative</span>}</td>
                   <td style={td}>{u.company || '—'}</td>
                   <td style={{ ...td, fontSize: 12.5 }}>{(u.trades || []).length ? (u.trades || []).join(', ') : '—'}</td>
-                  <td style={{ ...td, fontSize: 12.5, color: '#666' }}>{(u.projectAccess == null || u.projectAccess === 'all') ? 'All' : `${(u.projectAccess || []).length} selected`}</td>
+                  <td style={{ ...td, fontSize: 12.5, color: '#666' }}>
+                    {(u.projectAccess == null || u.projectAccess === 'all') ? 'All' : `${(u.projectAccess || []).length} selected`}
+                    {/* Visible in the list on purpose - a permission you have to open a
+                        record to discover is one nobody audits. */}
+                    {u.allProjects === true && (
+                      <span style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#8a6d1a' }}>sees all on CM screens</span>
+                    )}
+                  </td>
                   <td style={td}>{u.phone || '—'}</td>
                   <td style={td}>{u.email || '—'}</td>
                   <td style={td}>{u.mustResetPin
@@ -215,6 +222,25 @@ export default function UsersPage() {
             <option value="contracts-manager">Contracts Manager</option>
           </select>
           <div style={{ fontSize: 12, color: '#999', marginTop: 4, marginBottom: 4 }}>Contracts Managers see additional features in the Site App.</div>
+          {/* ONLY MEANINGFUL FOR A CONTRACTS MANAGER.
+              The CM screens pick projects by matching this person's name against the
+              project's Contracts Manager field. This is the deliberate exception for
+              somebody who needs oversight of everything rather than their own jobs.
+              Hidden for operatives, whose projects come from Project access below. */}
+          {form.accessLevel === 'contracts-manager' && (
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '9px 11px', borderRadius: 8, background: form.allProjects ? '#fffbeb' : '#fafafa', border: '1px solid #eee', cursor: 'pointer', marginBottom: 6 }}>
+              <input type="checkbox" checked={form.allProjects === true}
+                onChange={e => setForm({ ...form, allProjects: e.target.checked })}
+                style={{ marginTop: 2 }} />
+              <span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1a19' }}>Sees all projects</span>
+                <span style={{ display: 'block', fontSize: 12, color: '#777', marginTop: 2 }}>
+                  Normally a Contracts Manager only sees projects they are named on. Tick this for
+                  somebody who needs every project on the CM screens.
+                </span>
+              </span>
+            </label>
+          )}
           <Lbl>Project access <Req /></Lbl>
           <ProjectAccessPicker projects={projects}
             value={form.projectAccess}

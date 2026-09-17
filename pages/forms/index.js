@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { compressImage } from '../../lib/compressImage'
+import { nameMatches, cmSeesAll } from '../../lib/cmSiteApp'
 
 // forms.rockroofing.co.uk — operative-facing app.
 // Mobile-first, big tap targets, one decision per screen. No portal access.
@@ -231,17 +232,16 @@ function FormsHomeMenu({ user }) {
     (async () => {
       try {
         const d = await fetch('/api/ops-projects').then(r => r.json())
-        const norm = s => (s || '').trim().toLowerCase()
         // Live projects only - badges must not count work on Complete/Archived jobs.
         const live = (d.projects || []).filter(p => (p.status || 'active') === 'active')
-        const mine = live.filter(p => {
-          const a = norm(user.name), b = norm(p.contractsManager)
-          if (!a || !b) return false
-          if (a === b) return true
-          const at = a.split(/\s+/), bt = b.split(/\s+/)
-          if (at.length >= 2 && bt.length >= 2) return at[0] === bt[0] && at[at.length - 1] === bt[bt.length - 1]
-          return false
-        })
+        // ONE RULE, SHARED WITH THE CM SCREENS.
+        //
+        // This was a second, inline copy of the name match that lib/cmSiteApp.js already
+        // held - identical line for line, which is exactly how two copies start before
+        // one of them is changed and the badge quietly stops agreeing with the screen it
+        // links to. Swapped after diffing both: same normaliser, same status filter, same
+        // matching. Nobody's count moves.
+        const mine = cmSeesAll(user) ? live : live.filter(p => nameMatches(user.name, p.contractsManager))
         setMyProjectCount(mine.length)
         const nos = new Set(mine.map(p => p.projectNo))
         setMyProjectNos(nos)

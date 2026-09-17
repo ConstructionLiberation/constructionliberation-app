@@ -1,47 +1,80 @@
-pkg918 - Site App Users: a search box on the project picker
-============================================================
+pkg920 - Missing Forms: mark a form "not needed"
+=================================================
 
-REPLACE (1 file, existing - no new files to create):
+ONE NEW FILE - CREATE THIS MANUALLY:
 
-  pages/operations/users.js
+  lib/formsWaived.js
 
-Note the folder: pages/operations/, not pages/.
+REPLACE (2 files, both existing):
+
+  pages/operations/forms-missing.js
+  pages/api/forms-missing.js
+
+NOTE: forms-missing.js exists in TWO folders. Both are here; both must be
+replaced.
 
 
 WHAT IT DOES
 ------------
-The project access dropdown on Site App Users now opens with a search box
-at the top. Type a job number or a project name and the tick list narrows.
-Everything else about it is unchanged - "All projects" still sits above the
-list, ticking still works the same way.
+Open any card's pop-out. The Missing list now has a "Not needed" tick box on
+each row. Tick it and that obligation leaves the totals, the card percentage
+moves immediately, and it drops into a new "Not needed" section at the bottom
+where it can be unticked to bring it back.
 
-Matches job number OR name, so "J178" and "Gas Lane" both find it.
-Sticky, so it stays reachable once the list scrolls.
-Autofocused, so you can open and type without reaching for the mouse.
-Escape clears the search; clicking away closes and clears it.
+Works on every form type, not just diaries - same rule, one tick box.
 
-ONE THING THAT NEEDED THINKING ABOUT. Searching narrows the list; it does
-not untick anything. But a ticked project scrolling out of view reads as
-having been cleared, and the natural response is to tick it again somewhere
-else. So when a search hides projects that are already selected, it says so:
+The example that prompted it: Will allocated to Albert Bartlett for one day
+to walk the job. The Planner says somebody was on site, so a Daily Site Diary
+is raised as due. Only a person can know it was a visit rather than a shift.
 
-  "3 selected projects are hidden by this search. They are still selected."
+
+IT STAYS GONE - WHICH DECIDED THE DESIGN
+-----------------------------------------
+The waive is stored against WHAT THE OBLIGATION IS:
+
+    projectNo | formType | the date it is about
+
+and never against anything about the current view. So filtering to next
+month and coming back, or widening the range, finds the same key and the row
+is still waived. Keyed on a week, a row index or a position in a list it
+would have come back the moment the filter moved, which is the failure you
+asked me to avoid.
+
+That key rule lives in lib/formsWaived.js and is imported by BOTH the API
+that writes it and the page that reads it. A second copy would not error - it
+would simply stop matching, and the row would reappear with nothing to
+explain why.
+
+
+ALSO CHANGED, DELIBERATELY
+---------------------------
+The by-form totals were incremented inline in three places as rows were
+built. Excluding waived rows there would have meant the same subtraction
+written three more times, so they are now counted once from the finished row
+list. Same numbers, one rule, and the cards cannot disagree with the table
+they open.
+
+The POST is role-guarded (post-contract, management, admin). The GET stays
+open, as the whole Operations area is, because Site App users reach it
+without portal roles - but changing what the business counts as required is
+a different act.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Add or edit a Site App user, open Project access. Search box at the top,
-   already focused.
-2. Type part of a job number - list narrows. Tick one.
-3. Search for something else - the amber line should say one selected
-   project is hidden.
-4. Clear the search and confirm it is still ticked.
-5. Save, reopen the user, and confirm the right projects are on.
+1. Open the Daily Site Diary card. Find Will on Albert Bartlett. Tick
+   "Not needed".
+2. It should leave Missing immediately and the card percentage should move
+   without a reload.
+3. Scroll down - it is in "Not needed", showing who waived it.
+4. Close the modal, change the date range to next month, change it back.
+   It must still be waived. THIS IS THE TEST THAT MATTERS.
+5. Untick it from the Not needed list and confirm it returns to Missing.
+6. Check a different project's diary on the same day is unaffected.
 
 
-NOTE FOR WHOEVER EDITS THIS FILE NEXT
---------------------------------------
-The dropdown boilerplate in ProjectAccessPicker is duplicated by another
-picker in the same file - identical outside-click useEffect, same variable
-names. A whole-file find and replace on any of it will hit the wrong one.
-These edits were scoped to the component deliberately.
+ROLLBACK
+--------
+Untick anything waived. The store (ops:forms-waived) is additive and separate
+- nothing else reads or writes it, and deleting the key restores every waive
+at once.

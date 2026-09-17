@@ -1,4 +1,6 @@
-import { get, getOpsProjects, getSubmissionIndex, saveSubmissionIndex, getSubmission, getForms } from '../../lib/db'
+import { get, set, getOpsProjects, getSubmissionIndex, saveSubmissionIndex, getSubmission, getForms } from '../../lib/db'
+import { requireRole } from '../../lib/portalAuth'
+import { WAIVED_KEY, waiveKey, normaliseWaived } from '../../lib/formsWaived'
 import { loadPreStarts, isPreStartDoneBy, preStartSentAt } from '../../lib/preStartDone'
 import { formDateOf } from '../../lib/formDates'
 import withTenant from '../../lib/withTenant'
@@ -6,6 +8,9 @@ import withTenant from '../../lib/withTenant'
 // Forms "Missing" dashboard data.
 // For a given week range, works out the REQUIRED tracked forms per project/week and whether each has
 // been completed, plus the responsible person (CM for Pre-Start; effective Supervisor for the rest).
+//
+// POST { action:'waive', key, on }  marks one obligation not needed, or puts it back.
+//   The key comes from waiveKey() in lib/formsWaived.js - one rule, shared with the page.
 //
 // GET /api/forms-missing?from=YYYY-MM-DD&to=YYYY-MM-DD
 //   from/to are any dates; snapped to Mondays. Defaults: this week .. this week.
@@ -22,6 +27,35 @@ function cellCount(cell) { if (!cell) return 0; if (Array.isArray(cell)) return 
 function cellEntries(cell) { if (!cell) return []; return Array.isArray(cell) ? cell : (cell.entries || []) }
 
 async function handler(req, res) {
+  // MARKING ONE NOT NEEDED.
+  //
+  // Guarded, unlike the GET. Reading the dashboard is open because Site App users reach
+  // this area without portal roles; changing what the business counts as required is a
+  // different act and belongs to the people who own the process.
+  if (req.method === 'POST') {
+    // requireRole RETURNS the session - it does not attach it to req. Reading
+    // req.portalUser would have been undefined and every waive would have been stamped
+    // "Unknown" with nothing to say why.
+    const session = requireRole(req, res, ['post-contract', 'management', 'admin'])
+    if (!session) return
+    const key = String(req.body?.key || '')
+    if (String(req.body?.action || '') !== 'waive' || !key) {
+      return res.status(400).json({ error: 'Unknown action' })
+    }
+    const store = normaliseWaived(await get(WAIVED_KEY).catch(() => null))
+    if (req.body?.on === false) {
+      delete store[key]
+    } else {
+      store[key] = {
+        by: session.name || session.email || 'Unknown',
+        at: Date.now(),
+        note: String(req.body?.note || '').slice(0, 200),
+      }
+    }
+    await set(WAIVED_KEY, store)
+    return res.json({ ok: true, waived: store })
+  }
+
   try {
     const [alloc, ops, subs, roster, hsCols, hsData, waterIngress] = await Promise.all([
       get('ops:planning-allocations').then(v => v || {}),
@@ -32,6 +66,7 @@ async function handler(req, res) {
       get('ops:hs-matrix-data').then(v => v || {}),
       get('ops:water-ingress').then(v => v || {}),
     ])
+    const waived = normaliseWaived(await get(WAIVED_KEY).catch(() => null))
 
     // BACKFILL THE DIARY DATE ONTO OLDER INDEX ENTRIES.
     //
@@ -277,9 +312,35 @@ async function handler(req, res) {
       }
     }
 
-    // Upcoming (not-yet-actual) water-ingress visits are shown for visibility but
-    // don't count as required/missing until they're marked actual.
-    const countableRows = rows.filter(r => !r.upcoming)
+    // WAIVED ROWS ARE STILL RETURNED, just flagged.
+    //
+    // The page needs them to show a "Not needed" list somebody can untick - a waive
+    // nobody can undo from the screen is a mistake with no way back.
+    for (const r of rows) {
+      const w = waived[waiveKey(r)]
+      if (w) { r.waived = true; r.waivedBy = w.by || ''; r.waivedAt = w.at || 0 }
+    }
+
+    // BY-FORM TOTALS, REBUILT FROM THE ROWS.
+    //
+    // They were incremented inline in three places as rows were pushed, which meant
+    // excluding waived rows would have needed the same subtraction written three more
+    // times. Counting the finished list instead is one rule in one place, and it cannot
+    // disagree with the rows the page is showing.
+    //
+    // The keys are zeroed rather than replaced so a form type with nothing required
+    // still appears as a card at 0, exactly as before.
+    for (const k of Object.keys(byForm)) { byForm[k] = { required: 0, completed: 0 } }
+    for (const r of rows) {
+      // Upcoming water-ingress visits are shown for visibility and do not count until
+      // they are marked actual - the same rule as before, now stated once.
+      if (r.upcoming || r.waived) continue
+      if (!byForm[r.formType]) byForm[r.formType] = { required: 0, completed: 0 }
+      byForm[r.formType].required++
+      if (r.done) byForm[r.formType].completed++
+    }
+
+    const countableRows = rows.filter(r => !r.upcoming && !r.waived)
     const required = countableRows.length
     const completed = countableRows.filter(r => r.done).length
     const pct = required ? Math.round((completed / required) * 100) : 100

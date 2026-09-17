@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { businessNow } from '../../lib/businessDate'
 import OperationsShell, { PageHeading } from '../../components/OperationsShell'
 import { INK, GOLD, Loading, ghostBtn, th, td } from '../../components/opsUI'
+import { waiveKey } from '../../lib/formsWaived'
 
 const DAY = 86400000
 const parseISO = (s) => { if (!s) return null; const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1) }
@@ -37,6 +38,46 @@ export default function FormsMissingPage() {
   }
   useEffect(() => { load() }, [fromMon, toMon])
 
+  const [waiving, setWaiving] = useState('')
+  const [waiveErr, setWaiveErr] = useState('')
+
+  // MARK ONE NOT NEEDED, OR PUT IT BACK.
+  //
+  // The row is updated in place rather than reloading. A reload would close nothing but
+  // would rebuild the whole table underneath an open modal and lose the reading
+  // position, which on a long missing list is the difference between one click and
+  // finding your place again.
+  async function toggleWaive(row, on) {
+    const key = waiveKey(row)
+    if (!key) return
+    setWaiving(key); setWaiveErr('')
+    try {
+      const d = await fetch('/api/forms-missing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'waive', key, on }),
+      }).then(r => r.json())
+      if (d.error) { setWaiveErr(d.error); return }
+      setData(prev => {
+        if (!prev) return prev
+        const rows = prev.rows.map(r => waiveKey(r) === key ? { ...r, waived: on ? true : false } : r)
+        // The cards have to move with it - that is the point of the exercise. Counted
+        // here from the same rows the table shows, so the two cannot disagree.
+        const byForm = {}
+        for (const k of Object.keys(prev.byForm || {})) byForm[k] = { required: 0, completed: 0 }
+        let required = 0, completed = 0
+        for (const r of rows) {
+          if (r.upcoming || r.waived) continue
+          if (!byForm[r.formType]) byForm[r.formType] = { required: 0, completed: 0 }
+          byForm[r.formType].required++
+          required++
+          if (r.done) { byForm[r.formType].completed++; completed++ }
+        }
+        return { ...prev, rows, byForm, summary: { required, completed, pct: required ? Math.round((completed / required) * 100) : 100 } }
+      })
+    } catch (e) { setWaiveErr(e.message || 'Could not save') }
+    finally { setWaiving('') }
+  }
+
 
   const people = useMemo(() => data ? [...new Set(data.rows.map(r => r.responsible).filter(v => v && v !== '—'))].sort() : [], [data])
 
@@ -57,7 +98,7 @@ export default function FormsMissingPage() {
   // page's status/form/person filters. Opening a card against the filtered list would
   // show a count that did not match the number on the card you just pressed.
   const drillRows = useMemo(() => {
-    if (!data || drill === null) return { missing: [], done: [], upcoming: [], label: '' }
+    if (!data || drill === null) return { missing: [], done: [], upcoming: [], waived: [], label: '' }
     const all = data.rows.filter(r => drill === '' || r.formType === drill)
     // Sorted on the date the column now SHOWS. Sorting by week while displaying a
     // specific date makes a list look unordered.
@@ -66,9 +107,13 @@ export default function FormsMissingPage() {
       || String(a.projectNo).localeCompare(String(b.projectNo), undefined, { numeric: true })
       || FORM_ORDER.indexOf(a.formType) - FORM_ORDER.indexOf(b.formType)
     return {
-      missing: all.filter(r => !r.done && !r.upcoming).sort(by),
-      done: all.filter(r => r.done).sort(by),
-      upcoming: all.filter(r => r.upcoming).sort(by),
+      // Waived rows leave every other bucket. They are not missing, they are not done,
+      // and leaving them in Missing greyed out would keep them in the list people are
+      // trying to clear.
+      missing: all.filter(r => !r.done && !r.upcoming && !r.waived).sort(by),
+      done: all.filter(r => r.done && !r.waived).sort(by),
+      upcoming: all.filter(r => r.upcoming && !r.waived).sort(by),
+      waived: all.filter(r => r.waived).sort(by),
       label: drill === '' ? 'All required forms' : drill,
     }
   }, [data, drill])
@@ -259,6 +304,7 @@ export default function FormsMissingPage() {
                     <div style={{ fontSize: 12.5, color: '#888', marginTop: 2 }}>
                       {wcLabel(fromMon)} to {wcLabel(toMon)} &middot; {drillRows.done.length} completed, {drillRows.missing.length} missing
                       {drillRows.upcoming.length ? `, ${drillRows.upcoming.length} upcoming` : ''}
+                      {drillRows.waived.length ? `, ${drillRows.waived.length} not needed` : ''}
                     </div>
                   </div>
                   <button onClick={() => setDrill(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: '#999', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
@@ -266,9 +312,15 @@ export default function FormsMissingPage() {
 
                 <div style={{ overflowY: 'auto', padding: '4px 18px 18px' }}>
                   {/* MISSING FIRST. They are the reason anybody opens this. */}
+                  {waiveErr && (
+                    <div style={{ marginTop: 12, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '8px 11px', fontSize: 12.5 }}>{waiveErr}</div>
+                  )}
                   {[['Missing', drillRows.missing, '#b91c1c', '#fee2e2'],
                     ['Upcoming', drillRows.upcoming, '#0369a1', '#e0f2fe'],
-                    ['Completed', drillRows.done, '#16a34a', '#dcfce7']].map(([title, list, colour, bg]) => (
+                    ['Completed', drillRows.done, '#16a34a', '#dcfce7'],
+                    /* LAST, and its own section. Somewhere to undo a waive - one made by
+                       mistake is otherwise gone with no way back from this screen. */
+                    ['Not needed', drillRows.waived, '#8a6d1a', '#fffbeb']].map(([title, list, colour, bg]) => (
                     list.length === 0 ? null : (
                       <div key={title} style={{ marginTop: 16 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 700, color: colour, marginBottom: 6 }}>
@@ -284,6 +336,11 @@ export default function FormsMissingPage() {
                             <th style={{ ...th, textAlign: 'left' }}>Project</th>
                             {drill === '' && <th style={{ ...th, textAlign: 'left' }}>Form</th>}
                             <th style={{ ...th, textAlign: 'left' }}>Responsible</th>
+                            {/* Only where it means something. A completed form does not
+                                need waiving, and an upcoming one is not counted yet. */}
+                            {(title === 'Missing' || title === 'Not needed') && (
+                              <th style={{ ...th, textAlign: 'left', whiteSpace: 'nowrap' }}>Not needed</th>
+                            )}
                           </tr></thead>
                           <tbody>
                             {list.map((r, i) => (
@@ -298,6 +355,19 @@ export default function FormsMissingPage() {
                                 <td style={td}>{r.projectNo}{r.projectName && r.projectName !== r.projectNo ? ` - ${r.projectName}` : ''}</td>
                                 {drill === '' && <td style={td}>{r.formType}</td>}
                                 <td style={td}>{r.responsible}{r.role ? <span style={{ color: '#aaa', fontSize: 11 }}> ({r.role})</span> : ''}</td>
+                                {(title === 'Missing' || title === 'Not needed') && (
+                                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                                      <input type="checkbox"
+                                        checked={!!r.waived}
+                                        disabled={waiving === waiveKey(r)}
+                                        onChange={e => toggleWaive(r, e.target.checked)} />
+                                      {r.waived && r.waivedBy
+                                        ? <span style={{ fontSize: 11, color: '#8a6d1a' }}>{r.waivedBy}</span>
+                                        : null}
+                                    </label>
+                                  </td>
+                                )}
                               </tr>
                             ))}
                           </tbody>
@@ -305,7 +375,7 @@ export default function FormsMissingPage() {
                       </div>
                     )
                   ))}
-                  {drillRows.missing.length === 0 && drillRows.done.length === 0 && drillRows.upcoming.length === 0 && (
+                  {drillRows.missing.length === 0 && drillRows.done.length === 0 && drillRows.upcoming.length === 0 && drillRows.waived.length === 0 && (
                     <div style={{ padding: 26, textAlign: 'center', color: '#aaa', fontSize: 13.5 }}>
                       No forms are required for this over the selected weeks.
                     </div>
@@ -315,6 +385,11 @@ export default function FormsMissingPage() {
             </div>
           )}
 
+          <div style={{ fontSize: 11.5, color: '#999', marginTop: 8 }}>
+            Ticking <strong>Not needed</strong> on a form removes it from the totals for good - a day
+            somebody was on site but no form was genuinely due. It stays removed whatever dates are
+            filtered later, and can be put back from the Not needed list.
+          </div>
           <div style={{ fontSize: 11.5, color: '#999', marginTop: 8 }}>“Responsible” is who receives the Monday notification: the Contracts Manager for Pre-Start, and the designated Site Supervisor (or the qualified supervisor allocated on the Gantt) for the other forms.</div>
         </>
       )}
