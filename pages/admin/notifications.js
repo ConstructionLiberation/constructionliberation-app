@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import Head from 'next/head'
-import Link from 'next/link'
+import AdminShell from '../../components/AdminShell'
 
 const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const blank = () => ({
@@ -64,18 +63,19 @@ export default function NotificationsBuilder() {
     return `${cap(n.func)} · ${cap(n.cadence)} · ${when}${cond}`
   }
 
+  // THE SAME CHROME AS EVERY OTHER ADMIN PAGE.
+  //
+  // This page built its own dark bar and no tab bar at all, so opening it dropped you
+  // out of the Admin navigation entirely - the only way back was the browser.
+  //
+  // AdminShell also GATES it. There was no role check here whatever: any signed-in
+  // session could open the notification builder and edit what the business emails and to
+  // whom. The tab is admin-only, so the page now is too, which matches who could reach
+  // it in practice - it only ever appeared in the nav on Portal Users.
   return (
-    <>
-      <Head><title>Notification Builder — Admin</title></Head>
-      <div style={{ minHeight: '100vh', background: '#f5f6f8', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
-        <div style={{ background: '#1a1a19', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
-          <Link href="/admin" style={{ color: '#aaa', fontSize: 13, textDecoration: 'none' }}>&larr; Admin</Link>
-          <span style={{ color: '#444' }}>|</span>
-          <span style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>Email Notifications</span>
-        </div>
-
-        <div style={{ maxWidth: 1200, margin: '24px auto', padding: '0 24px', display: 'grid', gridTemplateColumns: editing ? '1fr 1.3fr' : '1fr', gap: 20 }}>
+    <AdminShell active="/admin/notifications" title="Email Notifications">
+      <>
+        <div style={{ display: 'grid', gridTemplateColumns: editing ? '1fr 1.3fr' : '1fr', gap: 20 }}>
           {/* List */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -204,8 +204,8 @@ export default function NotificationsBuilder() {
             </div>
           )}
         </div>
-      </div>
-    </>
+      </>
+    </AdminShell>
   )
 }
 

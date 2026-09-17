@@ -1,60 +1,53 @@
-pkg921 - Admin navigation was three different lists
-====================================================
+pkg922 - Email Notifications keeps the Admin navigation
+========================================================
 
-REPLACE (3 files, all existing - no new files to create):
+REPLACE (1 file, existing - no new files to create):
 
-  components/AdminShell.js
-  pages/admin.js
-  pages/admin/templates.js
+  pages/admin/notifications.js
 
-NOTE: pages/admin.js and pages/admin/templates.js are different files in
-different folders. Both are here.
+DEPLOY AFTER pkg921, which created the shared <AdminTabs> this page now
+uses. On its own it would not build.
 
 
 WHAT WAS WRONG
 --------------
-The Admin nav bar was written out three times:
+The page built its own dark header and no tab bar at all, so opening it
+dropped you out of the Admin navigation completely - the only way back was
+the browser button.
 
-  pages/admin.js            9 tabs   (inline)
-  pages/admin/templates.js  7 tabs   (inline, its own copy again)
-  components/AdminShell.js  7 tabs   (everything else)
-
-So the bar changed shape depending which Admin page you were standing on.
-Email Notifications and Xero Connection existed only on Portal Users, and
-leaving that page made them disappear with no way back except returning to
-it. Your screenshot is the templates.js copy.
-
-Nothing was broken in the sense of erroring. Three lists simply drifted,
-which is the fault this codebase produces more than any other.
+It now uses AdminShell, the same wrapper every other Admin page uses, so the
+header, the tabs, the highlight and the page width are identical to
+Templates, Documents and the rest. Nothing about the notification builder
+itself changed.
 
 
-WHAT CHANGED
-------------
-One list, ADMIN_TABS, exported from AdminShell along with the bar itself as
-an <AdminTabs> component. All three pages render it. The markup was
-identical in all three places, which is how the drift went unnoticed.
+IT ALSO CLOSES A GAP - PLEASE READ
+-----------------------------------
+This page had NO ROLE CHECK. None. Any signed-in session could open the
+notification builder and change what the business emails, to whom, and on
+what schedule.
 
+AdminShell gates it to admin, which matches who could reach it in practice:
+the Email Notifications tab only ever appeared on Portal Users, and that page
+redirects anybody who is not an admin.
 
-WHO SEES WHAT - UNCHANGED FOR MANAGEMENT
------------------------------------------
-  admin       9 tabs, now on EVERY admin page (was 9 on Portal Users, 7
-              elsewhere - that is the fix)
-  management  6 tabs, exactly as before
-
-Email Notifications and Xero Connection are marked admin-only, which
-reproduces precisely who could reach them before: they only ever appeared on
-Portal Users, and that page redirects anybody who is not an admin.
-
-Widening either to management is a decision for you, not something I should
-do while fixing a nav bar. Say the word and it is a one-line change.
+If a management user has been using this page, they will now be redirected.
+Tell me and I will widen the tab and the gate together.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. As an admin: open Admin, click Templates, Documents, RAMS Director. The
-   bar should have the same nine tabs on every one, with the current page
-   highlighted.
-2. Email Notifications and Xero Connection should be reachable from any of
-   them.
-3. As a management user: six tabs, no Portal Users, no Email Notifications,
-   no Xero Connection - same as today.
+1. Admin, then Email Notifications. The nine tabs stay, with Email
+   Notifications highlighted.
+2. Every other tab is reachable from it.
+3. The notification list and the editor work exactly as before.
+
+
+STILL TO DO - SAME SHAPE, NOT IN THIS PACKAGE
+----------------------------------------------
+/connect (Xero Connection) has no admin nav either, for the same reason.
+
+Left out deliberately: it is the page Xero redirects back to after OAuth, so
+wrapping it in a shell that fetches a session and can redirect needs testing
+against a real reconnect rather than reasoning. Worth doing, but not blind,
+and not at the same time as this.
