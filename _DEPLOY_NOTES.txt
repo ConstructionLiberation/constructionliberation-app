@@ -1,57 +1,47 @@
-pkg917 - CRM: pasted links in notes are clickable
-==================================================
+pkg918 - Site App Users: a search box on the project picker
+============================================================
 
 REPLACE (1 file, existing - no new files to create):
 
-  pages/crm.js
+  pages/operations/users.js
 
-DEPLOY AFTER pkg916, which also changes pages/crm.js. This package is built
-on top of it - deploying 916 afterwards would revert this.
+Note the folder: pages/operations/, not pages/.
 
 
 WHAT IT DOES
 ------------
-A Linkify component turns http://, https:// and www. addresses in typed text
-into real links. Applied in three places on the deal timeline:
+The project access dropdown on Site App Users now opens with a search box
+at the top. Type a job number or a project name and the tick list narrows.
+Everything else about it is unchanged - "All projects" still sits above the
+list, ticking still works the same way.
 
-  note bodies
-  activity outcomes ("WHAT HAPPENED")
-  comments on notes
+Matches job number OR name, so "J178" and "Gas Lane" both find it.
+Sticky, so it stays reachable once the list scrolls.
+Autofocused, so you can open and type without reaching for the mouse.
+Escape clears the search; clicking away closes and clears it.
 
-Opens in a new tab. Nothing else about the notes changed - no editor, no
-formatting, no markdown.
+ONE THING THAT NEEDED THINKING ABOUT. Searching narrows the list; it does
+not untick anything. But a ticked project scrolling out of view reads as
+having been cleared, and the natural response is to tick it again somewhere
+else. So when a search hides projects that are already selected, it says so:
 
-
-HOW IT IS BUILT
----------------
-RENDERED AS REACT ELEMENTS, NEVER AS HTML. A note is user input, and
-dangerouslySetInnerHTML on user input is how a CRM becomes an attack
-surface. The text is split on the address and the pieces rendered - so a
-note containing <script> is still just characters on a page.
-
-At MODULE SCOPE, not inside the component that uses it. A component defined
-inside another remounts its whole subtree on every render, which is what
-caused the typing bug.
-
-A fresh regex per call. A shared one carrying the g flag keeps lastIndex
-between calls and silently skips the first match on every other render.
-
-Trailing punctuation is left out of the link - "...deal=12094." links the
-address and leaves the full stop - but a closing bracket is kept when the
-address opened one.
+  "3 selected projects are hidden by this search. They are still selected."
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. The Edita note on this deal: the app.rockroofing.co.uk link is clickable
-   and opens in a new tab.
-2. Add a note with a link followed by a full stop - the stop should not be
-   part of the link.
-3. Add a note with no link - unchanged.
+1. Add or edit a Site App user, open Project access. Search box at the top,
+   already focused.
+2. Type part of a job number - list narrows. Tick one.
+3. Search for something else - the amber line should say one selected
+   project is hidden.
+4. Clear the search and confirm it is still ticked.
+5. Save, reopen the user, and confirm the right projects are on.
 
 
-NOT DONE
---------
-Email addresses are not linked. Easy to add as mailto: if you want it - it
-was not what you asked for and a mailto that opens the wrong client is more
-annoying than plain text.
+NOTE FOR WHOEVER EDITS THIS FILE NEXT
+--------------------------------------
+The dropdown boilerplate in ProjectAccessPicker is duplicated by another
+picker in the same file - identical outside-click useEffect, same variable
+names. A whole-file find and replace on any of it will hit the wrong one.
+These edits were scoped to the component deliberately.

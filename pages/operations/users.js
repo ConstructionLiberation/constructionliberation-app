@@ -314,6 +314,9 @@ function CompanyInput({ value, options, onChange }) {
 // projects) or an array of projectNos. Defaults to 'all' when unset.
 function ProjectAccessPicker({ projects, value, onChange }) {
   const [open, setOpen] = useState(false)
+  // Typed filter. Named pq rather than q so it cannot be confused with the page's own
+  // user search while reading this file.
+  const [pq, setPq] = useState('')
   const wrapRef = useRef(null)
   const isAll = value === 'all' || value == null
   const selected = Array.isArray(value) ? value : []
@@ -321,7 +324,7 @@ function ProjectAccessPicker({ projects, value, onChange }) {
   // Close the dropdown when clicking anywhere outside it.
   useEffect(() => {
     if (!open) return
-    const onDown = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    const onDown = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) { setOpen(false); setPq('') } }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
@@ -336,6 +339,20 @@ function ProjectAccessPicker({ projects, value, onChange }) {
     onChange(next)
   }
 
+  // Matches the job number OR the name, so "J178" and "Gas Lane" both find it.
+  const needle = pq.trim().toLowerCase()
+  const shown = needle
+    ? projects.filter(p => `${p.no || ''} ${p.name || ''}`.toLowerCase().includes(needle))
+    : projects
+  // TICKED BUT FILTERED OUT.
+  //
+  // Searching narrows the list, it does not untick anything - but a selection that
+  // vanishes off screen reads as having been cleared. Saying how many are hidden stops
+  // somebody re-ticking projects that were already on.
+  const hiddenSelected = needle && !isAll
+    ? selected.filter(no => !shown.some(p => p.no === no)).length
+    : 0
+
   const summary = isAll ? 'All projects (current & future)'
     : selected.length === 0 ? 'No projects selected'
     : `${selected.length} project${selected.length === 1 ? '' : 's'} selected`
@@ -349,12 +366,30 @@ function ProjectAccessPicker({ projects, value, onChange }) {
       </button>
       {open && (
         <div style={{ position: 'absolute', zIndex: 30, top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: '1px solid #ddd', borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', maxHeight: 280, overflowY: 'auto', padding: 6 }}>
+          {/* Sticky, so it stays reachable once the list scrolls. */}
+          <div style={{ position: 'sticky', top: 0, background: '#fff', paddingBottom: 6, zIndex: 1 }}>
+            <input
+              autoFocus
+              value={pq}
+              onChange={e => setPq(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setPq('') } }}
+              placeholder="Search job number or project name..."
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: 13.5, border: '1px solid #ddd', borderRadius: 7, fontFamily: 'inherit' }} />
+          </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, background: isAll ? '#fffbeb' : 'transparent' }}>
             <input type="checkbox" checked={isAll} onChange={toggleAll} /> All projects (current &amp; future)
           </label>
           <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
           {projects.length === 0 && <div style={{ padding: '8px 10px', color: '#aaa', fontSize: 13 }}>No projects.</div>}
-          {projects.map(p => (
+          {projects.length > 0 && shown.length === 0 && (
+            <div style={{ padding: '8px 10px', color: '#aaa', fontSize: 13 }}>No projects match that search.</div>
+          )}
+          {hiddenSelected > 0 && (
+            <div style={{ padding: '6px 10px', fontSize: 12, color: '#8a6d1a', background: '#fffbeb', borderRadius: 6 }}>
+              {hiddenSelected} selected project{hiddenSelected === 1 ? ' is' : 's are'} hidden by this search. They are still selected.
+            </div>
+          )}
+          {shown.map(p => (
             <label key={p.no} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 13.5 }}>
               <input type="checkbox" checked={!isAll && selected.includes(p.no)} onChange={() => toggleProject(p.no)} />
               {p.no}{p.name && p.name !== p.no ? ` — ${p.name}` : ''}
