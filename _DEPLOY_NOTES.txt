@@ -1,60 +1,55 @@
-pkg913 - Cash flow project list comes from Xero, and negotiated projects are added by hand
-===========================================================================================
+pkg914 - "Application Total" renamed to "Gross Application Total"
+==================================================================
 
 REPLACE (2 files, both existing - no new files to create):
 
-  pages/project-cashflow.js
-  pages/api/project-cashflow.js
-
-NOTE: same filename in two folders. Both must be replaced.
+  pages/applications.js
+  lib/applicationPdf.js
 
 
-CHANGE 1 - the live list is now the Project Financials register
----------------------------------------------------------------
-Was: Operations projects with status active or draft.
-Now: every Xero project the dashboard returns, minus the SHARED hide list
-     (config:hidden-projects - the same one Project Financials uses).
+WHAT AND WHY
+------------
+The figure was always correct:
 
-So a project set up in Xero and commercial but never created in Ops now has
-a row; an old job left active in Ops no longer sits here forever. Hide a
-dead job on Project Financials and it goes from both.
+  applicationTotal = measuredToDate + variationsToDate + materialsOnSite
 
-NO KEY CHANGE AND NO MIGRATION. Forecast keys were already "L:<jobNo>" and
-the page already joined job numbers to Xero ids to resolve names - that join
-has been load-bearing all along, which is why the names on this page have
-always been right.
+On J178 that is 314,935.77 + 36,714.00 + 0.00 = 351,649.77, which matches
+Gross on the certificate exactly. MCD and retention are applied BELOW it,
+in the certificate block, and both tie:
 
-The planner is still read, but only to SHADE rows - who is on site, planned
-start. A project the planner has never heard of gets no shading and is
-otherwise normal.
+  Gross                351,649.77
+  less MCD @ 2.5%        8,791.24
+  Sub-total            342,858.53
+  less Retention @ 5%   17,142.93
+  plus Released          8,571.46
+  Total                334,287.06
 
+The NAME was the problem. "Application Total" sits directly beneath two
+retention release lines it does not include, so the column visibly does not
+add up, and the only available conclusions are "the total is wrong" or "I
+do not understand this table".
 
-CHANGE 2 - negotiated projects are added by hand
--------------------------------------------------
-Was: every CRM deal at the Negotiating stage, automatically. A deal changing
-     stage silently changed the cash flow.
-Now: "+ Add project" next to the Negotiated heading. Name, optional customer.
-     An x on each hand-added row removes it.
+Renamed in BOTH places - the screen and the customer-facing PDF - so the
+portal and the paperwork say the same thing. The label column on the PDF
+already carries "1st Release Retention (released previously)", so the longer
+label has room.
 
-Removing REFUSES while forecasts exist against it, rather than leaving
-cashflow:hyp-apps:<key> in Redis with nothing on screen pointing at it -
-invisible here, still counted by Business Financials.
-
-ONE-TIME SEED SO NOTHING IS LOST. The first time the new code runs it scans
-for negotiated forecasts that already exist, names them from the CRM, and
-writes them into the new store. After that the CRM is never read here again.
-It only runs when the store has never existed - an empty list is a
-deliberate "I removed them all" and is not re-filled.
+No calculation changed. Nothing else touched.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. The live list. Expect MORE projects than before, possibly many more -
-   every non-hidden Xero project now appears, including completed ones.
-   Prune with the hide list on Project Financials, not here.
-2. Your existing negotiated projects should still be there, under Negotiated,
-   with their forecasts intact. THIS IS THE ONE TO CHECK FIRST.
-3. Add a project, confirm it appears, save a forecast against it.
-4. Try to remove a project that has a forecast - it should refuse and say so.
-5. Any project you were forecasting that has now vanished means its job
-   number is hidden, or it is not in Xero. Tell me which one.
+1. Open J178 application 1. The summary row reads "Gross Application Total",
+   still 351,649.77.
+2. Download the PDF and confirm the same, and that the label is not clipped.
+
+
+NOT DONE, WORTH A DECISION
+--------------------------
+"Proj. Final Account" on this page and "Gross AFA" on the retention tracker
+are the SAME figure under two names - both gross, both before MCD. The
+tracker then shows "Final Account" for the figure AFTER MCD. So "Final
+Account" means two different things depending which page you are on.
+
+Renaming is easy; deciding what it should be called on a document going to
+a customer is yours.
