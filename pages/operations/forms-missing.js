@@ -57,23 +57,21 @@ export default function FormsMissingPage() {
         body: JSON.stringify({ action: 'waive', key, on }),
       }).then(r => r.json())
       if (d.error) { setWaiveErr(d.error); return }
-      setData(prev => {
-        if (!prev) return prev
-        const rows = prev.rows.map(r => waiveKey(r) === key ? { ...r, waived: on ? true : false } : r)
-        // The cards have to move with it - that is the point of the exercise. Counted
-        // here from the same rows the table shows, so the two cannot disagree.
-        const byForm = {}
-        for (const k of Object.keys(prev.byForm || {})) byForm[k] = { required: 0, completed: 0 }
-        let required = 0, completed = 0
-        for (const r of rows) {
-          if (r.upcoming || r.waived) continue
-          if (!byForm[r.formType]) byForm[r.formType] = { required: 0, completed: 0 }
-          byForm[r.formType].required++
-          required++
-          if (r.done) { byForm[r.formType].completed++; completed++ }
-        }
-        return { ...prev, rows, byForm, summary: { required, completed, pct: required ? Math.round((completed / required) * 100) : 100 } }
-      })
+      // ASK THE SERVER, DO NOT RECALCULATE HERE.
+      //
+      // This used to recompute the cards in the browser from the rows it already had.
+      // That was a SECOND COPY of the counting rule - the same shape as every expensive
+      // fault in this codebase - and when the cards did not move there was no way to
+      // tell whether the waive had failed or the copy had simply disagreed.
+      //
+      // Now the same GET the page loads with runs again and the cards show exactly what
+      // the server counted. One rule, on the server, and the screen cannot drift from it.
+      //
+      // NO LOADING FLAG. load() sets it, and the drill-down modal is rendered inside the
+      // loading conditional - so calling load() here would shut the modal in your face
+      // mid-tick. This fetches the same data and swaps it in underneath.
+      const fresh = await fetch(`/api/forms-missing?from=${encodeURIComponent(fromMon)}&to=${encodeURIComponent(toMon)}`).then(r => r.json())
+      if (!fresh.error) setData(fresh)
     } catch (e) { setWaiveErr(e.message || 'Could not save') }
     finally { setWaiving('') }
   }
@@ -121,6 +119,13 @@ export default function FormsMissingPage() {
   const rows = useMemo(() => {
     if (!data) return []
     return data.rows.filter(r => {
+      // WAIVED ROWS LEAVE THIS TABLE.
+      //
+      // They are not required any more, so listing them here would put them straight
+      // back into the list people work through - and they would read as outstanding,
+      // which is the opposite of what ticking the box was for. They remain visible, and
+      // undoable, in the "Not needed" section of the pop-out.
+      if (r.waived) return false
       if (showOnly === 'missing' && (r.done || r.upcoming)) return false
       if (showOnly === 'done' && !r.done) return false
       if (fForm && r.formType !== fForm) return false
@@ -168,7 +173,7 @@ export default function FormsMissingPage() {
           </select>
         </div>
         <div style={{ fontSize: 12, color: '#888', alignSelf: 'flex-end', paddingBottom: 8 }}>
-          Showing {wcLabel(fromMon)} → {wcLabel(toMon)}{loading ? ' · loading…' : (data ? ` · ${data.rows?.length || 0} rows` : '')}
+          Showing {wcLabel(fromMon)} → {wcLabel(toMon)}{loading ? ' · loading…' : (data ? ` · ${(data.rows || []).filter(r => !r.waived).length} rows` : '')}
         </div>
       </div>
 

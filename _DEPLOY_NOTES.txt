@@ -1,53 +1,48 @@
-pkg922 - Email Notifications keeps the Admin navigation
-========================================================
+pkg923 - Missing Forms: the cards now come from the server, not a second sum
+=============================================================================
 
 REPLACE (1 file, existing - no new files to create):
 
-  pages/admin/notifications.js
+  pages/operations/forms-missing.js
 
-DEPLOY AFTER pkg921, which created the shared <AdminTabs> this page now
-uses. On its own it would not build.
+Deploy after pkg920.
 
 
 WHAT WAS WRONG
 --------------
-The page built its own dark header and no tab bar at all, so opening it
-dropped you out of the Admin navigation completely - the only way back was
-the browser button.
+pkg920 recalculated the card totals IN THE BROWSER after a tick, from the
+rows it already had. That was a second copy of the counting rule - the exact
+shape behind most of what we have found this month - and it meant that when
+the cards did not move there was no way to tell whether the waive had failed
+or the copy had simply disagreed with the server.
 
-It now uses AdminShell, the same wrapper every other Admin page uses, so the
-header, the tabs, the highlight and the page width are identical to
-Templates, Documents and the rest. Nothing about the notification builder
-itself changed.
+The server already counts this correctly. Your screenshot proves it: 33%,
+1/3 done, 2 missing IS the post-waive figure. The persistence worked; the
+number on screen was the problem.
+
+So the browser no longer counts anything. After a tick it re-runs the same
+GET the page loads with, and the cards show exactly what the server counted.
+One rule, on the server.
+
+It refreshes WITHOUT the loading flag on purpose: the pop-out is rendered
+inside the loading conditional, so calling load() would shut the modal in
+your face mid-tick.
 
 
-IT ALSO CLOSES A GAP - PLEASE READ
------------------------------------
-This page had NO ROLE CHECK. None. Any signed-in session could open the
-notification builder and change what the business emails, to whom, and on
-what schedule.
-
-AdminShell gates it to admin, which matches who could reach it in practice:
-the Email Notifications tab only ever appeared on Portal Users, and that page
-redirects anybody who is not an admin.
-
-If a management user has been using this page, they will now be redirected.
-Tell me and I will widen the tab and the gate together.
+TWO THINGS THAT DID NOT AGREE, ALSO FIXED
+------------------------------------------
+- The header said "28 rows" while the cards said 27 required - the row
+  count still included the waived one.
+- The main table below the cards still listed waived rows, so a form you had
+  just marked not needed reappeared in the list you were working through.
+  They are hidden there now, and remain visible and undoable in the
+  "Not needed" section of the pop-out.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Admin, then Email Notifications. The nine tabs stay, with Email
-   Notifications highlighted.
-2. Every other tab is reachable from it.
-3. The notification list and the editor work exactly as before.
-
-
-STILL TO DO - SAME SHAPE, NOT IN THIS PACKAGE
-----------------------------------------------
-/connect (Xero Connection) has no admin nav either, for the same reason.
-
-Left out deliberately: it is the page Xero redirects back to after OAuth, so
-wrapping it in a shell that fetches a session and can redirect needs testing
-against a real reconnect rather than reasoning. Worth doing, but not blind,
-and not at the same time as this.
+1. Open Pre-Start. Tick one of the two missing rows.
+2. The card percentage, the "x/y done" line, the overall card and the row
+   count should ALL move immediately, without a refresh.
+3. Untick it from Not needed - everything moves back.
+4. The waived row should not appear in the table under the cards.
