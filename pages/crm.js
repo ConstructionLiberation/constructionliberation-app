@@ -547,7 +547,7 @@ function CommentThread({ comments, onAdd, onEdit, onDelete, users }) {
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: C.text, whiteSpace: 'pre-wrap' }}>{c.body}</div>
+            <div style={{ fontSize: 13, color: C.text, whiteSpace: 'pre-wrap' }}><Linkify text={c.body} /></div>
           )}
         </div>
       ))}
@@ -918,6 +918,60 @@ function ImageLightbox({ src, onClose }) {
   );
 }
 
+// LINKS IN TEXT SOMEBODY TYPED.
+//
+// Notes, outcomes and comments are stored and rendered as plain text, so a pasted
+// address was readable but not clickable - you had to select it and copy it out.
+//
+// Rendered as REACT ELEMENTS, never as HTML. A note is user input, and
+// dangerouslySetInnerHTML on user input is how a CRM becomes an attack surface.
+//
+// Module scope, not defined inside the component that uses it: a component declared
+// inside another remounts its whole subtree on every render, which is what caused the
+// typing bug.
+const LINK_RE = /(https?:\/\/[^\s<>]+|www\.[^\s<>]+)/gi
+const TRAIL = '.,;:!?]}\'"'
+
+function Linkify({ text }) {
+  const s = String(text == null ? '' : text)
+  if (!s) return null
+  // A fresh regex each call. A shared one with the g flag carries lastIndex between
+  // calls and silently skips the first match on every other render.
+  const re = new RegExp(LINK_RE.source, 'gi')
+  const out = []
+  let last = 0
+  let m
+  while ((m = re.exec(s)) !== null) {
+    let url = m[0]
+    let trail = ''
+    // Trailing punctuation belongs to the sentence, not the address - "...deal=12094."
+    // should link the address and leave the full stop behind. A closing bracket is kept
+    // when the address opened one, so wiki-style links survive.
+    while (url) {
+      const ch = url[url.length - 1]
+      if (ch === ')') {
+        if ((url.split('(').length - 1) >= (url.split(')').length - 1)) break
+      } else if (TRAIL.indexOf(ch) < 0) break
+      trail = ch + trail
+      url = url.slice(0, -1)
+    }
+    if (!url) { continue }
+    if (m.index > last) out.push(s.slice(last, m.index))
+    out.push(
+      <a key={`${m.index}-${url}`}
+        href={/^www\./i.test(url) ? `https://${url}` : url}
+        target="_blank" rel="noreferrer noopener"
+        onClick={(e) => e.stopPropagation()}
+        style={{ color: C.link, textDecoration: 'underline', wordBreak: 'break-all' }}>{url}</a>
+    )
+    if (trail) out.push(trail)
+    last = m.index + m[0].length
+  }
+  if (!out.length) return <>{s}</>
+  if (last < s.length) out.push(s.slice(last))
+  return <>{out}</>
+}
+
 function NoteImages({ images, onRemove }) {
   const [zoom, setZoom] = useState(null);
   if (!images || !images.length) return null;
@@ -1026,7 +1080,7 @@ function HistoryItem({ h, onEdit, onEditActivity, onDelete, onPin, onReopen, onC
           // how the last paren went missing.
           <>
             {h.body && !h.outcome && (
-              <div style={{ fontSize: 13, color: '#444', marginTop: 3, whiteSpace: 'pre-wrap' }}>{h.body}</div>
+              <div style={{ fontSize: 13, color: '#444', marginTop: 3, whiteSpace: 'pre-wrap' }}><Linkify text={h.body} /></div>
             )}
             {h.outcome && (
               // WHAT HAPPENED, its own block so a recorded outcome reads differently from
@@ -1034,7 +1088,7 @@ function HistoryItem({ h, onEdit, onEditActivity, onDelete, onPin, onReopen, onC
               // activity box.
               <div style={{ marginTop: 5, background: '#f7f9fc', borderLeft: `3px solid ${C.link}`, borderRadius: 4, padding: '6px 9px' }}>
                 <div style={{ fontSize: 10.5, fontWeight: 700, color: C.dim, letterSpacing: 0.3 }}>WHAT HAPPENED</div>
-                <div style={{ fontSize: 13, color: '#444', whiteSpace: 'pre-wrap', marginTop: 2 }}>{h.outcome}</div>
+                <div style={{ fontSize: 13, color: '#444', whiteSpace: 'pre-wrap', marginTop: 2 }}><Linkify text={h.outcome} /></div>
               </div>
             )}
             {h.images && h.images.length > 0 && <NoteImages images={h.images} />}

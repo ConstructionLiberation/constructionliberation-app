@@ -1,67 +1,57 @@
-pkg916 - CRM: clearing a customer contact's phone number actually clears it
-============================================================================
+pkg917 - CRM: pasted links in notes are clickable
+==================================================
 
-REPLACE (2 files, both existing - no new files to create):
+REPLACE (1 file, existing - no new files to create):
 
   pages/crm.js
-  pages/api/crm.js
 
-NOTE: same filename in two folders. Both must be replaced.
-
-
-WHAT WAS WRONG
---------------
-The delete was working. The redisplay was putting it back.
-
-The Customer Contact panel falls back to the contact record whenever the
-deal's own copy is blank:
-
-    if (v != null && trim(v) !== '' && trim(v) !== '-') return v
-    return dealContact?.[key] ?? ''
-
-So clearing the phone wrote '' to the deal, that read as "nothing here",
-and the contact record's number went straight back on screen. There was no
-way to say "deliberately blank" - empty and cleared looked identical.
-
-Writing through to the contact would not have worked either: upsert-contact
-skips blanks on purpose, so a half-filled project form cannot wipe details
-that came from the import. That guard is right and stays.
+DEPLOY AFTER pkg916, which also changes pages/crm.js. This package is built
+on top of it - deploying 916 afterwards would revert this.
 
 
-WHAT CHANGED
+WHAT IT DOES
 ------------
-1. New API action, clear-contact-field: blanks ONE named field on ONE
-   contact. Explicit, so upsert keeps its guard. Refuses name, first_name
-   and last_name - those identify the record, and blanking one orphans it.
+A Linkify component turns http://, https:// and www. addresses in typed text
+into real links. Applied in three places on the deal timeline:
 
-2. Clearing a Customer Contact field on a deal now clears it on the contact
-   record as well. The phone belongs to the person, not the deal, so it goes
-   from every deal and from the Contacts page.
+  note bodies
+  activity outcomes ("WHAT HAPPENED")
+  comments on notes
 
-Setting a value is unchanged - it still writes to the deal only.
+Opens in a new tab. Nothing else about the notes changed - no editor, no
+formatting, no markdown.
+
+
+HOW IT IS BUILT
+---------------
+RENDERED AS REACT ELEMENTS, NEVER AS HTML. A note is user input, and
+dangerouslySetInnerHTML on user input is how a CRM becomes an attack
+surface. The text is split on the address and the pieces rendered - so a
+note containing <script> is still just characters on a page.
+
+At MODULE SCOPE, not inside the component that uses it. A component defined
+inside another remounts its whole subtree on every render, which is what
+caused the typing bug.
+
+A fresh regex per call. A shared one carrying the g flag keeps lastIndex
+between calls and silently skips the first match on every other render.
+
+Trailing punctuation is left out of the link - "...deal=12094." links the
+address and leaves the full stop - but a closing bracket is kept when the
+address opened one.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Open the deal, clear the phone on Dan Kearney. It should stay cleared,
-   with no refresh.
-2. Reload the page. Still cleared.
-3. Open another deal with the same contact - also cleared, which is the
-   point.
-4. Check the Contacts list - the number is gone there too.
-5. Type a new number on a deal. It saves as before.
+1. The Edita note on this deal: the app.rockroofing.co.uk link is clickable
+   and opens in a new tab.
+2. Add a note with a link followed by a full stop - the stop should not be
+   part of the link.
+3. Add a note with no link - unchanged.
 
 
-FOUND WHILE IN HERE - NOT FIXED, DIFFERENT AREA
-------------------------------------------------
-pages/api/crm.js imports sendTestMention from lib/crmMentions.js.
-THAT FUNCTION DOES NOT EXIST - crmMentions exports six things and that is
-not one of them.
-
-SWC compiles a missing named import to undefined rather than failing, so it
-builds and deploys clean. But the "send test mention" button on
-pages/crm-scores.js calls action 'mention-test-send', which calls it, and
-that throws a 500 every time.
-
-Left out of this package deliberately - different area, and the fix needs a
-decision about what the test send should actually do.
+NOT DONE
+--------
+Email addresses are not linked. Easy to add as mailto: if you want it - it
+was not what you asked for and a mailto that opens the wrong client is more
+annoying than plain text.
