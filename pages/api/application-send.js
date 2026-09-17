@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { checkEmailLinks } from '../../lib/linkGuard'
 import { requireRole } from '../../lib/portalAuth'
 import { getProject, get, saveProject, getClient } from '../../lib/db'
 import { buildApplicationPDF } from '../../lib/applicationPdf'
@@ -69,6 +70,10 @@ async function handler(req, res) {
     const ccList = (Array.isArray(cc) ? cc : [cc]).filter(Boolean)
     if (ccList.length) payload.cc = ccList
     if (replyTo) payload.reply_to = replyTo
+
+    // Every link in this must be on our own address. Reports and lets the email go;
+    // see lib/linkGuard.js for why it warns rather than blocks.
+    await checkEmailLinks(payload.html, 'application-send', req)
 
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',

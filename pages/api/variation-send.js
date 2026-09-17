@@ -1,4 +1,5 @@
 import { currentTenantId } from '../../lib/tenantContext'
+import { checkEmailLinks } from '../../lib/linkGuard'
 import { fromEmail } from '../../lib/tenantSettings'
 import { requireRole } from '../../lib/portalAuth'
 import { getProject, get } from '../../lib/db'
@@ -149,6 +150,11 @@ async function handler(req, res) {
     }
 
     let last = null
+    // ONCE, NOT PER RECIPIENT. htmlFor() differs only by which address gets the button;
+    // the HOSTS in it are the same for everybody, so one check covers the send and does
+    // not raise the same alert five times for one email.
+    await checkEmailLinks(htmlFor(recipients[0] || '', true), 'variation-send', req)
+
     for (const addr of recipients) {
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',

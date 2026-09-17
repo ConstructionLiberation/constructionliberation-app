@@ -1,53 +1,69 @@
-pkg926 - Prove the variation link fix without emailing anybody
-===============================================================
+pkg927 - Catch a bad link in an outgoing email before a customer does
+======================================================================
 
-REPLACE (1 file, existing):
+ONE NEW FILE - CREATE THIS MANUALLY:
 
-  pages/api/cron/variation-reminders.js
+  lib/linkGuard.js
 
-CONTAINS pkg924. If you have not deployed 924, this replaces it - do not
-deploy 924 afterwards or you will undo this.
+REPLACE (2 files, both existing):
 
-
-WHAT IT ADDS
-------------
-The dry run now reports two things:
-
-  origin          the address links will be built with
-  invokedOnHost   the host the request actually arrived on
-
-Nothing else changed. No emails, no sends.
+  pages/api/application-send.js
+  pages/api/variation-send.js
 
 
-HOW TO TEST - TWO MINUTES, NO CUSTOMER TOUCHED
------------------------------------------------
-1. On the production domain:
+WHAT IT IS
+----------
+An invariant check: every link in an email to somebody outside the business
+must be on a host we own.
 
-   https://app.rockroofing.co.uk/api/cron/variation-reminders?dry=1
+Tonight's fault produced NO ERROR. The cron succeeded, Resend accepted the
+email, every figure in it was correct - and the link led to a Vercel sign-in
+page. Error reporting and cron health cannot catch that, because nothing
+went wrong. An invariant can.
 
-   origin        -> https://app.rockroofing.co.uk
-   invokedOnHost -> app.rockroofing.co.uk
+Tested against the actual email Jason received: it flags
+rock-3k4sdnhn9-rock-roofing.vercel.app. A correct email, a mailto, a blob
+attachment link and a relative link all pass clean.
 
-   Both agree. This step proves nothing on its own - the OLD code passed it
-   too. It is the control.
 
-2. Now the one that matters. Open the SAME route on the deployment url, the
-   one from Jason's email:
+IT WARNS, IT DOES NOT BLOCK
+----------------------------
+The email still sends. You get an error email naming the route and the
+offending host.
 
-   https://rock-3k4sdnhn9-rock-roofing.vercel.app/api/cron/variation-reminders?dry=1
+Deliberate: if the host list were ever incomplete, a blocking guard means a
+customer gets NO application at all, which is worse than a bad link. Let it
+run a week. If nothing false fires, change BLOCK to true at the top of
+lib/linkGuard.js and it starts refusing instead. That one line is the whole
+switch.
 
-   You will pass Vercel's sign-in because you are signed in; Jason could not.
+The check can never break a send - it is wrapped so that a fault in the
+guard itself is swallowed.
 
-   origin        -> https://app.rockroofing.co.uk     <- THE FIX
-   invokedOnHost -> rock-3k4sdnhn9-rock-roofing.vercel.app
 
-   Two different values is the proof. Under the old code both read
-   rock-3k4sdnhn9... and that is exactly what went into Jason's email.
+COVERAGE - PARTIAL, AND HERE IS EXACTLY WHAT IS NOT COVERED
+------------------------------------------------------------
+32 files call Resend directly. There is no shared send helper, and the
+payload shape differs in each, so wiring all 32 is a large change with 32
+chances to break a send. Not something to do at the end of a long session.
 
-   If origin shows the vercel.app address, the package is not live.
+COVERED:   application-send, variation-send
+           (variation-reminders needs no guard - pkg926 fixed it at source)
 
-3. While you are there, check the `due` list. Each entry has a `project`
-   label - if any are blank, the cold-cache fault is still present.
+NOT COVERED YET: pre-start-send, pre-start-notify-send, rams-approvals,
+           issue-notify, issue-send-customer, bookkeeping-inquery,
+           portal-auth (password resets), ops-scorecards, concern-invite,
+           chase-email-send, deliveries-notify, forms-weekly-notify,
+           hs-expiry-email, outstanding-invoices, ops-users, report-problem,
+           wip-lock, variation-instruct
 
-NOTE: the deployment url in step 2 ages out as you deploy. Take the current
-one from the newest error email, or from the Vercel dashboard.
+The real answer is one shared sendEmail() helper that every route uses, with
+this check inside it. That is the job worth doing, and it is its own package.
+
+
+AFTER DEPLOYING - CHECK
+-----------------------
+1. Send a variation and an application as normal. Both should behave exactly
+   as before - the guard only reports.
+2. You should NOT receive an error email. If you do, it has found a real one
+   and the email names the route and the host.
