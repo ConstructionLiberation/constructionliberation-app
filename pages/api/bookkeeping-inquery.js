@@ -2,7 +2,7 @@ import { fromEmail } from '../../lib/tenantSettings'
 import { currentTenantId } from '../../lib/tenantContext'
 import { get, set, getPortalUsers } from '../../lib/db'
 import { requireRole } from '../../lib/portalAuth'
-import { INQUERY_KEY, createReviewToken } from '../../lib/inquery'
+import { INQUERY_KEY, createReviewToken, inqueryProjectOptions, projectDisplay, projectFromId } from '../../lib/inquery'
 import withTenant from '../../lib/withTenant'
 
 // IN QUERY - the bookkeeper's side.
@@ -11,6 +11,7 @@ import withTenant from '../../lib/withTenant'
 //   POST { action:'assign',  key, assignee }
 //   POST { action:'comment', key, body }
 //   POST { action:'status',  key, status }        query | approved
+//   POST { action:'project', key, xeroId }        which job this cost belongs to
 //   POST { action:'send',    items }              email each assignee their list
 //
 // The reviewer's side is /api/inquery-review, which is token-authenticated because
@@ -52,7 +53,9 @@ async function handler(req, res) {
         .filter(u => u.name)
         .sort((a, b) => a.name.localeCompare(b.name))
     } catch { users = [] }
-    return res.json({ state, users })
+    let projects = []
+    try { projects = await inqueryProjectOptions() } catch { projects = [] }
+    return res.json({ state, users, projects })
   }
 
   if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return res.status(405).json({ error: 'Method not allowed' }) }
@@ -93,6 +96,27 @@ async function handler(req, res) {
       approvedAt: status === 'approved' ? Date.now() : 0,
       approvedBy: status === 'approved' ? by : '',
     }
+    await set(INQUERY_KEY, state)
+    return res.json({ ok: true, state })
+  }
+
+  if (action === 'project') {
+    const key = String(req.body?.key || '')
+    if (!key) return res.status(400).json({ error: 'Missing key' })
+    const options = await inqueryProjectOptions()
+    const project = projectFromId(req.body?.xeroId, options)
+    // An id that matches nothing is a mistake, not a clear. Clearing is sending ''.
+    if (req.body?.xeroId && !project) return res.status(400).json({ error: 'That project is no longer in the list.' })
+    const rec = state[key] || { status: 'query', comments: [] }
+    const comments = Array.isArray(rec.comments) ? rec.comments : []
+    // A note in the thread, so the reviewer sees WHO said which job and when rather
+    // than a project that silently appeared between one email and the next.
+    const before = projectDisplay(rec.project)
+    const after = projectDisplay(project)
+    if (before !== after) {
+      comments.push({ by, body: after ? `Project set to ${after}.` : `Project cleared${before ? ` (was ${before})` : ''}.`, at: Date.now(), system: true })
+    }
+    state[key] = { ...rec, project, comments, updatedAt: Date.now() }
     await set(INQUERY_KEY, state)
     return res.json({ ok: true, state })
   }
@@ -153,23 +177,26 @@ async function handler(req, res) {
           <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${esc(r.supplier || '')}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${esc(r.reference || '')}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${esc(r.description || '')}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px;color:${projectDisplay((state[r.key] || {}).project) ? '#1a1a19' : '#b45309'}">${esc(projectDisplay((state[r.key] || {}).project) || 'not set')}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px;text-align:right;white-space:nowrap">${money(r.amount)}</td>
         </tr>`).join('')
 
       const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:720px;color:#1a1a19">
         <p style="font-size:15px">Hello ${esc(person.name)},</p>
         <p style="font-size:14px">These costs are sitting <strong>in query</strong> - they are in Xero but not yet
-        against a job. Please confirm each one, or say what is wrong with it.</p>
+        against a job. Please confirm each one, or say what is wrong with it. If the project
+        is blank or wrong, you can set it on the review page.</p>
         <table style="width:100%;border-collapse:collapse;margin:14px 0">
           <thead><tr>
             <th style="text-align:left;font-size:11px;color:#888;padding:4px 8px">Date</th>
             <th style="text-align:left;font-size:11px;color:#888;padding:4px 8px">Supplier</th>
             <th style="text-align:left;font-size:11px;color:#888;padding:4px 8px">Reference</th>
             <th style="text-align:left;font-size:11px;color:#888;padding:4px 8px">Description</th>
+            <th style="text-align:left;font-size:11px;color:#888;padding:4px 8px">Project</th>
             <th style="text-align:right;font-size:11px;color:#888;padding:4px 8px">Amount</th>
           </tr></thead>
           <tbody>${rowsHtml}</tbody>
-          <tfoot><tr><td colspan="4" style="padding:6px 8px;font-size:13px;font-weight:700">Total</td>
+          <tfoot><tr><td colspan="5" style="padding:6px 8px;font-size:13px;font-weight:700">Total</td>
             <td style="padding:6px 8px;font-size:13px;font-weight:700;text-align:right">${money(total)}</td></tr></tfoot>
         </table>
         <p><a href="${link}" style="background:#1c704f;color:#fff;padding:10px 18px;border-radius:6px;

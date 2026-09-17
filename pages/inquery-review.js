@@ -17,6 +17,7 @@ export default function InQueryReview() {
   const { token } = router.query
   const [me, setMe] = useState(null)
   const [items, setItems] = useState([])
+  const [projects, setProjects] = useState([])
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState({})     // key -> comment being typed
@@ -27,7 +28,7 @@ export default function InQueryReview() {
     setLoading(true)
     fetch(`/api/inquery-review?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
-      .then(d => { if (d.error) setErr(d.error); else { setMe(d.me); setItems(d.items || []) } })
+      .then(d => { if (d.error) setErr(d.error); else { setMe(d.me); setItems(d.items || []); setProjects(d.projects || []) } })
       .catch(e => setErr(e.message || 'Could not load'))
       .finally(() => setLoading(false))
   }, [token])
@@ -42,8 +43,8 @@ export default function InQueryReview() {
       if (d.error) { setErr(d.error); return }
       // Patch the one row rather than reloading - a reload would lose whatever is
       // half typed in the other boxes.
-      setItems(list => list.map(it => it.key === key ? { ...it, status: d.item.status, comments: d.item.comments } : it))
-      setDraft(s => ({ ...s, [key]: '' }))
+      setItems(list => list.map(it => it.key === key ? { ...it, status: d.item.status, comments: d.item.comments, project: d.item.project } : it))
+      if (patch.comment) setDraft(s => ({ ...s, [key]: '' }))
     } catch (e) { setErr(e.message || 'Could not save') }
     finally { setBusy('') }
   }
@@ -98,6 +99,30 @@ export default function InQueryReview() {
                 </div>
               )}
 
+              {/* WHICH JOB IS THIS FOR.
+                  The reason this person was asked is that they know, so they can say
+                  it here. It writes to the same field the bookkeeper's table shows,
+                  and the change is recorded in the thread below rather than appearing
+                  silently. Saved on change - no separate save button to forget. */}
+              <div style={{ marginTop: 10, borderTop: '1px solid #f2f2f2', paddingTop: 10, display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12.5, color: '#666', fontWeight: 600 }}>Project</span>
+                <select
+                  value={it.project?.xeroId || ''}
+                  disabled={busy === it.key}
+                  onChange={e => save(it.key, { xeroId: e.target.value })}
+                  style={{
+                    padding: '7px 9px', fontSize: 13, borderRadius: 7, fontFamily: 'inherit', maxWidth: '100%',
+                    border: `1px solid ${it.project ? '#ddd' : '#fed7aa'}`,
+                    background: it.project ? '#fff' : '#fff7ed',
+                    color: it.project ? INK : '#9a3412',
+                  }}>
+                  <option value="">Not set - please choose</option>
+                  {projects.map(p => (
+                    <option key={p.xeroId} value={p.xeroId}>{p.jobNo ? `${p.jobNo} - ${p.name}` : p.name}</option>
+                  ))}
+                </select>
+              </div>
+
               {it.comments.length > 0 && (
                 <div style={{ marginTop: 10 }}>
                   {it.comments.map((c, i) => (
@@ -140,8 +165,8 @@ export default function InQueryReview() {
 
         {!loading && items.length > 0 && (
           <p style={{ fontSize: 12, color: '#999', marginTop: 18 }}>
-            Approving tells the bookkeeper the cost is right. They then move it onto the job it belongs to,
-            at which point it leaves this list.
+            Approving tells the bookkeeper the cost is right. Setting the project tells them which job to move
+            it to - they then re-tag it in Xero, at which point it leaves this list.
           </p>
         )}
       </div>

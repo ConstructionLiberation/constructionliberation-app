@@ -1,6 +1,6 @@
 import { currentTenantId } from '../../lib/tenantContext'
 import { get, set } from '../../lib/db'
-import { INQUERY_KEY, verifyReviewToken } from '../../lib/inquery'
+import { INQUERY_KEY, verifyReviewToken, inqueryProjectOptions, projectDisplay, projectFromId } from '../../lib/inquery'
 import withTenant from '../../lib/withTenant'
 
 // THE REVIEWER'S SIDE.
@@ -13,8 +13,13 @@ import withTenant from '../../lib/withTenant'
 // that address - not the whole In Query list - so a forwarded link cannot show
 // somebody else's queries.
 //
-//   GET  ?token=..                              -> { me, items }
-//   POST { token, key, status?, comment? }      -> update one invoice
+//   GET  ?token=..                                        -> { me, items, projects }
+//   POST { token, key, status?, comment?, xeroId? }       -> update one invoice
+//
+// THE PROJECT LIST IS RETURNED HERE TOO. The reviewer is the person who knows which
+// job a cost belongs to - that is why they were asked - so they can set it, and it
+// writes to the same field the bookkeeper's table reads. The list comes from
+// projects:registry, one Redis read, so this endpoint still never touches Xero.
 async function handler(req, res) {
   const token = String(req.query.token || req.body?.token || '')
   const t = verifyReviewToken(token, currentTenantId())
@@ -43,11 +48,14 @@ async function handler(req, res) {
           // the amount even though this endpoint never reads Xero.
           lines: Array.isArray(rec.lines) ? rec.lines : [],
           amount: Number(rec.amount) || 0,
+          project: rec.project || null,
         }
       })
       .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.supplier).localeCompare(String(b.supplier)))
     const name = (Object.values(state).find(r => r && r.assignee && String(r.assignee.email || '').toLowerCase() === t.email)?.assignee?.name) || t.email
-    return res.json({ me: { name, email: t.email }, items })
+    let projects = []
+    try { projects = await inqueryProjectOptions() } catch { projects = [] }
+    return res.json({ me: { name, email: t.email }, items, projects })
   }
 
   if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return res.status(405).json({ error: 'Method not allowed' }) }
@@ -63,6 +71,23 @@ async function handler(req, res) {
   const comment = String(req.body?.comment || '').trim().slice(0, 2000)
   if (comment) { comments.push({ by: who, body: comment, at: Date.now() }); changed = true }
 
+  // WHICH JOB. Sent as xeroId; '' clears it. Undefined means "not touching it", which
+  // is what an Approve or a plain comment sends - so approving cannot wipe a project
+  // somebody already set.
+  let project = rec.project || null
+  if (req.body?.xeroId !== undefined) {
+    const options = await inqueryProjectOptions()
+    const next = projectFromId(req.body.xeroId, options)
+    if (req.body.xeroId && !next) return res.status(400).json({ error: 'That project is no longer in the list.' })
+    const before = projectDisplay(rec.project)
+    const after = projectDisplay(next)
+    if (before !== after) {
+      comments.push({ by: who, body: after ? `Project set to ${after}.` : `Project cleared${before ? ` (was ${before})` : ''}.`, at: Date.now(), system: true })
+      project = next
+      changed = true
+    }
+  }
+
   if (req.body?.status === 'approved' || req.body?.status === 'query') {
     const status = req.body.status
     // A note of the decision itself, so the thread reads as a history rather than
@@ -70,15 +95,15 @@ async function handler(req, res) {
     if (status !== (rec.status || 'query')) {
       comments.push({ by: who, body: status === 'approved' ? 'Marked approved.' : 'Put back in query.', at: Date.now(), system: true })
     }
-    state[key] = { ...rec, status, comments, updatedAt: Date.now(), approvedAt: status === 'approved' ? Date.now() : 0, approvedBy: status === 'approved' ? who : '' }
+    state[key] = { ...rec, status, comments, project, updatedAt: Date.now(), approvedAt: status === 'approved' ? Date.now() : 0, approvedBy: status === 'approved' ? who : '' }
     changed = true
   } else if (changed) {
-    state[key] = { ...rec, comments, updatedAt: Date.now() }
+    state[key] = { ...rec, comments, project, updatedAt: Date.now() }
   }
 
   if (!changed) return res.status(400).json({ error: 'Nothing to save' })
   await set(INQUERY_KEY, state)
-  return res.json({ ok: true, item: { key, status: state[key].status || 'query', comments: state[key].comments || [] } })
+  return res.json({ ok: true, item: { key, status: state[key].status || 'query', comments: state[key].comments || [], project: state[key].project || null } })
 }
 
 export default withTenant(handler)

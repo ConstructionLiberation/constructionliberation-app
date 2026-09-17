@@ -1,55 +1,74 @@
-pkg910 - "Cash flow to be updated" could never be cleared by saving
-====================================================================
+pkg911 - In Query: a Project column, on the table, in the email and on the link page
+=====================================================================================
 
-REPLACE (2 files, both existing - no new files to create):
+REPLACE (5 files, all existing - no new files to create):
 
-  pages/project-cashflow.js
-  pages/api/project-cashflow.js
+  lib/inquery.js
+  components/InQueryTable.js
+  pages/inquery-review.js
+  pages/api/bookkeeping-inquery.js
+  pages/api/inquery-review.js
 
-NOTE: same filename in two folders. Both must be replaced.
-
-
-WHAT WAS WRONG
---------------
-The warning has two triggers. pkg909 fixed the second one. The FIRST -
-"an application was raised since this forecast was saved" - has never been
-able to clear, and pkg909 is what made that visible.
-
-It decided when the last application was raised with:
-
-    const t = a.createdAt || (a.endDate ? Date.parse(a.endDate) : 0)
-
-The actuals feed never sent createdAt. It sent seq, appNumber, status,
-endDate, dueDate, thisCert, thisCertGross and grossToDate - nothing else.
-So a.createdAt was always undefined and it always fell back to endDate,
-which is the VALUATION date.
-
-That compares a valuation date against a save timestamp. Valuations are
-usually month end, so that date is frequently in the FUTURE - making
-"raised since you saved" permanently true. Saving could never win.
-
-The applications carry sentAt and createdAt. They just never left the API.
+NOTE: inquery-review.js exists in TWO folders - pages/ and pages/api/.
+Both are in this package and both must be replaced.
 
 
-WHAT CHANGED
+WHAT IT DOES
 ------------
-API now sends sentAt and createdAt on each application.
-Client compares timestamps: sentAt, then createdAt, then endDate clamped
-to now so a future valuation date can never beat a save.
+Every In Query invoice now carries a project, set by hand because Xero cannot
+tell you - the cost being untagged is the whole reason it is on this tab.
+
+  Bookkeeping > In Query   new sortable "Project" column with a picker on
+                           each row. Amber while unset.
+  The email                new Project column, showing "not set" in amber
+                           where nobody has said yet.
+  The review link page     a Project picker on each invoice card, editable
+                           by the person who was asked.
+
+Setting or changing it writes a line into the comment thread - "Project set
+to J240 - Market Drayton." - so it reads as a history rather than a value
+that silently appeared between one email and the next.
+
+Nothing re-tags anything in Xero. This records the ANSWER; re-tagging in
+Xero is still what moves the cost off the tab.
+
+
+HOW IT IS BUILT
+---------------
+ONE project list, in lib/inquery.js, called by both APIs. Two lists that
+drift is how a reviewer picks a project the bookkeeper cannot see.
+
+Source is projects:registry - our own record of every project Xero has ever
+returned. One Redis read, survives a deleted tracking option, and the review
+page still never touches Xero, which matters because the person holding that
+link may be outside the business.
+
+Excluded from the list: anything in config:hidden-projects, plus the four
+tracking options that are not projects (In Query, Old Projects, Internal,
+Head Office Cost). Offering "In Query" as the answer to "which job is this
+In Query cost for" is the obvious own goal.
+
+The email reads the project off the stored record, not off what the browser
+posted, so what goes out is what is saved.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Open a forecast still showing CASH FLOW TO BE UPDATED and save it.
-   The marker should clear.
-2. If it does NOT clear, hover it and send me the tooltip text - it lists
-   the reasons and will say which trigger is still firing.
-3. Some projects that were flagged may now clear on load without you
-   touching them, if their last save already postdates the application.
-   That is correct, not a missed warning.
+1. Bookkeeping > In Query. The Project column shows, amber and "Not set".
+2. Pick a project on one row. It saves immediately - no save button - and a
+   line appears in that invoice's comments.
+3. Sort by Project. Rows group by job number.
+4. Send the list to yourself. The email has a Project column.
+5. Open the link from the email, change the project there, then go back to
+   the Bookkeeping table and confirm it followed.
+6. Approve something on the link page and confirm the project SURVIVES -
+   approving must not wipe it.
 
 
-WHY THIS WAS NOT CAUGHT BY THE BUILD
-------------------------------------
-Reading a field the API never sends is valid JavaScript. It compiles, it
-runs, and the fallback produces a plausible date. The usual shape.
+ONE THING TO BE AWARE OF
+------------------------
+The review page now shows the project list to whoever holds the link. For
+Contracts Managers and site staff that is nothing; if you ever send an In
+Query item to somebody outside the business, they can see your job numbers
+and names. Say the word and it becomes a free-text box for external
+reviewers instead.

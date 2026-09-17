@@ -19,6 +19,7 @@ const keyOf = (r) => [r.date || '', r.supplier || r.contact || '', r.reference |
 export default function InQueryTable({ rows, statusFilter, onStatusFilterChange }) {
   const [state, setState] = useState({})
   const [users, setUsers] = useState([])
+  const [projects, setProjects] = useState([])
   const [sortCol, setSortCol] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
   const [expanded, setExpanded] = useState(null)
@@ -33,7 +34,7 @@ export default function InQueryTable({ rows, statusFilter, onStatusFilterChange 
 
   useEffect(() => {
     fetch('/api/bookkeeping-inquery').then(r => r.json())
-      .then(d => { if (!d.error) { setState(d.state || {}); setUsers(d.users || []) } })
+      .then(d => { if (!d.error) { setState(d.state || {}); setUsers(d.users || []); setProjects(d.projects || []) } })
       .catch(() => {})
   }, [])
 
@@ -65,6 +66,9 @@ export default function InQueryTable({ rows, statusFilter, onStatusFilterChange 
         ...g,
         description: g.lines.length === 1 ? g.lines[0].description : `${g.lines.length} lines`,
         assignee: rec.assignee || null,
+        // Overrides the tracking option carried in from Xero on purpose: that is
+        // always "In Query", which is exactly what this column exists to replace.
+        project: rec.project || null,
         status: rec.status === 'approved' ? 'approved' : 'query',
         comments: Array.isArray(rec.comments) ? rec.comments : [],
       }
@@ -98,6 +102,7 @@ export default function InQueryTable({ rows, statusFilter, onStatusFilterChange 
         case 'reference': return String(g.reference).toLowerCase()
         case 'description': return String(g.description).toLowerCase()
         case 'amount': return g.amount
+        case 'project': return String(g.project?.jobNo || '').toLowerCase()
         case 'user': return String(g.assignee?.name || '').toLowerCase()
         case 'status': return g.status
         case 'comments': return g.comments.length
@@ -123,13 +128,15 @@ export default function InQueryTable({ rows, statusFilter, onStatusFilterChange 
     const items = filtered
       .filter(g => g.status !== 'approved' && g.assignee?.email)
       .map(g => ({ key: g.key, date: g.date, supplier: g.supplier, reference: g.reference, description: g.description, amount: g.amount, lines: g.lines }))
+    // The project is NOT sent: the server reads it off its own record when it builds
+    // the email, so what goes out is what is stored rather than what a client claimed.
     if (!items.length) { setMsg('Nothing to send - assign somebody with an email address first.'); return }
     const d = await post({ action: 'send', items })
     if (d) setSendResult(d)
   }
 
   const COLS = [['date', 'Date'], ['supplier', 'Supplier'], ['reference', 'Reference'], ['description', 'Description'],
-    ['amount', 'Amount'], ['user', 'User responsible'], ['status', 'Status'], ['comments', 'Comments']]
+    ['project', 'Project'], ['amount', 'Amount'], ['user', 'User responsible'], ['status', 'Status'], ['comments', 'Comments']]
 
   return (
     <div>
@@ -208,7 +215,7 @@ export default function InQueryTable({ rows, statusFilter, onStatusFilterChange 
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={9} style={{ ...td, color: '#aaa', textAlign: 'center', padding: 30 }}>
+              <tr><td colSpan={10} style={{ ...td, color: '#aaa', textAlign: 'center', padding: 30 }}>
                 {groups.length === 0 ? 'Nothing tagged In Query in Xero for these filters.' : 'No items match these filters.'}
               </td></tr>
             ) : filtered.map((g, i) => (
@@ -225,6 +232,26 @@ export default function InQueryTable({ rows, statusFilter, onStatusFilterChange 
                   <td style={td}>{g.supplier || '\u2014'}</td>
                   <td style={td}>{g.reference || '\u2014'}</td>
                   <td style={{ ...td, maxWidth: 260, whiteSpace: 'normal' }}>{g.description || '\u2014'}</td>
+                  <td style={td}>
+                    {/* A native select rather than the searchable picker used elsewhere:
+                        this sits inside a horizontally scrolling table, and an absolutely
+                        positioned dropdown gets clipped by the overflow container. */}
+                    <select
+                      value={g.project?.xeroId || ''}
+                      disabled={busy}
+                      onChange={e => post({ action: 'project', key: g.key, xeroId: e.target.value })}
+                      style={{
+                        padding: '5px 7px', fontSize: 12.5, borderRadius: 6, fontFamily: 'inherit', maxWidth: 210,
+                        border: `1px solid ${g.project ? '#e5e5e5' : '#fed7aa'}`,
+                        background: g.project ? '#fff' : '#fff7ed',
+                        color: g.project ? '#1a1a2e' : '#9a3412',
+                      }}>
+                      <option value="">Not set</option>
+                      {projects.map(p => (
+                        <option key={p.xeroId} value={p.xeroId}>{p.jobNo ? `${p.jobNo} - ${p.name}` : p.name}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td style={{ ...td, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{money(g.amount)}</td>
                   <td style={td}>
                     <select
