@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
+import { AdminTabs } from '../../components/AdminShell'
 
 const TEMPLATES = [
   { key: 'prestart', label: 'Pre-Start Meeting Minutes' },
@@ -22,6 +23,7 @@ const uid = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}
 export default function TemplatesAdmin() {
   const router = useRouter()
   const [me, setMe] = useState(null)
+  const [role, setRole] = useState(null)
   const [key, setKey] = useState(null)             // null = show card list
   const [sections, setSections] = useState([])
   const [original, setOriginal] = useState('[]')   // snapshot for dirty check
@@ -37,6 +39,9 @@ export default function TemplatesAdmin() {
     fetch('/api/portal-auth?action=me').then(r => r.json()).then(d => {
       if (!d.user) { router.replace('/login'); return }
       if (!['management', 'admin'].includes(d.user.role)) { router.replace('/'); return }
+      // Kept so the shared nav can filter on it. This page allows management as well as
+      // admin, and the two see different tabs.
+      setRole(d.user.role)
       setMe(d.user)
     })
   }, [])
@@ -119,11 +124,10 @@ export default function TemplatesAdmin() {
           <span style={{ color: '#3a3a38' }}>|</span>
           <span style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>Admin</span>
         </div>
-        <div style={{ background: '#232321', padding: '0 24px', display: 'flex', gap: 4, height: 44, alignItems: 'center', overflowX: 'auto' }}>
-          {[['Portal Users', '/admin'], ['Templates', '/admin/templates'], ['Form Builder', '/operations/forms-builder'], ['Site App Users', '/operations/users'], ['Documents', '/admin/documents'], ['RAMS Director', '/admin/rams-director'], ['App Improvements', '/admin/problem-reports']].map(([label, href]) => (
-            <a key={href} href={href} style={{ fontSize: 13, textDecoration: 'none', padding: '8px 14px', whiteSpace: 'nowrap', color: href === '/admin/templates' ? '#fff' : '#bbb', fontWeight: href === '/admin/templates' ? 600 : 400, borderBottom: href === '/admin/templates' ? '2px solid #ca8a04' : '2px solid transparent' }}>{label}</a>
-          ))}
-        </div>
+        {/* THE THIRD COPY OF THIS NAV, now gone. There were three: this one with seven
+            tabs, AdminShell with seven, and pages/admin.js with nine - so the bar
+            changed shape depending which Admin page you were standing on. One list. */}
+        <AdminTabs active="/admin/templates" role={role} />
 
         <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
           {!key ? (

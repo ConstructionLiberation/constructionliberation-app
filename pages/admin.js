@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 
 import { ROLES, ROLE_LABEL as roleLabel, normRole, AREA_ACCESS } from '../lib/roles'
+import { AdminTabs } from '../components/AdminShell'
 
 // Friendly labels for the permission-matrix rows (areas).
 const AREA_LABEL = {
@@ -93,11 +94,11 @@ export default function AdminPage() {
           <span style={{ color: '#3a3a38' }}>|</span>
           <span style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>Admin</span>
         </div>
-        <div style={{ background: '#232321', padding: '0 24px', display: 'flex', gap: 4, height: 44, alignItems: 'center', overflowX: 'auto' }}>
-          {[['Portal Users', '/admin'], ['Templates', '/admin/templates'], ['Email Notifications', '/admin/notifications'], ['Form Builder', '/operations/forms-builder'], ['Site App Users', '/operations/users'], ['Documents', '/admin/documents'], ['RAMS Director', '/admin/rams-director'], ['App Improvements', '/admin/problem-reports'], ['Xero Connection', '/connect']].map(([label, href]) => (
-            <a key={href} href={href} style={{ fontSize: 13, textDecoration: 'none', padding: '8px 14px', whiteSpace: 'nowrap', color: href === '/admin' ? '#fff' : '#bbb', fontWeight: href === '/admin' ? 600 : 400, borderBottom: href === '/admin' ? '2px solid #ca8a04' : '2px solid transparent' }}>{label}</a>
-          ))}
-        </div>
+        {/* The same bar every other Admin page renders, from the same list. This used to
+            be a second inline copy with nine tabs against AdminShell's seven, which is
+            why the nav lost two entries the moment you left this page.
+            Role is hardcoded: this page redirects anybody who is not an admin. */}
+        <AdminTabs active="/admin" role="admin" />
 
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

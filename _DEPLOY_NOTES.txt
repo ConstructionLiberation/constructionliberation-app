@@ -1,80 +1,60 @@
-pkg920 - Missing Forms: mark a form "not needed"
-=================================================
+pkg921 - Admin navigation was three different lists
+====================================================
 
-ONE NEW FILE - CREATE THIS MANUALLY:
+REPLACE (3 files, all existing - no new files to create):
 
-  lib/formsWaived.js
+  components/AdminShell.js
+  pages/admin.js
+  pages/admin/templates.js
 
-REPLACE (2 files, both existing):
-
-  pages/operations/forms-missing.js
-  pages/api/forms-missing.js
-
-NOTE: forms-missing.js exists in TWO folders. Both are here; both must be
-replaced.
+NOTE: pages/admin.js and pages/admin/templates.js are different files in
+different folders. Both are here.
 
 
-WHAT IT DOES
+WHAT WAS WRONG
+--------------
+The Admin nav bar was written out three times:
+
+  pages/admin.js            9 tabs   (inline)
+  pages/admin/templates.js  7 tabs   (inline, its own copy again)
+  components/AdminShell.js  7 tabs   (everything else)
+
+So the bar changed shape depending which Admin page you were standing on.
+Email Notifications and Xero Connection existed only on Portal Users, and
+leaving that page made them disappear with no way back except returning to
+it. Your screenshot is the templates.js copy.
+
+Nothing was broken in the sense of erroring. Three lists simply drifted,
+which is the fault this codebase produces more than any other.
+
+
+WHAT CHANGED
 ------------
-Open any card's pop-out. The Missing list now has a "Not needed" tick box on
-each row. Tick it and that obligation leaves the totals, the card percentage
-moves immediately, and it drops into a new "Not needed" section at the bottom
-where it can be unticked to bring it back.
-
-Works on every form type, not just diaries - same rule, one tick box.
-
-The example that prompted it: Will allocated to Albert Bartlett for one day
-to walk the job. The Planner says somebody was on site, so a Daily Site Diary
-is raised as due. Only a person can know it was a visit rather than a shift.
+One list, ADMIN_TABS, exported from AdminShell along with the bar itself as
+an <AdminTabs> component. All three pages render it. The markup was
+identical in all three places, which is how the drift went unnoticed.
 
 
-IT STAYS GONE - WHICH DECIDED THE DESIGN
+WHO SEES WHAT - UNCHANGED FOR MANAGEMENT
 -----------------------------------------
-The waive is stored against WHAT THE OBLIGATION IS:
+  admin       9 tabs, now on EVERY admin page (was 9 on Portal Users, 7
+              elsewhere - that is the fix)
+  management  6 tabs, exactly as before
 
-    projectNo | formType | the date it is about
+Email Notifications and Xero Connection are marked admin-only, which
+reproduces precisely who could reach them before: they only ever appeared on
+Portal Users, and that page redirects anybody who is not an admin.
 
-and never against anything about the current view. So filtering to next
-month and coming back, or widening the range, finds the same key and the row
-is still waived. Keyed on a week, a row index or a position in a list it
-would have come back the moment the filter moved, which is the failure you
-asked me to avoid.
-
-That key rule lives in lib/formsWaived.js and is imported by BOTH the API
-that writes it and the page that reads it. A second copy would not error - it
-would simply stop matching, and the row would reappear with nothing to
-explain why.
-
-
-ALSO CHANGED, DELIBERATELY
----------------------------
-The by-form totals were incremented inline in three places as rows were
-built. Excluding waived rows there would have meant the same subtraction
-written three more times, so they are now counted once from the finished row
-list. Same numbers, one rule, and the cards cannot disagree with the table
-they open.
-
-The POST is role-guarded (post-contract, management, admin). The GET stays
-open, as the whole Operations area is, because Site App users reach it
-without portal roles - but changing what the business counts as required is
-a different act.
+Widening either to management is a decision for you, not something I should
+do while fixing a nav bar. Say the word and it is a one-line change.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Open the Daily Site Diary card. Find Will on Albert Bartlett. Tick
-   "Not needed".
-2. It should leave Missing immediately and the card percentage should move
-   without a reload.
-3. Scroll down - it is in "Not needed", showing who waived it.
-4. Close the modal, change the date range to next month, change it back.
-   It must still be waived. THIS IS THE TEST THAT MATTERS.
-5. Untick it from the Not needed list and confirm it returns to Missing.
-6. Check a different project's diary on the same day is unaffected.
-
-
-ROLLBACK
---------
-Untick anything waived. The store (ops:forms-waived) is additive and separate
-- nothing else reads or writes it, and deleting the key restores every waive
-at once.
+1. As an admin: open Admin, click Templates, Documents, RAMS Director. The
+   bar should have the same nine tabs on every one, with the current page
+   highlighted.
+2. Email Notifications and Xero Connection should be reachable from any of
+   them.
+3. As a management user: six tabs, no Portal Users, no Email Notifications,
+   no Xero Connection - same as today.
