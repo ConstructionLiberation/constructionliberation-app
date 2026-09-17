@@ -46,6 +46,14 @@ async function handler(req, res) {
     // its comment says every link in an outgoing email must come from the customer's
     // address, never from the request. The design emails already use it.
     const origin = baseUrl()
+    // REPORTED IN THE RESPONSE so this is testable without emailing a customer.
+    //
+    // The fault it exists to catch cannot be seen from the production domain: reading
+    // the host worked perfectly there and only broke when a cron ran it. So the thing
+    // worth checking is that `origin` is the same wherever the route is invoked FROM -
+    // which now means opening this on the deployment url and reading it back.
+    out.origin = origin
+    out.invokedOnHost = req.headers.host || ''
     const RESEND_KEY = process.env.RESEND_API_KEY
     const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
 
@@ -89,6 +97,8 @@ async function handler(req, res) {
         const value = (parseFloat(v.materials) || 0) + (parseFloat(v.labour) || 0) + (parseFloat(v.profit) || 0)
         const money = '£' + value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+        // The label is included so a blank project name shows up here too, rather than
+        // only in a customer's inbox.
         out.due.push({ projectId, varNumber: v.varNumber, project: label, to: b.sentTo, sentAt: new Date(b.firstSentAt).toISOString() })
         if (dry || !RESEND_KEY) continue
 

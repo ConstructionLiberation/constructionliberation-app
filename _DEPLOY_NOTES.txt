@@ -1,38 +1,53 @@
-pkg925 - crm-daily-activities has failed every day since it was written
-=======================================================================
+pkg926 - Prove the variation link fix without emailing anybody
+===============================================================
 
-REPLACE (1 file, existing - no new files to create):
+REPLACE (1 file, existing):
 
-  lib/crmDailyActivityEmail.js
+  pages/api/cron/variation-reminders.js
 
-
-THE REAL FAULT
---------------
-    ReferenceError: portalUrl is not defined
-
-buildEmail's third parameter was named `baseUrl`, which SHADOWED the
-imported baseUrl() at the top of the file. The template inside it referenced
-`portalUrl` - a name that exists in two other functions in that same file,
-but not in this one. And the caller passed `baseUrl` (the function) rather
-than `portalUrl` (the resolved string it had already worked out two lines
-earlier).
-
-A half-finished rename, in both directions at once.
-
-It compiles. The import graph is clean. npm run build never executes it. It
-only fails when the function actually RUNS - which is once a day, at 06:00
-and 07:00 UTC.
-
-So the CRM daily activity emails have NEVER been sent. Not once. pkg906
-fixed the heartbeat that was hiding this, which is why it is now surfacing
-as "last run failed" rather than silently succeeding.
-
-Worth asking Edita and anyone else expecting them to confirm they start
-arriving - that is the only proof.
+CONTAINS pkg924. If you have not deployed 924, this replaces it - do not
+deploy 924 afterwards or you will undo this.
 
 
-AFTER DEPLOYING - CHECK
------------------------
-Tomorrow morning: /api/admin/cron-health should show crm-daily-activities
-with a real duration and no failure, and the people with activities due
-should have an email.
+WHAT IT ADDS
+------------
+The dry run now reports two things:
+
+  origin          the address links will be built with
+  invokedOnHost   the host the request actually arrived on
+
+Nothing else changed. No emails, no sends.
+
+
+HOW TO TEST - TWO MINUTES, NO CUSTOMER TOUCHED
+-----------------------------------------------
+1. On the production domain:
+
+   https://app.rockroofing.co.uk/api/cron/variation-reminders?dry=1
+
+   origin        -> https://app.rockroofing.co.uk
+   invokedOnHost -> app.rockroofing.co.uk
+
+   Both agree. This step proves nothing on its own - the OLD code passed it
+   too. It is the control.
+
+2. Now the one that matters. Open the SAME route on the deployment url, the
+   one from Jason's email:
+
+   https://rock-3k4sdnhn9-rock-roofing.vercel.app/api/cron/variation-reminders?dry=1
+
+   You will pass Vercel's sign-in because you are signed in; Jason could not.
+
+   origin        -> https://app.rockroofing.co.uk     <- THE FIX
+   invokedOnHost -> rock-3k4sdnhn9-rock-roofing.vercel.app
+
+   Two different values is the proof. Under the old code both read
+   rock-3k4sdnhn9... and that is exactly what went into Jason's email.
+
+   If origin shows the vercel.app address, the package is not live.
+
+3. While you are there, check the `due` list. Each entry has a `project`
+   label - if any are blank, the cold-cache fault is still present.
+
+NOTE: the deployment url in step 2 ages out as you deploy. Take the current
+one from the newest error email, or from the Vercel dashboard.
