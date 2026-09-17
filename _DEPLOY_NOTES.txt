@@ -1,55 +1,48 @@
-pkg914 - "Application Total" renamed to "Gross Application Total"
-==================================================================
+pkg915 - Retention tracker: "Gross AFA" renamed to "Proj. Final Account"
+=========================================================================
 
-REPLACE (2 files, both existing - no new files to create):
+REPLACE (1 file, existing - no new files to create):
 
-  pages/applications.js
-  lib/applicationPdf.js
+  pages/retention.js
+
+DEPLOY AFTER pkg914, which renames the matching label on the Applications
+page and the PDF. Either order works, but together they are the change.
 
 
 WHAT AND WHY
 ------------
-The figure was always correct:
+It was one figure under two names. "Gross AFA" on the tracker and "Proj.
+Final Account" on the Applications page are the same number on the same
+basis - measured contract sum plus variations at final value, before MCD.
 
-  applicationTotal = measuredToDate + variationsToDate + materialsOnSite
+Renamed everywhere it is visible: the column header, its tooltip, the
+"where it comes from" drill-down heading, the three rows inside it and the
+sentence that compares it to project details.
 
-On J178 that is 314,935.77 + 36,714.00 + 0.00 = 351,649.77, which matches
-Gross on the certificate exactly. MCD and retention are applied BELOW it,
-in the certificate block, and both tie:
+The column NEXT to it is still "Final Account" and still means something
+different - that one is after MCD, and it is the figure retention is
+calculated on. Its tooltip now reads "Proj. Final Account less MCD" so the
+relationship between the two columns is stated on screen.
 
-  Gross                351,649.77
-  less MCD @ 2.5%        8,791.24
-  Sub-total            342,858.53
-  less Retention @ 5%   17,142.93
-  plus Released          8,571.46
-  Total                334,287.06
 
-The NAME was the problem. "Application Total" sits directly beneath two
-retention release lines it does not include, so the column visibly does not
-add up, and the only available conclusions are "the total is wrong" or "I
-do not understand this table".
-
-Renamed in BOTH places - the screen and the customer-facing PDF - so the
-portal and the paperwork say the same thing. The label column on the PDF
-already carries "1st Release Retention (released previously)", so the longer
-label has room.
-
-No calculation changed. Nothing else touched.
+IMPORTS STILL WORK
+------------------
+The CSV importer now accepts "Proj. Final Account", "Gross AFA" and
+"afaGross" for the same field. Spreadsheets already in circulation carry the
+old header, and an import that quietly reads null does not fail - it wipes
+the figure.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Open J178 application 1. The summary row reads "Gross Application Total",
-   still 351,649.77.
-2. Download the PDF and confirm the same, and that the label is not clipped.
+1. Retention tracker: first money column reads "Proj. Final Account", same
+   figures as before. J178 should still show 351,649.77.
+2. Open the drill-down on a project and confirm nothing still says Gross AFA.
+3. Compare J178 against its application: Proj. Final Account should be the
+   same number on both pages. That is the point of the change.
 
 
-NOT DONE, WORTH A DECISION
---------------------------
-"Proj. Final Account" on this page and "Gross AFA" on the retention tracker
-are the SAME figure under two names - both gross, both before MCD. The
-tracker then shows "Final Account" for the figure AFTER MCD. So "Final
-Account" means two different things depending which page you are on.
-
-Renaming is easy; deciding what it should be called on a document going to
-a customer is yours.
+NOT CHANGED
+-----------
+Nothing calculates differently. Internal field names (afaGross) are
+untouched - renaming a stored key is a migration, and this is a label.

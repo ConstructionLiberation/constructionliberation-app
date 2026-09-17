@@ -431,8 +431,11 @@ export default function RetentionPage() {
           //   Gross AFA  -> afaGross      (was projectValue)
           //   Invoiced   -> invoicedNet   (was not mapped at all)
           //   Total Paid -> paid          (was totalPaid)
-          afaGross: num(pick(r, 'Gross AFA', 'afaGross')),
-          projectValue: num(pick(r, 'Gross AFA', 'Final Account')),
+          // BOTH NAMES ACCEPTED. The column was renamed on screen; spreadsheets already
+          // in circulation carry the old header, and an import that silently reads null
+          // wipes the figure rather than failing.
+          afaGross: num(pick(r, 'Proj. Final Account', 'Gross AFA', 'afaGross')),
+          projectValue: num(pick(r, 'Proj. Final Account', 'Gross AFA', 'Final Account')),
           appliedFor: num(pick(r, 'Applied for')),
           certified: num(pick(r, 'Certified')),
           invoicedNet: num(pick(r, 'Invoiced', 'invoicedNet')),
@@ -1001,7 +1004,7 @@ export default function RetentionPage() {
                       its settings records. Applied for is showing whatever was typed on the
                       row, and Certified will be blank unless it was typed too.
                       <div style={{ marginTop: 6, color: '#94a3b8' }}>
-                        If Gross AFA above names an application, the two disagree and that is
+                        If Proj. Final Account above names an application, the two disagree and that is
                         itself the fault - send this screen over.
                       </div>
                     </div>
@@ -1025,16 +1028,16 @@ export default function RetentionPage() {
                           {row('Typed on this row', appliedForFor.certified ? fmtC(parseFloat(appliedForFor.certified)) : 'not set', 'only used where there is no sent application')}
                         </tbody>
                       </table>
-                      <div style={{ marginTop: 14, fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4 }}>Gross AFA - where it comes from</div>
+                      <div style={{ marginTop: 14, fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4 }}>Proj. Final Account - where it comes from</div>
                       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
                         <tbody>
                           {row('SHOWN ON THE ROW', appliedForFor.afaShown == null ? '-' : fmtC(appliedForFor.afaShown), appliedForFor.afaSource || '')}
                           {row('Measured contract sum (app)', d.afaAppMeasured == null ? '-' : fmtC(d.afaAppMeasured), 'the contract works schedule ON the application')}
                           {row('Variations at final value (app)', d.afaAppVariations == null ? '-' : fmtC(d.afaAppVariations), `${d.appVarInstructed} instructed of ${d.appVarCount} on the application`)}
-                          {row('= Gross AFA from the application', d.afaApp == null ? '-' : fmtC(d.afaApp), 'frozen when the application was sent')}
+                          {row('= Proj. Final Account from the application', d.afaApp == null ? '-' : fmtC(d.afaApp), 'frozen when the application was sent')}
                           {row('Contract value (project details)', d.afaSettingsContract == null ? '-' : fmtC(d.afaSettingsContract), '')}
                           {row('Instructed variations (project details)', d.afaSettingsVariations == null ? '-' : fmtC(d.afaSettingsVariations), `${d.settingsVarInstructed} instructed of ${d.settingsVarCount} on the project`)}
-                          {row('= Gross AFA from project details', d.afaSettings == null ? '-' : fmtC(d.afaSettings), 'used only where there is no sent application')}
+                          {row('= Proj. Final Account from project details', d.afaSettings == null ? '-' : fmtC(d.afaSettings), 'used only where there is no sent application')}
                           {row('Figure saved when it was sent', appliedForFor.afaStamped == null ? 'none' : fmtC(appliedForFor.afaStamped),
                             appliedForFor.afaUsedStamp
                               ? 'used - the application could not be recomputed'
@@ -1056,7 +1059,7 @@ export default function RetentionPage() {
                           : `mostly the variations: the application carries ${fmtC(d.afaAppVariations)} against ${fmtC(d.afaSettingsVariations)} on the project, a difference of ${fmtC(varGap)} - usually a variation instructed AFTER the last application went out`
                         return (
                           <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: '#fff7ed', border: '1px solid #fed7aa', fontSize: 12, color: '#7c2d12' }}>
-                            Gross AFA is {fmtC(gap)} {gap > 0 ? 'above' : 'below'} the project-details final account. It is {blame}.
+                            Proj. Final Account is {fmtC(gap)} {gap > 0 ? 'above' : 'below'} the project-details final account. It is {blame}.
                             The application always wins, so the figure shown is the application&apos;s.
                           </div>
                         )
@@ -1360,9 +1363,9 @@ export default function RetentionPage() {
                         ['Ref', 'left', 'Project reference (job number) from project details.', 'ref'],
                         ['Customer', 'left', 'Customer name from project details.', 'customer'],
                         ['Project', 'left', 'Project name from project details.', 'project'],
-                        ['Gross AFA', 'right', 'Final account BEFORE Main Contractor\u2019s Discount: measured contract sum + variations at final value. The latest SENT application always wins - a typed value or an override is only used where the project has no sent application.', 'afaGross'],
+                        ['Proj. Final Account', 'right', 'Final account BEFORE Main Contractor\u2019s Discount: measured contract sum + variations at final value. The SAME figure, on the same basis, as Proj. Final Account on the Applications page - it was called Gross AFA here and they were one number under two names. The latest SENT application always wins; a typed value or an override is only used where the project has no sent application.', 'afaGross'],
                         ['MCD', 'right', 'Main Contractor\u2019s Discount deducted from the gross. Set on the IHM and editable in Edit Project Details.', 'mcdValue'],
-                        ['Final Account', 'right', 'Gross AFA less MCD, retention included. MCD comes off only what Edit Project Details says it comes off - measured works only, or measured plus variations and materials - so a project that excludes variations from MCD is no longer over-discounted. Taken from the latest SENT application, which has already done this arithmetic; a typed value is only used where there is no sent application. This is the figure retention is calculated on.', 'finalAccount'],
+                        ['Final Account', 'right', 'Proj. Final Account less MCD, retention included. MCD comes off only what Edit Project Details says it comes off - measured works only, or measured plus variations and materials - so a project that excludes variations from MCD is no longer over-discounted. Taken from the latest SENT application, which has already done this arithmetic; a typed value is only used where there is no sent application. This is the figure retention is calculated on.', 'finalAccount'],
                         ['Applied for', 'right', 'The sub-total on the latest SENT application: gross measured works less MCD, plus variations. The application always wins - a typed value is only used where a project has no sent application. A warning triangle means it does not agree with Certified.', 'appliedFor'],
                         ['Certified', 'right', 'The "Previously certified (gross)" box on the latest SENT application - the typed figure, used as the Previously Cert. column on the certificate, where This Certificate = current less previously. Blank means the box has not been filled in. Editable inline, but the next application sent overwrites it.', 'certified'],
                         ['Invoiced', 'right', 'Total invoiced on the project: sum of the Sales (account code 200) lines from Xero. NET of VAT, and INCLUDING retention (retention is posted to a separate account, so the Sales total already includes it). From Xero for synced projects, or the imported Xero CSV.', 'invoiced'],
