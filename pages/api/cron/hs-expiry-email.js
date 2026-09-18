@@ -1,4 +1,4 @@
-import { fromEmail } from '../../../lib/tenantSettings'
+import { fromEmail, alertEmail } from '../../../lib/tenantSettings'
 import forEachTenant, { recordSubJob } from '../../../lib/forEachTenant'
 import { get, getTeamMembers, getOpsUsers } from '../../../lib/db'
 import { runFormsWeeklyNotify } from './forms-weekly-notify'
@@ -90,9 +90,12 @@ async function handler(req, res) {
     }
     expired.sort((a, b) => a.date - b.date); soon.sort((a, b) => a.date - b.date)
 
-    // recipients: Operations Managers, else ALERT_EMAIL
+    // recipients: Operations Managers, else the CUSTOMER'S alert address.
+    // Was process.env.ALERT_EMAIL - one value for the whole deployment, so a
+    // second customer's H&S expiry notice would have gone to Rock Roofing.
     let recips = (team || []).filter(m => m.active !== false && /operations manager/i.test(m.jobRole || m.role || '')).map(m => m.email).filter(Boolean)
-    if (!recips.length && process.env.ALERT_EMAIL) recips = [process.env.ALERT_EMAIL]
+    const fallbackAlert = alertEmail()
+    if (!recips.length && fallbackAlert) recips = [fallbackAlert]
     recips = [...new Set(recips)]
     if (!recips.length) return res.status(200).json({ ok: false, reason: 'no recipients' })
 

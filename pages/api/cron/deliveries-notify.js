@@ -1,4 +1,4 @@
-import { fromEmail } from '../../../lib/tenantSettings'
+import { fromEmail, alertEmail } from '../../../lib/tenantSettings'
 import { get, getOpsProjects, getTeamMembers } from '../../../lib/db'
 
 // Daily 7am deliveries notification.
@@ -57,7 +57,8 @@ export async function runDeliveriesNotify({ force = false } = {}) {
   const opsMgr = (team || []).find(m => m.active !== false && /operations manager/i.test(m.jobRole || m.role || ''))
   const opsMgrName = opsMgr ? (opsMgr.name || [opsMgr.firstName, opsMgr.lastName].filter(Boolean).join(' ')) : 'the Operations Manager'
   const opsMgrPhone = opsMgr?.phone || opsMgr?.mobile || ''
-  const opsMgrEmail = opsMgr?.email || process.env.ALERT_EMAIL || ''
+  // Customer's own alert address, not the deployment's. See lib/tenantSettings.
+  const opsMgrEmail = opsMgr?.email || alertEmail() || ''
 
   // Effective supervisor per project (Details supervisor if on the Gantt, else first Gantt supervisor).
   function effectiveSupervisor(projectKey) {

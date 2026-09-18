@@ -185,6 +185,47 @@ export async function middleware(req) {
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
+
+  // EXTERNAL USERS ARE DESIGN-ONLY, ON THE SERVER AS WELL AS THE SCREEN.
+  //
+  // A design customer's session carries role 'external'. Until now that was
+  // enforced by client-side JavaScript alone - the nav hid everything else.
+  // Nothing on the server said so, so a valid external session presented to
+  // /api/commercial-metrics, /api/planning-costs or any of the other ~190
+  // routes would have been accepted: signed cookie, right tenant, no role
+  // check. Typing a URL was enough.
+  //
+  // These are people outside the company - a customer's design team. They are
+  // the one class of user the portal hands a login to and does not employ.
+  //
+  // Allowed: the design pages, the design APIs, and signing in and out.
+  // Everything else is 404 rather than 403, for the same reason as the platform
+  // host above: a 403 confirms the route exists.
+  if (session.role === 'external') {
+    // '/' is deliberately NOT allowed. pages/index.js already redirects an
+    // external user to /design, but only after the portal home has rendered -
+    // so a customer saw the internal home page flash up first. Redirecting here
+    // means they never receive it at all.
+    const ok =
+      pathname.startsWith('/design') ||
+      pathname.startsWith('/api/design-') ||
+      // The design pages read the project list from here. Allowed so the area
+      // keeps working - but this endpoint does NOT scope its response to the
+      // customer's own projects, and that is the next thing to fix. See
+      // _DEPLOY_NOTES.
+      pathname === '/api/planning' ||
+      pathname === '/api/portal-auth' ||
+      pathname === '/api/blob-upload'
+    if (!ok) {
+      if (pathname.startsWith('/api/')) {
+        return new NextResponse(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+      }
+      const url = req.nextUrl.clone()
+      url.pathname = '/design'
+      return NextResponse.redirect(url)
+    }
+  }
+
   return NextResponse.next()
 }
 
