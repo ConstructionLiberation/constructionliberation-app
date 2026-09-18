@@ -1,69 +1,57 @@
-pkg927 - Catch a bad link in an outgoing email before a customer does
-======================================================================
+pkg928 - Stop the daily health alert crying wolf
+=================================================
 
-ONE NEW FILE - CREATE THIS MANUALLY:
+REPLACE (1 file, existing - no new files to create):
 
-  lib/linkGuard.js
-
-REPLACE (2 files, both existing):
-
-  pages/api/application-send.js
-  pages/api/variation-send.js
+  lib/cronHealth.js
 
 
-WHAT IT IS
-----------
-An invariant check: every link in an email to somebody outside the business
-must be on a host we own.
+WHAT WAS WRONG
+--------------
+Two jobs were reported OVERDUE every morning while working perfectly.
 
-Tonight's fault produced NO ERROR. The cron succeeded, Resend accepted the
-email, every figure in it was correct - and the link led to a Vercel sign-in
-page. Error reporting and cron health cannot catch that, because nothing
-went wrong. An invariant can.
+The expected interval is derived from the cron expression, which assumes a
+job runs whenever it is invoked. These two do not - they are invoked daily
+and then decide it is not their day:
 
-Tested against the actual email Jason received: it flags
-rock-3k4sdnhn9-rock-roofing.vercel.app. A correct email, a mailto, a blob
-attachment link and a relative link all pass clean.
+  forms-weekly-notify      Mondays only, inside the hs-expiry-email dispatcher
+  design-rfi-outstanding   every third WORKING day
 
+pkg906 stopped a skipped run overwriting the heartbeat of a real one, which
+was right - that had hidden a genuinely broken job for weeks. The side
+effect is that these jobs legitimately show an age far longer than their
+schedule implies, so they read as dead.
 
-IT WARNS, IT DOES NOT BLOCK
-----------------------------
-The email still sends. You get an error email naming the route and the
-offending host.
-
-Deliberate: if the host list were ever incomplete, a blocking guard means a
-customer gets NO application at all, which is worse than a bad link. Let it
-run a week. If nothing false fires, change BLOCK to true at the top of
-lib/linkGuard.js and it starts refusing instead. That one line is the whole
-switch.
-
-The check can never break a send - it is wrapped so that a fault in the
-guard itself is swallowed.
+The timings in Friday's email confirm it exactly: 96.5h back from Friday
+08:30 is Monday 08:00, and design-rfi-outstanding was due to run at 09:00
+that same morning - half an hour AFTER the alert said it was overdue.
 
 
-COVERAGE - PARTIAL, AND HERE IS EXACTLY WHAT IS NOT COVERED
-------------------------------------------------------------
-32 files call Resend directly. There is no shared send helper, and the
-payload shape differs in each, so wiring all 32 is a large change with 32
-chances to break a send. Not something to do at the end of a long session.
+WHAT CHANGED
+------------
+A declared cadence per job, overriding anything derived from the schedule.
+Declared rather than derived because the cadence lives in an `if` inside
+each job and no cron expression can describe it.
 
-COVERED:   application-send, variation-send
-           (variation-reminders needs no guard - pkg926 fixed it at source)
+  forms-weekly-notify      7 days
+  design-rfi-outstanding   5 days
 
-NOT COVERED YET: pre-start-send, pre-start-notify-send, rams-approvals,
-           issue-notify, issue-send-customer, bookkeeping-inquery,
-           portal-auth (password resets), ops-scorecards, concern-invite,
-           chase-email-send, deliveries-notify, forms-weekly-notify,
-           hs-expiry-email, outstanding-invoices, ops-users, report-problem,
-           wip-lock, variation-instruct
+Five, not three: the worst case is a Friday send, where Mon, Tue, Wed is the
+third working day - five calendar days later.
 
-The real answer is one shared sendEmail() helper that every route uses, with
-this check inside it. That is the job worth doing, and it is its own package.
+Tested both ways. At the ages from Friday's email both read healthy; at
+175h and 145h - a genuinely missed slot - both still fire.
+
+
+WHY THIS MATTERS MORE THAN IT LOOKS
+------------------------------------
+Two false alarms a day is how you stop opening the email. On 17 September
+that same email also carried crm-daily-activities failing for real, sitting
+underneath the two that were wrong.
 
 
 AFTER DEPLOYING - CHECK
 -----------------------
-1. Send a variation and an application as normal. Both should behave exactly
-   as before - the guard only reports.
-2. You should NOT receive an error email. If you do, it has found a real one
-   and the email names the route and the host.
+1. Tomorrow at 08:30 there should be NO health alert at all.
+2. /api/admin/cron-health should show both jobs as ok rather than OVERDUE.
+3. If an alert does arrive, read it - it now means something.
