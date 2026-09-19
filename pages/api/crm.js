@@ -1,7 +1,6 @@
 import { get, set, getPortalUsers } from '../../lib/db'
 import { verifySessionToken, SESSION_COOKIE } from '../../lib/portalAuth'
 import { canAccessArea, normRole } from '../../lib/roles'
-import { SEED_DEALS } from '../../lib/crmSeedDeals'
 import { DEFAULT_FIELD_SCHEMA } from '../../lib/crmFieldSchema'
 import { fetchMessageBody } from '../../lib/msGraph'
 import { sendMentionEmails, getMentionableUsers, diagnoseMentions, sendTestMention } from '../../lib/crmMentions'
@@ -99,10 +98,22 @@ async function loadDeals() {
     Object.defineProperty(saved, '_wereSeed', { value: false, enumerable: false })
     return saved
   }
-  // First run: seed from the sample deals (deep-ish copy).
-  const seeded = (SEED_DEALS || []).map(d => ({ ...d, fields: { ...d.fields }, history: [...(d.history || [])], activities: [...(d.activities || [])], notes: [...(d.notes || [])] }))
-  // Non-enumerable so it cannot leak into anything that serialises the array.
-  Object.defineProperty(seeded, '_wereSeed', { value: true, enumerable: false })
+  // FIRST RUN IS EMPTY. IT USED TO BE ROCK ROOFING'S REAL PIPELINE.
+  //
+  // lib/crmSeedDeals.js held 378 genuine deals - main contractors, named
+  // contacts, site addresses, tender values, credit limits, lost reasons, and
+  // internal notes of the "decline and send to Hoyes" kind. Every tenant whose
+  // crm:deals key was absent was served that as its starting data, and
+  // pages/crm.js imported the same file into the CLIENT bundle, where it
+  // reached the browser of anyone who opened the CRM on any hostname.
+  //
+  // Found on zztest: a tenant whose database contained two keys displayed
+  // Rock's entire six-month pipeline. Nothing had leaked between databases -
+  // it was compiled in.
+  //
+  // A customer's CRM now starts empty, which is what a new customer's CRM is.
+  const seeded = []
+  Object.defineProperty(seeded, '_wereSeed', { value: false, enumerable: false })
   return seeded
 }
 async function loadSchema() {

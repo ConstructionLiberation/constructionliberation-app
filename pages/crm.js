@@ -14,7 +14,6 @@ import { useRouter } from 'next/router';
 import * as XLSX from 'xlsx';
 import { upload } from '@vercel/blob/client';
 import { mapPipedriveRows, mapOrganizationRows, mapPeopleRows, mapActivityRows, mapNoteRows, groupByDeal, detectExportType } from '../lib/crmImportMap';
-import { SEED_DEALS } from '../lib/crmSeedDeals';
 import { ORGS, CONTACTS } from '../lib/crmDirectory';
 import { DEFAULT_FIELD_SCHEMA } from '../lib/crmFieldSchema';
 import ReportImprovementLink from '../components/ReportImprovementLink';

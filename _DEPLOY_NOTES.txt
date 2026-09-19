@@ -1,147 +1,88 @@
-PACKAGE 929 - find-string, the ALERT_EMAIL leak, sendTestMention, external gate
+PACKAGE 930 - Rock Roofing's pipeline was being shipped to every tenant
 ================================================================================
 
-Nine files. Complete replacements. One is new and must be created by hand.
+Three files. Complete replacements. Nothing new to create.
 
-CREATE THIS FILE MANUALLY IN GITHUB
------------------------------------
-  pages/api/admin/find-string.js          <-- NEW, does not exist yet
+  lib/crmSeedDeals.js        339 KB -> 1.3 KB
+  pages/crm.js               one dead import removed
+  pages/api/crm.js           first-run seeding now returns nothing
 
-REPLACE THESE
--------------
-  lib/tenantSettings.js
-  lib/ramsNotify.js
-  lib/crmMentions.js
-  middleware.js
-  package.json
-  pages/api/test-email.js
-  pages/api/cron/deliveries-notify.js
-  pages/api/cron/hs-expiry-email.js
+DEPLOY THIS BEFORE ANYTHING ELSE ON THE LIST.
 
 
-WHAT IS IN IT
-=============
+WHAT WAS HAPPENING
+==================
+lib/crmSeedDeals.js held 378 real Rock Roofing deals - six months of live
+pipeline. Main contractor names, named contacts, site addresses, tender values,
+credit scores, credit limits, lost reasons, and internal commercial notes of the
+"Decline & send to Hoyes roofing" kind.
 
-1. /api/admin/find-string - the leak hunt's one dependency
---------------------------------------------------------
-Read only. Writes nothing. Admin only. Wrapped in withTenant, so the same URL
-on two hostnames searches two different databases - which is the whole point.
+Two separate paths put it where it should never have been:
 
-  GET /api/admin/find-string?q=<string>
-      &match=<pattern>   key pattern, default *
-      &limit=<n>         default 50, max 500
-      &keys=1            search key NAMES too
+1. pages/crm.js imported SEED_DEALS on line 17 AND NEVER USED IT. A dead import
+   - but an import is enough. The whole 339 KB was compiled into the client
+   bundle and served to the browser of anyone who opened the CRM, on any
+   tenant, on any hostname.
 
-It returns the key, the size and a short window either side of the match. It
-deliberately does NOT return the matching value: a route that prints one
-customer's records into a browser tab to prove they should not be there has
-reproduced the leak it was built to find.
+2. pages/api/crm.js seeded it as the starting data for any tenant whose
+   crm:deals key was absent. A brand-new customer's CRM opened showing Rock's
+   pipeline as though it were their own.
 
-The `tenant` field in the response is the important one. A clean result is only
-evidence if you know which database answered.
-
-SMOKE TEST after deploy, on app.rockroofing.co.uk:
-  /api/admin/find-string?q=Rock%20Roofing&limit=5
-Expect: tenant "rock" (or whatever Rock's registry id is), some hits, and
-keysScanned well above zero. If it reports 503 "No database in scope", the
-route is not resolving a tenant and that is a finding in itself.
+Found on zztest: a tenant whose database contained exactly two keys displayed
+Rock's entire pipeline. find-string on that host reported found: 0, correctly -
+nothing had crossed between databases. It was compiled in. The database
+isolation work does not touch this axis at all.
 
 
-2. ALERT_EMAIL was reading the environment in four places
----------------------------------------------------------
-lib/tenantSettings.js already had alertEmail(). Four files ignored it and read
-process.env.ALERT_EMAIL, which has ONE value for the whole deployment. With a
-second customer, their RAMS rejection / delivery note / H&S expiry with no
-recipient resolved would have been posted to Rock Roofing's inbox - another
-company's operational mail arriving silently.
-
-Fixed in: lib/ramsNotify.js, pages/api/cron/deliveries-notify.js,
-pages/api/cron/hs-expiry-email.js, pages/api/test-email.js.
-
-ALSO FIXED, and this one was not on the list: alertEmail() itself returned
-fromTenant('replyTo') - a copy of the function directly above it. Under one
-customer those are the same address so nothing looked wrong. It now prefers the
-tenant's own alertEmail and falls back to their replyTo deliberately, with the
-reasoning written down. Never Rock's address.
-
-  -> If you want a separate alert mailbox per customer, add `alertEmail` to the
-     tenant record on /platform. Without it, their replyTo is used, which is
-     the previous behaviour made intentional.
-
-pages/api/test-email.js also stopped sending from the hard-coded
-"Rock Roofing Sales Dashboard <onboarding@resend.dev>". It now uses
-fromEmail('notify'), so the test proves THIS customer's path rather than the
-deployment's.
+WHAT CHANGED
+============
+- The import is gone from pages/crm.js. Nothing else in that file referenced it.
+- pages/api/crm.js no longer imports it; loadDeals() returns an empty array on
+  first run, with _wereSeed false.
+- lib/crmSeedDeals.js is a stub exporting an empty array, with the history
+  written into it so nobody refills it.
 
 
-3. sendTestMention now exists
-------------------------------
-pages/api/crm.js has imported it from lib/crmMentions.js since the mention work
-landed. That file exported six things and never this one. SWC compiles a missing
-named import to undefined, so the build passed every time and the "send test
-mention" button on pages/crm-scores.js threw a 500 on every click.
-
-It sends one real email down the identical path a real mention uses - same
-resolver, same template, same sender.
-
-SMOKE TEST: pages/crm-scores.js -> send test mention. Expect an email, and a
-response carrying `testSentTo`.
+SMOKE TEST
+==========
+1. app.rockroofing.co.uk -> CRM. Rock's real deals still load, because they come
+   from crm:deals in Rock's database, not from the seed. THIS IS THE ONE THAT
+   MATTERS - if Rock's CRM is empty after this deploy, stop and tell me.
+2. zztest.constructionliberation.com -> CRM. Expect an empty CRM. Before this
+   package it showed Rock's pipeline.
+3. The CRM page should also load noticeably faster; 339 KB has come out of the
+   bundle.
 
 
-4. External users are gated on the server, not just the screen
----------------------------------------------------------------
-middleware.js. A design customer's session carries role 'external'. Until now
-that was enforced by client-side JavaScript alone - the nav hid the rest. A
-valid external session presented to /api/commercial-metrics or any of the other
-~190 routes would have been accepted: signed cookie, right tenant, no role
-check. Typing a URL was enough.
+STILL TO DO, AND THE SECOND ONE IS YOURS
+=========================================
 
-Allowed for external: /design*, /api/design-*, /api/portal-auth,
-/api/blob-upload, and /api/planning. Everything else is 404 for APIs and a
-redirect to /design for pages.
+a) Delete lib/crmSeedDeals.js outright in GitHub once a deploy is confirmed
+   clean. The stub is only there so a straggling import cannot fail a build.
 
-'/' is deliberately NOT allowed. pages/index.js already redirected an external
-user to /design, but only after the portal home had rendered - so a customer saw
-the internal home page flash up first.
+b) DELETING IT DOES NOT REMOVE IT FROM GIT HISTORY. Every commit that contained
+   it still contains it, and anyone with read access to the repo can recover it.
+   The repo is private, which limits this - but check whether any version of
+   this data was ever committed to `rockrooofingsalesdashboard`, which was
+   PUBLIC. That repo had a Pipedrive integration and a scorecard page, so it is
+   a plausible origin. Check before deleting the repo; knowing matters more than
+   the repo does.
 
->>> READ THIS ONE <<<
-/api/planning is allowed because the design pages read their project list from
-it. That endpoint does NOT scope its response to the customer's own projects.
-So an external user can still read the operations planner. The middleware gate
-closes ~190 routes and leaves this one open on purpose rather than break the
-design area. Scoping /api/planning by the external user's projectAccess is the
-next package, and it is the same shape as the Site App /api/site-badges problem.
+c) pages/scorecard-crm.js hardcodes ESTIMATORS = ['Roman', 'Niall', 'James'] and
+   defaults to 'Roman'. Same class - tenant data written into source - but it is
+   names on a page, not a commercial position. NOT fixed here because there are
+   two reasonable sources (derive from the deals' estimator_responsible values,
+   or read the portal user list) and that is your call, not mine.
 
-SMOKE TEST: sign in as an external design user, then type /wip in the address
-bar. Expect a redirect to /design, not the WIP page. Then confirm the design
-area still works end to end - project list, drawings, RFIs, a file download.
-
-
-5. package.json renamed
-------------------------
-"rockroofing-portal" -> "construction-liberation-app". Cosmetic. It was the last
-place in the whole setup still carrying the old name.
-
-
-WHAT THIS PACKAGE DOES NOT TOUCH
-=================================
-- The 245 hardcoded "Rock Roofing" strings, /rock-logo.jpg, site.webmanifest.
-- The platform having no database and therefore no login. Still the blocker on
-  /platform, and PLATFORM_HOSTS must stay UNSET until it has one.
-- The 16+ emailed links built from req.headers.host.
-- Server-side module gates.
+d) pages/lessons-learnt.js carries 'James / Carl / Nathan' as field hints. Same
+   class again, cosmetic.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
-- esbuild compile on all eight changed/new .js files: clean
-- package.json parses as JSON
-- no client page imports crmMentions, tenantSettings, tenantContext or
-  ramsNotify, so nothing server-only reaches the browser bundle
+- esbuild compile on all three files: clean
+- no residual SEED_DEALS reference anywhere outside the stub
+- pages/crm.js imports no server-only module, so nothing new reaches the browser
+- _wereSeed is still defined on both paths, so the "showing sample deals" banner
+  logic on pages/crm.js cannot read undefined
 - every edit applied by a script asserting the anchor appeared exactly once
-- no non-ASCII characters introduced (the box-drawing characters in ramsNotify
-  and middleware are pre-existing and already build clean)
-
-NOT tested: anything that requires running the app. The four smoke tests above
-are the ones that matter, and the external gate is the one most worth doing
-carefully - it is the only change that can lock a real user out of something.
