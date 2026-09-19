@@ -83,12 +83,27 @@ async function handler(req, res) {
     return res.status(503).json({ error: 'No database in scope: ' + e.message })
   }
 
+  // HOW MANY KEYS ARE THERE, ACCORDING TO THE DATABASE ITSELF.
+  //
+  // Without this the scan cannot be checked against anything. On 20 September
+  // three separate searches of Rock's database each reported exactly
+  // keysScanned: 500 with truncated: false - and there was no way to tell
+  // whether that was the real key count or the scan quietly stopping after one
+  // batch and calling it done. A clean "found: 0" means nothing if you do not
+  // know how much was looked at.
+  //
+  // dbsize is the database's own count. Compare it with keysScanned and the
+  // question answers itself, every time, without anyone having to wonder.
+  let totalKeys = null
+  try { totalKeys = await redis.dbsize() } catch { totalKeys = null }
+
   const hits = []
   let scanned = 0
   let unreadable = 0
   let cursor = 0
   let rounds = 0
   let truncated = false
+  let completed = false
 
   try {
     do {
@@ -136,8 +151,12 @@ async function handler(req, res) {
       }
 
       if (truncated) break
-    } while (cursor !== 0 && rounds < 200)
+    } while (cursor !== 0 && rounds < 400)
 
+    // The scan finished only if the cursor came back to zero. Anything else -
+    // hitting the hit limit, or running out of rounds - is a partial answer and
+    // must say so.
+    completed = cursor === 0 && !truncated
     if (cursor !== 0 && !truncated) truncated = true
   } catch (e) {
     return res.status(500).json({ error: 'Scan failed: ' + e.message, scanned, hits })
@@ -152,7 +171,13 @@ async function handler(req, res) {
     match,
     searchedKeyNames: alsoKeys,
     keysScanned: scanned,
+    // The database's own count. If keysScanned is well short of this and
+    // complete is true, the scan is lying and the result cannot be trusted.
+    keysInDatabase: totalKeys,
+    complete: completed,
+    coverage: (totalKeys && totalKeys > 0) ? Math.round((scanned / totalKeys) * 100) + '%' : null,
     keysUnreadable: unreadable,
+    scanRounds: rounds,
     found: hits.length,
     truncated,
     hits,

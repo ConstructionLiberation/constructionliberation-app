@@ -1,94 +1,62 @@
-PACKAGE 933 - remove 8x8, and fix a cron-health state that could never fire
+PACKAGE 935 - the diagnostic could not check itself
 ================================================================================
 
-Six replacement files, and THREE FILES TO DELETE BY HAND IN GITHUB.
+One file. Complete replacement.
+
+  pages/api/admin/find-string.js
 
 
-DELETE THESE THREE FILES
-------------------------
-  lib/crm8x8.js
-  pages/api/call-volume.js
-  pages/api/cron/crm-call-volume.js
+WHY
+===
+Three searches of Rock's database in a row reported exactly
 
-Nothing imports them after this package. Delete them in the GitHub web editor
-(open the file -> the bin icon -> commit).
+    keysScanned: 500, truncated: false
 
+and there was no way to tell whether 500 is Rock's real key count or the scan
+stopping after one batch and calling it finished. A clean "found: 0" is
+worthless if you do not know how much was looked at - and the leak hunt is
+built entirely on clean "found: 0" results, including zztest's.
 
-REPLACE THESE SIX
------------------
-  vercel.json                  17 crons -> 16
-  lib/cronHealth.js            the ordering fix
-  lib/forEachTenant.js         comment only
-  lib/scopedCache.js           comment only
-  pages/scorecard-crm.js       "Calls made" removed
-  pages/api/targets.js         orphan target removed
+WHAT CHANGED
+============
+The response now carries:
 
+  keysInDatabase   the database's OWN count, from DBSIZE
+  coverage         keysScanned as a percentage of it
+  complete         true only if the cursor came back to zero
+  scanRounds       how many SCAN calls it took
 
-1. 8x8 IS GONE
-==============
-James has decided outbound call volume is not a feature that will be added.
-Removed rather than left dormant, because a scheduled cron for an integration
-that does not exist is noise with a slot attached.
+`complete` is now honest: it is false if the hit limit stopped the scan, and
+false if it ran out of rounds. Previously `truncated: false` was reported in
+cases where the scan had not actually finished.
 
-The "Calls made" row is deleted from the sales scorecard, along with its
-default target of 100/month. Deleted rather than kept as a manual entry: a
-metric with no source either sits blank and looks broken, or invites a monthly
-hand-count nobody maintains. Scorecards is due a proper pass anyway, and
-reinstating something deliberately later is cleaner than leaving a stub.
+Round cap raised from 200 to 400.
 
->>> WATCH THIS ONE <<<
-pages/scorecard-crm.js had a SIX-name Promise.all destructure over six fetches.
-It is now FIVE and FIVE. That construct has caused faults here before - a
-mismatch shifts every response one place along and the page renders plausible
-nonsense rather than failing. Counted and commented in place. If the scorecard
-shows wrong numbers after this deploy rather than no numbers, that is where to
-look first.
+Nothing else about the search changed. It still writes nothing, still returns
+no values, still refuses searches under three characters.
 
 
-2. THE CRON-HEALTH STATE THAT COULD NEVER FIRE
-===============================================
-This is why the alert arrived this morning:
+HOW TO READ IT AFTER THIS
+==========================
+On Rock:
 
-  crm-call-volume - OVERDUE - last ran 30h ago - Not configured.
-  Missing in Vercel: EIGHTX8_API_KEY, ...
+  /api/admin/find-string?q=ll:&keys=1&limit=50
 
-lib/cronHealth.js already had a 'not configured' state, deliberately excluded
-from alerts, with a comment explaining exactly why: an alert that always says
-the same thing is an alert people stop opening.
+  - keysInDatabase around 500 and coverage 100% -> the scan was always fine,
+    Rock's database really does hold about 500 keys, and `ll:minutes` genuinely
+    does not exist. The Lessons Learnt page has been rendering from the seed
+    file all along, and the two lessons files in pkg934 MUST NOT be deployed
+    until that is dealt with separately.
 
-But it was tested AFTER the OVERDUE branch. A job whose integration does not
-exist never records a fresh heartbeat, so it is always overdue too - OVERDUE
-always won, and 'not configured' was unreachable for precisely the jobs it was
-written for. The state existed, was correct, and never ran.
+  - keysInDatabase far above 500 -> the scan was capping and reporting success.
+    Every "found: 0" so far, including zztest's, needs re-running. Tell me and
+    I will fix the loop properly rather than instrument it.
 
-Now tested before OVERDUE. Third instance today of the same pattern:
-
-  pkg931  a tenant guard that never ran because the call was at module scope
-  pkg932  fromEmail() that never ran because the env var was read first
-  pkg933  a cron state that never ran because a broader test came first
-
-WORTH ADDING TO CODE-NUANCES: when a guard is written for a specific case,
-check that nothing broader upstream of it matches first. All three were correct
-code in the wrong position.
+Either answer is worth having. The point of this package is that the question
+stops being unanswerable.
 
 
-SMOKE TEST
+CHECKS RUN
 ==========
-1. Sales scorecard loads, and every remaining metric shows the SAME numbers as
-   before. Wrong numbers, not missing ones, is the failure mode to watch for.
-2. /api/admin/cron-health (or whatever the diagnostic route is) lists 16 crons,
-   with no crm-call-volume.
-3. Tomorrow morning: no cron health alert for crm-call-volume. Nothing else
-   should have changed status.
-4. Confirm Vercel shows 16 cron jobs after the deploy.
-
-
-CHECKS RUN BEFORE PACKAGING
-============================
-- esbuild compile on all five changed .js files: clean
-- vercel.json parses, cron count asserted 17 -> 16
-- no import of the three deleted files remains anywhere
-- Promise.all names counted against fetches: 5 and 5
-- no other reference to callsMade, callVolume, EIGHTX8 or crm8x8 outside one
-  explanatory comment
-- every edit applied by a script asserting the anchor appeared exactly once
+- esbuild compile: clean
+- read-only, writes nothing, unchanged in that respect
