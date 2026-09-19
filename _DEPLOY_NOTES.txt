@@ -1,62 +1,73 @@
-PACKAGE 935 - the diagnostic could not check itself
+PACKAGE 936 - the diagnostic was scanning 3% and reporting success
 ================================================================================
 
-One file. Complete replacement.
+One file. Complete replacement. Read only, writes nothing.
 
   pages/api/admin/find-string.js
 
 
-WHY
-===
-Three searches of Rock's database in a row reported exactly
+WHAT WAS WRONG
+==============
+DBSIZE on Rock's database returns 14,308 keys.
+find-string reported keysScanned: 500, complete: true.
 
-    keysScanned: 500, truncated: false
+It scanned three per cent of the database and said it had finished. EXISTS
+ll:minutes returns 1, and the search for it returned nothing - which is how
+this was found, after an hour spent investigating a Lessons Learnt fault that
+did not exist.
 
-and there was no way to tell whether 500 is Rock's real key count or the scan
-stopping after one batch and calling it finished. A clean "found: 0" is
-worthless if you do not know how much was looked at - and the leak hunt is
-built entirely on clean "found: 0" results, including zztest's.
+EVERY "found: 0" FROM THIS ROUTE SO FAR IS WORTHLESS. That includes the zztest
+result on 19 September that was taken as Test A passing. Test A is unproven and
+must be re-run after this deploy.
+
+Two causes, and the second is the one that mattered:
+
+1. The SCAN cursor was run through Number() and compared against 0. Upstash
+   returns it as a string. A cursor that does not survive the round trip ends
+   the loop, and the loop ending was being read as the keyspace being
+   exhausted.
+
+2. Nothing measured coverage. There was no way for the result to be wrong in a
+   way anyone could see. That is the actual defect - the cursor bug was just
+   what happened to trip it.
+
 
 WHAT CHANGED
 ============
-The response now carries:
-
-  keysInDatabase   the database's OWN count, from DBSIZE
-  coverage         keysScanned as a percentage of it
-  complete         true only if the cursor came back to zero
-  scanRounds       how many SCAN calls it took
-
-`complete` is now honest: it is false if the hit limit stopped the scan, and
-false if it ran out of rounds. Previously `truncated: false` was reported in
-cases where the scan had not actually finished.
-
-Round cap raised from 200 to 400.
-
-Nothing else about the search changed. It still writes nothing, still returns
-no values, still refuses searches under three characters.
+- The cursor is kept as the exact string returned and compared with '0'.
+  Both response shapes handled: [cursor, keys] and { cursor, keys }.
+- DBSIZE is read and reported as keysInDatabase, with dbsizeError carrying the
+  reason when it fails rather than a bare null. (The previous version caught it
+  into null and the reason was invisible - the same silent-failure pattern this
+  codebase keeps being bitten by.)
+- `complete` is true ONLY when the cursor returned to 0 AND at least as many
+  keys were seen as the database says it holds.
+- `coverage` gives the percentage. `stoppedBecause` says what ended the scan.
+- A time budget: 40s for key-name searches, 20s for value searches. A value
+  search does a GET per key, so 14,308 of them was never going to finish inside
+  one invocation - it simply was not saying so.
+- COUNT raised to 1000, round cap to 2000.
 
 
-HOW TO READ IT AFTER THIS
-==========================
-On Rock:
+HOW TO USE IT NOW
+=================
+Always read `complete` and `coverage` before `found`.
 
+  complete: true   -> a found: 0 means the string is not in that database.
+  complete: false  -> found: 0 means NOTHING. Look at stoppedBecause.
+
+For a whole-database sweep, prefer keys=1 (no GETs, covers everything). For a
+value search on a large database, narrow it with match= to a key prefix, e.g.
+
+  ?q=ZZTESTMARKER&match=crm:*&limit=50
+
+
+SMOKE TEST after deploy
+========================
   /api/admin/find-string?q=ll:&keys=1&limit=50
 
-  - keysInDatabase around 500 and coverage 100% -> the scan was always fine,
-    Rock's database really does hold about 500 keys, and `ll:minutes` genuinely
-    does not exist. The Lessons Learnt page has been rendering from the seed
-    file all along, and the two lessons files in pkg934 MUST NOT be deployed
-    until that is dealt with separately.
+Expect keysInDatabase around 14308, coverage near 100%, complete: true, and
+ll:minutes among the hits. If coverage is still 3% the cursor fix has not
+worked and I need to know.
 
-  - keysInDatabase far above 500 -> the scan was capping and reporting success.
-    Every "found: 0" so far, including zztest's, needs re-running. Tell me and
-    I will fix the loop properly rather than instrument it.
-
-Either answer is worth having. The point of this package is that the question
-stops being unanswerable.
-
-
-CHECKS RUN
-==========
-- esbuild compile: clean
-- read-only, writes nothing, unchanged in that respect
+Then re-run whatever the leak hunt relied on, because none of it stands.

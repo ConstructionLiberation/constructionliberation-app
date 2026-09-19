@@ -85,42 +85,76 @@ async function handler(req, res) {
 
   // HOW MANY KEYS ARE THERE, ACCORDING TO THE DATABASE ITSELF.
   //
-  // Without this the scan cannot be checked against anything. On 20 September
-  // three separate searches of Rock's database each reported exactly
-  // keysScanned: 500 with truncated: false - and there was no way to tell
-  // whether that was the real key count or the scan quietly stopping after one
-  // batch and calling it done. A clean "found: 0" means nothing if you do not
-  // know how much was looked at.
+  // On 20 September this route reported keysScanned: 500, complete: true on a
+  // database that DBSIZE says holds 14,308 keys. It scanned 3% of it and said
+  // it had finished. Every "found: 0" it produced that day was worthless,
+  // including the one used to conclude that the zztest tenant was clean.
   //
-  // dbsize is the database's own count. Compare it with keysScanned and the
-  // question answers itself, every time, without anyone having to wonder.
+  // A diagnostic that cannot state its own coverage is worse than no
+  // diagnostic, because a clean result from it gets believed. So coverage is
+  // now measured against the database's own count, and `complete` is only ever
+  // true when the whole keyspace was walked.
   let totalKeys = null
-  try { totalKeys = await redis.dbsize() } catch { totalKeys = null }
+  let dbsizeError = null
+  try {
+    if (typeof redis.dbsize === 'function') totalKeys = await redis.dbsize()
+    else if (typeof redis.dbSize === 'function') totalKeys = await redis.dbSize()
+    else dbsizeError = 'no dbsize method on the client'
+  } catch (e) {
+    // Reported, never swallowed. The previous version caught this into null and
+    // the reason was invisible - the exact silent-failure pattern this codebase
+    // keeps being bitten by.
+    dbsizeError = e.message || String(e)
+  }
+  if (typeof totalKeys === 'string') totalKeys = parseInt(totalKeys, 10)
+  if (!Number.isFinite(totalKeys)) totalKeys = null
 
   const hits = []
   let scanned = 0
   let unreadable = 0
-  let cursor = 0
   let rounds = 0
-  let truncated = false
-  let completed = false
+  let hitLimitReached = false
+  let outOfTime = false
+  let outOfRounds = false
+
+  // THE CURSOR IS A STRING AND MUST BE PASSED BACK EXACTLY AS GIVEN.
+  //
+  // It used to be run through Number() and compared with 0. That is the most
+  // likely reason the scan stopped after two rounds on a 14,308-key database:
+  // a cursor that does not survive the round trip ends the loop, and the loop
+  // ending was being read as the keyspace being exhausted.
+  let cursor = '0'
+  let first = true
+
+  // A value search does a GET per key. Fourteen thousand of those will not
+  // finish inside a serverless invocation, so this was ALWAYS going to be
+  // partial - it simply was not saying so. A key-name search (keys=1) needs no
+  // GETs and can cover the whole keyspace comfortably.
+  const started = Date.now()
+  const BUDGET_MS = alsoKeys ? 40000 : 20000
+  const MAX_ROUNDS = 2000
 
   try {
-    do {
-      // COUNT is a hint, not a promise - Redis may return more or fewer. The
-      // loop is bounded by rounds as well as by cursor so a pathological scan
-      // cannot run until the function times out and reports nothing at all.
-      const out = await redis.scan(cursor, { match, count: 500 })
-      cursor = Number(Array.isArray(out) ? out[0] : 0)
-      const batch = (Array.isArray(out) ? out[1] : []) || []
+    while (first || cursor !== '0') {
+      first = false
+      if (Date.now() - started > BUDGET_MS) { outOfTime = true; break }
+      if (rounds >= MAX_ROUNDS) { outOfRounds = true; break }
+
+      const out = await redis.scan(cursor, { match, count: 1000 })
+      // Both shapes seen in the wild: [cursor, keys] and { cursor, keys }.
+      const nextCursor = Array.isArray(out) ? out[0] : (out && out.cursor)
+      const batch = (Array.isArray(out) ? out[1] : (out && out.keys)) || []
+      cursor = String(nextCursor === undefined || nextCursor === null ? '0' : nextCursor)
       rounds++
 
       for (const key of batch) {
         scanned++
 
-        if (alsoKeys && String(key).toLowerCase().includes(needle)) {
-          hits.push({ key, where: 'key name', bytes: null, near: null })
-          if (hits.length >= limit) { truncated = true; break }
+        if (alsoKeys) {
+          if (String(key).toLowerCase().includes(needle)) {
+            hits.push({ key, where: 'key name', bytes: null, near: null })
+            if (hits.length >= limit) { hitLimitReached = true; break }
+          }
           continue
         }
 
@@ -141,45 +175,49 @@ async function handler(req, res) {
         const idx = text.toLowerCase().indexOf(needle)
         if (idx === -1) continue
 
-        hits.push({
-          key,
-          where: 'value',
-          bytes: text.length,
-          near: snippet(text, idx),
-        })
-        if (hits.length >= limit) { truncated = true; break }
+        hits.push({ key, where: 'value', bytes: text.length, near: snippet(text, idx) })
+        if (hits.length >= limit) { hitLimitReached = true; break }
       }
 
-      if (truncated) break
-    } while (cursor !== 0 && rounds < 400)
-
-    // The scan finished only if the cursor came back to zero. Anything else -
-    // hitting the hit limit, or running out of rounds - is a partial answer and
-    // must say so.
-    completed = cursor === 0 && !truncated
-    if (cursor !== 0 && !truncated) truncated = true
+      if (hitLimitReached) break
+    }
   } catch (e) {
-    return res.status(500).json({ error: 'Scan failed: ' + e.message, scanned, hits })
+    return res.status(500).json({ error: 'Scan failed: ' + e.message, scanned, rounds, hits })
   }
 
+  const walkedWholeKeyspace = cursor === '0' && !hitLimitReached && !outOfTime && !outOfRounds
+  // Coverage is the honest number. If the database reported its size and the
+  // scan saw fewer keys than that, the answer is partial whatever the cursor
+  // said.
+  const coveredAll = totalKeys === null ? walkedWholeKeyspace : (walkedWholeKeyspace && scanned >= totalKeys)
+
   return res.status(200).json({
-    // WHICH DATABASE ANSWERED. The single most important field here: a clean
-    // result is only evidence if you know it came from the store you meant.
+    // WHICH DATABASE ANSWERED. A clean result is only evidence if you know it
+    // came from the store you meant.
     tenant: currentTenantId() || '(single tenant)',
     host: req.headers['x-forwarded-host'] || req.headers.host || null,
     query: q,
     match,
     searchedKeyNames: alsoKeys,
-    keysScanned: scanned,
-    // The database's own count. If keysScanned is well short of this and
-    // complete is true, the scan is lying and the result cannot be trusted.
+
+    // ---- COVERAGE. READ THESE BEFORE BELIEVING found. ----
     keysInDatabase: totalKeys,
-    complete: completed,
-    coverage: (totalKeys && totalKeys > 0) ? Math.round((scanned / totalKeys) * 100) + '%' : null,
+    dbsizeError,
+    keysScanned: scanned,
+    coverage: totalKeys ? Math.round((scanned / totalKeys) * 1000) / 10 + '%' : null,
+    // TRUE only when the whole keyspace was walked AND as many keys were seen
+    // as the database says it holds. A "found: 0" with complete:false proves
+    // nothing whatsoever.
+    complete: coveredAll,
+    stoppedBecause: coveredAll ? null
+      : hitLimitReached ? `hit the limit of ${limit} results - raise limit=`
+      : outOfTime ? 'ran out of time - narrow it with match=, or use keys=1'
+      : outOfRounds ? 'ran out of scan rounds'
+      : 'the cursor did not return to 0',
+
     keysUnreadable: unreadable,
     scanRounds: rounds,
     found: hits.length,
-    truncated,
     hits,
   })
 }
