@@ -26,7 +26,8 @@ const SEEN_KEY = 'ops:project-process-seen'
 //
 // Functions, so they are evaluated per request with the customer resolved.
 // lib/ramsNotify.js already did it this way - that was the shape to copy.
-const FROM = () => process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
+// Customer's sender. The environment used to win here; see lib/designEmail.js.
+const FROM = () => fromEmail('notify')
 const APP_URL = () => baseUrl('PORTAL_URL')
 
 function readCookie(req, name) {

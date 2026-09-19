@@ -1,113 +1,108 @@
-PACKAGE 931 - one customer's mail was written into another's database
+PACKAGE 932 - the environment was winning over the customer's sender
 ================================================================================
 
-Three files. Complete replacements. Nothing new to create.
+Eight files. Complete replacements. Nothing new to create.
 
-  lib/tenantSettings.js      adds msConfigured()
-  lib/crmEmailSync.js        SYNC_GROUP / BCC_MAILBOX off module scope
-  lib/crmEmailVolume.js      same, and imports from the source not the re-export
+  lib/designEmail.js
+  lib/designRfiNotify.js
+  lib/notifications.js
+  pages/api/variation-instruct.js
+  pages/api/chase-email-send.js
+  pages/api/project-process.js
+  pages/api/design-email-test.js
+  pages/api/cron/variation-reminders.js
 
-CONTAINMENT FIRST - see the bottom of this file. Deploying this stops it
-happening again; it does not remove what is already in zztest.
 
+WHAT WAS WRONG
+==============
+Eight live send paths read the environment variable FIRST:
 
-WHAT HAPPENED
-=============
-Found on 19 September 2026, roughly an hour after zztest was registered. The
-Emails tab on the zztest portal was showing Rock Roofing's mail, and
-find-string on the zztest host confirmed crm:emails:unallocated and
-crm:emails:sync-state existed in zztest's own database.
+    const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
 
-Two things combined:
+NOTIFY_FROM_EMAIL is set, so fromEmail() NEVER RAN. The tenant-aware helper was
+present, correct, and dead code.
 
-1. MS_TENANT_ID / MS_CLIENT_ID / MS_CLIENT_SECRET are GLOBAL environment
-   variables, so the Graph token is Rock's whichever tenant is in scope.
+Consequence for customer two: variation instructions, RFI notifications, design
+emails, chase emails and project-process emails would all have gone out FROM
+ROCK ROOFING'S ADDRESS, off Rock's verified sending domain, with the customer's
+own domain sitting unused in Resend.
 
-2. lib/crmEmailSync.js line 40 was:
+pages/api/chase-email-send.js was the worst of them - it read
+ACCOUNTS_FROM_EMAIL and then fell through to a HARDCODED
+"Rock Roofing Accounts <onboarding@resend.dev>". A second customer chasing
+their own debt would have done it in Rock's name.
 
-       export const SYNC_GROUP = msSyncGroup()
-
-   Module scope. A module is evaluated ONCE per serverless instance, and that
-   happens with NO tenant in scope - so it took the environment fallback,
-   'crm-sync@rockroofing.co.uk', and stayed frozen at that value for every
-   tenant the instance handled afterwards. Same for BCC_MAILBOX.
-
-crm-email-sync loops every registered tenant. It reached zztest, used Rock's
-credentials and Rock's sync group, and wrote Rock's messages into zztest's
-store.
-
-THE REDIS ISOLATION HELD THROUGHOUT. Every read and write went to the correct
-database. The data crossed on a module-scope constant plus a shared credential,
-which is a boundary that nothing built so far watches.
-
-THE PART WORTH SITTING WITH: zztest's registry record has no msSyncGroup, so
-fromTenant('msSyncGroup') would have THROWN and refused. The guard existed and
-was correct. Evaluating at module scope meant it was never called while zztest
-was in scope, so the guard never ran. The warning about this exact pattern is
-written at the top of lib/tenantSettings.js, two imports away.
+Same shape as pkg931: a guard that exists, is correct, and never executes. And
+the same root pattern as the seeded CRM deals - a default that looks right
+because it happens to be the first customer's value.
 
 
 WHAT CHANGED
 ============
-- SYNC_GROUP and BCC_MAILBOX are now syncGroup() and bccMailbox() - functions,
-  resolved per request. Same names at every call site, one word longer.
-- lib/crmEmailVolume.js no longer imports SYNC_GROUP from crmEmailSync; it calls
-  msSyncGroup() from tenantSettings directly. One fewer copy of the rule.
-- New msConfigured() in tenantSettings. runEmailSync() and refreshEmailVolume()
-  now return { skipped: true } for a customer with no Microsoft settings rather
-  than throwing. Without this the restored guard would produce an error email
-  every fifteen minutes for every tenant that does not use Outlook sync.
-- PRIVATE_MAILBOXES is left reading the environment, with a note. It is empty in
-  your environment so it is currently harmless, but it belongs on the tenant
-  record with the other Microsoft settings.
+Every site now calls fromEmail(kind) and nothing else. fromEmail() already
+carries the same environment chain as its no-tenant fallback, so SINGLE-TENANT
+BEHAVIOUR IS UNCHANGED - the precedence was the entire bug.
 
-RULE TO CARRY FORWARD, and it belongs in CODE-NUANCES.md:
-NEVER CALL A TENANT-AWARE FUNCTION AT MODULE SCOPE. It must be called inside the
-request, every time, or it is not tenant-aware at all. I checked the rest of the
-codebase: these two were the only instances.
+Kinds were chosen to preserve exactly what each site resolved to before:
 
+  lib/designEmail.js            FORMS_FROM_EMAIL  ->  fromEmail('forms')
+  lib/designRfiNotify.js        FORMS_FROM_EMAIL  ->  fromEmail('forms')
+  lib/notifications.js          NOTIFY_FROM_EMAIL ->  fromEmail('notify')
+  variation-instruct.js         NOTIFY_FROM_EMAIL ->  fromEmail('notify')
+  variation-reminders.js        NOTIFY_FROM_EMAIL ->  fromEmail('notify')
+  project-process.js            NOTIFY_FROM_EMAIL ->  fromEmail('notify')
+  chase-email-send.js           ACCOUNTS_FROM_EMAIL -> fromEmail('accounts')
+  design-email-test.js          reports fromEmail('forms'), which is what
+                                designEmail.js actually uses. The diagnostic
+                                was reporting a different value from the one
+                                the code used.
 
-CONTAINMENT - YOURS, AND BEFORE OR ALONGSIDE THE DEPLOY
-========================================================
-1. Take zztest out of the cron loop. forEachTenant calls allTenants() and does
-   NOT filter on `active`, so setting active:false will not do it. Delete these
-   two keys from the CONTROL database (upstash-kv-bole-window):
-
-       tenant:zztest
-       tenant-host:zztest.constructionliberation.com
-
-   Re-register in two minutes from the two calls we already ran, once this is
-   deployed.
-
-2. Clear Rock's mail out of zztest's store. On the zztest host, first:
-
-       /api/admin/find-string?q=crm&keys=1&limit=50
-
-   so you can see all thirteen keys before removing anything. Then delete the
-   crm:emails:* keys in zztest's Data Browser. Or simpler: delete the whole
-   zztest database and create a fresh empty one - it holds nothing you want.
-
-3. Rock's own data is unaffected. Nothing was read from zztest into Rock.
+Note the kind changes on the two design files: they were passing 'notifyOnly'
+but the env read in front meant FORMS_FROM_EMAIL was what actually went out.
+'forms' preserves the real behaviour rather than the written intent.
 
 
-SMOKE TEST after deploy
-========================
-1. Rock's CRM -> Emails tab. The queue must still populate. THIS IS THE ONE
-   THAT MATTERS - if Rock's email sync stops, tell me.
-2. Watch the next crm-email-sync run (every 15 minutes) in the cron health /
-   error reporting. Expect no new errors.
-3. Once zztest is re-registered, wait for a sync cycle and run
-   find-string?q=crm:emails&keys=1 on the zztest host. Expect found: 0. That is
-   the proof the fix holds, and it is worth doing deliberately rather than
-   assuming.
+DELIBERATELY NOT CHANGED
+=========================
+lib/errorReport.js still reads ERROR_REPORT_EMAIL / NOTIFY_FROM_EMAIL globally.
+Platform errors go to the platform operator, not to the customer, so a global
+value is arguably right. Flagged in OUTSTANDING-5 as a decision to take rather
+than an oversight.
+
+pages/api/design-email-test.js lines 21-22 still report the raw environment
+values. That is legitimately what those fields are for - they show what is
+configured. Line 24 is the one that had to change, because it claimed to show
+what the code uses.
+
+
+SMOKE TEST
+==========
+Everything below should look EXACTLY as it did before. Rock has one tenant
+record and its senders resolve to the same addresses, so any change in what
+arrives is a fault, not an improvement.
+
+1. Send a variation from a project. Check the From address is
+   notifications@send.rockroofing.co.uk as usual.
+2. Send a chase email from the bookkeeping chase screen. From should be
+   Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk> - that comes
+   from the `senders.commercial` override on Rock's tenant record... CHECK THIS
+   ONE CAREFULLY. Rock's record has senders.commercial but no senders.accounts,
+   so fromEmail('accounts') will fall back to the default sender
+   (notifications@send.rockroofing.co.uk) rather than the accounts address.
+   IF THE CHASE EMAIL FROM ADDRESS CHANGES, the fix is to add
+   "accounts": "Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>"
+   to the `senders` object on tenant:rock. Tell me and I will give you the call.
+3. Open /api/design-email-test and confirm fromUsed matches what design emails
+   actually arrive from.
+4. Watch variation-reminders on its next run for a From-address change.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
-- esbuild compile on all three files: clean
-- no residual SYNC_GROUP / BCC_MAILBOX reference outside the explanatory comment
-- a codebase-wide scan for any other module-scope call to a tenantSettings
-  function: none remain
-- no client page imports any of these three modules, so nothing new reaches the
-  browser bundle
+- esbuild compile on all eight files: clean
+- no remaining `process.env.*FROM_EMAIL ||` precedence outside errorReport.js
+  and the two diagnostic report fields
+- fromEmail imported in every file that now calls it; added to
+  chase-email-send.js, which had no import
+- no client page or component imports any of these modules
 - every edit applied by a script asserting the anchor appeared exactly once

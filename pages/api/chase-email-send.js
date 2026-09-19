@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { fromEmail } from '../../lib/tenantSettings'
 import withTenant from '../../lib/withTenant'
 
 // Sends a single chase email (already-rendered subject + body) via Resend.
@@ -19,9 +20,12 @@ async function handler(req, res) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'Email is not configured (RESEND_API_KEY missing).' })
 
-  const FROM = process.env.ACCOUNTS_FROM_EMAIL
-    || process.env.FORMS_FROM_EMAIL
-    || 'Rock Roofing Accounts <onboarding@resend.dev>'
+  // Customer's accounts sender. This read ACCOUNTS_FROM_EMAIL directly and then
+  // fell through to a HARDCODED Rock Roofing address - so a second customer
+  // chasing their own debt would have done it in Rock's name. fromEmail()
+  // resolves the customer's 'accounts' sender, and falls back to the same
+  // environment chain when no tenant is in scope. See lib/designEmail.js.
+  const FROM = fromEmail('accounts')
 
   // Preserve the plain-text template layout as HTML (newlines -> <br>).
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

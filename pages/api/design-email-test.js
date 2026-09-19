@@ -21,7 +21,8 @@ async function handler(req, res) {
     FORMS_FROM_EMAIL: process.env.FORMS_FROM_EMAIL || null,
     NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || null,
     FORMS_REPLY_TO: process.env.FORMS_REPLY_TO || null,
-    fromUsed: process.env.FORMS_FROM_EMAIL || fromEmail('notifyOnly'),
+    // Must report what designEmail.js ACTUALLY uses, or the diagnostic lies.
+    fromUsed: fromEmail('forms'),
     recipient: to,
   }
   if (!to) return res.json({ ...diag, sent: false, error: 'No recipient - pass ?to=you@example.com' })

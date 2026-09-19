@@ -208,7 +208,8 @@ async function handler(req, res) {
       const bytes = await buildVariationPDF({ variation: withInstruction, project, logoUrl: `${proto}://${req.headers.host}/rock-logo.jpg` })
       const label = projectLabel(project.jobNo, project.name)
       const who = [instruction.byName, instruction.byRole, instruction.byCompany].filter(Boolean).join(', ')
-      const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
+      // Customer's sender. The environment used to win here; see lib/designEmail.js.
+      const FROM = fromEmail('notify')
       const text = `Variation ${variation.varNumber} for ${label} has been instructed.\n\n`
         + `Instructed by ${who}\n`
         + `on ${new Date(instruction.at).toLocaleString('en-GB')}\n`

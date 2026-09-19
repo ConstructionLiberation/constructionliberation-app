@@ -55,7 +55,8 @@ async function handler(req, res) {
     out.origin = origin
     out.invokedOnHost = req.headers.host || ''
     const RESEND_KEY = process.env.RESEND_API_KEY
-    const FROM = process.env.NOTIFY_FROM_EMAIL || fromEmail('forms')
+    // Customer's sender. The environment used to win here; see lib/designEmail.js.
+    const FROM = fromEmail('notify')
 
     for (const [projectId, proj] of Object.entries(all || {})) {
       const vars = Array.isArray(proj?.variations) ? proj.variations : []
