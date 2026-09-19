@@ -1,88 +1,113 @@
-PACKAGE 930 - Rock Roofing's pipeline was being shipped to every tenant
+PACKAGE 931 - one customer's mail was written into another's database
 ================================================================================
 
 Three files. Complete replacements. Nothing new to create.
 
-  lib/crmSeedDeals.js        339 KB -> 1.3 KB
-  pages/crm.js               one dead import removed
-  pages/api/crm.js           first-run seeding now returns nothing
+  lib/tenantSettings.js      adds msConfigured()
+  lib/crmEmailSync.js        SYNC_GROUP / BCC_MAILBOX off module scope
+  lib/crmEmailVolume.js      same, and imports from the source not the re-export
 
-DEPLOY THIS BEFORE ANYTHING ELSE ON THE LIST.
+CONTAINMENT FIRST - see the bottom of this file. Deploying this stops it
+happening again; it does not remove what is already in zztest.
 
 
-WHAT WAS HAPPENING
-==================
-lib/crmSeedDeals.js held 378 real Rock Roofing deals - six months of live
-pipeline. Main contractor names, named contacts, site addresses, tender values,
-credit scores, credit limits, lost reasons, and internal commercial notes of the
-"Decline & send to Hoyes roofing" kind.
+WHAT HAPPENED
+=============
+Found on 19 September 2026, roughly an hour after zztest was registered. The
+Emails tab on the zztest portal was showing Rock Roofing's mail, and
+find-string on the zztest host confirmed crm:emails:unallocated and
+crm:emails:sync-state existed in zztest's own database.
 
-Two separate paths put it where it should never have been:
+Two things combined:
 
-1. pages/crm.js imported SEED_DEALS on line 17 AND NEVER USED IT. A dead import
-   - but an import is enough. The whole 339 KB was compiled into the client
-   bundle and served to the browser of anyone who opened the CRM, on any
-   tenant, on any hostname.
+1. MS_TENANT_ID / MS_CLIENT_ID / MS_CLIENT_SECRET are GLOBAL environment
+   variables, so the Graph token is Rock's whichever tenant is in scope.
 
-2. pages/api/crm.js seeded it as the starting data for any tenant whose
-   crm:deals key was absent. A brand-new customer's CRM opened showing Rock's
-   pipeline as though it were their own.
+2. lib/crmEmailSync.js line 40 was:
 
-Found on zztest: a tenant whose database contained exactly two keys displayed
-Rock's entire pipeline. find-string on that host reported found: 0, correctly -
-nothing had crossed between databases. It was compiled in. The database
-isolation work does not touch this axis at all.
+       export const SYNC_GROUP = msSyncGroup()
+
+   Module scope. A module is evaluated ONCE per serverless instance, and that
+   happens with NO tenant in scope - so it took the environment fallback,
+   'crm-sync@rockroofing.co.uk', and stayed frozen at that value for every
+   tenant the instance handled afterwards. Same for BCC_MAILBOX.
+
+crm-email-sync loops every registered tenant. It reached zztest, used Rock's
+credentials and Rock's sync group, and wrote Rock's messages into zztest's
+store.
+
+THE REDIS ISOLATION HELD THROUGHOUT. Every read and write went to the correct
+database. The data crossed on a module-scope constant plus a shared credential,
+which is a boundary that nothing built so far watches.
+
+THE PART WORTH SITTING WITH: zztest's registry record has no msSyncGroup, so
+fromTenant('msSyncGroup') would have THROWN and refused. The guard existed and
+was correct. Evaluating at module scope meant it was never called while zztest
+was in scope, so the guard never ran. The warning about this exact pattern is
+written at the top of lib/tenantSettings.js, two imports away.
 
 
 WHAT CHANGED
 ============
-- The import is gone from pages/crm.js. Nothing else in that file referenced it.
-- pages/api/crm.js no longer imports it; loadDeals() returns an empty array on
-  first run, with _wereSeed false.
-- lib/crmSeedDeals.js is a stub exporting an empty array, with the history
-  written into it so nobody refills it.
+- SYNC_GROUP and BCC_MAILBOX are now syncGroup() and bccMailbox() - functions,
+  resolved per request. Same names at every call site, one word longer.
+- lib/crmEmailVolume.js no longer imports SYNC_GROUP from crmEmailSync; it calls
+  msSyncGroup() from tenantSettings directly. One fewer copy of the rule.
+- New msConfigured() in tenantSettings. runEmailSync() and refreshEmailVolume()
+  now return { skipped: true } for a customer with no Microsoft settings rather
+  than throwing. Without this the restored guard would produce an error email
+  every fifteen minutes for every tenant that does not use Outlook sync.
+- PRIVATE_MAILBOXES is left reading the environment, with a note. It is empty in
+  your environment so it is currently harmless, but it belongs on the tenant
+  record with the other Microsoft settings.
+
+RULE TO CARRY FORWARD, and it belongs in CODE-NUANCES.md:
+NEVER CALL A TENANT-AWARE FUNCTION AT MODULE SCOPE. It must be called inside the
+request, every time, or it is not tenant-aware at all. I checked the rest of the
+codebase: these two were the only instances.
 
 
-SMOKE TEST
-==========
-1. app.rockroofing.co.uk -> CRM. Rock's real deals still load, because they come
-   from crm:deals in Rock's database, not from the seed. THIS IS THE ONE THAT
-   MATTERS - if Rock's CRM is empty after this deploy, stop and tell me.
-2. zztest.constructionliberation.com -> CRM. Expect an empty CRM. Before this
-   package it showed Rock's pipeline.
-3. The CRM page should also load noticeably faster; 339 KB has come out of the
-   bundle.
+CONTAINMENT - YOURS, AND BEFORE OR ALONGSIDE THE DEPLOY
+========================================================
+1. Take zztest out of the cron loop. forEachTenant calls allTenants() and does
+   NOT filter on `active`, so setting active:false will not do it. Delete these
+   two keys from the CONTROL database (upstash-kv-bole-window):
+
+       tenant:zztest
+       tenant-host:zztest.constructionliberation.com
+
+   Re-register in two minutes from the two calls we already ran, once this is
+   deployed.
+
+2. Clear Rock's mail out of zztest's store. On the zztest host, first:
+
+       /api/admin/find-string?q=crm&keys=1&limit=50
+
+   so you can see all thirteen keys before removing anything. Then delete the
+   crm:emails:* keys in zztest's Data Browser. Or simpler: delete the whole
+   zztest database and create a fresh empty one - it holds nothing you want.
+
+3. Rock's own data is unaffected. Nothing was read from zztest into Rock.
 
 
-STILL TO DO, AND THE SECOND ONE IS YOURS
-=========================================
-
-a) Delete lib/crmSeedDeals.js outright in GitHub once a deploy is confirmed
-   clean. The stub is only there so a straggling import cannot fail a build.
-
-b) DELETING IT DOES NOT REMOVE IT FROM GIT HISTORY. Every commit that contained
-   it still contains it, and anyone with read access to the repo can recover it.
-   The repo is private, which limits this - but check whether any version of
-   this data was ever committed to `rockrooofingsalesdashboard`, which was
-   PUBLIC. That repo had a Pipedrive integration and a scorecard page, so it is
-   a plausible origin. Check before deleting the repo; knowing matters more than
-   the repo does.
-
-c) pages/scorecard-crm.js hardcodes ESTIMATORS = ['Roman', 'Niall', 'James'] and
-   defaults to 'Roman'. Same class - tenant data written into source - but it is
-   names on a page, not a commercial position. NOT fixed here because there are
-   two reasonable sources (derive from the deals' estimator_responsible values,
-   or read the portal user list) and that is your call, not mine.
-
-d) pages/lessons-learnt.js carries 'James / Carl / Nathan' as field hints. Same
-   class again, cosmetic.
+SMOKE TEST after deploy
+========================
+1. Rock's CRM -> Emails tab. The queue must still populate. THIS IS THE ONE
+   THAT MATTERS - if Rock's email sync stops, tell me.
+2. Watch the next crm-email-sync run (every 15 minutes) in the cron health /
+   error reporting. Expect no new errors.
+3. Once zztest is re-registered, wait for a sync cycle and run
+   find-string?q=crm:emails&keys=1 on the zztest host. Expect found: 0. That is
+   the proof the fix holds, and it is worth doing deliberately rather than
+   assuming.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
 - esbuild compile on all three files: clean
-- no residual SEED_DEALS reference anywhere outside the stub
-- pages/crm.js imports no server-only module, so nothing new reaches the browser
-- _wereSeed is still defined on both paths, so the "showing sample deals" banner
-  logic on pages/crm.js cannot read undefined
+- no residual SYNC_GROUP / BCC_MAILBOX reference outside the explanatory comment
+- a codebase-wide scan for any other module-scope call to a tenantSettings
+  function: none remain
+- no client page imports any of these three modules, so nothing new reaches the
+  browser bundle
 - every edit applied by a script asserting the anchor appeared exactly once
