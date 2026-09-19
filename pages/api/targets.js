@@ -21,7 +21,6 @@ const DEFAULT_TARGETS = {
   sales: {
     dealsResearched: 20,
     emailsSentExternal: 200,
-    callsMade: 100,
     avgValueSecured: 150000,
     avgValuePriced: 200000,
     chasedScored5: 3,

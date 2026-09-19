@@ -54,10 +54,6 @@
       "schedule": "0 2 * * *"
     },
     {
-      "path": "/api/cron/crm-call-volume",
-      "schedule": "30 2 * * *"
-    },
-    {
       "path": "/api/cron/gp-snapshot",
       "schedule": "0 3 22 * *"
     },

@@ -316,7 +316,6 @@ export default function Scorecard() {
   const [loading, setLoading] = useState(true)
   const [lastSync, setLastSync] = useState(null)
   const [emailVolume, setEmailVolume] = useState({})
-  const [callVolume, setCallVolume] = useState({})
   const [gpSnapshots, setGpSnapshots] = useState({})
   const [hiddenProjects, setHiddenProjects] = useState([])
   const [targets, setTargets] = useState(null)
@@ -345,11 +344,13 @@ export default function Scorecard() {
   async function loadData() {
     setLoading(true)
     try {
-      const [dr, vc, ev, cv, gs, tr] = await Promise.all([
+      // FIVE NAMES, FIVE FETCHES. Count them after any change - a mismatch here
+      // silently shifts every response one place along and the page renders
+      // plausible nonsense.
+      const [dr, vc, ev, gs, tr] = await Promise.all([
         fetch('/api/deals-crm'),
         fetch('/api/value-changes-crm'),
         fetch('/api/email-volume'),
-        fetch('/api/call-volume'),
         fetch('/api/gp-snapshots'),
         fetch('/api/targets')
       ])
@@ -361,7 +362,6 @@ export default function Scorecard() {
       // Email volume is a nice-to-have on this page; a failure here must not stop the
       // scorecard loading.
       try { setEmailVolume((await ev.json()).volume || {}) } catch { setEmailVolume({}) }
-      try { setCallVolume((await cv.json()).volume || {}) } catch { setCallVolume({}) }
       try { setGpSnapshots((await gs.json()).snapshots || {}) } catch { setGpSnapshots({}) }
       const td = await tr.json()
       setTargets(td.targets || DEFAULT_TARGETS)
@@ -793,8 +793,6 @@ export default function Scorecard() {
       // 0 when there is no figure at all - a month we never counted is not a month with
       // no emails, and a red zero against target would be a lie.
       emailsSentExternal: personMailbox ? (emailVolume[personMailbox]?.[m] ?? null) : null,
-      // Outbound calls from 8x8. Same rule: null, not zero, for a month never counted.
-      callsMade: personMailbox ? (callVolume[personMailbox]?.[m] ?? null) : null,
       avgValueSecured: avgNow.avg,
       _avgValueSecuredPrior: avgPrior.avg,
       _avgValueSecuredCount: avgNow.count,
@@ -831,7 +829,6 @@ export default function Scorecard() {
   const salesMetricDefs = [
     { key: 'dealsResearched', label: 'Deals researched', sub: 'Projects added to Project In', format: v => v, targetKey: 'dealsResearched', drillKey: '_dealsResearchedList' },
     { key: 'emailsSentExternal', label: 'Emails sent externally', sub: 'To at least one address outside Rock Roofing', format: v => v, targetKey: 'emailsSentExternal' },
-    { key: 'callsMade', label: 'Calls made', sub: 'Outbound calls, from 8x8', format: v => v, targetKey: 'callsMade' },
     { key: 'gleniganScored5', label: 'Glenigan scored ≥5', format: v => v, targetKey: 'gleniganScored5', drillKey: '_gleniganScored5Projects' },
     { key: 'chasedScored5', label: 'Actively Chased scored ≥5', sub: 'Received in month, scored 5 or more', format: v => v, targetKey: 'chasedScored5', drillKey: '_chasedScored5Projects' },
     { key: 'strikeRateValue', label: 'Strike rate (value) — all estimators', sub: 'Rolling 6 months', format: pct, targetKey: 'strikeRateValue', drillKey: '_rolling6AllProjects' },
