@@ -1,73 +1,132 @@
-PACKAGE 936 - the diagnostic was scanning 3% and reporting success
+PACKAGE 934 - the hardcoded admin, and a second seeded dataset
 ================================================================================
 
-One file. Complete replacement. Read only, writes nothing.
+Four files. Complete replacements. Nothing new to create.
 
-  pages/api/admin/find-string.js
+  pages/api/portal-auth.js         the first-admin bootstrap removed
+  pages/api/admin/tenant-setup.js  a deliberate 'first-admin' action added
+  pages/api/lessons-learnt.js      stops seeding Rock's minutes into tenants
+  lib/lessonsSeed.js               60 KB -> 1.2 KB
 
-
-WHAT WAS WRONG
-==============
-DBSIZE on Rock's database returns 14,308 keys.
-find-string reported keysScanned: 500, complete: true.
-
-It scanned three per cent of the database and said it had finished. EXISTS
-ll:minutes returns 1, and the search for it returned nothing - which is how
-this was found, after an hour spent investigating a Lessons Learnt fault that
-did not exist.
-
-EVERY "found: 0" FROM THIS ROUTE SO FAR IS WORTHLESS. That includes the zztest
-result on 19 September that was taken as Test A passing. Test A is unproven and
-must be re-run after this deploy.
-
-Two causes, and the second is the one that mattered:
-
-1. The SCAN cursor was run through Number() and compared against 0. Upstash
-   returns it as a string. A cursor that does not survive the round trip ends
-   the loop, and the loop ending was being read as the keyspace being
-   exhausted.
-
-2. Nothing measured coverage. There was no way for the result to be wrong in a
-   way anyone could see. That is the actual defect - the cursor bug was just
-   what happened to trip it.
+>>> READ THE VERIFICATION SECTION BEFORE DEPLOYING. There is one thing to check
+>>> on Rock FIRST, and it takes thirty seconds.
 
 
-WHAT CHANGED
-============
-- The cursor is kept as the exact string returned and compared with '0'.
-  Both response shapes handled: [cursor, keys] and { cursor, keys }.
-- DBSIZE is read and reported as keysInDatabase, with dbsizeError carrying the
-  reason when it fails rather than a bare null. (The previous version caught it
-  into null and the reason was invisible - the same silent-failure pattern this
-  codebase keeps being bitten by.)
-- `complete` is true ONLY when the cursor returned to 0 AND at least as many
-  keys were seen as the database says it holds.
-- `coverage` gives the percentage. `stoppedBecause` says what ended the scan.
-- A time budget: 40s for key-name searches, 20s for value searches. A value
-  search does a GET per key, so 14,308 of them was never going to finish inside
-  one invocation - it simply was not saying so.
-- COUNT raised to 1000, round cap to 2000.
+1. NO MORE HARDCODED ADMIN
+===========================
+pages/api/portal-auth.js held:
+
+    const FIRST_ADMIN_EMAIL = 'james@rockroofing.co.uk'
+    const FIRST_ADMIN_TEMP_PW = '<a literal password>'
+
+and ensureSeed() created that account, AS AN ADMIN, in any tenant with an empty
+user list, on every call to the route. A brand-new customer's portal contained
+a Rock Roofing administrator whose password was a string in this repository.
+Anyone who could read the source could sign in to any freshly provisioned
+customer as an admin.
+
+Confirmed on zztest on 19 September: a database with two keys in it accepted
+that email and password and returned an admin session.
+
+Both constants and the seeding are gone. A tenant with no users is now a tenant
+nobody can sign in to, which is the correct state for a database that has not
+been provisioned.
+
+The first admin is created deliberately instead:
+
+  POST /api/admin/tenant-setup
+  { action: 'first-admin', id, name, email, password, redis? }
+
+Three guards, all deliberate:
+
+  - REFUSES if the tenant already has users. Any Rock admin can reach this
+    route; without that check it would be a back door into every customer's
+    portal rather than a fix for one.
+  - REFUSES if the target database has no identity record, or if its identity
+    disagrees with the id given. Creating an admin in an unstamped database
+    means creating one in a database whose owner is unverified.
+  - Password supplied by the caller, minimum 12 characters, nothing generated
+    and nothing defaulted. mustResetPassword is set, so the customer changes it
+    at first sign-in and whatever was typed stops being useful.
+
+NEW-CUSTOMER.md step 10 should be updated to use this. It is now step 4a:
+identity, then first-admin, then register.
 
 
-HOW TO USE IT NOW
-=================
-Always read `complete` and `coverage` before `found`.
+2. ROCK'S INTERNAL MEETING MINUTES WERE BEING WRITTEN INTO OTHER TENANTS
+========================================================================
+Found while doing the above. Same fault class as pkg930, and worse in one way.
 
-  complete: true   -> a found: 0 means the string is not in that database.
-  complete: false  -> found: 0 means NOTHING. Look at stoppedBecause.
+lib/lessonsSeed.js held 60 KB of Rock's real internal management meetings - two
+years of them, with named staff, monthly sales figures, KPI percentages,
+quality failures, and candid internal commentary of the "efficiency is dropping,
+we all need to double down ways to improve gross margin" kind.
 
-For a whole-database sweep, prefer keys=1 (no GETs, covers everything). For a
-value search on a large database, narrow it with match= to a key prefix, e.g.
+ensureSeed() in pages/api/lessons-learnt.js did:
 
-  ?q=ZZTESTMARKER&match=crm:*&limit=50
+    if (!mins || !mins.length) await set(MIN_KEY, SEED_MINUTES)
+
+The CRM seed was rendered and discarded. This one was WRITTEN - permanently,
+into the customer's own database, where it would then look like their records.
+It fired the first time anyone opened Lessons Learnt on a new tenant.
+
+Not in the client bundle, so nothing reached a browser that should not have.
+
+The seed is now empty and ensureSeed() only writes the seen-flag.
 
 
-SMOKE TEST after deploy
-========================
-  /api/admin/find-string?q=ll:&keys=1&limit=50
+3. NOT CHANGED, AND DELIBERATELY: lib/formDefs.js
+==================================================
+46 KB of form definitions with 41 "Rock Roofing" references inside the question
+text, e.g. "Have you had your daily call with the Rock Roofing Contracts
+Manager?". These get written into a tenant's database the same way.
 
-Expect keysInDatabase around 14308, coverage near 100%, complete: true, and
-ll:minutes among the hits. If coverage is still 3% the cursor fix has not
-worked and I need to know.
+Left alone because they are a DIFFERENT KIND OF THING. crmSeedDeals and
+lessonsSeed are Rock's DATA and must not ship. formDefs are Rock's TEMPLATES
+and genuinely are useful starting content for any roofing contractor - the
+problem is only the company name inside them.
 
-Then re-run whatever the leak hunt relied on, because none of it stands.
+The right fix is substituting companyName() at seed time, which belongs with
+the branding package rather than here. Flagged, not forgotten.
+
+
+VERIFICATION - DO THIS ON ROCK BEFORE DEPLOYING
+================================================
+Emptying lessonsSeed is only safe if Rock's minutes are already saved in Rock's
+own database rather than being re-seeded from the file on each cold start. They
+should be - the seed key was set long ago - but confirm rather than assume:
+
+  app.rockroofing.co.uk/api/admin/find-string?q=Biggest%20sales%20month&limit=3
+
+Expect at least one hit. That string is from the September 2024 minutes.
+
+  - HITS  -> the minutes are real records in Rock's database. Deploy.
+  - NO HITS -> stop and tell me. It would mean the page has been rendering from
+    the seed file all along and emptying it would empty the page.
+
+Then after deploying, open Lessons Learnt on Rock and confirm the history is
+still there.
+
+
+SMOKE TEST
+==========
+1. Sign in to Rock normally. Nothing about authentication changed for a tenant
+   that already has users.
+2. Lessons Learnt on Rock still shows the full history.
+3. Add and remove a test portal user from the admin screen - the user
+   management paths are in the same file and should be untouched.
+4. The real test comes when zztest is recreated: its portal must refuse every
+   login until 'first-admin' has been called, and then accept only the account
+   that call created.
+
+
+CHECKS RUN BEFORE PACKAGING
+============================
+- esbuild compile on all four files: clean
+- no residual FIRST_ADMIN / RockAdmin string anywhere outside an explanatory
+  comment
+- ensureSeed removed from portal-auth and nothing calls it; the unrelated
+  ensureSeed in lessons-learnt kept and gutted
+- no residual SEED_MINUTES reference outside the stub and one comment
+- no client page or component imports any of these four modules
+- every edit applied by a script asserting the anchor appeared exactly once

@@ -1,4 +1,4 @@
-import { requireRole } from '../../../lib/portalAuth'
+import { requireRole, hashPassword } from '../../../lib/portalAuth'
 import { getClient, clientForCredentials } from '../../../lib/db'
 import { saveTenant, tenantForHost, tenantById, allTenants, registryConfigured, tenancyEnabled } from '../../../lib/tenants'
 
@@ -134,6 +134,90 @@ export default async function handler(req, res) {
     return res.json({ ok: true, identity: rec, wroteTo: target })
   }
 
+  // THE FIRST ADMIN, CREATED ON PURPOSE.
+  //
+  // Replaces the bootstrap that used to live in pages/api/portal-auth.js, which
+  // created a Rock Roofing admin with a password literal in the source in ANY
+  // tenant whose user list was empty.
+  //
+  // Three guards, and all three matter:
+  //
+  //   - it REFUSES if the tenant already has users, so it cannot be used to add
+  //     an administrator to a customer who is already running. Any Rock admin
+  //     can reach this route, and without that check this would be a back door
+  //     into every customer's portal rather than a fix for one.
+  //   - the password is supplied by the caller and must be a real one. Nothing
+  //     is generated, nothing is defaulted, and there is no value to leak.
+  //   - mustResetPassword is set, so the customer changes it at first sign-in
+  //     and whatever was typed here stops being useful immediately.
+  //
+  // POST { action:'first-admin', id, name, email, password, redis? }
+  if (action === 'first-admin') {
+    if (!id) return res.status(400).json({ error: 'id required' })
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase()
+    const password = String((req.body && req.body.password) || '')
+    const personName = String((req.body && req.body.name) || '').trim()
+    if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' })
+    if (password.length < 12) return res.status(400).json({ error: 'Password must be at least 12 characters.' })
+    if (!personName) return res.status(400).json({ error: 'A name is required.' })
+
+    // Same three ways of finding the database as the identity branch, and the
+    // same refusal to guess.
+    let redis = null
+    let target = null
+    const creds = req.body && req.body.redis
+    if (creds && creds.url && creds.token) {
+      redis = await clientForCredentials(creds)
+      target = 'credentials supplied in this request'
+    } else {
+      const known = registryConfigured() ? await tenantById(String(id).toLowerCase()).catch(() => null) : null
+      if (known && known.redis) {
+        redis = await clientForCredentials(known.redis)
+        target = `the registered database for "${known.id}"`
+      } else {
+        return res.status(400).json({
+          error: `No database found for "${id}". Register it first, or supply redis: { url, token } in this request.`,
+        })
+      }
+    }
+
+    // The database must already know who it is, and agree. Creating an admin in
+    // a database that has not been stamped means creating one in a database
+    // whose owner is unverified.
+    const identity = await redis.get('tenant:identity').catch(() => null)
+    if (!identity || !identity.id) {
+      return res.status(409).json({ error: `That database has no identity record. Stamp it first with action 'identity'.` })
+    }
+    if (String(identity.id) !== String(id).toLowerCase()) {
+      return res.status(409).json({ error: `That database identifies as "${identity.id}", not "${id}". Refusing.` })
+    }
+
+    const existing = (await redis.get('portal:users').catch(() => null)) || []
+    if (Array.isArray(existing) && existing.length > 0) {
+      return res.status(409).json({
+        error: `"${id}" already has ${existing.length} user(s). This creates the FIRST admin only - add further users from inside their portal.`,
+      })
+    }
+
+    const user = {
+      id: `pu_${Date.now()}`,
+      name: personName,
+      email,
+      role: 'admin',
+      active: true,
+      passwordHash: hashPassword(password),
+      mustResetPassword: true,
+      createdAt: Date.now(),
+    }
+    await redis.set('portal:users', [user])
+    return res.json({
+      ok: true,
+      wroteTo: target,
+      tenant: String(id).toLowerCase(),
+      admin: { id: user.id, name: user.name, email: user.email, role: user.role, mustResetPassword: true },
+    })
+  }
+
   // Write a customer into the control database.
   if (action === 'register') {
     if (!registryConfigured()) return res.status(400).json({ error: 'Control database not configured' })
@@ -153,5 +237,5 @@ export default async function handler(req, res) {
     return res.json({ ok: true, tenant: safe })
   }
 
-  return res.status(400).json({ error: "action must be 'identity' or 'register'" })
+  return res.status(400).json({ error: "action must be 'identity', 'first-admin' or 'register'" })
 }

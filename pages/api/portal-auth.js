@@ -17,11 +17,27 @@ import withTenant from '../../lib/withTenant'
 //   POST { action:'set-password', id, password } (admin or self)
 //   POST { action:'delete', id } (admin)
 //
-// First-admin bootstrap: if no users exist, a seed admin is created on first
-// access so the very first login is possible.
-
-const FIRST_ADMIN_EMAIL = 'james@rockroofing.co.uk'   // seed admin
-const FIRST_ADMIN_TEMP_PW = 'RockAdmin2026!'           // change on first login
+// THERE IS NO LONGER A FIRST-ADMIN BOOTSTRAP HERE, AND THERE MUST NOT BE ONE.
+//
+// This file used to hold:
+//
+//     const FIRST_ADMIN_EMAIL = 'james@rockroofing.co.uk'
+//     const FIRST_ADMIN_TEMP_PW = '<a literal password>'
+//
+// and ensureSeed() created that account, as an ADMIN, in ANY tenant whose user
+// list was empty - on every single call to this route. So a brand-new
+// customer's portal contained a Rock Roofing administrator whose password was
+// a string in this repository, and anyone who could read the source could sign
+// in to any freshly provisioned customer as an admin.
+//
+// Confirmed on the zztest tenant on 19 September 2026: a database with two keys
+// in it accepted that email and that password and returned an admin session.
+//
+// The first admin is now created deliberately at provisioning, by
+// /api/admin/tenant-setup with action 'first-admin', which refuses if the
+// tenant already has users. A tenant with no users is a tenant nobody can sign
+// in to, which is the correct state for a database that has not been
+// provisioned. It is not a state to fix by inventing an account.
 
 function readCookie(req, name) {
   const raw = req.headers.cookie || ''
@@ -97,26 +113,7 @@ async function sendResetLink({ to, name, resetUrl }) {
   } catch (e) { return { sent: false, error: e.message } }
 }
 
-async function ensureSeed() {
-  let users = await getPortalUsers()
-  if (users.length === 0) {
-    users = [{
-      id: `pu_${Date.now()}`,
-      name: 'James McVeigh',
-      email: FIRST_ADMIN_EMAIL.toLowerCase(),
-      role: 'admin',
-      active: true,
-      passwordHash: hashPassword(FIRST_ADMIN_TEMP_PW),
-      mustResetPassword: true,
-      createdAt: Date.now(),
-    }]
-    await savePortalUsers(users)
-  }
-  return users
-}
-
 async function handler(req, res) {
-  await ensureSeed()
 
   if (req.method === 'GET') {
     const action = req.query.action

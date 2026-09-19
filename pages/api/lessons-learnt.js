@@ -1,7 +1,6 @@
 import { get, set, getLiveTasks, saveLiveTasks, getPortalUsers } from '../../lib/db'
 import { verifySessionToken, SESSION_COOKIE } from '../../lib/portalAuth'
 import { canAccessArea, hasRole } from '../../lib/roles'
-import { SEED_MINUTES } from '../../lib/lessonsSeed'
 import withTenant from '../../lib/withTenant'
 
 // Monthly Lessons Learnt: minutes + a manually-categorised lessons table.
@@ -36,12 +35,25 @@ function sessionUser(req) { return verifySessionToken(readCookie(req, SESSION_CO
 // Everyone else with lessons-learnt access can view only.
 function canEdit(role) { return hasRole(role, ['management', 'admin']) }
 
+// NOTHING IS SEEDED ANY MORE. A CUSTOMER'S LESSONS LEARNT STARTS EMPTY.
+//
+// This used to write SEED_MINUTES - two years of Rock Roofing's real internal
+// management meetings, with named staff, monthly sales figures, KPI
+// percentages, quality failures and lines like "efficiency is dropping, we all
+// need to double down ways to improve gross margin" - into the database of
+// ANY tenant, the first time anyone opened this page.
+//
+// Not rendered and discarded, as the CRM seed was. Written. Permanently. Into
+// a customer's own store, where it would then look like their data.
+//
+// Rock's own minutes were seeded long ago and live in Rock's database as
+// ordinary editable records, so emptying the seed costs Rock nothing.
+//
+// The seed key is still written so the shape is preserved for anything that
+// reads it, and so this cannot start seeding again by accident.
 async function ensureSeed() {
   const seeded = await get(SEED_KEY)
   if (seeded) return
-  const mins = await get(MIN_KEY)
-  if (!mins || !mins.length) await set(MIN_KEY, SEED_MINUTES)
-  // Lessons table starts EMPTY - it is populated only by completing future meetings.
   await set(SEED_KEY, true)
 }
 
