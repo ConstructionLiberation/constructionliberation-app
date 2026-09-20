@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
+import { useFormat } from '../components/TenantProvider'
 
 export default function LoginPage() {
+  // The customer's own name and logo, from /api/tenant-brand. Available
+  // before sign-in because tenant resolution happens on the hostname.
+  const { companyName: brand, logoUrl: logo } = useFormat()
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -54,12 +58,22 @@ export default function LoginPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Sign in</title></Head>
+      <Head><title>{brand} - Sign in</title></Head>
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a19', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
         <div style={{ background: '#fff', borderRadius: 16, padding: '40px 44px', width: 400, maxWidth: '90vw', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 54, borderRadius: 8 }} />
-            <h1 style={{ fontSize: 20, color: '#1a1a19', margin: '14px 0 2px' }}>Rock Roofing Portal</h1>
+            {/* THE FIRST SEVEN STRINGS A CUSTOMER EVER SEES.
+                These were "Rock Roofing" and /rock-logo.jpg, hard-coded, on a
+                page served from every customer's own hostname. Confirmed on a
+                test tenant: another company's logo, name and brand colour on a
+                constructionliberation.com address.
+                Tenant resolution happens on the hostname, BEFORE
+                authentication, so the right name was always available here -
+                it was simply never asked for. */}
+            {logo
+              ? <img src={logo} alt={brand} style={{ height: 54, borderRadius: 8 }} />
+              : null}
+            <h1 style={{ fontSize: 20, color: '#1a1a19', margin: '14px 0 2px' }}>{brand} Portal</h1>
             <div style={{ fontSize: 13, color: '#999' }}>{resetUser ? 'Set a new password to continue' : forgot ? 'Reset your password' : 'Sign in to continue'}</div>
           </div>
 

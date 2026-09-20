@@ -1,10 +1,11 @@
 import '../styles/globals.css'
 import ReportProblemButton from '../components/ReportProblemButton'
 import PageErrorBoundary from '../components/PageErrorBoundary'
+import { TenantProvider } from '../components/TenantProvider'
 
 export default function App({ Component, pageProps }) {
   return (
-    <>
+    <TenantProvider>
       {/* Every page, not just the one that happens to be failing today. A production
           build replaces render errors with "a client-side exception has occurred", which
           tells nobody anything - the boundary shows the real message instead.
@@ -13,6 +14,6 @@ export default function App({ Component, pageProps }) {
         <Component {...pageProps} />
       </PageErrorBoundary>
       <ReportProblemButton />
-    </>
+    </TenantProvider>
   )
 }
