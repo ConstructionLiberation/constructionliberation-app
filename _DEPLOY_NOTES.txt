@@ -1,113 +1,131 @@
-PACKAGE 940 - the emails that reach people outside the company
+PACKAGE 941 - the demo data generator
 ================================================================================
 
-Eight files. Complete replacements. Nothing new to create.
+Two files. BOTH ARE NEW and must be created by hand in GitHub.
 
-  lib/ramsNotify.js
-  lib/designEmail.js
-  lib/hsRenewalNotify.js
-  lib/notifications.js
-  lib/designRfiNotify.js
-  lib/outstandingInvoicesReport.js
-  lib/chaseEmailTemplates.js
-  pages/outstanding-invoices.js
+  lib/demoSeed.js                  the generator
+  pages/api/admin/seed-demo.js     the endpoint that runs it
 
-DEPENDS ON pkg937 and pkg939. outstanding-invoices.js imports useFormat from
-components/TenantProvider.
+Nothing existing is touched. Deploying this changes nothing until you call it.
 
 
-WHY THESE NEXT
-==============
-PDFs are read by the customer's own staff and occasionally forwarded. These
-emails go OUTBOUND by default - to subcontractors, to a customer's design team,
-to the people a customer is chasing for money. A subcontractor receiving a
-training-renewal demand signed "Rock Roofing Ltd" from a different company is
-worse than an unbranded PDF.
+WHAT IT IS
+==========
+A GENERATOR, not a dataset. Every record is invented at call time from a
+seeded pseudo-random sequence. There is no array of projects in the file and
+no real customer data anywhere near it.
 
-24 strings across seven files, all now companyName().
+That shape is deliberate. lib/crmSeedDeals.js held 378 of Rock's real deals
+and shipped them into every tenant's client bundle. lib/lessonsSeed.js held
+two years of Rock's internal minutes and WROTE them into any tenant that
+opened the Lessons Learnt page. Both fired automatically. This does not.
 
-
-WHAT CHANGED
-============
-  ramsNotify              email shell footer, "As <name> Contracts Manager",
-                          "As <name> Director", project-allocated subject and
-                          heading and body                          (6)
-  designEmail             shell footer, password/login subject lines, portal
-                          invitation body, "from <name>", "Sent by X at <name>"  (6)
-  hsRenewalNotify         "<name> (office)" label, two lines of the renewal
-                          request body, footer                       (4)
-  notifications           both "Sent automatically from the <name> portal"
-                          footers and the default subject            (3)
-  designRfiNotify         shell footer                               (1)
-  outstandingInvoicesReport  weekly report heading and subject       (2)
-
-Every file already imported something from tenantSettings; NONE of them
-imported companyName. That was caught by a check, not by the compiler - a
-missing named import compiles to undefined and would have thrown at send time,
-which is the documented fault class in this codebase. All six imports extended.
+THREE GUARDS, each for something that has actually gone wrong:
+  1. Never runs by itself. Only a deliberate POST naming a tenant.
+  2. Refuses a tenant that already has data - dashboard:cache, ops:projects or
+     crm:deals populated means it declines. Wipe first, on purpose.
+  3. Refuses unless the target database's identity record agrees with the id
+     given. It cannot write to a database that will not say who it is.
 
 
-THE CHASE TEMPLATE PLACEHOLDER - READ THIS ONE
-===============================================
-The seeded chase letters signed off with the merge token
+HOW TO USE IT
+=============
+Browser console on app.rockroofing.co.uk, signed in as admin.
 
-    [Rock Roofing QS Name]
+Preview first - generates nothing, writes nothing, touches no database:
 
-That is a placeholder, not prose, and it sits alongside [Customer QS Name] -
-so the pair reads "their QS" and "our QS". It is now [Our QS Name] in the
-seeded examples.
+  await fetch('/api/admin/seed-demo', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'preview', projects:30, deals:48 })
+  }).then(r=>r.json()).then(console.log)
 
-BUT: templates a customer has already EDITED are saved in their own database
-and still contain the old token. So pages/outstanding-invoices.js now
-substitutes BOTH. Removing the old one would have silently stopped substituting
-in exactly the templates someone had bothered to customise - they would have
-sent with a literal "[Rock Roofing QS Name]" in the signature.
+Then seed:
 
-Rock's saved templates keep working untouched. New tenants get the neutral one.
+  await fetch('/api/admin/seed-demo', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'seed', id:'demo', projects:30, deals:48 })
+  }).then(r=>r.json()).then(console.log)
 
-The signature block at the foot of a chase email also hard-coded "Rock
-Roofing". senderSignature() and buildBody() are module-scope helpers, so the
-brand is threaded through as a PARAMETER rather than read from a hook. Uglier,
-and much harder to get wrong: a missed argument shows as a blank line, not as
-one customer's name on another's letter.
+To start again:
+
+  await fetch('/api/admin/seed-demo', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'wipe', id:'demo', confirm:'demo' })
+  }).then(r=>r.json()).then(console.log)
+
+Options: projects (1-60), deals (0-200), seed (any integer - the SAME seed
+gives the SAME demo, so you can rehearse against a fixed dataset),
+targetMargin (default 0.25).
+
+
+WHAT IT GENERATES
+=================
+30 projects across 14 months, mixed live / defects / complete. Per project:
+contract value, margin clustered on 25% with a realistic spread (a couple go
+negative, because a demo where everything is profitable is not credible to
+anyone who has run a contract), variations mostly instructed, monthly
+applications with a gross-to-date that climbs, certified lagging slightly,
+cost lines that reconcile to the margin, invoice lines that reconcile to the
+applications, and retention at 3/5/10%.
+
+Plus 48 CRM deals across seven stages, emails allocated to the first 14 deals,
+nine in the unallocated review queue, nine team members and nine portal users.
+
+Names are invented and NZ-flavoured but generic - no trade-specific language,
+so the demo is not narrowed to roofing. Currency in the CRM records is NZD.
+
+Portal users are MERGED, not replaced, so the first admin created at
+provisioning survives.
+
+
+THE ONE COMPROMISE, WRITTEN DOWN
+=================================
+It writes dashboard:cache directly.
+
+pages/api/dashboard.js builds that cache from a LIVE Xero connection and
+returns 401 before touching it when there are no tokens - so on a tenant with
+no Xero the seeded cache survives and is never rebuilt. That is what makes
+this possible without standing up a Xero organisation.
+
+The cost is that projectCacheRow() in lib/demoSeed.js shadows the object
+dashboard.js constructs. That is the dominant fault class in this codebase -
+one rule written twice - and it is accepted deliberately. It is confined to
+ONE function so there is exactly one place to update. If the commercial pages
+start showing blanks after a change to dashboard.js, that function is why.
+
+
+WHAT WILL BE EMPTY OR ERROR ON THE DEMO
+========================================
+Anything that reads Xero live rather than from the cache:
+  - the sync buttons (Sync invoices, deep sync)
+  - /connect and anything Xero-authenticated
+  - parts of Bookkeeping and the reconciliation screens
+  - Business Financials (also excluded from demo's module list)
+
+Worth knowing which screens not to open on Friday rather than finding out in
+the meeting. Forms, submissions and site photos are NOT generated yet - that
+is the next package.
 
 
 SMOKE TEST
 ==========
-On Rock, everything below must read exactly as it did before.
-
-1. Outstanding invoices -> open a chase email. Signature block ends "Rock
-   Roofing". Page title unchanged.
-2. Trigger a RAMS approval email. Footer and body read Rock Roofing.
-3. A design portal invitation - subject line "Your Rock Roofing Design portal
-   login".
-4. The weekly outstanding invoices report on its next run.
-5. Any Site App notification - footer reads "Rock Roofing Site App".
-
-Then on demo, the same paths should read "Demo".
-
-
-WHAT IS LEFT AFTER THIS
-========================
-Roughly 60 server-side strings, mostly in:
-  lib/formDefs.js + formDefsExtra.js   41, seeded form templates - needs
-                                       substitution AT SEED TIME, and the form
-                                       editor, so it belongs with that build
-  lib/preStartSchema.js                8, template defaults
-  pages/api/design-*.js                ~20, mostly email subjects
-  lib/tenantSettings.js                9, all fallbacks and comments - correct
-                                       as they are
-
-Plus the 115 client-side strings, which now have a mechanism (useFormat) and
-need sweeping page by page.
+1. Run the preview. Check the summary reads sensibly.
+2. Seed demo. Expect keysWritten around 49 and a summary.
+3. On demo: Commercial, Project Financials, a project page, Retention, CRM,
+   the CRM email queue. Figures should be consistent with each other -
+   applications should not exceed the AFA, retention should be the stated
+   percentage of the applied-for total.
+4. Rock must be COMPLETELY UNTOUCHED. Check one project page and the
+   dashboard. The endpoint writes only to the named tenant, but that is worth
+   confirming once rather than trusting.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
-- esbuild compile on all eight files: clean. It caught one real fault - a
-  double-quoted string converted to a template literal without closing it.
-- companyName used and imported in all six lib files, counts matched
-- an assert fired on the token count (7, not the 6 I expected) and wrote
-  nothing until it was corrected
-- useFormat hook declared before any early return in the page component
-- every edit applied by a script asserting the anchor appeared exactly once
+- esbuild compile on both files: clean
+- generator dry-run in node: 30 projects, 26.8% average margin, 49 keys,
+  76 fields per cache row, figures reconcile
+- clientForCredentials, tenantById and registryConfigured all confirmed to
+  exist with those exact names
+- no unused imports
+- writes nothing at module scope; nothing runs unless the endpoint is called
