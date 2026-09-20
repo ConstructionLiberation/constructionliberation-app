@@ -1,99 +1,93 @@
-PACKAGE 943 - the demo data now matches what the pages actually read
+PACKAGE 944 - the money columns, WIP, and retention release dates
 ================================================================================
 
-One file. Complete replacement.
+One file. Complete replacement. Wipe and re-seed after deploying.
 
   lib/demoSeed.js
 
-Wipe and re-seed after deploying. Same two calls as before.
+
+1. WHY EVERY MONEY COLUMN SHOWED A DASH
+========================================
+Total Spend was correct while Invoiced, Retention, Lab Spend and Mat Spend all
+showed dashes. That inconsistency was the clue: Total Spend comes from the
+cache row, so the row was fine and the other columns were reading something
+else.
+
+They read the row too - just five fields I never wrote:
+
+    p.grossInvoiced          p.retentionOutstanding    p.remainingToClaim
+    p.labourSpend            p.materialsSpend
+
+pages/commercial.js renders those DIRECTLY in the default Budget Tracker view.
+The derived calcAtValDate() path - which does compute them from _costLines and
+_invoiceLines - only runs in EOM Report mode. I had spent the last package
+making the line-level data correct for a code path the page was not using.
+
+All five are now set, consistent with the lines beneath them.
 
 
-WHAT WAS WRONG
-==============
-The rows appeared; the figures did not. Five separate shape mismatches, all
-from me guessing field names instead of reading the consumers. Each one found
-by reading the page that renders it:
+2. WHY WIP WAS EMPTY
+=====================
+"No WIP to show for August 2026. Projects appear here when there are
+post-valuation costs."
 
-1. COST LINES used `account` and `total`.
-   pages/commercial.js reads l.accountCode and l.amount. Every money column
-   came out as zero while the project rows themselves showed. Now both sets of
-   names are written.
+Exactly right, and there were none. Cost lines were dated randomly across each
+project's life, so almost nothing landed after the current valuation date.
 
-2. INVOICE LINES used `total`.
-   Invoiced is read as `sales200`, falling back to `subTotal`. `total` alone is
-   invisible. Now all three.
+Live projects now get 2-7 cost lines dated deliberately in the last 26 days.
+21 of 30 projects now have post-valuation costs, so WIP calculates and the
+month-end figure is non-zero.
 
-3. THE AFA FIELD was `afaGross`. The Commercial table reads `afa`. Both set.
-
-4. ops:projects WAS FLAT. The real shape is
-   { projectNo, status, manual, createdAt, updatedAt, data: { projectName,
-   customerCompany, projectAddress, contractsManager, estimator,
-   quantitySurveyor, designManager, operationsManager, ... } }
-   A flat object gives a project list with every column blank - which is why
-   Operations and Design looked empty.
-
-5. crm:deals USED `stage` AND TOP-LEVEL ATTRIBUTES.
-   pages/crm.js reads deal.stageId, and every attribute out of deal.fields -
-   51 references to d.fields in that one file. A deal with its values at the
-   top level renders as an empty row. Stage ids must also be real:
-   stage_project_in, stage_received, stage_mc_secured and so on. Fixed, with
-   the full CRM field set populated: organization, contact_person,
-   contact_email, contact_phone, contact_job_role, org_address, org_phone,
-   org_website, value, site_location, region, size_m2, credit_score,
-   credit_limit, estimator_responsible, project_type, lead_source,
-   project_start_date, scope_of_works, supply_chain_approved.
+That is also more realistic: work continues after the valuation is cut, which
+is the entire reason WIP exists.
 
 
-ALSO ADDED
-==========
-PROJECT DETAILS COMPLETE. The banner listed every project because it checks
-nine fields: applicationDay, valuationDay, paymentDay, contractValue,
-labourBudget, materialsBudget, retentionPct, pcDate (or pcDateTBC) and
-defectsDate (or defectsDateTBC). All nine are now set - live projects get the
-TBC flags, completed ones get real dates. The banner should disappear.
+3. RETENTION HAD NO RELEASE DATES
+==================================
+"30 retentions with no release date - these never show as overdue and never
+reach the Cash Flow."
 
-LABOUR AND MATERIALS BUDGETS, set a little under actual spend on some projects
-so the "Over Budget" tiles on the Commercial dashboard have something in them.
+There was no retention:entries key at all - the tracker was deriving rows from
+the projects with nothing to release. Now written properly: 30 entries with
+customer, project, final account, percentage, certified value, and BOTH
+release dates. First release a month after PC, second a year after. Six are
+past due and unpaid, so the overdue state and the cash-flow schedule both have
+something in them.
 
-DUE DATES AND AN AGED DEBT BOOK. Every invoice is due 30 days after its period
-end. 45 of 231 invoices are overdue - 19% - worth about 2.0m, spread across
-all four ageing buckets: 21 at 90+ days, 6 at 61-90, 12 at 31-60, 6 at 0-30.
-The first attempt produced four overdue invoices in total, which is a debtor
-list with nothing to demonstrate.
-
-ONE EMAIL ADDRESS EVERYWHERE. Every generated customer, contact, portal user,
-team member and mailbox is james@constructionliberation.com, so any
-notification the demo sends arrives somewhere you can open it - and the demo
-physically cannot email a real person.
-
-DESIGN AND OPERATIONS PEOPLE. designManager and operationsManager are now set
-on every ops project, so those areas have someone against each job.
+retention:entries added to the wipe list, so re-seeding stays clean.
 
 
-STILL NOT GENERATED
-====================
-Forms, submissions and site photos. Scorecard entries, targets, value changes
-and GP snapshots - so the scorecard pages will still be thin. Business
-Financials needs 48 further keys and is a package of its own.
+STILL NOT DONE - AND ONE NEEDS A DECISION
+==========================================
+APPLICATIONS says "Contracted Rates required" on every project. Contracted
+rates are a per-project rate schedule normally uploaded from a spreadsheet,
+and lib/contractRatesParser.js hardcodes Rock's sheet layout. Seeding them
+means generating a rate schedule per project - doable, but it is a bigger
+piece than the rest and I would rather ask than guess at the shape.
+
+DO YOU NEED THE APPLICATIONS SCREEN WORKING FOR FRIDAY? If yes it is the next
+package. If you plan to demo applications from the project page instead, it
+can wait.
+
+Also still missing: forms, submissions and site photos; scorecard entries,
+targets, value changes and GP snapshots; Business Financials (48 keys).
 
 
 SMOKE TEST
 ==========
 1. Wipe, re-seed.
-2. Commercial - the yellow "project details incomplete" banner should be GONE,
-   and AFA, Invoiced, Retention, Labour and Materials columns should all carry
-   figures. Two or three projects over budget.
-3. Outstanding Invoices - around 45 overdue across four ageing buckets.
-4. Operations and Design - 30 projects, with names, customers and CMs.
-5. CRM - 48 deals spread across the stage columns, each with a company,
-   contact, value and estimator.
-6. A project page - WIP should calculate, since valuation dates now resolve.
+2. Project Financials - Invoiced, Retention, Remaining, Lab Spend and Mat
+   Spend all carry figures. Totals row adds up.
+3. WIP - a non-zero total for the current month, with projects listed.
+4. Retention - the yellow "no release date" banner GONE, some rows flagged as
+   release due.
+5. Outstanding Invoices - around 45 overdue across four ageing buckets.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
 - esbuild compile: clean
-- generator dry-run: field names verified against the exact reads in
-  pages/commercial.js, pages/api/ops-projects.js and pages/crm.js
-- overdue profile measured, not assumed: 45 of 231, four buckets populated
-- every generated email address confirmed to be the demo address
+- field names taken from the exact render lines in pages/commercial.js, not
+  guessed
+- measured after generating: 21 of 30 projects with post-valuation costs,
+  30 retention entries all with release dates, 6 overdue
