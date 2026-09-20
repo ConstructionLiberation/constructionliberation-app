@@ -1,93 +1,103 @@
-PACKAGE 944 - the money columns, WIP, and retention release dates
+PACKAGE 945 - margins, WIP, retention duplicates, pipeline and Site App users
 ================================================================================
 
-One file. Complete replacement. Wipe and re-seed after deploying.
+Two files. Complete replacements. Wipe and re-seed after deploying.
 
   lib/demoSeed.js
+  pages/api/admin/seed-demo.js   (default deal count only)
+
+Re-seed with just: { action:'seed', id:'demo', projects:30 }
+Deals now default to 190.
 
 
-1. WHY EVERY MONEY COLUMN SHOWED A DASH
-========================================
-Total Spend was correct while Invoiced, Retention, Lab Spend and Mat Spend all
-showed dashes. That inconsistency was the clue: Total Spend comes from the
-cache row, so the row was fine and the other columns were reading something
-else.
+WHAT WAS WRONG, AND WHY
+========================
 
-They read the row too - just five fields I never wrote:
+MARGINS SWUNG FROM -50% TO +71%. The page computes
+(invoiced - costs) / invoiced. Costs were derived from certifiedGross, which
+lags invoiced by a random 0-12%, so the division was against a different
+figure from the one the margin was set on. Costs now derive from the same
+number the page divides by. Measured after the change: average 26.5%, range
+12% to 38%.
 
-    p.grossInvoiced          p.retentionOutstanding    p.remainingToClaim
-    p.labourSpend            p.materialsSpend
+WIP WAS STILL EMPTY, AND THE WINDOW IS THE REASON. computeProjectWip takes
+costs where date > valuationDate AND date <= monthEnd. With a valuation day of
+28 that is a THREE DAY window - the 29th, 30th and 31st. My "post-valuation"
+costs were dated within the last 26 days, which put them in the current month
+and outside every closed month's window. Now a few lines land on the 29th-31st
+of each of the last six months, so every selectable month has WIP. 16 of 30
+projects have WIP in the August window.
 
-pages/commercial.js renders those DIRECTLY in the default Budget Tracker view.
-The derived calcAtValDate() path - which does compute them from _costLines and
-_invoiceLines - only runs in EOM Report mode. I had spent the last package
-making the line-level data correct for a code path the page was not using.
+RETENTION SHOWED 60 ROWS FOR 30 PROJECTS. The tracker merges retention:entries
+with project-derived rows by project name. Mine said "Vogel Street Apartments"
+where the project row says "J101-Vogel Street Apartments", so they did not
+match and both appeared. Now matched exactly.
 
-All five are now set, consistent with the lines beneath them.
-
-
-2. WHY WIP WAS EMPTY
-=====================
-"No WIP to show for August 2026. Projects appear here when there are
-post-valuation costs."
-
-Exactly right, and there were none. Cost lines were dated randomly across each
-project's life, so almost nothing landed after the current valuation date.
-
-Live projects now get 2-7 cost lines dated deliberately in the last 26 days.
-21 of 30 projects now have post-valuation costs, so WIP calculates and the
-month-end figure is non-zero.
-
-That is also more realistic: work continues after the valuation is cut, which
-is the entire reason WIP exists.
+TOO MANY OVERDUE INVOICES. 46% of live invoices unpaid put nearly everything
+in the debtor book. Now 25 overdue out of 206, about 12%, still spread across
+all four ageing buckets.
 
 
-3. RETENTION HAD NO RELEASE DATES
-==================================
-"30 retentions with no release date - these never show as overdue and never
-reach the Cash Flow."
+WHAT IS NEW
+===========
 
-There was no retention:entries key at all - the tracker was deriving rows from
-the projects with nothing to release. Now written properly: 30 entries with
-customer, project, final account, percentage, certified value, and BOTH
-release dates. First release a month after PC, second a year after. Six are
-past due and unpaid, so the overdue state and the cash-flow schedule both have
-something in them.
+PIPELINE FOUR TIMES THE SIZE. 190 deals, all 14 stages populated. 48 across 14
+columns reads as a dead pipeline.
 
-retention:entries added to the wipe list, so re-seeding stays clean.
+AN ACTIVITY ON EVERY DEAL. 14 overdue (7%), 3 due today, the rest spread 2-45
+days out. A CRM demo where nothing is due does not show what the CRM is for.
+
+FIFTEEN SITE APP OPERATIVES, with training records - Site Safe Passport,
+Working at Height, First Aid, Hot Works, EWP, Confined Space. Expiries are
+deliberately mixed: some lapsed, some inside 60 days, most current, and about
+a fifth of certificates simply not held. So the H&S matrix shows red, amber
+and green rather than one colour. Three are supervisors, four are
+subcontractor staff. All on your email address.
 
 
-STILL NOT DONE - AND ONE NEEDS A DECISION
-==========================================
-APPLICATIONS says "Contracted Rates required" on every project. Contracted
-rates are a per-project rate schedule normally uploaded from a spreadsheet,
-and lib/contractRatesParser.js hardcodes Rock's sheet layout. Seeding them
-means generating a rate schedule per project - doable, but it is a bigger
-piece than the rest and I would rather ask than guess at the shape.
+YOUR QUESTIONS
+==============
 
-DO YOU NEED THE APPLICATIONS SCREEN WORKING FOR FRIDAY? If yes it is the next
-package. If you plan to demo applications from the project page instead, it
-can wait.
+IS THE SITE APP SET UP FOR DEMO? Yes - siteapp.demo.constructionliberation.com
+is in demo's hosts list and the CNAME is live. With ops:users now seeded it
+should have people in it. Worth testing on a phone.
 
-Also still missing: forms, submissions and site photos; scorecard entries,
-targets, value changes and GP snapshots; Business Financials (48 keys).
+SCORECARDS - ADD A PERSON AND ROLE. Not a seeding problem. The names are
+hardcoded in pages/scorecard-crm.js (ESTIMATORS) and pages/operations/
+scorecards.js (Will, Mike, Dori as fixed columns). Making them add-a-person
+needs a code change plus somewhere to store the list. That is a build, and
+the right one - it is on the Friday list as item 6.
+
+RAMS -> SWMS FOR NZ. Also a code change, not seeding. lib/terms.js already
+maps it and flags it STATUTORY: an Australian or NZ SWMS has prescribed
+content and a relabelled UK RAMS is not a compliant one. Wiring term() into
+the RAMS pages is straightforward; whether the DOCUMENT is fit for NZ is a
+separate question you may want to be careful about in the room.
+
+
+STILL NOT GENERATED
+====================
+Contracted rates (Applications still says "required"), forms, submissions and
+site photos, scorecard entries and targets, Business Financials.
 
 
 SMOKE TEST
 ==========
-1. Wipe, re-seed.
-2. Project Financials - Invoiced, Retention, Remaining, Lab Spend and Mat
-   Spend all carry figures. Totals row adds up.
-3. WIP - a non-zero total for the current month, with projects listed.
-4. Retention - the yellow "no release date" banner GONE, some rows flagged as
-   release due.
-5. Outstanding Invoices - around 45 overdue across four ageing buckets.
+1. Wipe, re-seed with { action:'seed', id:'demo', projects:30 }
+2. Project Financials, EOM Report mode - profit percentages clustered around
+   25%, not swinging wildly.
+3. WIP for August 2026 - non-zero, with projects listed.
+4. Retention - 30 rows, not 60. Some releases flagged overdue.
+5. CRM - 190 deals, every stage column populated, a handful of overdue
+   activities.
+6. Operations - the H&S matrix should show 15 people with mixed expiry states.
+7. Outstanding Invoices - about 25 overdue.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
 - esbuild compile: clean
-- field names taken from the exact render lines in pages/commercial.js, not
-  guessed
-- measured after generating: 21 of 30 projects with post-valuation costs,
-  30 retention entries all with release dates, 6 overdue
+- every figure measured after generating, not assumed: margin 26.5% avg,
+  12% overdue, 16 projects with August WIP, 190 deals over 14 stages,
+  190 activities with 14 overdue and 3 due today, 15 operatives,
+  30 retention entries

@@ -133,7 +133,7 @@ async function handler(req, res) {
   }
 
   const { keys, summary, users } = generateDemo({
-    projects: body.projects, deals: body.deals,
+    projects: body.projects, deals: body.deals === undefined ? 190 : body.deals,
     seed: body.seed, targetMargin: body.targetMargin,
   })
 
