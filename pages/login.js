@@ -58,7 +58,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <Head><title>{brand} - Sign in</title></Head>
+      <Head><title>{brand ? `${brand} - Sign in` : 'Sign in'}</title></Head>
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a19', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
         <div style={{ background: '#fff', borderRadius: 16, padding: '40px 44px', width: 400, maxWidth: '90vw', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
@@ -73,7 +73,7 @@ export default function LoginPage() {
             {logo
               ? <img src={logo} alt={brand} style={{ height: 54, borderRadius: 8 }} />
               : null}
-            <h1 style={{ fontSize: 20, color: '#1a1a19', margin: '14px 0 2px' }}>{brand} Portal</h1>
+            <h1 style={{ fontSize: 20, color: '#1a1a19', margin: '14px 0 2px' }}>{brand ? `${brand} Portal` : 'Portal'}</h1>
             <div style={{ fontSize: 13, color: '#999' }}>{resetUser ? 'Set a new password to continue' : forgot ? 'Reset your password' : 'Sign in to continue'}</div>
           </div>
 

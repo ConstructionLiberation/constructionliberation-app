@@ -20,7 +20,14 @@ import { createContext, useContext, useEffect, useState } from 'react'
 // case where a component would rather wait.
 
 const FALLBACK = {
-  name: 'Portal',
+  // EMPTY, NOT A WORD.
+  //
+  // This was 'Portal', and the login page renders `{brand} Portal` - so when
+  // the feed failed the heading read "Portal Portal". A placeholder that reads
+  // as real content composes into nonsense at the call site. An empty string
+  // lets each call site choose its own fallback, and makes the failure look
+  // like a missing name rather than a wrong one.
+  name: '',
   logoUrl: '',
   localeKey: 'UK',
   localeCode: 'en-GB',

@@ -1,94 +1,87 @@
-PACKAGE 938 - the documents that leave the building
+PACKAGE 939 - "Portal Portal", and two guards that should have been there
 ================================================================================
 
-Seven files. Complete replacements. Nothing new to create.
+Five files. Complete replacements. Nothing new to create.
 
-  lib/outstandingInvoicesPdf.js
-  lib/approvalAudit.js
-  lib/preStartNotifyPdf.js
-  lib/signedRamsPdf.js
-  lib/wipPdf.js
-  lib/submissionsPdf.js
-  lib/designShell.js
-
-DEPENDS ON pkg937. designShell.js imports useFormat from
-components/TenantProvider, which pkg937 creates. Deploy 937 first.
+  middleware.js
+  components/TenantProvider.js
+  pages/login.js
+  pages/api/tenant-brand.js
+  pages/api/admin/tenant-setup.js
 
 
-WHY THESE FILES FIRST
-=====================
-Of the 94 real "Rock Roofing" strings on the server, these are the ones printed
-onto documents that a customer sends to THEIR client. A wrong company name in a
-nav bar is embarrassing; a wrong company name on a digital approval certificate
-or a RAMS signature record is a document that misrepresents who issued it.
+1. WHY THE LOGIN PAGE SAID "PORTAL PORTAL"
+===========================================
+/api/tenant-brand was not in the middleware allowlist of routes reachable
+without a session. So on the login page - which by definition has no session -
+the fetch got a 401, the provider fell back to its defaults, and the heading
+rendered `{brand} Portal` with brand = "Portal".
 
-They are also the hardest for you to notice, because nobody re-reads a PDF
-footer.
+My miss, and the rule was already written down: ANY NEW API ROUTE MUST BE ADDED
+TO THE MIDDLEWARE PASSTHROUGH. I wrote a route whose entire purpose is to work
+before sign-in and then did not open it.
 
+Two lines added:
+  - the anonymous allowlist (so the login page can read it)
+  - the external-user gate from pkg929 (so the Design portal nav can too)
 
-WHAT CHANGED
-============
-Every one of these now calls companyName(), which reads the tenant record and
-falls back to "Rock Roofing Ltd" when no tenant is in scope. So nothing changes
-for Rock and everything changes for customer two.
-
-  outstandingInvoicesPdf   page footer
-  approvalAudit            certificate heading, body text, and footer -
-                           THREE instances on a single legal-ish document
-  preStartNotifyPdf        footer
-  signedRamsPdf            page footer on the signature record
-  wipPdf                   "Produced ... from the <name> portal"
-  submissionsPdf           page footer
-  designShell              the /rock-logo.jpg in the Design portal nav
-
-designShell is a React component, so it uses useFormat() from the pkg937
-provider rather than companyName(). The Design portal is the one area a
-CUSTOMER'S OWN CLIENT logs in to, which makes it the last place another
-company's logo should appear.
+It is safe to open because the response is enumerated field by field and
+carries only what is already public: name, logo, locale, currency, terms. No
+modules, no hosts, no addresses.
 
 
-THE LOGO WILL VANISH FROM THE DESIGN NAV
-=========================================
-Same as the login page in pkg937: logoUrl is empty on Rock's tenant record, so
-the img is omitted rather than rendering broken. Expect it. To restore:
+2. THE FAILURE MODE ITSELF
+===========================
+The fallback name was the word 'Portal'. A placeholder that reads as real
+content composes into nonsense at the call site - hence "Portal Portal" rather
+than something obviously broken.
 
-  add "logoUrl": "https://<public url>" to tenant:rock
+It is now an empty string, in both the provider and the API's unresolved
+branch, and the login page decides its own fallback:
 
-A blob-store URL is the right home, and it also fixes the cron-generated PDFs
-that currently fetch the logo from the deployment URL and get blocked by
-Deployment Protection.
+  {brand ? `${brand} Portal` : 'Portal'}
+
+So a feed that fails now shows a missing name rather than a wrong one.
 
 
-NOT CHANGED, DELIBERATELY
-==========================
-lib/omsPdf.js - the cover already takes a company object with name, address,
-phone, email and web, so it is parameterised already. Only a colour comment
-mentions Rock. Renaming the variable is cosmetic and can wait.
+3. register NOW REFUSES A URL THAT IS NOT A URL
+================================================
+Yesterday a register call went through with the literal string
+"PASTE_THE_HTTPS_URL" in redis.url. It returned ok:true, the tenant looked
+registered, and every request to that hostname then threw "Upstash Redis client
+was passed an invalid URL". A broken tenant created by a successful-looking
+call.
 
-lib/variationPdf.js - the only occurrence is inside a comment.
+register now checks redis.url starts with https:// and has a dot in it, and
+that redis.token is at least 20 characters, before writing anything. Same
+principle as first-admin checking the password length: validate at the door
+rather than discover at the first request.
+
+The error messages name what was received, truncated to 40 characters, so a
+pasted placeholder is obvious without echoing a real token.
 
 
 SMOKE TEST
 ==========
-Generate one of each on Rock and check the footer still reads Rock Roofing:
+1. demo.constructionliberation.com/login - reads "Demo Portal". THIS IS THE
+   ONE. It is the first time the app has shown a customer their own name.
+2. app.rockroofing.co.uk/login - reads "Rock Roofing Portal", unchanged.
+3. /api/tenant-brand on both, SIGNED OUT, in a private window. Should return
+   200 with the right name - not a 401. Confirm there is no `modules` or
+   `hosts` field in the response.
+4. Sign in on both. Nothing about authentication changed.
+5. Design portal nav still loads for an external user.
 
-1. WIP PDF (the bookkeeper's one).
-2. Outstanding invoices PDF.
-3. A signed RAMS record.
-4. A design approval certificate, if you can raise one - it has three
-   instances and is the most important of the four.
-5. Design portal nav - logo absent, everything else unchanged.
-
-Then the same on demo, where they should read "Demo".
+Then, to see the logo work end to end: add
+  "logoUrl": "https://<any public image url>"
+to tenant:demo in the control database, wait 60 seconds, reload the demo login
+page. That proves the whole chain and leaves only the upload screen to build.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
-- esbuild compile on all seven files: clean
-- companyName imported exactly once per file, at the top
-- no server file imports designShell, so pulling a React hook into it cannot
-  drag components into an API route
-- TenantProvider imports nothing server-only
-- no non-ASCII introduced (the em dashes and middots in the footers are
-  pre-existing)
+- esbuild compile on all five files: clean
+- the allowlist entry is an exact path match, not a startsWith, so it opens one
+  route and nothing beneath it
+- no non-ASCII introduced
 - every edit applied by a script asserting the anchor appeared exactly once

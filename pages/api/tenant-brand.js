@@ -45,7 +45,8 @@ async function handler(req, res) {
   // login page calls it and a broken login page is worse than a plain one.
   if (!t) {
     return res.status(200).json({
-      name: 'Portal',
+      // Empty rather than a placeholder word - see components/TenantProvider.js.
+      name: '',
       logoUrl: '',
       localeKey: 'UK',
       localeCode: 'en-GB',

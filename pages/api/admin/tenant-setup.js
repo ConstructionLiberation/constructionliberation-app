@@ -220,6 +220,24 @@ export default async function handler(req, res) {
 
   // Write a customer into the control database.
   if (action === 'register') {
+    // A URL THAT IS NOT A URL MUST NOT REACH THE REGISTRY.
+    //
+    // On 20 September a register call went through with the literal string
+    // "PASTE_THE_HTTPS_URL" in redis.url. The call returned ok:true, the
+    // tenant looked registered, and every request to that hostname then threw
+    // "Upstash Redis client was passed an invalid URL" - a broken tenant
+    // created by a successful-looking call.
+    //
+    // Checked here rather than trusted, the same way first-admin checks the
+    // password length.
+    const rurl = String((req.body && req.body.tenant && req.body.tenant.redis && req.body.tenant.redis.url) || '')
+    const rtok = String((req.body && req.body.tenant && req.body.tenant.redis && req.body.tenant.redis.token) || '')
+    if (!/^https:\/\/[^\s]+\./.test(rurl)) {
+      return res.status(400).json({ error: `redis.url must be an https REST URL, e.g. https://something.upstash.io - received: ${rurl.slice(0, 40) || '(empty)'}` })
+    }
+    if (rtok.length < 20) {
+      return res.status(400).json({ error: `redis.token looks wrong - received ${rtok.length} characters. A real Upstash REST token is around 60.` })
+    }
     if (!registryConfigured()) return res.status(400).json({ error: 'Control database not configured' })
     const rec = req.body.tenant
     if (!rec || !rec.id) return res.status(400).json({ error: 'tenant record with an id required' })

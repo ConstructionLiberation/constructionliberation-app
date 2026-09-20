@@ -170,6 +170,15 @@ export async function middleware(req) {
     // a session here would silence exactly the errors most worth hearing.
     // It writes nothing and returns 204 whatever happens.
     pathname === '/api/client-error' ||
+    // WHO IS THIS PORTAL. Open on purpose, and it HAS to be: the login page
+    // needs the company name and logo, and there is no session on the login
+    // page. Without this line the fetch gets a 401, the provider falls back to
+    // its generic defaults, and the heading renders "Portal Portal".
+    //
+    // Safe because the response is enumerated field by field and carries only
+    // what is already public - name, logo, locale, currency, terms. No modules,
+    // no hosts, no addresses. See pages/api/tenant-brand.js.
+    pathname === '/api/tenant-brand' ||
     pathname.startsWith('/xero-callback') ||
     pathname.startsWith('/api/xero')
   if (isOpen) return NextResponse.next()
@@ -215,6 +224,7 @@ export async function middleware(req) {
       // _DEPLOY_NOTES.
       pathname === '/api/planning' ||
       pathname === '/api/portal-auth' ||
+      pathname === '/api/tenant-brand' ||
       pathname === '/api/blob-upload'
     if (!ok) {
       if (pathname.startsWith('/api/')) {
