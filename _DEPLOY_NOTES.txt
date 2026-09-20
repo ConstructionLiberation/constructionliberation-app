@@ -1,76 +1,99 @@
-PACKAGE 942 - the demo showed no projects
+PACKAGE 943 - the demo data now matches what the pages actually read
 ================================================================================
 
 One file. Complete replacement.
 
   lib/demoSeed.js
 
-
-WHY THE DEMO WAS EMPTY
-======================
-The seed wrote 49 keys to demo's database successfully. The portal showed
-nothing.
-
-pages/api/dashboard.js DOES read dashboard:cache first - I had it wrong when I
-said it only wrote it. But the cache-first path is guarded by a field-presence
-check on the first row: nineteen marker fields that must be exactly true, and
-nine more that must merely exist. Each was added when a record shape changed,
-to stop an old snapshot serving stale values after a deploy. A sensible guard.
-
-My rows carried none of the _v1 markers. So the guard rejected the cache, the
-code fell through to the live Xero call, and that 401'd on a tenant with no
-Xero connection. 49 keys written, nothing on screen.
-
-This is the same guard noted in CODE-NUANCES: "dashboard:cache requires a
-field-presence guard that must be bumped whenever record shape changes". It
-bit in the other direction - not a stale cache being served, but a fresh one
-being refused.
+Wipe and re-seed after deploying. Same two calls as before.
 
 
-WHAT CHANGED
-============
-projectCacheRow() now emits all 28 fields the guard checks. The list was
-EXTRACTED FROM THE CONDITION PROGRAMMATICALLY rather than transcribed by eye -
-there are 28 of them on one 1,400-character line and reading it correctly by
-hand is not a reasonable thing to ask of anyone.
+WHAT WAS WRONG
+==============
+The rows appeared; the figures did not. Five separate shape mismatches, all
+from me guessing field names instead of reading the consumers. Each one found
+by reading the page that renders it:
 
-Rows now carry 93 fields, up from 76.
+1. COST LINES used `account` and `total`.
+   pages/commercial.js reads l.accountCode and l.amount. Every money column
+   came out as zero while the project rows themselves showed. Now both sets of
+   names are written.
 
-A note is written into the file: IF A NEW MARKER IS ADDED TO THAT CONDITION,
-IT MUST BE ADDED HERE TOO, or the demo silently empties. That is a real
-coupling and there is no way to avoid it while the seeder writes the cache
-directly - which is the compromise already documented in pkg941.
+2. INVOICE LINES used `total`.
+   Invoiced is read as `sales200`, falling back to `subTotal`. `total` alone is
+   invisible. Now all three.
+
+3. THE AFA FIELD was `afaGross`. The Commercial table reads `afa`. Both set.
+
+4. ops:projects WAS FLAT. The real shape is
+   { projectNo, status, manual, createdAt, updatedAt, data: { projectName,
+   customerCompany, projectAddress, contractsManager, estimator,
+   quantitySurveyor, designManager, operationsManager, ... } }
+   A flat object gives a project list with every column blank - which is why
+   Operations and Design looked empty.
+
+5. crm:deals USED `stage` AND TOP-LEVEL ATTRIBUTES.
+   pages/crm.js reads deal.stageId, and every attribute out of deal.fields -
+   51 references to d.fields in that one file. A deal with its values at the
+   top level renders as an empty row. Stage ids must also be real:
+   stage_project_in, stage_received, stage_mc_secured and so on. Fixed, with
+   the full CRM field set populated: organization, contact_person,
+   contact_email, contact_phone, contact_job_role, org_address, org_phone,
+   org_website, value, site_location, region, size_m2, credit_score,
+   credit_limit, estimator_responsible, project_type, lead_source,
+   project_start_date, scope_of_works, supply_chain_approved.
 
 
-BEFORE YOU RE-SEED
-==================
-The demo tenant already has the old rows, and 'seed' refuses a populated
-tenant. Wipe first:
+ALSO ADDED
+==========
+PROJECT DETAILS COMPLETE. The banner listed every project because it checks
+nine fields: applicationDay, valuationDay, paymentDay, contractValue,
+labourBudget, materialsBudget, retentionPct, pcDate (or pcDateTBC) and
+defectsDate (or defectsDateTBC). All nine are now set - live projects get the
+TBC flags, completed ones get real dates. The banner should disappear.
 
-  await fetch('/api/admin/seed-demo', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ action:'wipe', id:'demo', confirm:'demo' })
-  }).then(r=>r.json()).then(console.log)
+LABOUR AND MATERIALS BUDGETS, set a little under actual spend on some projects
+so the "Over Budget" tiles on the Commercial dashboard have something in them.
 
-Then seed again with the same call as before. Use the same `seed` value if you
-want the identical dataset back; omit it and you get the default 20260920.
+DUE DATES AND AN AGED DEBT BOOK. Every invoice is due 30 days after its period
+end. 45 of 231 invoices are overdue - 19% - worth about 2.0m, spread across
+all four ageing buckets: 21 at 90+ days, 6 at 61-90, 12 at 31-60, 6 at 0-30.
+The first attempt produced four overdue invoices in total, which is a debtor
+list with nothing to demonstrate.
+
+ONE EMAIL ADDRESS EVERYWHERE. Every generated customer, contact, portal user,
+team member and mailbox is james@constructionliberation.com, so any
+notification the demo sends arrives somewhere you can open it - and the demo
+physically cannot email a real person.
+
+DESIGN AND OPERATIONS PEOPLE. designManager and operationsManager are now set
+on every ops project, so those areas have someone against each job.
+
+
+STILL NOT GENERATED
+====================
+Forms, submissions and site photos. Scorecard entries, targets, value changes
+and GP snapshots - so the scorecard pages will still be thin. Business
+Financials needs 48 further keys and is a package of its own.
 
 
 SMOKE TEST
 ==========
-1. Wipe, re-seed, then open Commercial on demo. THIRTY PROJECTS SHOULD APPEAR.
-   If it is still empty, the guard has rejected the rows again and I need to
-   see the condition as deployed - it may have gained a marker since the copy
-   I read.
-2. Project Financials, a project page, Retention, WIP.
-3. Figures should reconcile: applications not exceeding the AFA, retention at
-   the stated percentage of applied-for, costs consistent with the margin.
-4. Rock untouched.
+1. Wipe, re-seed.
+2. Commercial - the yellow "project details incomplete" banner should be GONE,
+   and AFA, Invoiced, Retention, Labour and Materials columns should all carry
+   figures. Two or three projects over budget.
+3. Outstanding Invoices - around 45 overdue across four ageing buckets.
+4. Operations and Design - 30 projects, with names, customers and CMs.
+5. CRM - 48 deals spread across the stage columns, each with a company,
+   contact, value and estimator.
+6. A project page - WIP should calculate, since valuation dates now resolve.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
 - esbuild compile: clean
-- the guard simulated in node against a generated row: all 19 markers true,
-  all 9 presence fields present, "GUARD WOULD PASS"
-- marker list extracted from the source condition, not typed out
+- generator dry-run: field names verified against the exact reads in
+  pages/commercial.js, pages/api/ops-projects.js and pages/crm.js
+- overdue profile measured, not assumed: 45 of 231, four buckets populated
+- every generated email address confirmed to be the demo address
