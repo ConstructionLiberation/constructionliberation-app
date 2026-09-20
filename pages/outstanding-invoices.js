@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Head from 'next/head'
+import { useFormat } from '../components/TenantProvider'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
 import SyncBar from '../components/SyncBar'
@@ -68,6 +69,12 @@ function resolveMergeFields(str, row, me, greetingName) {
     "[Today's Date]": new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
     '[Invoice Value]': fmt(row.due),
     '[Invoice Value inc VAT]': fmt(row.due),
+    // OUR QS, THEIRS. The seeded examples use '[Our QS Name]'; the old
+    // '[Rock Roofing QS Name]' is kept because templates a customer has ALREADY
+    // EDITED are saved in their own database and still contain it. Removing it
+    // would silently stop substituting in exactly the templates someone had
+    // bothered to customise.
+    '[Our QS Name]': senderName,
     '[Rock Roofing QS Name]': senderName,
     '[Sender Name]': senderName,
     '[Sender Email]': senderEmail,
@@ -79,23 +86,28 @@ function resolveMergeFields(str, row, me, greetingName) {
 }
 
 // A signature block built from the logged-in sender: name, email, phone, company.
-function senderSignature(me) {
+// brand is passed in rather than read here: these are module-scope helpers and
+// useFormat() is a hook. Threading it through is uglier than a global and far
+// harder to get wrong - a missing argument shows up as a blank line in a chase
+// email, not as one customer's name on another's letter.
+function senderSignature(me, brand) {
   const nm = (me && (me.name || [me.firstName, me.lastName].filter(Boolean).join(' '))) || ''
   const lines = [
     nm,
     (me && me.email) || '',
     (me && me.phone) || '',
-    'Rock Roofing',
+    brand || '',
   ].filter(Boolean)
   return lines.join('\n')
 }
 
 // Resolve a template body and expand the sign-off into the full sender signature
-// (name / email / phone / Rock Roofing). Templates sign off with
-// [Rock Roofing QS Name]; we replace that final token with the signature block.
-function buildBody(tplBody, row, me, greetingName) {
+// (name / email / phone / company). Templates sign off with [Our QS Name] -
+// or [Rock Roofing QS Name] in templates saved before pkg940 - and we replace
+// that final token with the signature block.
+function buildBody(tplBody, row, me, greetingName, brand) {
   let out = resolveMergeFields(tplBody, row, me, greetingName)
-  const sig = senderSignature(me)
+  const sig = senderSignature(me, brand)
   // Replace the resolved sender name on its own sign-off line with the full block.
   const senderName = (me && (me.name || [me.firstName, me.lastName].filter(Boolean).join(' '))) || ''
   if (senderName && out.trimEnd().endsWith(senderName)) {
@@ -159,7 +171,8 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
 
   const [to, setTo] = useState('')
   const [subject, setSubject] = useState(fresh ? '' : resolveMergeFields(tpl.subject, row, me))
-  const [body, setBody] = useState(fresh ? '' : buildBody(tpl.body, row, me))
+  const { companyName: brand } = useFormat()
+  const [body, setBody] = useState(fresh ? '' : buildBody(tpl.body, row, me, undefined, brand))
   // Seed CCs from the template's auto-CC flags.
   const [ccList, setCcList] = useState(() => {
     const seed = []
@@ -176,7 +189,7 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
   function switchToFresh(v) {
     setFresh(v)
     if (v) { setSubject(''); setBody('') }
-    else { setSubject(resolveMergeFields(tpl.subject, row, me)); setBody(buildBody(tpl.body, row, me)) }
+    else { setSubject(resolveMergeFields(tpl.subject, row, me)); setBody(buildBody(tpl.body, row, me, undefined, brand)) }
   }
   function addCc() {
     const parts = ccInput.split(/[;,]/).map(s => s.trim()).filter(Boolean)
@@ -192,7 +205,7 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
     setTo(email)
     const hit = contactOptions.find(c => c.email === email)
     const name = hit?.name || ''
-    if (!fresh) setBody(buildBody(tpl.body, row, me, name))
+    if (!fresh) setBody(buildBody(tpl.body, row, me, name, brand))
   }
 
   async function send() {
@@ -342,6 +355,7 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
 const quickCc = { padding: '3px 9px', background: '#fff', border: '1px dashed #c7d2fe', borderRadius: 12, fontSize: 11, cursor: 'pointer', color: '#4f46e5' }
 
 export default function OutstandingInvoicesPage() {
+  const { companyName: brandTitle } = useFormat()
   const [invoices, setInvoices] = useState([])
   const [meta, setMeta] = useState({})
   const [members, setMembers] = useState([])
@@ -513,7 +527,7 @@ export default function OutstandingInvoicesPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Outstanding Invoices · v9</title></Head>
+      <Head><title>{brandTitle} — Outstanding Invoices · v9</title></Head>
       <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
         <CommercialNav active="/outstanding-invoices" right={<SyncBar show={['invoices']} months={12} onDone={() => loadAll({ fresh: true })} />} />
 
