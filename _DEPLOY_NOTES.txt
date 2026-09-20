@@ -1,153 +1,94 @@
-PACKAGE 937 - the structural layer for branding, currency and terminology
+PACKAGE 938 - the documents that leave the building
 ================================================================================
 
-Six files. THREE ARE NEW and must be created by hand in GitHub.
+Seven files. Complete replacements. Nothing new to create.
 
-CREATE THESE THREE
-------------------
-  lib/locale.js                     money, dates, numbers, terms (server side)
-  lib/terms.js                      the UK / US / AU / NZ terminology map
-  components/TenantProvider.js      the same four functions, client side
-  pages/api/tenant-brand.js         the feed between them            <-- also new
+  lib/outstandingInvoicesPdf.js
+  lib/approvalAudit.js
+  lib/preStartNotifyPdf.js
+  lib/signedRamsPdf.js
+  lib/wipPdf.js
+  lib/submissionsPdf.js
+  lib/designShell.js
 
-REPLACE THESE TWO
------------------
-  pages/_app.js                     wraps the app in TenantProvider
-  pages/login.js                    the first real consumer
-
-
-THE POINT OF THIS PACKAGE
-=========================
-Nothing visible changes for Rock. This is the plumbing that every branding and
-currency package from here on plugs into, plus ONE page converted to prove it
-works end to end.
-
-It is deliberately not a library with no consumers. logoUrl() has been
-tenant-aware and unused since tenancy was built, and that is exactly how a good
-helper becomes dead code nobody trusts.
+DEPENDS ON pkg937. designShell.js imports useFormat from
+components/TenantProvider, which pkg937 creates. Deploy 937 first.
 
 
-THE ARCHITECTURE, AND WHY IT IS ONE FEED
+WHY THESE FILES FIRST
+=====================
+Of the 94 real "Rock Roofing" strings on the server, these are the ones printed
+onto documents that a customer sends to THEIR client. A wrong company name in a
+nav bar is embarrassing; a wrong company name on a digital approval certificate
+or a RAMS signature record is a document that misrepresents who issued it.
+
+They are also the hardest for you to notice, because nobody re-reads a PDF
+footer.
+
+
+WHAT CHANGED
+============
+Every one of these now calls companyName(), which reads the tenant record and
+falls back to "Rock Roofing Ltd" when no tenant is in scope. So nothing changes
+for Rock and everything changes for customer two.
+
+  outstandingInvoicesPdf   page footer
+  approvalAudit            certificate heading, body text, and footer -
+                           THREE instances on a single legal-ish document
+  preStartNotifyPdf        footer
+  signedRamsPdf            page footer on the signature record
+  wipPdf                   "Produced ... from the <name> portal"
+  submissionsPdf           page footer
+  designShell              the /rock-logo.jpg in the Design portal nav
+
+designShell is a React component, so it uses useFormat() from the pkg937
+provider rather than companyName(). The Design portal is the one area a
+CUSTOMER'S OWN CLIENT logs in to, which makes it the last place another
+company's logo should appear.
+
+
+THE LOGO WILL VANISH FROM THE DESIGN NAV
 =========================================
-Two problems that looked separate are the same problem:
+Same as the login page in pkg937: logoUrl is empty on Rock's tenant record, so
+the img is omitted rather than rendering broken. Expect it. To restore:
 
-  115 client-side "Rock Roofing" strings
-  128 client-side pound signs (159 in total across 43 files, plus 368 uses
-      of 'en-GB' or 'GBP')
+  add "logoUrl": "https://<public url>" to tenant:rock
 
-Both are a value that lives on the tenant record and has to reach a component
-that CANNOT read it. companyName() and the new locale helpers both call
-currentTenant(), which is AsyncLocalStorage, which is Node-only. Importing
-either into a component drags async_hooks into the browser bundle.
-
-So: one feed, /api/tenant-brand, carrying name, logo, locale, currency and the
-terms map. Server code calls lib/locale.js. Client code calls useFormat() from
-components/TenantProvider.js. THE FOUR FUNCTION NAMES ARE IDENTICAL ON BOTH
-SIDES - money(), num(), formatDate(), term() - so a line moved between a page
-and an API route does not need rewriting, and cannot quietly leave a pound sign
-behind.
+A blob-store URL is the right home, and it also fixes the cron-generated PDFs
+that currently fetch the logo from the deployment URL and get blocked by
+Deployment Protection.
 
 
-/api/tenant-brand IS UNAUTHENTICATED. READ THIS.
-=================================================
-It has to be: the login page needs the company name and logo, and there is no
-session on the login page.
+NOT CHANGED, DELIBERATELY
+==========================
+lib/omsPdf.js - the cover already takes a company object with name, address,
+phone, email and web, so it is parameterised already. Only a colour comment
+mentions Rock. Renaming the variable is cosmetic and can wait.
 
-Which means it must return NOTHING that is not already public. The fields are
-written out one by one rather than spread from the tenant record, precisely so
-that a field added to that record later cannot leak by accident. It returns:
-
-  name, logoUrl, localeKey, localeCode, currency, currencySymbol, terms
-
-It does NOT return modules, hosts, sending addresses, user counts or anything
-else. If you add a field to the tenant record, it does not appear here unless
-someone adds it deliberately.
-
-(For contrast: /api/admin/tenant-setup's GET returns every tenant's id, name,
-hosts and modules behind nothing but an admin role. Already on the outstanding
-list. Not repeated here.)
-
-
-TERMINOLOGY - THE PART THAT NEEDS YOUR ATTENTION
-=================================================
-lib/terms.js maps about 40 terms across UK / US / AU / NZ. Two categories, and
-the distinction is the whole reason the file is structured this way:
-
-  COSMETIC   same thing, said differently. "Rooflight" / "skylight". Switches
-             freely.
-
-  STATUTORY  legal weight, defined in legislation, often with deadlines
-             attached. THESE DO NOT VARY YET - they render in UK English
-             everywhere until someone qualified in that market reviews them.
-
-Marked statutory: retention/retainage, application/payment claim, VAT/GST/sales
-tax, practical completion, defects liability period, RAMS/SWMS.
-
-Why they are held: NZ's Construction Contracts Act defines "payment claim" and
-"payment schedule" with response deadlines. Australia's Security of Payment
-regime varies BY STATE. An Australian SWMS is mandated for high-risk work with
-prescribed content - a UK RAMS is not a compliant SWMS, so relabelling it would
-be worse than leaving it foreign. A wrong local term looks authoritative in a
-way that an obviously British one does not.
-
-Also in the file: UK_ONLY (CIS, reverse-charge VAT, CSCS - no equivalents
-anywhere, these are modules to switch OFF rather than words to translate) and
-NOT_IN_UK (mechanic's liens, lien waivers, ABN withholding - concepts with
-nothing to map back to).
-
-I am reasonably confident on the cosmetic terms and NOT confident on the
-statutory ones. Treat the map as a first pass for local review, not an answer.
-
-
-WHAT CHANGED VISIBLY
-====================
-pages/login.js only. The logo, the page title and the heading now come from the
-feed. On Rock they render "Rock Roofing" exactly as before, because that is
-what Rock's tenant record says.
-
-Note the logo: logoUrl is empty on Rock's record, so the img is omitted rather
-than rendering a broken image. THE LOGO WILL DISAPPEAR FROM THE LOGIN PAGE
-until a logoUrl is set on the tenant record. That is deliberate - the
-alternative is hard-coding /rock-logo.jpg again - but you should expect it
-rather than be surprised by it. To restore it, add to tenant:rock:
-
-  "logoUrl": "https://<a public url for the logo>"
-
-A blob-store URL is the right home for it, and that also fixes the
-cron-generated PDFs that currently fetch the logo from the deployment URL.
+lib/variationPdf.js - the only occurrence is inside a comment.
 
 
 SMOKE TEST
 ==========
-1. app.rockroofing.co.uk/login - heading reads "Rock Roofing Portal", title
-   reads "Rock Roofing - Sign in". Logo absent until logoUrl is set.
-2. demo.constructionliberation.com/login - heading reads "Demo Portal".
-   THIS IS THE ONE THAT MATTERS. It is the first time the app has shown a
-   customer their own name.
-3. /api/tenant-brand on both hosts - correct name, currency GBP, localeCode
-   en-GB, and NO modules or hosts in the response.
-4. Sign in on both. Nothing about authentication changed.
+Generate one of each on Rock and check the footer still reads Rock Roofing:
 
+1. WIP PDF (the bookkeeper's one).
+2. Outstanding invoices PDF.
+3. A signed RAMS record.
+4. A design approval certificate, if you can raise one - it has three
+   instances and is the most important of the four.
+5. Design portal nav - logo absent, everything else unchanged.
 
-NEXT, AND WHY IN THIS ORDER
-============================
-1. pages/index.js - the other four strings a customer sees first.
-2. Server-side sweep: 169 "Rock Roofing" -> companyName(). Covers PDFs, email
-   bodies, chase templates.
-3. Money sweep by area, using money() and useFormat(). 43 files; do it by
-   module so each package is testable.
-4. Dates: 368 'en-GB' uses. Same approach.
-5. Wire logoUrl end to end, then site.webmanifest.
-
-Terms can be introduced gradually - term() returns the key itself for anything
-not in the map, so a page can adopt it before every word is mapped.
+Then the same on demo, where they should read "Demo".
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
-- esbuild compile on all six files: clean
-- no client file imports lib/locale.js, lib/tenantContext, lib/tenantSettings
-  or lib/db, so nothing server-only reaches the browser bundle
-- no non-ASCII characters in any new or edited file
-- the feed's response fields enumerated explicitly, not spread
+- esbuild compile on all seven files: clean
+- companyName imported exactly once per file, at the top
+- no server file imports designShell, so pulling a React hook into it cannot
+  drag components into an API route
+- TenantProvider imports nothing server-only
+- no non-ASCII introduced (the em dashes and middots in the footers are
+  pre-existing)
 - every edit applied by a script asserting the anchor appeared exactly once
