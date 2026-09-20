@@ -1,131 +1,76 @@
-PACKAGE 941 - the demo data generator
+PACKAGE 942 - the demo showed no projects
 ================================================================================
 
-Two files. BOTH ARE NEW and must be created by hand in GitHub.
+One file. Complete replacement.
 
-  lib/demoSeed.js                  the generator
-  pages/api/admin/seed-demo.js     the endpoint that runs it
-
-Nothing existing is touched. Deploying this changes nothing until you call it.
+  lib/demoSeed.js
 
 
-WHAT IT IS
-==========
-A GENERATOR, not a dataset. Every record is invented at call time from a
-seeded pseudo-random sequence. There is no array of projects in the file and
-no real customer data anywhere near it.
+WHY THE DEMO WAS EMPTY
+======================
+The seed wrote 49 keys to demo's database successfully. The portal showed
+nothing.
 
-That shape is deliberate. lib/crmSeedDeals.js held 378 of Rock's real deals
-and shipped them into every tenant's client bundle. lib/lessonsSeed.js held
-two years of Rock's internal minutes and WROTE them into any tenant that
-opened the Lessons Learnt page. Both fired automatically. This does not.
+pages/api/dashboard.js DOES read dashboard:cache first - I had it wrong when I
+said it only wrote it. But the cache-first path is guarded by a field-presence
+check on the first row: nineteen marker fields that must be exactly true, and
+nine more that must merely exist. Each was added when a record shape changed,
+to stop an old snapshot serving stale values after a deploy. A sensible guard.
 
-THREE GUARDS, each for something that has actually gone wrong:
-  1. Never runs by itself. Only a deliberate POST naming a tenant.
-  2. Refuses a tenant that already has data - dashboard:cache, ops:projects or
-     crm:deals populated means it declines. Wipe first, on purpose.
-  3. Refuses unless the target database's identity record agrees with the id
-     given. It cannot write to a database that will not say who it is.
+My rows carried none of the _v1 markers. So the guard rejected the cache, the
+code fell through to the live Xero call, and that 401'd on a tenant with no
+Xero connection. 49 keys written, nothing on screen.
+
+This is the same guard noted in CODE-NUANCES: "dashboard:cache requires a
+field-presence guard that must be bumped whenever record shape changes". It
+bit in the other direction - not a stale cache being served, but a fresh one
+being refused.
 
 
-HOW TO USE IT
-=============
-Browser console on app.rockroofing.co.uk, signed in as admin.
+WHAT CHANGED
+============
+projectCacheRow() now emits all 28 fields the guard checks. The list was
+EXTRACTED FROM THE CONDITION PROGRAMMATICALLY rather than transcribed by eye -
+there are 28 of them on one 1,400-character line and reading it correctly by
+hand is not a reasonable thing to ask of anyone.
 
-Preview first - generates nothing, writes nothing, touches no database:
+Rows now carry 93 fields, up from 76.
 
-  await fetch('/api/admin/seed-demo', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ action:'preview', projects:30, deals:48 })
-  }).then(r=>r.json()).then(console.log)
+A note is written into the file: IF A NEW MARKER IS ADDED TO THAT CONDITION,
+IT MUST BE ADDED HERE TOO, or the demo silently empties. That is a real
+coupling and there is no way to avoid it while the seeder writes the cache
+directly - which is the compromise already documented in pkg941.
 
-Then seed:
 
-  await fetch('/api/admin/seed-demo', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ action:'seed', id:'demo', projects:30, deals:48 })
-  }).then(r=>r.json()).then(console.log)
-
-To start again:
+BEFORE YOU RE-SEED
+==================
+The demo tenant already has the old rows, and 'seed' refuses a populated
+tenant. Wipe first:
 
   await fetch('/api/admin/seed-demo', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ action:'wipe', id:'demo', confirm:'demo' })
   }).then(r=>r.json()).then(console.log)
 
-Options: projects (1-60), deals (0-200), seed (any integer - the SAME seed
-gives the SAME demo, so you can rehearse against a fixed dataset),
-targetMargin (default 0.25).
-
-
-WHAT IT GENERATES
-=================
-30 projects across 14 months, mixed live / defects / complete. Per project:
-contract value, margin clustered on 25% with a realistic spread (a couple go
-negative, because a demo where everything is profitable is not credible to
-anyone who has run a contract), variations mostly instructed, monthly
-applications with a gross-to-date that climbs, certified lagging slightly,
-cost lines that reconcile to the margin, invoice lines that reconcile to the
-applications, and retention at 3/5/10%.
-
-Plus 48 CRM deals across seven stages, emails allocated to the first 14 deals,
-nine in the unallocated review queue, nine team members and nine portal users.
-
-Names are invented and NZ-flavoured but generic - no trade-specific language,
-so the demo is not narrowed to roofing. Currency in the CRM records is NZD.
-
-Portal users are MERGED, not replaced, so the first admin created at
-provisioning survives.
-
-
-THE ONE COMPROMISE, WRITTEN DOWN
-=================================
-It writes dashboard:cache directly.
-
-pages/api/dashboard.js builds that cache from a LIVE Xero connection and
-returns 401 before touching it when there are no tokens - so on a tenant with
-no Xero the seeded cache survives and is never rebuilt. That is what makes
-this possible without standing up a Xero organisation.
-
-The cost is that projectCacheRow() in lib/demoSeed.js shadows the object
-dashboard.js constructs. That is the dominant fault class in this codebase -
-one rule written twice - and it is accepted deliberately. It is confined to
-ONE function so there is exactly one place to update. If the commercial pages
-start showing blanks after a change to dashboard.js, that function is why.
-
-
-WHAT WILL BE EMPTY OR ERROR ON THE DEMO
-========================================
-Anything that reads Xero live rather than from the cache:
-  - the sync buttons (Sync invoices, deep sync)
-  - /connect and anything Xero-authenticated
-  - parts of Bookkeeping and the reconciliation screens
-  - Business Financials (also excluded from demo's module list)
-
-Worth knowing which screens not to open on Friday rather than finding out in
-the meeting. Forms, submissions and site photos are NOT generated yet - that
-is the next package.
+Then seed again with the same call as before. Use the same `seed` value if you
+want the identical dataset back; omit it and you get the default 20260920.
 
 
 SMOKE TEST
 ==========
-1. Run the preview. Check the summary reads sensibly.
-2. Seed demo. Expect keysWritten around 49 and a summary.
-3. On demo: Commercial, Project Financials, a project page, Retention, CRM,
-   the CRM email queue. Figures should be consistent with each other -
-   applications should not exceed the AFA, retention should be the stated
-   percentage of the applied-for total.
-4. Rock must be COMPLETELY UNTOUCHED. Check one project page and the
-   dashboard. The endpoint writes only to the named tenant, but that is worth
-   confirming once rather than trusting.
+1. Wipe, re-seed, then open Commercial on demo. THIRTY PROJECTS SHOULD APPEAR.
+   If it is still empty, the guard has rejected the rows again and I need to
+   see the condition as deployed - it may have gained a marker since the copy
+   I read.
+2. Project Financials, a project page, Retention, WIP.
+3. Figures should reconcile: applications not exceeding the AFA, retention at
+   the stated percentage of applied-for, costs consistent with the margin.
+4. Rock untouched.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
-- esbuild compile on both files: clean
-- generator dry-run in node: 30 projects, 26.8% average margin, 49 keys,
-  76 fields per cache row, figures reconcile
-- clientForCredentials, tenantById and registryConfigured all confirmed to
-  exist with those exact names
-- no unused imports
-- writes nothing at module scope; nothing runs unless the endpoint is called
+- esbuild compile: clean
+- the guard simulated in node against a generated row: all 19 markers true,
+  all 9 presence fields present, "GUARD WOULD PASS"
+- marker list extracted from the source condition, not typed out
