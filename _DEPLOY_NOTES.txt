@@ -1,75 +1,62 @@
-PACKAGE 998 - "Project not found" when clicking a project
+PACKAGE 999 - "Refused: undefined has been instructed"
 ================================================================================
 
 One file. Complete replacement. Mind the folder and the brackets.
 
-  pages/api/project/[id].js
+  pages/api/project/[id]/settings.js
 
-No re-seed.
+NO RE-SEED. Code only - your contracted rates, applications and retention
+ticks are untouched.
 
 
-THE CAUSE - THE SAME ONE, A THIRD TIME
+WHAT WAS HAPPENING
 ================================================================================
-Line 12 of that route:
+Saving ANY project detail - a customer contact, an address, a valuation day -
+runs a lock that protects instructed variations from being altered. Correct,
+and it is the control rather than the screen, as the comment there says.
 
-    let tokens = await getTokens()
-    if (!tokens) return res.status(401).json({ error: 'Not connected to Xero' })
+It matched variations on varNumber alone:
 
-That ran BEFORE the dashboard cache lookup and before the project register
-fallback. So on a tenant without Xero every project page answered "Project
-not found" no matter how complete its data was - and clicking a project name
-from Project Financials is exactly that request.
+    incoming.variations.find(v => String(v.varNumber || '') === String(was.varNumber || ''))
 
-The file already argues the opposite case forty lines further down, for a
-project whose Xero tracking option has been deleted:
+A variation with no varNumber gives an EMPTY string, so every numberless
+variation matched the FIRST one in the list. Its signature then differed from
+all the others, and the save was refused - naming "undefined" because there
+was no number to name.
 
-    "we still hold its applications, contracted rates, variations and
-     retention, so the page must still open"
-
-Same reasoning applies when the ACCOUNTING is absent rather than the tracking
-option. The guard was written when Xero was always there.
+The seeded variations carry `id` and `ref` (V01, V02) but no varNumber, which
+is why it showed up on demo. It is not a demo-only shape: anything written
+without a number behaves identically on any tenant, and matching the WRONG
+variation is a good deal worse than refusing the save.
 
 
 THE FIX
 ================================================================================
-No tokens is no longer a refusal. The route resolves the project from the
-dashboard cache, then from projects:registry, exactly as it already did. The
-Xero category lookup - the only step that genuinely needs a connection - is
-now skipped rather than attempted, and "no tenant id" is a 500 only when
-there ARE tokens, because a connection without one is broken while no
-connection at all is simply a customer who does not use Xero.
+Matching now uses the same composite key the drop-check two lines above
+already uses - varNumber plus description. Demonstrated rather than reasoned
+about: with the old rule V02 resolved to V01; with the new one it resolves to
+V02.
+
+And the refusal now names something. varNumber, else ref, else the
+description. "Refused: undefined has been instructed" told you nothing and
+told me nothing either - it took reading the source to find out which check
+had fired.
 
 
-THE PATTERN, NOW WORTH WRITING DOWN
+WHAT IT DOES NOT CHANGE
 ================================================================================
-Three faults this evening, all the same:
-
-  996  28 routes deleted a cache nothing could rebuild
-  997  dashboard.js refused the cache when asked to sync without tokens
-  998  the project route refused before ever reading the cache
-
-On a single-tenant app with Xero permanently connected, "no tokens" only ever
-meant BROKEN. With a second tenant it means NOT APPLICABLE, and those want
-opposite behaviour. Every remaining `if (!tokens) return 401` is a candidate.
-I checked: three others remain, in business-financials.js, dashboard.js (the
-genuine sync path, correct) and sync-chart-of-accounts.js. The first is worth
-looking at when Business Financials gets its data.
-
-
-ONE THING THAT IS NOT A BUG
-================================================================================
-Your retention release ticks, and anything else you set by hand, went because
-you WIPED. retention:entries is in DEMO_KEY_PREFIXES, so a re-seed
-regenerates every record and discards what you had marked.
-
-Nothing in the app is losing your work. But it does mean: once the sweep is
-finished, stop re-seeding. Anything you set up for the demo only survives
-until the next wipe.
+The lock itself. An instructed variation still cannot be altered or removed,
+and Rock's variations carry varNumber so they match exactly as before - the
+composite key adds the description, which is identical on both sides for an
+unchanged variation.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Project Financials: click a project name. It opens.
-2. The page carries its applications, variations, retention and costs.
-3. ROCK: open a project the same way. Unchanged - it has tokens, so every
-   step runs exactly as before, including the Xero category lookup.
+1. Demo: open a project, Edit Project Details, add a customer contact, save.
+   It saves.
+2. Demo: change the valuation day or the address. Saves.
+3. ROCK, the one that matters: find a project with an INSTRUCTED variation,
+   try to edit that variation's value in Edit Project Details, and confirm it
+   is still refused - and that the message now names the variation. Then
+   change something unrelated on the same project and confirm it saves.

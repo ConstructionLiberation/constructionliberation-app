@@ -70,6 +70,10 @@ async function handler(req, res) {
   // refused by name so the loss is visible instead of silent.
   if (Array.isArray(incoming.variations) && Array.isArray(existing.variations) && existing.variations.length) {
     const key = (v) => `${String(v.varNumber || '').trim().toUpperCase()}|${String(v.description || '').trim().slice(0, 40)}`
+    // Something to call it in the refusal. varNumber, else ref, else the
+    // description - "Refused: undefined has been instructed" told the user
+    // nothing and told me nothing either.
+    const label = (v) => String(v.varNumber || v.ref || v.description || 'a variation').trim()
     const incomingKeys = new Set(incoming.variations.map(key))
     const dropped = existing.variations.filter(v => !incomingKeys.has(key(v)))
     // AN INSTRUCTED VARIATION CANNOT BE CHANGED. The screen locks it, but the screen is a
@@ -85,13 +89,24 @@ async function handler(req, res) {
       // BOOLEAN by every other writer, so this lock silently did nothing on any
       // variation instructed from the tracker or from Edit Project Details.
       if (!isInstructed(was)) continue
-      const now = incoming.variations.find(v => String(v.varNumber || '').trim().toUpperCase() === String(was.varNumber || '').trim().toUpperCase())
+      // MATCH ON THE SAME COMPOSITE KEY THE DROP CHECK USES, not on varNumber
+      // alone. A variation with no varNumber gives an EMPTY key, so every
+      // numberless variation matched the first one in the list - the signature
+      // then differed for all the others and the save was refused, naming
+      // "undefined" because there was no number to name.
+      //
+      // Seeded demo variations carry id and ref but no varNumber, which is how
+      // this surfaced: adding a customer contact was refused by a variations
+      // lock the user had not been anywhere near. It is not only a demo shape -
+      // anything written without a number behaves the same way on any tenant,
+      // and matching the WRONG variation is worse than the refusal.
+      const now = incoming.variations.find(v => key(v) === key(was))
       if (!now) {
-        return res.status(409).json({ error: `Refused: ${was.varNumber} has been instructed and cannot be removed.` })
+        return res.status(409).json({ error: `Refused: ${label(was)} has been instructed and cannot be removed.` })
       }
       if (sig(now) !== sig(was)) {
         return res.status(409).json({
-          error: `Refused: ${was.varNumber} has been instructed and cannot be changed. Raise a new variation instead.`,
+          error: `Refused: ${label(was)} has been instructed and cannot be changed. Raise a new variation instead.`,
         })
       }
     }
