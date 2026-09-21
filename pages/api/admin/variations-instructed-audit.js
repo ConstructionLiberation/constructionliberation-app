@@ -1,4 +1,5 @@
 import withTenant from '../../../lib/withTenant'
+import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { saveProject, getClient } from '../../../lib/db'
 import { requireRole } from '../../../lib/portalAuth'
 import { isInstructed } from '../../../lib/applications'
@@ -137,7 +138,7 @@ async function handler(req, res) {
     }
   }
 
-  if (apply) { try { await redis.del('dashboard:cache') } catch { /* non-fatal */ } }
+  if (apply) { try { await invalidateDashboardCache(redis) } catch { /* non-fatal */ } }
 
   res.json({
     ok: true,

@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { currentTenantId } from '../../lib/tenantContext'
 import { getProject, saveProject, get, getClient } from '../../lib/db'
 import { isInstructed } from '../../lib/applications'
@@ -192,7 +193,7 @@ async function handler(req, res) {
   await saveProject(t.projectId, { ...fresh, variations: next })
   try {
     const redis = await getClient()
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
   } catch {}
 
   // CONFIRM IT BACK TO EVERYONE WHO WAS ON THE ORIGINAL, with the document carrying the

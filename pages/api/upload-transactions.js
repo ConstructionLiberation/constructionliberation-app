@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getProject } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
@@ -167,7 +168,7 @@ async function handler(req, res) {
     })
     const { mergeCosts } = await import('../../lib/mergeCosts')
     await mergeCosts(redis, projectId)
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
 
     res.json({
       ok: true,

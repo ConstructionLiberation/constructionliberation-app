@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getClient } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
@@ -102,7 +103,7 @@ async function handler(req, res) {
       config[String(a.code)] = { name: a.name || '', category }
     }
     await redis.set(CONFIG_KEY, config)
-    await redis.del('dashboard:cache')   // costs re-derive on next read
+    await invalidateDashboardCache(redis)   // costs re-derive on next read
     return res.json({ ok: true, saved: Object.keys(config).length })
   }
 

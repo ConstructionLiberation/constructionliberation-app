@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getProject, saveProject, get, getAllProjectSettings, getOpsProjects, getPortalUsers, getClient } from '../../lib/db'
 import { resolveProjectPeople } from '../../lib/projectPeople'
 import { computeApplicationSummary, buildContractWorksFromRates, buildAppVariations, resolveAppDates, backfillAppNumbers } from '../../lib/applications'
@@ -9,7 +10,7 @@ import withTenant from '../../lib/withTenant'
 async function clearDashboardCache() {
   try {
     const redis = await getClient()
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
   } catch {}
 }
 

@@ -1,4 +1,5 @@
 import withTenant from '../../../lib/withTenant'
+import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { getTokens, saveTokens, getClient } from '../../../lib/db'
 import { refreshXeroToken, fetchAllCostBills, extractJobNoFromDescription, LABOUR_ACCOUNTS, COST_OF_SALE_ACCOUNTS } from '../../../lib/xero'
 
@@ -64,7 +65,7 @@ async function handler(req, res) {
       // files alone.
       await redis.set('uploaded:invoices', { ...processedInvoices, ...newInvoiceNumbers })
       await redis.set('sync:lastDate', new Date().toISOString().split('T')[0])
-      await redis.del('dashboard:cache')
+      await invalidateDashboardCache(redis)
     }
 
     res.json({

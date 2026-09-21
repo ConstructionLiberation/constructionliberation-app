@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../lib/xero'
@@ -317,7 +318,7 @@ async function handler(req, res) {
       await redis.set(`invoiced:latest:${pid}`, { totalInvoiced: tot, invoicedExVat: exVat, invoicedSales200: sales200, retention612, vatTotal: vat, vatRateLabel, paidTotal: paid, dueTotal: due, invoiceCount: merged.length, calculatedAt: new Date().toISOString(), source: 'sync_button' })
     }
 
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
     await redis.set('sync-invoices:at', new Date().toISOString())
     res.json({ ok: true, months, invoicesFetched: all.length, invoicesMatched: matchedInv, invoicesUnassigned: unassignedInv, creditNotesMatchedByAllocation: creditByAllocation, projectsTouched: byProject.size })
   } catch (e) {

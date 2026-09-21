@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getProject, saveProject, getClient } from '../../lib/db'
 
 // Negotiated projects (Pipedrive deals, id like "N:123") aren't in getProject, so
@@ -26,7 +27,7 @@ const persistProject = async (id, project) => isNegotiated(id) ? saveNegProject(
 async function clearDashboardCache() {
   try {
     const redis = await getClient()
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
   } catch {}
 }
 

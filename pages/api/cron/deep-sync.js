@@ -15,6 +15,7 @@
 // ===========================================================================
 
 import forEachTenant from '../../../lib/forEachTenant'
+import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../../lib/db'
 import { getClient } from '../../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories, fetchProfitAndLoss, fetchAccountCodeMap } from '../../../lib/xero'
@@ -295,7 +296,7 @@ async function handler(req, res) {
     await redis.set(`invoiced:latest:${projectId}`, { totalInvoiced, paidTotal, dueTotal, invoiceCount: mergedInv.length, calculatedAt: new Date().toISOString(), source: 'deep_sync' })
 
     await redis.set('deep-sync:pointer', (pointer + 1) % active.length)
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
 
     // ── Bookkeeping benchmark: pull P&L per month (cheap — 1 call/month) ──
     // Only refresh once per day (guard so it doesn't run on every manual trigger).

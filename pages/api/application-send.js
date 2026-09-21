@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { checkEmailLinks } from '../../lib/linkGuard'
 import { requireRole } from '../../lib/portalAuth'
 import { getProject, get, saveProject, getClient } from '../../lib/db'
@@ -156,7 +157,7 @@ async function handler(req, res) {
     // Refresh Project Financials / Retentions so the new AFA shows.
     try {
       const redis = await getClient()
-      await redis.del('dashboard:cache')
+      await invalidateDashboardCache(redis)
     } catch {}
 
     return res.json({ ok: true, id: data?.id || null, application: apps[idx] })

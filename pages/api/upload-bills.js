@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getClient } from '../../lib/db'
 import { LABOUR_ACCOUNTS, COST_OF_SALE_ACCOUNTS, extractJobNoFromDescription } from '../../lib/xero'
 import withTenant from '../../lib/withTenant'
@@ -114,7 +115,7 @@ async function handler(req, res) {
       // the real ones every upload - so anyone who did start trusting it would
       // be reading something wrong.
       await redis.set('uploaded:invoices', { ...processedInvoices, ...newInvoiceNumbers })
-      await redis.del('dashboard:cache')
+      await invalidateDashboardCache(redis)
     }
 
     const labourTotal = Object.values(labourByJob).reduce((s, v) => s + v, 0)

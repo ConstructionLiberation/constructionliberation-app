@@ -1,4 +1,5 @@
 import withTenant from '../../../lib/withTenant'
+import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../../lib/db'
 import { getClient } from '../../../lib/db'
 import { refreshXeroToken, extractJobNoFromDescription } from '../../../lib/xero'
@@ -116,7 +117,7 @@ async function handler(req, res) {
 
     if (reachedEnd) {
       await redis.set('backfill:labour:progress', { page, done: true })
-      await redis.del('dashboard:cache')
+      await invalidateDashboardCache(redis)
     } else {
       await redis.set('backfill:labour:progress', { page, done: false })
     }

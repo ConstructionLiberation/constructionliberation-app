@@ -1,4 +1,5 @@
 import withTenant from '../../../lib/withTenant'
+import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../../lib/db'
 import { getClient } from '../../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../../lib/xero'
@@ -114,7 +115,7 @@ async function handler(req, res) {
     await redis.set(`costs:latest:${trackingOptionId}`, costData)
     await redis.set(`costs:lines:${trackingOptionId}`, costLines)
     await redis.set('backfill:lastSync', now.toISOString())
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
 
     res.json({
       ok: true,

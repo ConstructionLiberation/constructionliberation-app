@@ -1,10 +1,11 @@
 import { getStaff, saveStaff, getClient } from '../../lib/db'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import withTenant from '../../lib/withTenant'
 
 async function clearCache() {
   try {
     const redis = await getClient()
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
   } catch {}
 }
 

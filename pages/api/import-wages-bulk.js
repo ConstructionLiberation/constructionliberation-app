@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../lib/xero'
@@ -165,7 +166,7 @@ async function handler(req, res) {
     }
 
     try { await redis.set('costs:seen-accounts', seenAccounts) } catch {}
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
 
     return res.json({
       ok: true,

@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../lib/xero'
@@ -186,7 +187,7 @@ async function handler(req, res) {
       summary.push({ project: tracking, matched: true, invoices: allLines.length, invoiced: mTotal, paid: mPaid, due: mDue, vatRateLabel: mVatLabel })
     }
 
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
 
     const totalProcessed = [...byProject.values()].reduce((s, m) => s + m.size, 0)
     return res.json({

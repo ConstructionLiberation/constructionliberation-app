@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../lib/xero'
@@ -203,7 +204,7 @@ async function handler(req, res) {
       await redis.set('costs:untagged:wages', combinedUn)
     }
 
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
     await redis.set('sync-wages:at', new Date().toISOString())
     res.json({ ok: true, months, wageLinesFetched: all.length, skippedNoDate: all._skippedNoDate || 0, taggedToProjects: taggedCount, untagged: untagged.length, projectsTouched: byProject.size })
   } catch (e) {

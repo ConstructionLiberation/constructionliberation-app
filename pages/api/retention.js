@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getProject, saveProject, getClient } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
@@ -50,7 +51,7 @@ async function handler(req, res) {
         }
       }
       await redis.set(KEY, all)
-      try { await redis.del('dashboard:cache') } catch {}
+      try { await invalidateDashboardCache(redis) } catch {}
       return res.json({
         entries: all, added, updated, skipped,
         // Named so the page can say which ones, rather than only how many.
@@ -79,7 +80,7 @@ async function handler(req, res) {
     // The Retention Tracker is the source of truth for a project's stage
     // (live/defects/complete), which Project Financials reads. Any save may change
     // status, so always refresh the dashboard cache.
-    try { await redis.del('dashboard:cache') } catch {}
+    try { await invalidateDashboardCache(redis) } catch {}
     // comment back to the project's retentionComments so Project Details stays in
     // step. (Only comments sync back — all other fields are read-only from the
     // project; manual VAT stays only in the tracker.)
@@ -88,7 +89,7 @@ async function handler(req, res) {
         const settings = (await getProject(entry.xeroId)) || {}
         if ((settings.retentionComments || '') !== entry.comments) {
           await saveProject(entry.xeroId, { ...settings, retentionComments: entry.comments })
-          try { await redis.del('dashboard:cache') } catch {}
+          try { await invalidateDashboardCache(redis) } catch {}
         }
       }
     } catch (e) { console.error('retention comment write-back failed:', e) }
@@ -102,7 +103,7 @@ async function handler(req, res) {
     try { const d = await redis.get(KEY); if (d) entries = d } catch {}
     entries = entries.filter(e => e.id !== id)
     await redis.set(KEY, entries)
-    try { await redis.del('dashboard:cache') } catch {}
+    try { await invalidateDashboardCache(redis) } catch {}
     return res.json({ entries })
   }
 

@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getTokens, saveTokens, getClient } from '../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../lib/xero'
 import { mergeCosts } from '../../lib/mergeCosts'
@@ -82,7 +83,7 @@ async function handler(req, res) {
     else if (type === 'manual') await clearManual()
     else if (type === 'all') { await clearBills(); await clearWages(); await clearSales(); await clearManual() }
 
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
     res.json({ ok: true, type, keysCleared: cleared })
   } catch (e) {
     console.error('clear-financial-data error:', e)

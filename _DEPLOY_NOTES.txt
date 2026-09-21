@@ -1,80 +1,83 @@
-PACKAGE 995 - hide the metrics a customer does not want
+PACKAGE 996 - why the commercial data vanished, and why it would have done
+              it again in front of WPC
 ================================================================================
 
-Two files. Complete replacements. scorecard-crm.js includes 990 and 994.
+28 files. One is NEW: lib/dashboardCache.js. The other 27 are one-line
+changes - an import, and a call swapped.
 
-  pages/api/targets.js
-  pages/scorecard-crm.js
-
-No re-seed. Works on every tenant immediately.
+RE-SEED AFTERWARDS to get the data back. This stops it happening again; it
+cannot recover what has already gone.
 
 
-YOUR IDEA, AND IT IS THE BETTER ANSWER
+WHAT HAPPENED
 ================================================================================
-We were about to seed a number into "emails sent externally" so a card would
-not look broken. That would have been inventing data to hide a gap. Hiding
-the card says the truthful thing instead: this customer does not measure
-that.
+Nothing to do with time, and not a fault in anything you clicked. Twenty-eight
+routes did this whenever something changed that would alter the commercial
+figures:
 
-It also generalises past the three cards in front of us. Glenigan is a UK
-data source a New Zealand contractor has never heard of. Actively Chased is
-Rock's own lead category. Another customer will want measures neither of us
-has thought of. A fixed list of metrics was always going to be wrong for
-somebody.
+    await redis.del('dashboard:cache')
+
+pages/api/retention.js does it in FOUR places - including on saving a row.
+contracted-rates.js, applications.js, variation-instruct.js and the upload
+routes all do it too. Sweeping the commercial screens and saving anything was
+enough.
+
+On ROCK that is correct. The next Xero sync rebuilds the cache, and a stale
+cache is worse than a missing one.
+
+On DEMO it is destructive and permanent. pages/api/dashboard.js returns 401
+before it ever reaches the cache when there are no Xero tokens - which is the
+only reason a seeded cache works at all. Delete it and NOTHING can put it
+back. Budget Tracker, Project Financials, Retention and WIP all go blank and
+stay blank.
+
+HANDOVER-6 wrote down half of this: "If the commercial pages go blank after a
+change to dashboard.js, that function is why." The other half - that any of
+twenty-eight routes could delete the cache outright - was never the danger on
+a single-tenant app, because Rock always had Xero.
 
 
-HOW IT WORKS
+THE FIX
 ================================================================================
-A "Metrics" button sits at the right of the person tabs. It opens a row of
-tick boxes - every metric for that scorecard - and unticking one hides it.
-Saves immediately, no OK button. The button shows a count when anything is
-hidden, so a hidden metric is never a mystery.
+One function, lib/dashboardCache.js, and all 28 routes call it instead:
 
-Stored per tenant as scorecard:hidden, an array of metric keys. Empty for
-every existing tenant, so ROCK SEES NO CHANGE until somebody hides
-something.
+    await invalidateDashboardCache(redis)
 
-The filter is applied at ONE point:
+It deletes the cache only if something can rebuild it. No accounting
+connection, no delete. If it cannot even determine that, it also does not
+delete - keeping a cache you were unsure about is recoverable, deleting one
+you needed is not.
 
-    const metricDefs = allMetricDefs.filter(m => !hidden.includes(m.key))
+Checked both paths: with tokens it deletes, without tokens it skips. And
+checked that `redis` is actually in scope at all 28 call sites, since the
+replacement passes it as an argument where the old code closed over it.
 
-metricDefs already fed all three renderers - the last-full-month cards, the
-current-month cards and the trend table - so hiding a metric hides it in all
-three. No second list to keep in step, which is the fault this codebase
-produces more than any other.
-
-Estimator and sales scorecards have separate metric sets and the picker shows
-whichever you are on. The hidden list is shared, and the keys do not collide,
-so hiding "total value of work priced" on one does not touch the other unless
-the key is the same metric.
+One rule, twenty-eight places, now one place. Same shape as every other fix
+this week.
 
 
-ONE THING IN THE API WORTH KNOWING
+WHY THIS MATTERED MORE THAN IT LOOKS
 ================================================================================
-The POST used to be:
-
-    await set('scorecard:targets', req.body.targets)
-
-unconditional. A POST carrying only `hidden` would have written undefined
-over every target the customer had set. It now writes each only if present.
+You found it by sweeping. On Friday, one save on a commercial screen in front
+of WPC would have blanked the demo mid-sentence, with no way back inside the
+meeting.
 
 
-NOT DONE, DELIBERATELY
+AFTER DEPLOYING
 ================================================================================
-pages/operations/scorecards.js has its own metric layout and is untouched.
-Same idea applies there; it is a different page with fixed columns rather
-than cards, so it is its own change.
+    wipe:  { action:'wipe', id:'demo', confirm:'demo' }
+    seed:  { action:'seed', id:'demo', projects:30 }
 
-And this hides metrics rather than adding them. Adding a measure we have not
-written is a bigger piece - it needs somewhere to define how it is computed.
+Then the commercial screens come back, and stay back however much you click.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo scorecard, sales tab: Metrics, untick Emails sent externally,
-   Glenigan scored 5+ and Actively Chased scored 5+. The cards go, and so do
-   their rows in the trend table at the bottom.
-2. The button reads "Metrics (3 hidden)".
-3. Reload - still hidden. It is stored, not local state.
-4. Tick one back on: it returns, with its figures intact.
-5. ROCK: the button appears, nothing is hidden, every card as before.
+1. Demo, after re-seeding: edit a retention row and save it. Budget Tracker
+   and Project Financials still have data. That is the exact sequence that
+   emptied them.
+2. Demo: instruct a variation, save contracted rates. Same.
+3. ROCK: change something on retention, then check the commercial pages
+   refresh as they always have. The cache must STILL be dropped there - if
+   Rock starts showing stale figures after an edit, that is this package and
+   I want to know.

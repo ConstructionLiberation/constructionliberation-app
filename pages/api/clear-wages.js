@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getTokens, saveTokens, getAllProjectSettings, getClient } from '../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../lib/xero'
 import { mergeCosts } from '../../lib/mergeCosts'
@@ -42,7 +43,7 @@ async function handler(req, res) {
     // Delete the untagged wage lump sums.
     await redis.del('costs:untagged:wages')
     // Invalidate the dashboard cache so figures refresh.
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
 
     res.json({ ok: true, projectsCleared: cleared, projectsChecked: projectIds.length })
   } catch (e) {

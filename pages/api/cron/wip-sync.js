@@ -15,6 +15,7 @@
 // ===========================================================================
 
 import forEachTenant from '../../../lib/forEachTenant'
+import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { getTokens, saveTokens, getAllProjectSettings, getEffectiveValuationDate, getWipEndDate } from '../../../lib/db'
 import { getClient } from '../../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories, fetchBillsByCategory, fetchLabourJournalsByCategory, getInvoicesByCategory } from '../../../lib/xero'
@@ -199,7 +200,7 @@ async function handler(req, res) {
       processed++
     }
 
-    await redis.del('dashboard:cache')
+    await invalidateDashboardCache(redis)
 
     res.json({
       ok: true,

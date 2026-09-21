@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getClient } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
@@ -13,7 +14,7 @@ async function handler(req, res) {
   await redis.del('costs:labour')
   await redis.del('costs:materials')
   await redis.del('uploaded:invoices')
-  await redis.del('dashboard:cache')
+  await invalidateDashboardCache(redis)
   res.json({ ok: true, message: 'All cost data reset' })
 }
 
