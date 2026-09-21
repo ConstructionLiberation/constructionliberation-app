@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useFormat } from '../components/TenantProvider'
+import { claimTitle } from '../lib/applications'
 import Head from 'next/head'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
@@ -121,7 +122,8 @@ function CalendarMonth({ year, month, projects, onProjectClick }) {
 }
 
 export default function ApplicationCalendar() {
-  const { companyName: brand } = useFormat()
+  const { companyName: brand, term } = useFormat()
+  const claim = claimTitle(term('application'))
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
@@ -223,14 +225,14 @@ export default function ApplicationCalendar() {
 
   return (
     <>
-      <Head><title>{brand ? `${brand} - Application Calendar` : 'Application Calendar'}</title></Head>
+      <Head><title>{brand ? `${brand} - ${claim} Calendar` : `${claim} Calendar`}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
 
         <CommercialNav active="/application-calendar" />
 
         <div style={{ padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1a1a2e' }}>Application Calendar</h1>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1a1a2e' }}>{claim} Calendar</h1>
             <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#555', alignItems: 'center' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 12, height: 12, borderRadius: 2, background: '#dbeafe', border: '1px solid #93c5fd', display: 'inline-block' }} /> Application date

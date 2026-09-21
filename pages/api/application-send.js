@@ -4,6 +4,7 @@ import { requireRole } from '../../lib/portalAuth'
 import { getProject, get, saveProject, getClient } from '../../lib/db'
 import { buildApplicationPDF } from '../../lib/applicationPdf'
 import { describeApplication, computeApplicationSummary, backfillAppNumbers } from '../../lib/applications'
+import { term } from '../../lib/locale'
 import withTenant from '../../lib/withTenant'
 
 // POST /api/application-send
@@ -56,7 +57,7 @@ async function handler(req, res) {
     const b64 = Buffer.from(bytes).toString('base64')
     // Matches the download - the attachment the customer receives should be named the
     // same as the one the QS has on file.
-    const fname = `${describeApplication(app, { prevReleases: prev || null }).titleShort} ${app.seq || ''} - ${(jobNo || name || 'application')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
+    const fname = `${describeApplication(app, { prevReleases: prev || null, term }).titleShort} ${app.seq || ''} - ${(jobNo || name || 'application')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
 
     // ACCOUNTS, NOT A KIND OF ITS OWN.
     //

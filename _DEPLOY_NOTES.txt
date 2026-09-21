@@ -1,76 +1,110 @@
-PACKAGE 974 - why the email says 142 and the CRM screen says none
+PACKAGE 975 - payment claim, everywhere
 ================================================================================
 
-One file. Complete replacement.
+Seven files. Complete replacements.
 
-  lib/demoSeed.js
+  lib/applications.js
+  lib/applicationPdf.js
+  components/CommercialNav.js
+  pages/applications.js          <- includes 971 and 972's changes to this file
+  pages/application-calendar.js  <- includes 972's change
+  pages/api/application-send.js
+  pages/api/application-pdf.js
 
-DEPLOYING THIS ALONE CHANGES NOTHING. It fixes what a seed WRITES; the demo
-data already in the database was written by the old version. See the two
-commands at the bottom.
+Screen, PDF and email, as you asked. Rock is untouched - term() is per
+tenant, and the UK phrasing is the DEFAULT, so anything that does not pass a
+term behaves exactly as it does today.
 
 
-THE CAUSE - AND YOU SPOTTED IT BY LOOKING AT A SCREEN
+PROVED, NOT ASSUMED, THAT ROCK IS UNCHANGED
 ================================================================================
-The open-activity list exists in TWO places.
+Ran describeApplication's title logic for both locales across four cases:
 
-  deal.activities        an array on each deal. This is what the CRM page
-                         reads, which is why every deal shows an activity.
+  UK, interim          "Application for Payment"
+  UK, final account    "Proposed Final Account and Interim Application for Payment"
+  NZ, interim          "Payment Claim"
+  NZ, final account    "Proposed Final Account and Interim Payment Claim"
 
-  crm:activities:open    a SEPARATE flat index across every deal, written by
-                         pages/api/crm.js whenever an activity is saved
-                         through the app. This is the ONLY thing the daily
-                         email reads.
-
-The seeder wrote the deals and never built the index. So on demo the index is
-empty, and collectProjectsWithoutActivity() - which asks "is this deal id in
-the index?" - answers no for all of them. 142 open deals not in the exempt
-stage, 142 flagged, every evening, while the screen showed an activity on
-every one.
-
-Nothing was updated after 6pm. The two sources have never agreed.
-
-This is the project-list-in-three-keys lesson wearing a new coat: one
-concept, two storage locations, no shared accessor, and a screen that looks
-right because it happens to read the correct one.
+The UK strings are byte-identical to the ones hardcoded before. That string
+is the PDF headline, the email subject and the download filename, so it had
+to be exact.
 
 
-THE FIX
+THE ONE PLACE THE WORDING LIVES
 ================================================================================
-The seeder now builds crm:activities:open from the activities it puts on the
-deals - open deals only, undone activities only. Field names copied from the
-writer in pages/api/crm.js rather than invented: { id, dealId, text, due,
-assignee }.
+describeApplication() in lib/applications.js already produced the title used
+by the PDF, the email subject and the filename - one rule, one place, which
+is why this was a small job rather than a sweep.
 
-It is also added to DEMO_KEY_PREFIXES, so a wipe removes it. Without that a
-re-seed would leave an index pointing at deal ids that no longer exist, which
-is a worse failure than the one being fixed.
+It cannot call term() itself: lib/applications.js is imported by client
+pages, so importing lib/locale.js would drag AsyncLocalStorage into the
+browser bundle. The term is threaded in, as with resolveMergeFields in 957.
 
-Ran the email's OWN filter against the generated index rather than eyeballing
-the shape: of four test deals it flags exactly the one whose only activity is
-marked done, and leaves the lost deal and the exempt-stage deal alone.
+Two helpers now live beside it, because English does not cooperate:
+
+  claimTitle()        'application for payment' -> 'Application for Payment'
+                      A blunt capitalise-every-word gives "For".
+  claimTitlePlural()  'Applications for Payment' moves the s to the FIRST
+                      word; 'Payment Claims' to the last. The joining word is
+                      the tell. Checked against all four locales.
 
 
-TO ACTUALLY FIX THE DEMO DATA
+WHAT CHANGED ON SCREEN
 ================================================================================
-From the browser console on a host you have an admin session on:
+Commercial nav group and its two sub-items, the page title, the "Upcoming"
+heading and its column header, the month label, and the list badges. The
+Application Calendar becomes the Payment Claim Calendar.
 
-    wipe:  { action:'wipe', id:'demo', confirm:'demo' }
-    seed:  { action:'seed', id:'demo', projects:30 }
+IN THE PDF: the headline, "Payment Claim no.", "Payment Claim date", the
+"Payment Claim Total" column and the "Gross Payment Claim Total" row.
 
-posted to /api/admin/seed-demo, as before. The data is generated, so nothing
-is lost - but it IS regenerated, so any figure you have memorised from
-rehearsing will change.
-
-If you would rather not re-seed this close to Friday, the alternative is to
-leave it and accept one email a day. The CRM screen is correct either way -
-this only affects the email.
+IN THE EMAIL: subject line, the "please find attached our ..." sentence and
+the retention-release sentence.
 
 
-WORTH CHECKING ON ROCK, AND I HAVE NOT
+THE CHECK EARNED ITS KEEP AGAIN
 ================================================================================
-The same two sources exist on Rock. There the index is maintained properly by
-the app, so it should be right - but the test is free and it is the one you
-just did by accident: does the number in tomorrow's email match what the CRM
-actually shows? If Rock's email over-reports too, the index has drifted there
-as well, and that is a different job.
+The "Upcoming" heading and its column header are not in ApplicationsPage -
+they are in a separate UpcomingTable component. I put the hook in the page
+and UpcomingTable referenced two variables it did not have. Exactly the Shell
+fault from 965, caught this time by the declared-where-used scan before it
+shipped rather than by your build failing.
+
+
+WHAT THIS STILL NEEDS BEFORE A REAL NZ CUSTOMER SENDS ONE
+================================================================================
+The word is right. The DOCUMENT is not yet verified. A payment claim under
+the Construction Contracts Act has prescribed content - it must state that it
+is made under the Act, and for residential work it must be accompanied by the
+prescribed outline of process.
+
+None of that is in the PDF, and nothing here added it. For a demo that is
+fine and you have decided so deliberately. Before an NZ customer sends a real
+one it needs someone who knows the Act to read the document. That belongs on
+the onboarding checklist, not in the code.
+
+
+WHAT I HAVE DELIBERATELY NOT RENAMED
+================================================================================
+valuation -> progress claim. It is cosmetic in the glossary, but "valuation
+date" is your internal cut-off date and runs through dozens of API routes and
+stored fields. "Progress claim date" sitting next to "Payment Claim" would
+confuse rather than localise.
+
+RAMS -> SWMS. The glossary's own note says an AU SWMS has prescribed content
+and a relabelled UK RAMS is not a compliant one. Payment claim is a document
+you can fix before anyone pays; a RAMS is a safety document a worker signs
+onto, and calling it a SWMS invites "so you are SWMS-compliant?" - to which
+the answer is no. Leaving it reads as a UK product being straight.
+
+
+SMOKE TEST
+================================================================================
+1. Demo Commercial nav: the group reads "Payment Claims", and its two
+   sub-items are "Payment Claims" and "Payment Claim Calendar".
+2. Demo applications page: headings, the month label, the column header.
+3. Demo: open one and download the PDF. Headline, "Payment Claim no.", the
+   table column, and the filename.
+4. Demo: open the send modal. Subject line and the body sentence.
+5. ROCK, the same five. Every one must read exactly as it does today - the
+   PDF headline and the email subject especially.

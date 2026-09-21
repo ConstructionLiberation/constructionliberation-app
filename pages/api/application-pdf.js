@@ -19,6 +19,7 @@ async function handler(req, res) {
     let prev = null
     for (const a of sorted) { if ((a.seq || 0) < (app.seq || 0)) prev = a }
     const { describeApplication, computeApplicationSummary, backfillAppNumbers } = await import('../../lib/applications')
+    const { term } = await import('../../lib/locale')
     backfillAppNumbers(apps)
     // 'Previously certified' is entered manually on the app (0 for the first app).
     const isFirst = !prev
@@ -43,7 +44,7 @@ async function handler(req, res) {
     })
     // The filename says it too - this is the copy that ends up in somebody's Downloads
     // folder next to eleven others called "Application n".
-    const fname = `${describeApplication(app, { prevReleases: prev || null }).titleShort} ${app.seq || ''} - ${(jobNo || name || 'application')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
+    const fname = `${describeApplication(app, { prevReleases: prev || null, term }).titleShort} ${app.seq || ''} - ${(jobNo || name || 'application')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${fname}"`)
     return res.send(Buffer.from(bytes))

@@ -1,15 +1,19 @@
 import Link from 'next/link'
 import ReportImprovementLink from './ReportImprovementLink'
 import BrandLogo from './BrandLogo'
+import { useFormat } from './TenantProvider'
+import { claimTitle, claimTitlePlural } from '../lib/applications'
 
 // Commercial Portal nav. Most items are single pages. Two items are GROUPS with their
 // own sub-nav row: "Applications" and "Scorecards".
-const GROUPS = {
+// GROUPS is module scope and the applications labels depend on the tenant, so
+// that one group is built at render time instead. Everything else is static.
+const groupsFor = (term) => ({
   applications: {
-    label: 'Applications',
+    label: claimTitlePlural(term('application')),
     subs: [
-      { href: '/applications', label: 'Applications for Payment' },
-      { href: '/application-calendar', label: 'Application Calendar' },
+      { href: '/applications', label: claimTitlePlural(term('application')) },
+      { href: '/application-calendar', label: `${claimTitle(term('application'))} Calendar` },
     ],
   },
   scorecards: {
@@ -20,7 +24,7 @@ const GROUPS = {
       { href: '/commercial-scorecard', label: 'Commercial Scorecard' },
     ],
   },
-}
+})
 
 // Main nav order. Group entries reference GROUPS by key; the rest are plain pages.
 const MAIN = [
@@ -35,13 +39,15 @@ const MAIN = [
   { group: 'scorecards' },
 ]
 
-function groupForHref(href) {
-  for (const [key, g] of Object.entries(GROUPS)) if (g.subs.some(s => s.href === href)) return key
+function groupForHref(groups, href) {
+  for (const [key, g] of Object.entries(groups)) if (g.subs.some(s => s.href === href)) return key
   return null
 }
 
 export default function CommercialNav({ active, right = null }) {
-  const activeGroup = groupForHref(active)
+  const { term } = useFormat()
+  const GROUPS = groupsFor(term)
+  const activeGroup = groupForHref(GROUPS, active)
 
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 20 }}>

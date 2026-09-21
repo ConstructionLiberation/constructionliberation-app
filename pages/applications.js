@@ -6,7 +6,7 @@ import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
 import ProjectSearchSelect from '../components/ProjectSearchSelect'
 import ProjectDatesModal from '../components/ProjectDatesModal'
-import { describeApplication, computeApplicationSummary, worksValueToDate, resolveAppDates, buildAppVariations, materialLineTotal, materialValueToDate, isMeasurableWorks } from '../lib/applications'
+import { claimTitle, claimTitlePlural, describeApplication, computeApplicationSummary, worksValueToDate, resolveAppDates, buildAppVariations, materialLineTotal, materialValueToDate, isMeasurableWorks } from '../lib/applications'
 
 const fmtDate = (s) => { if (!s) return '—'; const d = new Date(s + (s.length === 10 ? 'T00:00:00' : '')); return isNaN(d) ? s : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 const monthLabel = (key) => {
@@ -21,7 +21,9 @@ export default function ApplicationsPage() {
   // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
   // useFormat(), which is a hook, so it lives here instead. Same shape as
   // before, so every call site below is unchanged.
-  const { money, companyName: brand } = useFormat()
+  const { money, companyName: brand, term } = useFormat()
+  const claim = claimTitle(term('application'))
+  const claims = claimTitlePlural(term('application'))
   const fmt = (n) => money(Number(n) || 0)
   const [projects, setProjects] = useState([])
   const [projectId, setProjectId] = useState('')
@@ -270,7 +272,7 @@ export default function ApplicationsPage() {
 
   return (
     <>
-      <Head><title>{brand ? `${brand} - Applications · v29` : 'Applications · v29'}</title></Head>
+      <Head><title>{brand ? `${brand} - ${claims} · v29` : `${claims} · v29`}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
         <CommercialNav active="/applications" />
         {/* Full width. 1280 was fine when this was two blocks side by side; with three
@@ -278,7 +280,7 @@ export default function ApplicationsPage() {
             columns do not stretch absurdly on a very wide monitor. */}
         <div style={{ padding: 24, maxWidth: 2000, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-            <label style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>Select Project — Upcoming Applications</label>
+            <label style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>Select Project — Upcoming {claims}</label>
             <ProjectSearchSelect projects={projects} value={projectId} onPick={(pid) => pickProject(pid)} minWidth={340} />
             {false && (
             <select value={projectId} onChange={e => pickProject(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #d5d9e0', borderRadius: 8, fontSize: 13, minWidth: 340, background: '#fff' }}>
@@ -342,7 +344,7 @@ export default function ApplicationsPage() {
                 ) : (
                   <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                     <div>
-                      <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Application month</label>
+                      <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>{claim} month</label>
                       <input type="month" value={newMonth} onChange={e => setNewMonth(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #d5d9e0', borderRadius: 8, fontSize: 13 }} />
                     </div>
                     <div style={{ fontSize: 12, color: '#666' }}>
@@ -365,7 +367,7 @@ export default function ApplicationsPage() {
 
               {/* Previous applications table */}
               <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <div style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#1a1a2e', borderBottom: '1px solid #eee' }}>Applications</div>
+                <div style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#1a1a2e', borderBottom: '1px solid #eee' }}>{claims}</div>
                 {sortedApps.length === 0 ? (
                   <div style={{ padding: 24, color: '#aaa', fontSize: 13 }}>No applications yet.</div>
                 ) : (
@@ -422,7 +424,7 @@ export default function ApplicationsPage() {
                                   release can be picked out without opening every
                                   application to find which one it was. Same wording as
                                   the PDF and the email, from the same function. */}
-                              {describeApplication(a, { prevReleases: prevApp }).tags.map(t => (
+                              {describeApplication(a, { prevReleases: prevApp, term }).tags.map(t => (
                                 <span key={t} style={{
                                   marginLeft: 6, padding: '1px 7px', borderRadius: 10, fontSize: 10.5, fontWeight: 700,
                                   background: t === 'FINAL ACCOUNT' ? '#ccfbf1' : '#e0e7ff',
@@ -483,6 +485,9 @@ function prevGrossForApp(sortedApps, app) {
 // Set the recurring application/valuation/payment day-of-month for a project —
 // the same date-entry the Application Calendar's banner opens.
 function UpcomingTable({ rows, loading, onOpen, onDismissed }) {
+  const { term } = useFormat()
+  const claim = claimTitle(term('application'))
+  const claims = claimTitlePlural(term('application'))
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const dueInfo = (iso) => {
     if (!iso) return { color: '#9ca3af', bg: '#f3f4f6', days: null }
@@ -499,7 +504,7 @@ function UpcomingTable({ rows, loading, onOpen, onDismissed }) {
   return (
     <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '14px 16px', borderBottom: '1px solid #eee', flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e' }}>Upcoming Applications</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e' }}>Upcoming {claims}</div>
         <div style={{ flex: 1 }} />
         <KeyDot c="#f3f4f6" label="Not yet due" />
         <KeyDot c="#ffedd5" label="Within 3 days" />
@@ -513,7 +518,7 @@ function UpcomingTable({ rows, loading, onOpen, onDismissed }) {
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr style={{ background: '#f8f9fa', borderBottom: '2px solid #eee' }}>
-            {['Project', 'Next app', 'Application due', 'Valuation date', 'Status', ''].map((h, i) => (
+            {['Project', 'Next app', `${claim} due`, 'Valuation date', 'Status', ''].map((h, i) => (
               <th key={i} style={{ padding: '9px 14px', textAlign: i === 5 ? 'right' : 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{h}</th>
             ))}
           </tr></thead>
@@ -1484,7 +1489,7 @@ function AddMaterialsModal({ pos, addedPONumbers = [], addedLineKeys = [], hidde
 // - CC: any number (customer contacts and/or portal users), plus free-text.
 // - Message from an editable template with placeholders filled in.
 function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, isSent, prevReleases = null, onClose, onSent }) {
-  const { companyName: brand } = useFormat()
+  const { companyName: brand, term } = useFormat()
   const [portalUsers, setPortalUsers] = useState([])
   useEffect(() => { (async () => {
     try { const d = await fetch('/api/portal-auth?action=directory').then(r => r.json()); setPortalUsers(d.users || []) } catch {}
@@ -1521,12 +1526,12 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
   const signer = { name: me?.name || '', email: me?.email || '', phone: me?.phone || '' }
 
   // One description for the subject, the body and the PDF - see describeApplication.
-  const desc = describeApplication(app, { prevReleases })
+  const desc = describeApplication(app, { prevReleases, term })
   const defaultSubject = `${desc.titleFull} ${appNo} - ${monthName} ${year}`
   // Spelled out in the body as well as the subject. A retention release is a claim the
   // customer has to recognise and approve, and a subject line alone is easy to skim past.
   const releaseLine = desc.releases.length
-    ? `This application includes the ${desc.releases.join(' and the ').toLowerCase()}.\n\n`
+    ? `This ${term('application')} includes the ${desc.releases.join(' and the ').toLowerCase()}.\n\n`
     : ''
   // Same care as the document: proposed, and the payment is interim.
   const finalLine = desc.isFinal
@@ -1534,7 +1539,7 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
     : ''
   const defaultBody =
     `Hi ${custName},\n\n` +
-    `Please find attached our ${desc.isFinal ? 'proposed final account and interim application for payment' : 'application for payment'} ${appNo} for ${monthName}.\n\n` +
+    `Please find attached our ${desc.isFinal ? `proposed final account and interim ${term('application')}` : term('application')} ${appNo} for ${monthName}.\n\n` +
     finalLine +
     releaseLine +
     `Feel free to call if there is anything you would like to discuss.\n\n` +
