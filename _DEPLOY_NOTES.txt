@@ -1,59 +1,92 @@
-PACKAGE 969 - "Forms" becomes "Site App"
+PACKAGE 970 - GST instead of VAT, on the retention tracker
 ================================================================================
 
 One file. Complete replacement.
 
-  pages/forms/index.js
+  pages/retention.js
+
+THE FIRST CONSUMER OF term(). lib/terms.js has existed since pkg937 with
+nothing reading it - the same shape as logoUrl() before 955.
 
 
-WHAT CHANGED
+SMALLER THAN EXPECTED, AND THAT IS A FINDING
 ================================================================================
-Three places, not one. You asked for the login, but changing only that would
-have left the header bar on every page still saying "Forms" two lines below a
-heading saying "Site App".
-
-  login heading     {brand} Forms      ->  {brand} Site App
-  browser tab       {brand} Forms      ->  {brand} Site App
-  header bar        Forms              ->  Site App
-
-Both of the last two are inside Shell, so they change on EVERY page of the
-Site App, not just the login.
+OUTSTANDING-6 said GST was "applications and the retention tracker".
+pages/applications.js has NO user-visible VAT string at all. Every one is on
+the retention tracker. So this is the whole of the GST job on the demo
+screens, not half of it.
 
 
-WHAT I DID NOT CHANGE
+WHAT CHANGED - ELEVEN LABELS
 ================================================================================
-"Project Forms" as the heading of the list you land on after login, and
-"Missing Forms" in the CM menu. Those are about forms specifically and are
-still the right word - the app is called the Site App, the things inside it
-are still forms.
+Two column headings (VAT, VAT Type), six tooltips, the mixed-treatment
+warning, and four labels in the add/edit form. All now term('vat'), which
+returns VAT for a UK tenant and GST for NZ and AU.
 
 
-ONE THING THIS DOES NOT REACH, AND IT MATTERS ON A PHONE
+WHAT DELIBERATELY DID NOT CHANGE, AND WHY IT MATTERS
 ================================================================================
-public/site.webmanifest says:
+1. The SPREADSHEET COLUMN at lines 463-464:
 
-    "name": "Rock Roofing",
-    "short_name": "Rock Roofing"
+       pick(r, 'VAT Type', 'vatRateLabel')
 
-That is what an operative sees under the icon when they add the Site App to
-their home screen. Every customer's phone would install it as "Rock Roofing",
-and on demo it already would.
+   That is the literal header in the Xero CSV being imported. Renaming it
+   would break the import for every existing file, and it is not a label -
+   nobody sees it.
 
-It cannot be fixed the same way: it is a static JSON file, not a React
-component, so it cannot read the tenant. The fix is to serve it from a route
-that can - pages/api/site-webmanifest.js returning the JSON with companyName
-and logoUrl substituted, and _document.js pointing the <link rel="manifest">
-at it. That is a small package on its own; it was already on the outstanding
-list and this is the second reason to do it.
+2. The DROPDOWN VALUES: '20%', '5%', '0% reverse charge', 'No VAT', 'Mixed'.
+   These are STORED on the record as vatRateLabel and parsed back into a rate
+   by parseVatRate(). Changing 'No VAT' to 'No GST' would change stored data
+   and stop the parser recognising its own values. They are data wearing the
+   appearance of labels, which is exactly the trap term() is easy to fall
+   into.
 
-Worth deciding whether it should read "Demo Site App" or just "Demo" on the
-home screen - short_name is what actually shows under the icon, and there is
-not much room.
+   It also means an NZ tenant sees a heading that says GST above a dropdown
+   offering 20% and 5% - UK rates. That is honest rather than tidy: the rates
+   come from their Xero, and pretending otherwise would be worse. Making the
+   list locale-aware is a real change, not a relabel.
+
+3. Nothing COMPUTES from term('vat'). The word maps; the tax does not.
+   lib/terms.js marks this entry statutory with that note attached.
+
+
+CHECKED
+================================================================================
+- term() mapped to its enclosing component: RetentionPage 7 uses, EntryForm 4,
+  both declared. Run with the CORRECTED scanner - the one that knows about
+  `export function`.
+- Compiles and bundles clean.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Site App login - "Demo Site App" under the CL badge.
-2. Log in and look at the dark bar at the top of any page - "Site App".
-3. Rock - "Rock Roofing Site App". Tell your operatives, since the wording
-   they have been looking at for months has changed.
+1. Demo retention: the two column headings read GST and GST Type, and the
+   tooltips behind them say GST.
+2. Demo: add or edit an entry - "(ex-GST)", "GST Type", "Manual GST".
+3. Rock: every one of those still reads VAT.
+
+
+PAYMENT CLAIM - I HAVE NOT DONE THIS AND IT NEEDS YOUR DECISION
+================================================================================
+term('application') maps to "payment claim" for NZ, and it is the change WPC
+would notice most. But the word appears in three quite different places:
+
+  ON SCREEN    the Commercial nav item, page headings, table labels
+  IN THE PDF   the document title on what you send a client
+  IN EMAILS    the subject line and body of the covering email
+
+The screen is a relabel and safe. THE PDF AND THE EMAIL ARE NOT. Under the
+NZ Construction Contracts Act a payment claim has prescribed content - it
+must state that it is made under the Act, and for residential work it must
+carry the prescribed outline of process. A document headed "Payment Claim"
+that does not do those things is worse than one headed "Application for
+Payment", because it looks like it is claiming a statutory status it has not
+earned. That is precisely what the statutory flag in lib/terms.js is warning
+about.
+
+My recommendation: relabel the SCREEN only, and leave the PDF and email in
+British wording until someone who knows the Act has looked at the document
+itself. Tell WPC that, in those words - it reads as competence rather than a
+gap.
+
+Say which and I will build it.

@@ -325,7 +325,10 @@ export default function RetentionPage() {
   // before, so every call site below is unchanged.
   // Column headings and helper text carried a literal pound sign while the
   // figures under them came from money(). The symbol comes from the same feed.
-  const { money, currencySymbol } = useFormat()
+  // term('vat') gives VAT for a UK tenant and GST for NZ and AU. It is marked
+  // STATUTORY in lib/terms.js - the WORD maps, the TAX does not - so it is
+  // used for labels here and nothing is computed from it.
+  const { money, currencySymbol, term } = useFormat()
   const fmt = (n) => (n == null || n === '' ? '\u2014' : money(n))
   const fmtC = (n) => money(n || 0)
   const [entries, setEntries] = useState([])
@@ -1228,7 +1231,7 @@ export default function RetentionPage() {
                   tip: 'Total Retention Owed across EVERY project on the register - Live, Defects Liability and Complete - less any 1st or 2nd Value marked released. Does not change with the filters, so it always matches Business Financials > Retentions Due. When a filter is hiding rows, the figure for what is on screen is shown underneath.' },
                 { label: 'Remaining to Claim', value: fmtC(totals.remaining), color: totals.remaining > 1 ? '#dc2626' : '#16a34a',
                   sub: totals.filterHidesRows ? `${fmtC(totals.remainingFiltered)} on screen` : '',
-                  tip: 'Final Account minus Applied for, excluding VAT, across every project on the register. What is still to be claimed - the sum of the Account Remaining column. Does not change with the filters.' },
+                  tip: `Final Account minus Applied for, excluding ${term('vat')}, across every project on the register. What is still to be claimed - the sum of the Account Remaining column. Does not change with the filters.` },
                 { label: 'In Defects Liability', value: totals.defects, raw: true, color: '#ca8a04',
                   tip: 'Every project on the register at Defects Liability. Does not change with the filters.' },
                 { label: 'Live Projects', value: totals.live, raw: true,
@@ -1375,7 +1378,7 @@ export default function RetentionPage() {
                         ['Final Account', 'right', 'Proj. Final Account less MCD, retention included. MCD comes off only what Edit Project Details says it comes off - measured works only, or measured plus variations and materials - so a project that excludes variations from MCD is no longer over-discounted. Taken from the latest SENT application, which has already done this arithmetic; a typed value is only used where there is no sent application. This is the figure retention is calculated on.', 'finalAccount'],
                         ['Applied for', 'right', 'The sub-total on the latest SENT application: gross measured works less MCD, plus variations. The application always wins - a typed value is only used where a project has no sent application. A warning triangle means it does not agree with Certified.', 'appliedFor'],
                         ['Certified', 'right', 'The "Previously certified (gross)" box on the latest SENT application - the typed figure, used as the Previously Cert. column on the certificate, where This Certificate = current less previously. Blank means the box has not been filled in. Editable inline, but the next application sent overwrites it.', 'certified'],
-                        ['Invoiced', 'right', 'Total invoiced on the project: sum of the Sales (account code 200) lines from Xero. NET of VAT, and INCLUDING retention (retention is posted to a separate account, so the Sales total already includes it). From Xero for synced projects, or the imported Xero CSV.', 'invoiced'],
+                        ['Invoiced', 'right', `Total invoiced on the project: sum of the Sales (account code 200) lines from Xero. NET of ${term('vat')}, and INCLUDING retention (retention is posted to a separate account, so the Sales total already includes it). From Xero for synced projects, or the imported Xero CSV.`, 'invoiced'],
                         ['✓', 'center', 'Match check: green tick when Applied for equals Invoiced, red flag when they differ.', null],
                         ['Account Remaining', 'right', 'Final Account − Applied for. What is still to be CLAIMED against the final account. Falls back to invoiced only where a project has no application.', null],
                         ['Retention Owed', 'right', 'Applied for \u00d7 Ret % - exactly the two columns to the left. Nothing else feeds it.', 'retentionOwed'],
@@ -1389,10 +1392,10 @@ export default function RetentionPage() {
                         ['1st Date', 'left', 'Due date of the first retention release (manual).', 'r1date'],
                         ['2nd Value \u2013 click to release', 'right', 'Second retention release - half of the retention on APPLIED FOR (Applied for x retention %). Retention comes from the application - it is deducted on what has been applied for - so that is the source of truth. It converges on the Final Account as the job completes. CLICK THE CELL to confirm this half has been released; click again to undo. A half ticked in the retention section of an application marks itself. Amber = still to confirm, blue = Xero looks paid so it probably has been, green = released.', null],
                         ['2nd Date', 'left', 'Due date of the second retention release (manual).', 'r2date'],
-                        ['VAT', 'right', `VAT on the Final Account = Final Account × VAT-type rate. Reverse charge / 0% = ${currencySymbol}0.`, null],
-                        ['VAT Type', 'left', 'VAT treatment from Xero: reverse charge, 5%, 20%, zero-rated, etc.', null],
-                        ['Total Due', 'right', 'Final Account + VAT. The full amount due including VAT.', null],
-                        ['Total Paid', 'right', 'Total received from the customer (including VAT). From Xero / the imported CSV.', 'paid'],
+                        [term('vat'), 'right', `${term('vat')} on the Final Account = Final Account × ${term('vat')}-type rate. Reverse charge / 0% = ${currencySymbol}0.`, null],
+                        [`${term('vat')} Type`, 'left', `${term('vat')} treatment from Xero: reverse charge, 5%, 20%, zero-rated, etc.`, null],
+                        ['Total Due', 'right', `Final Account + ${term('vat')}. The full amount due including ${term('vat')}.`, null],
+                        ['Total Paid', 'right', `Total received from the customer (including ${term('vat')}). From Xero / the imported CSV.`, 'paid'],
                         ['Total Remaining (Check)', 'right', 'Total Due − Total Paid.', null],
                         ['Comments', 'left', 'Synced with the retention release date comments box in Project Details.', null],
                         ['', 'left', '', null],
@@ -1703,7 +1706,7 @@ export default function RetentionPage() {
                             {/* VAT */}
                             {vatNeedsManual(entry)
                               ? <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                  <span title="This project has mixed VAT treatments across its invoices, so VAT can't be auto-calculated. Enter it manually in Edit." style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 600, cursor: 'help' }}>⚠ enter manually</span>
+                                  <span title={`This project has mixed ${term('vat')} treatments across its invoices, so ${term('vat')} can't be auto-calculated. Enter it manually in Edit.`} style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 600, cursor: 'help' }}>⚠ enter manually</span>
                                 </td>
                               : <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: '#555' }}>{fa ? fmtC(vatVal) : '—'}</td>}
                             {/* VAT Type */}
@@ -1828,7 +1831,7 @@ export default function RetentionPage() {
 // matching existing projects; picking one auto-fills and links the entry.
 function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], allProjects = [], inputStyle, existingXeroIds = new Set(), existingKeys = new Set() }) {
   // Labels only - this form has no formatted figures in it.
-  const { currencySymbol } = useFormat()
+  const { currencySymbol, term } = useFormat()
   const f = field => e => setForm({ ...form, [field]: e.target.value })
   const fb = field => e => setForm({ ...form, [field]: e.target.checked })
   const [showSuggest, setShowSuggest] = useState(false)
@@ -1947,11 +1950,11 @@ function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], al
           <input type="number" value={form.certified || ''} onChange={f('certified')} style={inputStyle} />
         </div>
         <div>
-          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Invoiced Net {currencySymbol} <span style={{ color: '#bbb' }}>(ex-VAT)</span></div>
+          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Invoiced Net {currencySymbol} <span style={{ color: '#bbb' }}>(ex-{term('vat')})</span></div>
           <input type="number" value={form.invoicedNet != null ? form.invoicedNet : (form.invoiced || '')} onChange={f('invoicedNet')} style={inputStyle} />
         </div>
         <div>
-          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>VAT Type</div>
+          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>{term('vat')} Type</div>
           <select value={form.vatRateLabel || ''} onChange={f('vatRateLabel')} style={inputStyle}>
             <option value="">— select —</option>
             {['20%', '5%', '0% reverse charge', '0% zero-rated', 'Exempt', 'No VAT', 'Mixed'].map(o => <option key={o} value={o}>{o}</option>)}
@@ -1959,9 +1962,9 @@ function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], al
         </div>
         <div>
           <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>
-            Manual VAT {currencySymbol} {(form.vatRateLabel || '').toLowerCase() === 'mixed' && <span style={{ color: '#c77700' }}>(required — mixed)</span>}
+            Manual {term('vat')} {currencySymbol} {(form.vatRateLabel || '').toLowerCase() === 'mixed' && <span style={{ color: '#c77700' }}>(required — mixed)</span>}
           </div>
-          <input type="number" value={form.vatManual || ''} onChange={f('vatManual')} placeholder={(form.vatRateLabel || '').toLowerCase() === 'mixed' ? 'Enter VAT' : 'auto'} style={inputStyle} />
+          <input type="number" value={form.vatManual || ''} onChange={f('vatManual')} placeholder={(form.vatRateLabel || '').toLowerCase() === 'mixed' ? `Enter ${term('vat')}` : 'auto'} style={inputStyle} />
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 12 }}>
