@@ -4,11 +4,21 @@ import Head from 'next/head'
 const DEPT_LABEL = { estimating: 'Estimating', commercial: 'Commercial', operations: 'Operations', accounting: 'Accounting', sales: 'Sales' }
 const DEPT_COLOR = { estimating: '#7c3aed', commercial: '#ca8a04', operations: '#0d9488', accounting: '#ea580c', sales: '#2563eb' }
 const MONTHNAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+// NO NAMES IN THE HINTS.
+//
+// These read "James / Carl / Nathan" and "(Dori)" - Rock Roofing's own people,
+// hard-coded as the prompt under each section heading. Every tenant saw them,
+// and on any other company's portal they are four strangers being told to
+// write the minutes.
+//
+// The hints now say what the section is FOR, which is what a hint is meant to
+// do. Who fills it in is a matter for whoever is chairing the meeting, not for
+// grey text nobody can edit.
 const SECTIONS = [
-  { key: 'wins', label: 'Wins this month', hint: 'Wins as a business / special learnings (James / Carl)' },
-  { key: 'kpi', label: 'General performance / KPIs', hint: 'Main KPI data points vs targets (Dori)' },
-  { key: 'upcoming', label: 'Up and coming news', hint: 'James / Carl / Nathan' },
-  { key: 'focus', label: 'Big focus for next month', hint: 'James / Carl / Nathan' },
+  { key: 'wins', label: 'Wins this month', hint: 'Wins as a business, and anything worth learning from' },
+  { key: 'kpi', label: 'General performance / KPIs', hint: 'Main KPI data points against target' },
+  { key: 'upcoming', label: 'Up and coming news', hint: 'Anything the team should know is coming' },
+  { key: 'focus', label: 'Big focus for next month', hint: 'The one or two things that matter most next month' },
 ]
 
 export default function LessonsLearnt() {

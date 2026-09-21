@@ -1,57 +1,40 @@
-PACKAGE 951 - the In Query project dropdowns were empty
+PACKAGE 952 - staff names removed from the Lessons Learnt hints
 ================================================================================
 
-One file. Complete replacement. Wipe and re-seed.
+One file. Complete replacement. No re-seed needed.
 
-  lib/demoSeed.js
+  pages/lessons-learnt.js
 
 
 WHAT IT WAS
 ===========
-Every row on the In Query tab offered "Not set" and nothing else, so a parked
-cost could not be assigned to a job - which is the entire purpose of the tab.
+The grey prompt under each section heading on the Monthly Minutes named Rock
+Roofing staff, hard-coded:
 
-Not an app bug, and not the data you could see. components/InQueryTable.js
-makes its OWN fetch to /api/bookkeeping-inquery, separate from the four calls
-pages/bookkeeping.js makes, and reads d.projects from it. That endpoint builds
-the list with inqueryProjectOptions(), which reads
+  Wins this month              "... (James / Carl)"
+  General performance / KPIs   "... (Dori)"
+  Up and coming news           "James / Carl / Nathan"
+  Big focus for next month     "James / Carl / Nathan"
 
-    projects:registry
+Every tenant saw them. On another company's portal that is four strangers
+being told to write their minutes.
 
-which I had never seeded. Everything else on the page worked because it comes
-from dashboard:cache, which was seeded - hence a tab full of correct lines
-with a dropdown that had nothing in it.
+They now describe what the section is FOR, which is what a hint is meant to
+do:
 
-Worth naming as a shape: THE PROJECT LIST EXISTS IN THREE PLACES and they are
-not interchangeable.
+  Wins as a business, and anything worth learning from
+  Main KPI data points against target
+  Anything the team should know is coming
+  The one or two things that matter most next month
 
-    dashboard:cache      the commercial surfaces
-    costs:lines:<id>     the WIP page
-    projects:registry    the In Query dropdown, and anything that needs a
-                         project to survive being deleted from Xero
+Who fills a section in is a matter for whoever chairs the meeting, not grey
+text nobody can edit.
 
-Each was found the same way - a screen that was empty for no visible reason.
-
-
-WHAT CHANGED
-============
-projects:registry is now written: 30 entries keyed by xeroId, each with name,
-jobNo, trackingCategoryId, firstSeen and lastSeenInXero.
-
-In Query is deliberately NOT in it. lib/inquery.js filters it out anyway,
-since offering "In Query" as the answer to "which job is this In Query cost
-for" is an own goal - the comment in that file says as much.
-
-Added to the wipe list.
+Applies to Rock as well as demo, which is what you asked for. Nothing else on
+the page changes and no stored minutes are touched.
 
 
 SMOKE TEST
 ==========
-1. Wipe, re-seed.
-2. Bookkeeping -> In Query. Each row's Project dropdown should list all 30
-   jobs as "J101 - J101-Vogel Street Apartments" and so on, sorted by job
-   number descending.
-3. Assign one. It should take.
-4. The USER RESPONSIBLE dropdown next to it should list the seeded team -
-   that reads d.users from the same endpoint, which comes from the portal
-   users the seeder merges in. Tell me if that one is also empty.
+Lessons Learnt -> Monthly minutes -> open any month. The four grey prompts
+read as above, with no names. Existing minutes content is unaffected.
