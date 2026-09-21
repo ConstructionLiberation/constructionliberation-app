@@ -15,7 +15,7 @@ import InQueryTable from '../components/InQueryTable'
 import ReportImprovementLink from '../components/ReportImprovementLink'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 
-const fmt = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2 }).format(n || 0)
+import { useFormat } from '../components/TenantProvider'
 const INK = '#1a1a2e'
 const th = { textAlign: 'left', padding: '10px 12px', fontSize: 11, color: '#777', fontWeight: 600, borderBottom: '2px solid #eee', whiteSpace: 'nowrap' }
 const td = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f2f0ec' }
@@ -172,6 +172,8 @@ function rowMonth(r) {
 }
 
 export default function BookkeepingPage() {
+  const { money, currencySymbol } = useFormat()
+  const fmt = (n) => money(n || 0)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('bills')        // bills | invoices | wages | ignored
@@ -639,7 +641,9 @@ function CodeMultiSelect({ options, selected, onChange }) {
 }
 
 function ReconPanel({ data, month, tab, onPickMonth, onPickPL }) {
-  const fmtL = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n || 0)
+  // currencySymbol for the chart axis, which prints its own k-suffix.
+  const { money, currencySymbol } = useFormat()
+  const fmtL = (n) => money(n || 0, { dp: 0 })
   const showGraph = tab !== 'ignored'   // no graph on Overheads
 
   // Last 6 months (YYYY-MM), oldest -> newest.
@@ -753,7 +757,7 @@ function ReconPanel({ data, month, tab, onPickMonth, onPickPL }) {
                 style={{ cursor: 'pointer' }}>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#999' }} axisLine={{ stroke: '#e5e5e5' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: '#999' }} axisLine={false} tickLine={false} width={56}
-                  tickFormatter={(v) => Math.abs(v) >= 1000 ? `£${Math.round(v / 1000)}k` : `£${v}`} domain={['auto', 'auto']} />
+                  tickFormatter={(v) => Math.abs(v) >= 1000 ? `${currencySymbol}${Math.round(v / 1000)}k` : `${currencySymbol}${v}`} domain={['auto', 'auto']} />
                 <Tooltip formatter={(v) => [fmtL(v), 'Uncategorised']} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                 <ReferenceLine y={0} stroke="#16a34a" strokeDasharray="5 4" strokeWidth={1.5} />
                 <Line type="monotone" dataKey="uncategorised" stroke="#7c3aed" strokeWidth={2.5}

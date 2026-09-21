@@ -1,78 +1,83 @@
-PACKAGE 962 - money on the project, cash flow, WIP and sales screens
+PACKAGE 963 - money in CRM and Bookkeeping
 ================================================================================
 
-Four files. Complete replacements. Note the FOLDER on the first one.
+Two files. Complete replacements.
 
-  pages/project/[id].js        <- literal square brackets, as always
-  pages/project-cashflow.js
-  pages/wip.js
-  pages/sales.js
+  pages/crm.js
+  pages/bookkeeping.js
 
-VALUES AND LABELS TOGETHER this time, unlike 960/961. 960 was split because it
-was already verified when I found the labels; here I started fresh, and making
-you paste four files of this size twice is worse than the attribution I would
-gain. If something reads wrong, the figures came from money() and the symbols
-from currencySymbol - both off the same feed.
-
-Seventeen components. Six formatter definitions moved off module scope.
-
-  project/[id]      ProjectPage(fmt), WipTab, CostsTab, IncomeTab,
-                    RetentionTab, CostCommentsModal (fmtC), DetailsForm (fmtP)
-  project-cashflow  HypAppModal, Row, ProjectCashflow, PositionPanel,
-                    OverrideBox (gbp, gbpK)
-  wip               ProjectSection, WipPage, ManualAdjustments, AdjRow (fmtC)
-  sales             Dashboard (fmt)
-
-Every call site keeps its name and shape. 135 calls unchanged.
+These are the last two demo screens with real seeded data behind them - 190
+deals in the CRM and a full bookkeeping dataset with a September backlog.
 
 
-TWO THINGS WORTH KNOWING
+CRM - ELEVEN COMPONENTS, AND TWO THINGS THAT ARE NOT COMPONENTS
 ================================================================================
-project-cashflow's gbp and gbpK were FUNCTION DECLARATIONS at the bottom of
-the file, used by components three hundred lines above them. That works only
-because function declarations hoist. Nothing was wrong with it, but it is why
-a grep for "const gbp" found nothing in this file and my formatter count
-missed both.
+Four separate money formatters: two at module scope (money, money0) and two
+more written again inside CompanyHistoryModal and ContactPanel. Nine
+components now take the hook: ListView, BoardCard, BoardColumn,
+EditableField, EntityTable, CRMPageInner, CompanyHistoryModal, ContactPanel,
+AddProjectModal.
 
-gbpK keeps its own rounding rather than going through money(): it prints
-"$12k" and "$1.5k", and money() would put the grouping and decimals back in.
-Only the symbol changed.
+Two consumers are NOT components and cannot take a hook, so the formatter is
+threaded in, exactly as resolveMergeFields was in 957:
+
+  displayCell(deal, key)  ->  displayCell(deal, key, money)
+
+  historyIcon(t)          ->  historyIcon(t, sym)
+
+historyIcon is worth a word. It is a map of emoji for deal-history events -
+note, call, stage change - and the icon for a VALUE CHANGE was a literal
+pound sign. The one non-emoji glyph in the set. It would have sat there in a
+demo history timeline looking exactly like the thing we spent the day
+removing, and no grep for a formatter would ever have found it.
 
 
-A THRESHOLD THAT IS NOT CURRENCY-AWARE, AND I HAVE NOT TOUCHED IT
+BOOKKEEPING - AND A CATCH THAT WOULD HAVE THROWN
 ================================================================================
-sales.js has "Won >=£200K" as a headline stat and a matching column. The
-LABEL now reads >=$200K on demo, but the threshold behind it is still the
-number 200,000 applied to whatever currency the figures are in. 200,000 NZD
-is not 200,000 GBP, so on a NZ tenant the label is honest about the number and
-the number is arguably the wrong one.
+Two components, two formatters: fmt on BookkeepingPage, fmtL on ReconPanel.
 
-Changing it means deciding what that band should be per customer, which is a
-business question, not a formatting one. Flagged rather than guessed at.
+The reconciliation chart's Y axis prints its own k-suffix and needed
+currencySymbol. I put it on BookkeepingPage and the axis is in ReconPanel -
+so ReconPanel referenced a variable it had not declared. That compiles and
+bundles perfectly and throws the moment the panel renders. The
+declared-where-used check caught it; nothing else would have.
 
 
 CHECKED
 ================================================================================
-- Zero visible pound signs left in any of the four. The only two remaining are
-  inside JSX block comments explaining an old "Rev £0" bug.
-- Every formatter sits directly under its hook, and EVERY useFormat() is the
-  first line of its component - checked mechanically, not by eye, because a
-  hook below an early return is the fault this codebase keeps hitting.
-- All four compile and bundle for the browser with no duplicate symbols. That
-  check is what caught the two shadowing collisions in 960, so it is not
-  ceremonial.
+- Every identifier mapped to its enclosing component and matched against the
+  declarations. Clean in both files.
+- Every useFormat() is the first line of its component.
+- Both compile and bundle for the browser with no duplicate symbols.
+- One pound sign remains in crm.js, and it is deliberate: the `sym || '£'`
+  fallback inside historyIcon.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo, a project: open it and go through the tabs - Costs, Income, WIP,
-   Retention. Four different components, three different formatters.
-2. Demo, Edit Project Details: that is DetailsForm and fmtP, the pence-accurate
-   one, plus four "(£)" labels that should now read "($)".
-3. Demo, project cash flow: the timeline bars carry gbpK (the "$12k" form) and
-   the hover titles carry gbp. Open a hypothetical application - HypAppModal
-   has 32 of the calls on its own.
-4. Demo, WIP: the write-down confirm dialog mentions "$0", in two places.
-5. Demo, sales: the chart Y axis, the >=$200K stat and column, and the min and
-   max value filters.
-6. Rock, all four: unchanged, sterling everywhere, same decimals.
+1. Demo CRM, board view: deal values on the cards and the column totals -
+   those are two different formatters, money and money0.
+2. Demo CRM, list view: the Value column. That is displayCell, the threaded
+   one.
+3. Demo CRM: open a deal, look at the history timeline. A "value changed"
+   entry should have a $ in its circle, not a £.
+4. Demo CRM: Add Project - the "Value ($)" label.
+5. Demo bookkeeping: the figures, then the reconciliation panel and its
+   chart axis. The axis is the one that would have thrown.
+6. Rock: both pages unchanged.
+
+
+WHAT IS LEFT, AND ONE THING TO DECIDE
+================================================================================
+Business Financials is NOT in this package, and it is bigger than it looks:
+components/BizNav.js EXPORTS gbp and gbpK, and TWENTY pages import them by
+name. Converting those to a hook means touching all twenty.
+
+It is also not seeded. The module is switched on now, but the 48 keys behind
+it are not there, so on Friday those pages render empty whatever currency
+they are in. Seeding it is the decision, and the currency work should follow
+that rather than lead it.
+
+After that the remainder is genuinely cosmetic - scorecards, contracted
+rates, procurement, the upload screens, and two PDF generators - none of
+which have demo data behind them either.

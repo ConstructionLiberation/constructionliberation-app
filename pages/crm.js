@@ -11,6 +11,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { useFormat } from '../components/TenantProvider';
 import * as XLSX from 'xlsx';
 import { upload } from '@vercel/blob/client';
 import { mapPipedriveRows, mapOrganizationRows, mapPeopleRows, mapActivityRows, mapNoteRows, groupByDeal, detectExportType } from '../lib/crmImportMap';
@@ -153,8 +154,6 @@ const CONTACT_FIELDS = [['name','Name'],['first_name','First name'],['last_name'
 const DEFAULT_CONTACT_COLUMNS = CONTACT_FIELDS.map((f) => f[0]);
 
 // ---- helpers --------------------------------------------------------------
-const money = (v) => { const n = Number(v); return isNaN(n) ? '£0' : '£' + n.toLocaleString('en-GB', { maximumFractionDigits: 2 }); };
-const money0 = (v) => { const n = Number(v); return isNaN(n) ? '£0' : '£' + n.toLocaleString('en-GB', { maximumFractionDigits: 0 }); };
 // TIMEZONE PINNED. Without it the server formats in UTC and the browser in London time,
 // so the two render different text - which is React error #425, and it takes hydration
 // down with it (#418/#423). A page that fails to hydrate keeps its markup but loses event
@@ -321,7 +320,7 @@ function cellValue(deal, key) {
   if (key === 'next_activity') return nextActivityDate(deal);
   const v = deal.fields[key]; return v === null || v === undefined ? '' : v;
 }
-function displayCell(deal, key) {
+function displayCell(deal, key, money) {
   const v = cellValue(deal, key);
   if (key === 'value') return money(deal.fields.value);
   if (key === 'created' || key === 'expected_close_date' || key === 'next_activity') return shortDate(v) || '-';
@@ -564,6 +563,8 @@ function CommentThread({ comments, onAdd, onEdit, onDelete, users }) {
 // Board card + CHEVRON column
 // ===========================================================================
 function BoardCard({ deal, onOpen, onDragStart, today }) {
+  const { money: tenantMoney } = useFormat()
+  const money = (v) => tenantMoney(Number(v) || 0, { dp: 2 })
   const st = dealDotState(deal, today);
   // A tender return with nobody responsible for it is the thing most likely to be missed,
   // so it is flagged on the card rather than only being visible inside the deal.
@@ -609,6 +610,8 @@ function BoardCard({ deal, onOpen, onDragStart, today }) {
   );
 }
 function BoardColumn({ stage, deals, onOpen, onDragStart, onDrop, today, isFirst }) {
+  const { money: tenantMoney } = useFormat()
+  const money0 = (v) => tenantMoney(Number(v) || 0, { dp: 0 })
   const [over, setOver] = useState(false);
   const total = deals.reduce((s, d) => s + (Number(d.fields.value) || 0), 0);
   const bg = over ? '#dbe8fb' : columnBg(stage.id);
@@ -738,6 +741,8 @@ function SideBox({ title, action, children, collapsed, onToggle }) {
 // Editable sidebar field
 // ===========================================================================
 function EditableField({ field, value, onSave, users }) {
+  const { money: tenantMoney } = useFormat()
+  const money = (v) => tenantMoney(Number(v) || 0, { dp: 2 })
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? '');
   useEffect(() => { setDraft(value ?? ''); }, [value]);
@@ -1025,8 +1030,10 @@ function DealLink({ id, onOpen, style, children, title }) {
 // ===========================================================================
 // History feed (combined edit for activities incl date + reopen; comments on notes)
 // ===========================================================================
-function historyIcon(t) { return ({ note: '📝', activity: '📞', stage: '↗', value: '£', close: '📅', won: '✓', lost: '✕', import: '⬇', mention: '@' })[t] || '•'; }
+// `sym` is the tenant's currency symbol - the one non-emoji icon in this map.
+function historyIcon(t, sym) { return ({ note: '📝', activity: '📞', stage: '↗', value: sym || '£', close: '📅', won: '✓', lost: '✕', import: '⬇', mention: '@' })[t] || '•'; }
 function HistoryItem({ h, onEdit, onEditActivity, onDelete, onPin, onReopen, onComment, onEditComment, onDeleteComment, users }) {
+  const { currencySymbol } = useFormat()
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(h.body || '');
   const [date, setDate] = useState(h.ts ? new Date(h.ts).toISOString().slice(0, 16) : '');
@@ -1056,7 +1063,7 @@ function HistoryItem({ h, onEdit, onEditActivity, onDelete, onPin, onReopen, onC
     }}>
       {/* The icon keeps its white disc but borrows the row's border, so it reads as part
           of the card rather than a hole punched in a tinted background. */}
-      <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#fff', border: rowStyle.border, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>{historyIcon(h.type)}</span>
+      <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#fff', border: rowStyle.border, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>{historyIcon(h.type, currencySymbol)}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         {isNote && h.pinned && (
           <div style={{ fontSize: 10, fontWeight: 700, color: C.link, letterSpacing: 0.4, marginBottom: 2 }}>
@@ -2499,6 +2506,8 @@ function ResizeHandle({ onMouseDown }) {
 const INLINE_EDITABLE = new Set(['estimator_responsible', 'general_info', 'project_stage', 'size_m2', 'project_score']);
 
 function ListView({ deals, columns, sort, onSort, onOpen, today, schema = [], users = [], onEditField }) {
+  const { money: tenantMoney } = useFormat()
+  const money = (v) => tenantMoney(Number(v) || 0, { dp: 2 })
   const { widths, startResize } = useColWidths(columns);
   return (
     <div style={{ overflow: 'auto', height: '100%' }}>
@@ -2526,7 +2535,7 @@ function ListView({ deals, columns, sort, onSort, onOpen, today, schema = [], us
                       rest of the row keeps its click handler, so clicking anywhere still
                       opens the project in place. */}
                   {k === 'title'
-                    ? <DealLink id={d.id} onOpen={onOpen} title="Open the project — right-click or ctrl-click for a new tab" style={{ color: 'inherit' }}>{displayCell(d, k)}</DealLink>
+                    ? <DealLink id={d.id} onOpen={onOpen} title="Open the project — right-click or ctrl-click for a new tab" style={{ color: 'inherit' }}>{displayCell(d, k, money)}</DealLink>
                     : INLINE_EDITABLE.has(k) && onEditField
                       // stopPropagation, or clicking into the field would open the deal
                       // underneath it.
@@ -2537,7 +2546,7 @@ function ListView({ deals, columns, sort, onSort, onOpen, today, schema = [], us
                             users={users}
                             onSave={(key, val) => onEditField(d.id, key, val)} />
                         </span>
-                      : displayCell(d, k)}
+                      : displayCell(d, k, money)}
                 </td>
               ))}
             </tr>
@@ -2616,6 +2625,7 @@ function AddEntityModal({ kind, fields, existing, onSave, onClose }) {
 // company name on the Companies list, which showed counts but no way to see WHICH jobs
 // they were.
 function CompanyHistoryModal({ company, deals, onOpenDeal, onClose }) {
+  const { money: tenantMoney } = useFormat()
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -2625,7 +2635,7 @@ function CompanyHistoryModal({ company, deals, onOpenDeal, onClose }) {
   const name = String(company || '').trim().toLowerCase();
   const mine = (deals || []).filter((d) => String(d.fields?.organization || '').trim().toLowerCase() === name);
 
-  const money = (n) => '£' + Number(n || 0).toLocaleString('en-GB', { maximumFractionDigits: 0 });
+  const money = (n) => tenantMoney(n || 0, { dp: 0 });
   const dateOf = (d) => d.closeTime || d.wonTime || d.lostTime || null;
 
   // Won, lost, still out. Sorted newest first within each - the recent history is what
@@ -2705,6 +2715,8 @@ function CompanyHistoryModal({ company, deals, onOpenDeal, onClose }) {
 }
 
 function EntityTable({ rows, fields, columns, sort, onSort, onDelete, noun, onOpenName }) {
+  const { money: tenantMoney } = useFormat()
+  const money0 = (v) => tenantMoney(Number(v) || 0, { dp: 0 })
   const { widths, startResize } = useColWidths(columns);
   return (
     <div style={{ overflow: 'auto', height: '100%' }}>
@@ -2792,6 +2804,8 @@ export default function CRMPage(props) {
 }
 
 function CRMPageInner() {
+  const { money: tenantMoney, currencySymbol } = useFormat()
+  const money = (v) => tenantMoney(Number(v) || 0, { dp: 2 })
   // The REAL today, in UK local time, as YYYY-MM-DD so it compares directly with the
   // activity due dates. This was PREVIEW_TODAY - a date hard-coded into the preview seed
   // file when the demo data was generated. It never moved, so every activity due after
@@ -4612,6 +4626,7 @@ function CRMPageInner() {
 // Add project modal
 // ===========================================================================
 function AddProjectModal({ onClose, onCreate, users }) {
+  const { currencySymbol } = useFormat()
   const [f, setF] = useState({});
   const [org, setOrg] = useState('');
   const [contact, setContact] = useState('');
@@ -4629,7 +4644,7 @@ function AddProjectModal({ onClose, onCreate, users }) {
   const systemsOpts = (schemaFor('systems_priced').options) || [];
 
   // Field groups (mirror the sidebar). Person/org detail fields live in their own sections.
-  const PROJECT_FIELDS = [['title','Project title', true],['value','Value (£)', false],['project_score','Project Score', false],['expected_close_date','Tender Return date', false]];
+  const PROJECT_FIELDS = [['title','Project title', true],['value',`Value (${currencySymbol})`, false],['project_score','Project Score', false],['expected_close_date','Tender Return date', false]];
   const DETAIL_KEYS = CRM_DETAIL_KEYS;
   const CONTACT_KEYS = [['contact_phone','Phone'],['contact_email','Email'],['contact_job_role','Job Role']];
   const ORG_KEYS = [['org_address','Address'],['org_phone','Phone'],['org_website','Website'],['org_email','Email'],['org_reg_number','Registration Number'],['supply_chain_approved','Supply Chain Approved?']];
@@ -4665,7 +4680,7 @@ function AddProjectModal({ onClose, onCreate, users }) {
         <div style={{ ...grpHdr, marginTop: 0 }}>Project</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {fieldCell('title','Project title', true, true)}
-          {fieldCell('value','Value (£)', false)}
+          {fieldCell('value',`Value (${currencySymbol})`, false)}
           <div>
             <label style={fLbl}>Stage *</label>
             <select value={stageId} onChange={(e) => setStageId(e.target.value)}
@@ -4987,6 +5002,7 @@ function ActivitiesTable({ rows, total, schema = [], orgsData = [], contactsData
 // and the details you would otherwise go hunting for. Read-only - this is a place to look
 // while you talk, not another place to edit from.
 function ContactPanel({ deal, schema = [], orgsData = [], contactsData = [] }) {
+  const { money: tenantMoney } = useFormat()
   const f = deal.fields || {};
   const box = { background: C.feedBg, border: `1px solid ${C.line}`, borderRadius: 10, padding: '12px 14px', marginBottom: 12 };
   const hdr = { fontSize: 11, fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 8 };
@@ -5015,7 +5031,7 @@ function ContactPanel({ deal, schema = [], orgsData = [], contactsData = [] }) {
     return '';
   };
 
-  const money = (n) => (n == null || n === '' ? null : '£' + Number(n).toLocaleString('en-GB', { maximumFractionDigits: 0 }));
+  const money = (n) => (n == null || n === '' ? null : tenantMoney(n, { dp: 0 }));
   const line = (k, v, href) => {
     if (v == null || String(v).trim() === '' || String(v).trim() === '-') return null;
     return (
