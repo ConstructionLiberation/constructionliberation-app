@@ -1,92 +1,87 @@
-PACKAGE 986 - the Sales Dashboard and the priced-value scorecard metrics
+PACKAGE 987 - deals researched, and real lost reasons
 ================================================================================
 
-One file. Complete replacement. INCLUDES 974 AND 985.
+One file. Complete replacement. INCLUDES 974, 985 AND 986.
 
   lib/demoSeed.js
 
-If you have not re-seeded since 985, do it once after this and you get all
-three at once.
+One wipe and re-seed after this lands everything.
 
 
-ONE EMPTY ARRAY, FOUR EMPTY SCREENS
+DEALS RESEARCHED
 ================================================================================
-The seeder wrote `history: []` on every deal.
+scorecard-crm.js counts it as:
 
-lib/crmValueChanges.js does not STORE value-change records - it DERIVES them
-from each deal's history, on read, so they cannot drift from the deals they
-came from. Its own comment says so. With an empty history there is nothing to
-derive, which is why the Sales Dashboard was blank and three scorecard
-metrics - total value of work priced, value priced to existing customers, and
-projects priced over 200k - were empty for every estimator.
+    deals.filter(d => d.everIn1stContact && d.firstContactDate && ...)
 
-Not four missing datasets. One.
+Two TOP-LEVEL fields, not fields.*, and nothing set either - so the metric
+was zero in every month on both the scorecard and the Sales Dashboard, which
+deliberately share the source so they cannot disagree.
+
+Now true for any deal that got past Project In, dated the day it moved, using
+the same timestamp the history records for that step. So "deals researched"
+and the deal's own history agree about when it happened.
 
 
-WHAT IS GENERATED NOW
+LOST REASONS
 ================================================================================
-A history walked forward from the day the deal was created to the stage it
-sits in today: an opening price, a stage entry for each stage it passed
-through, and a repricing on roughly a third of those steps. 190 deals produce
-about 570 value-change records and 39 priced stage entries.
+Nothing was set, so every lost deal fell through to "No Reason Given" and the
+chart had one bar.
 
-Two details that had to be right rather than plausible:
+The list is taken STRAIGHT FROM the lost_reason options in
+lib/crmFieldSchema.js - checked programmatically, all eleven distinct values
+are real options, so the dropdown on a deal offers exactly what the chart
+shows. Inventing a reason here would have produced a value the select could
+not round-trip.
 
-STAGE LABELS, NOT IDS. deriveValueChanges() matches PRICED_STAGES against the
-LABEL written into the history - 'MC Unsecured' counts, 'MC Unsecured Not
-Priced' deliberately does not. The seeder had only the ids, so there is now a
-STAGE_LABEL map that mirrors STAGES in pages/crm.js exactly. An id in the
-history would have derived nothing and looked identical to the bug being
-fixed.
+Weighted the way a roofing pipeline really loses work:
 
-THE NUMBERS ARE GIVEN OUTRIGHT. deriveValueChanges() reads h.oldValue and
-h.newValue where they exist and falls back to parsing them out of the text -
-and parseMoneyPair() looks for a POUND SIGN. On a New Zealand tenant the text
-path can never match, so relying on it would have worked on Rock and silently
-produced nothing on demo.
+    4/17  Price
+    3/17  Roofing package already let
+    2/17  Unable to make contact
+    1/17 each  Package Contractor, Project Shelved, Alternative spec,
+               Gone with preferred approved supply chain,
+               Main Contractor didn't secure, No Time to Price,
+               Lead Time, No Feedback Given
+
+Only a LOST deal gets one. An open deal carrying a lost reason is the kind of
+detail a prospect notices.
 
 
-A FAULT I FOUND BY RUNNING IT, NOT READING IT
+THE SCORECARD - YOUR THIRD POINT, AND YOU ARE RIGHT
 ================================================================================
-The first version drifted: a deal card reading $250,000 with a history whose
-last entry said 185,500. The arithmetic was fine and nobody would have
-queried the scorecard, but anyone opening a deal sees the two disagree.
+It is not missing data. pages/scorecard-crm.js line 337:
 
-The walk now lands exactly on the deal's value. Checked across all 190:
-zero deals whose history ends on a different figure.
+    const ESTIMATORS = ['Roman', 'Niall', 'James']
 
+and line 423:
 
-WHAT I DID NOT NEED FROM YOU
-================================================================================
-You offered Rock's figures for shape. Two reasons not to, and neither is
-caution for its own sake.
+    const isEstimator = ESTIMATORS.includes(person)
 
-DEFAULT_TARGETS already exists in pages/api/targets.js - strike rate 25%, GP
-margin 25%, 667k priced, 20 deals researched a month, per role. The targets a
-demo measures against are already in the code.
+The page identifies people by FIRST NAME and that list is hardcoded to Rock's
+team. Demo's estimators are Sione Tuhware, Damien Oyelaran and so on, so
+isEstimator is false for every one of them and the estimator metric set never
+renders. No amount of seeding fixes it.
 
-And the metrics are derived from deals demo already has. The gap was never
-figures; it was the history those figures are computed from.
+operations/scorecards.js has the same shape with Will, Mike and Dori as fixed
+columns.
 
+That is the add-a-person build you already flagged. The good news is it need
+not start with an editor: every seeded staff member already carries
+jobRole ('Estimator', 'Sales', 'Contracts Manager'), and the tenant's own
+people are the correct source for that list. Deriving it from the staff
+records gets the scorecards working for any tenant and leaves the UI for
+adding and renaming as a second step.
 
-STILL EMPTY AFTER THIS
-================================================================================
-scorecard:entries - the hand-entered metrics that nothing derives, chiefly
-emails sent externally. That one is fed by the Microsoft sync on a real
-tenant, so a seeded value is inventing a number rather than demonstrating a
-feature. Worth a decision rather than a default.
-
-And the Rock names - ESTIMATORS in scorecard-crm.js, Will/Mike/Dori as fixed
-columns in operations/scorecards.js. A re-seed does not touch those; it is
-the add-a-person build.
+Say which and I will build it next.
 
 
 SMOKE TEST
 ================================================================================
 After wipe and re-seed:
-1. Sales Dashboard - Total value priced and Deals Researched have figures.
-2. CRM scorecard, pick an estimator - total value priced, value priced to
-   existing customers, average project value all populate.
-3. Open any deal, look at its history - an opening value, stage moves, and
-   revisions, ending on the figure shown on the card.
-4. CRM pipeline - red and green activity dots, from 985.
+1. Sales Dashboard - Deals Researched has figures by month.
+2. Sales Dashboard - Lost Reasons shows a spread, Price the largest.
+3. Open a lost deal: Lost Reason is filled and the dropdown offers the same
+   list.
+4. Open an OPEN deal: Lost Reason blank.
+5. Scorecards will still be empty. That is the names, not the data.
