@@ -1,71 +1,51 @@
-PACKAGE 953 - two sender identities, not four kinds
+PACKAGE 954 - a tenant with no Xero is not a failed cron
 ================================================================================
 
-Two files. Complete replacements.
+One file. Complete replacement.
 
-  lib/tenantSettings.js
-  pages/api/application-send.js
-
-
-WHAT CHANGED
-============
-The code asked for four sender kinds. Two of them - 'accounts' (chase emails)
-and 'commercial' (applications for payment) - have ALWAYS gone from the same
-address at Rock: Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>.
-Confirmed from real sends on 15 and 16 September.
-
-Two names for one identity is the fault this codebase keeps hitting. It works
-until somebody sets one key and not the other, and then applications and
-chases start arriving from different senders with nothing to explain why -
-which is EXACTLY what pkg932 caused: Rock's record has senders.commercial and
-no senders.accounts, so once fromEmail() actually started running, chase
-emails quietly fell back to the notifications address.
-
-application-send now asks for 'accounts'. Three kinds remain:
-
-    accounts   2 sites   applications for payment, and chases for payment
-    notify     7 sites   variations, notifications, project process, reports
-    forms     28 sites   design emails, RFIs, form notifications
-
-In practice that is TWO identities, because forms and notify both fall through
-to the customer's default sender unless they override one.
+  pages/api/cron/deliveries-sync.js
 
 
-BACKWARDS COMPATIBLE - NOTHING TO FIX ON ROCK FIRST
-====================================================
-'commercial' is now an ALIAS. A record that sets senders.commercial answers a
-request for 'accounts', and the reverse. So Rock's existing record keeps
-working untouched and chase emails go back to accountsreceivable@ the moment
-this deploys - no record edit required.
+WHAT IT WAS
+===========
+deliveries-sync returned
 
-The alias is marked for removal once no record uses the old key.
+    { ok: false, reason: 'not connected' }
+
+when a tenant has no Xero tokens. lib/forEachTenant.js reads the BODY, not
+just the status - so ok:false counts as a failed run. Demo has no Xero, and
+correctly never will, so it produced a failed cron, an error email and a
+cron-health alert every single day for a normal condition.
+
+Seen within hours of demo being registered. This is the second instance of
+exactly the same shape - pkg931 added msConfigured() to the email sync for the
+same reason - and the reasoning is the same: an alert that fires for a normal
+condition is an alert people stop reading, and then it costs you the one
+morning it says something different.
+
+Now returns { ok: true, skipped: true, reason: '...' }. `skipped` is the flag
+forEachTenant ALREADY understands: it does not count as a failure and it does
+not overwrite the heartbeat of a real run.
 
 
-WHAT TO SET ON A RECORD FROM NOW ON
-====================================
-Rock (tidy-up, optional - the alias covers it):
+CHECKED THE OTHERS
+==================
+deep-sync and wip-sync also bail on missing tokens, but with a 401 - and both
+are UNSCHEDULED (they are in the deliberately-unreachable list in
+lib/cronHealth.js), so neither is looping tenants. deliveries-sync was the
+only scheduled one with this shape.
 
-  "senders": { "accounts": "Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>" }
 
-Demo, once the domain verifies:
-
-  "sendingAddress": "notifications@send.demo.constructionliberation.com",
-  "senderName": "Demo",
-  "replyTo": "james@constructionliberation.com",
-  "senders": { "accounts": "Demo Accounts <accountsreceivable@send.demo.constructionliberation.com>" }
+NOT A FAULT, FOR THE RECORD
+============================
+Two of the three error emails you sent were historic: the
+"PASTE_THE_HTTPS_URL" one is from yesterday's registry mistake, already fixed,
+and the cron-health alert was reporting this same deliveries-sync failure.
 
 
 SMOKE TEST
 ==========
-1. On ROCK, open a chase email from Outstanding Invoices. From line should
-   read Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>. If it
-   has been showing notifications@ since Monday, this is the fix.
-2. Send an application. Same From line.
-3. Everything else - variations, RFIs, form notifications - unchanged from
-   notifications@send.rockroofing.co.uk.
-
-
-CHECKS RUN
-==========
-- esbuild compile on both files: clean
-- kinds counted after the change: accounts 2, notify 7, forms 28, commercial 0
+1. Tomorrow morning: no deliveries-sync failure for demo, and no cron-health
+   alert naming it.
+2. Rock's deliveries-sync unchanged - it has Xero, so it never reaches this
+   line.

@@ -13,7 +13,23 @@ async function setSeenIds(ids) { await set('ops:deliveries:seenPoIds', ids) }
 async function handler(req, res) {
   try {
     let tokens = await getTokens()
-    if (!tokens) return res.status(200).json({ ok: false, reason: 'not connected' })
+    // NOT CONNECTED IS A SKIP, NOT A FAILURE.
+    //
+    // This returned ok: false, and lib/forEachTenant.js reads the body - so a
+    // tenant with no Xero produced a failed cron run, an error email and a
+    // cron-health alert EVERY DAY, for the entirely correct state of not
+    // having connected an accounting package.
+    //
+    // Seen the moment a second tenant existed: demo generated a
+    // deliveries-sync failure within hours of being registered. Same shape as
+    // the msConfigured() skip added to the email sync in pkg931, and the same
+    // reasoning - an alert that fires for a normal condition is an alert
+    // people stop reading.
+    //
+    // `skipped` is the flag forEachTenant already understands: it does not
+    // count as a failure and it does not overwrite the heartbeat of a real
+    // run.
+    if (!tokens) return res.status(200).json({ ok: true, skipped: true, reason: 'Xero not connected for this customer' })
     try { const nt = await refreshXeroToken(tokens.refresh_token); tokens = { ...tokens, ...nt }; await saveTokens(tokens) } catch {}
 
     let pos = []
