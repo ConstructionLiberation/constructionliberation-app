@@ -1,4 +1,4 @@
-PACKAGE 950 - bookkeeping data, with September left to work through
+PACKAGE 951 - the In Query project dropdowns were empty
 ================================================================================
 
 One file. Complete replacement. Wipe and re-seed.
@@ -6,65 +6,52 @@ One file. Complete replacement. Wipe and re-seed.
   lib/demoSeed.js
 
 
-THE POINT OF THE SECTION IS THE RECONCILIATION
-===============================================
-Bookkeeping exists to get every cost, wage and sales invoice out of Xero and
-onto a project. Its value is the WORKING THROUGH: an unassigned line sits in
-the list until somebody gives it a project, and then it clears. Seeding
-everything as already-assigned would show a set of empty tabs and prove
-nothing.
+WHAT IT WAS
+===========
+Every row on the In Query tab offered "Not set" and nothing else, so a parked
+cost could not be assigned to a job - which is the entire purpose of the tab.
 
-So April through August are fully assigned and balance, and SEPTEMBER has a
-pile waiting:
+Not an app bug, and not the data you could see. components/InQueryTable.js
+makes its OWN fetch to /api/bookkeeping-inquery, separate from the four calls
+pages/bookkeeping.js makes, and reads d.projects from it. That endpoint builds
+the list with inqueryProjectOptions(), which reads
 
-    26 untagged bills      16 project costs to allocate, 10 genuine overheads
-    11 untagged wages      direct wages, week 36-39, no project
-     7 unassigned sales    invoices with no tracking category
-     9 in-query costs      parked, deliberately excluded from project spend
+    projects:registry
 
-Assign one and watch the line clear - that is the demo.
+which I had never seeded. Everything else on the page worked because it comes
+from dashboard:cache, which was seeded - hence a tab full of correct lines
+with a dropdown that had nothing in it.
 
-The mix of project costs and real overheads in the untagged bills is
-deliberate. If everything needed a project, categorising would be mechanical;
-the judgement is in telling the two apart, which is what the screen is for.
+Worth naming as a shape: THE PROJECT LIST EXISTS IN THREE PLACES and they are
+not interchangeable.
 
+    dashboard:cache      the commercial surfaces
+    costs:lines:<id>     the WIP page
+    projects:registry    the In Query dropdown, and anything that needs a
+                         project to survive being deleted from Xero
 
-WHAT ELSE WENT IN
-=================
-CHART OF ACCOUNTS and ACCOUNT CATEGORISATION. 16 codes with names and
-categories - sales, materials, labour, overheads. Without these every code
-reads as "uncategorised" and the app raises a banner about it, so the
-categorisation feature could not be shown working.
-
-THE IN QUERY BUCKET. Matched on the tracking option NAME, not a flag -
-pages/api/bookkeeping.js compares the project name to "inquery" with spaces
-stripped. It is now a real row in the project list called "In Query" with nine
-costs against it: a queried price, a wrong site, a suspected duplicate. Those
-are deliberately excluded from project spend until somebody decides where they
-belong.
+Each was found the same way - a screen that was empty for no visible reason.
 
 
-ONE THING WORTH RECORDING
-==========================
-The In Query cost lines were being referenced in the dashboard cache before
-they were declared. JavaScript hoists the declaration but not the value, so it
-would have been undefined at that point - no compile error, and an empty
-In Query tab with nothing to explain it. Caught by running the generator
-rather than by the compiler.
+WHAT CHANGED
+============
+projects:registry is now written: 30 entries keyed by xeroId, each with name,
+jobNo, trackingCategoryId, firstSeen and lastSeenInXero.
 
+In Query is deliberately NOT in it. lib/inquery.js filters it out anyway,
+since offering "In Query" as the answer to "which job is this In Query cost
+for" is an own goal - the comment in that file says as much.
 
-STILL NOT SEEDED
-================
-Business Financials - a further 48 keys including bank balances, the overhead
-ledger, the sales ledger and VAT. Scorecard entries and targets. Forms,
-submissions and photos. Contracted rates.
+Added to the wipe list.
 
 
 SMOKE TEST
 ==========
 1. Wipe, re-seed.
-2. Bookkeeping - Costs, Wages, Sales and In Query tabs all populated.
-3. Filter to September: the untagged pile. April to August: everything
-   assigned.
-4. Assign a project to one untagged line and confirm it clears.
-5. No "uncategorised account codes" banner, since the chart is now seeded.
+2. Bookkeeping -> In Query. Each row's Project dropdown should list all 30
+   jobs as "J101 - J101-Vogel Street Apartments" and so on, sorted by job
+   number descending.
+3. Assign one. It should take.
+4. The USER RESPONSIBLE dropdown next to it should list the seeded team -
+   that reads d.users from the same endpoint, which comes from the portal
+   users the seeder merges in. Tell me if that one is also empty.
