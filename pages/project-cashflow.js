@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { businessToday, businessNow } from '../lib/businessDate'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import CommercialNav from '../components/CommercialNav'
 import { computeApplicationSummary, resolveAppDates } from '../lib/applications'
@@ -35,6 +36,9 @@ function cellCount(cell) {
 }
 
 export default function ProjectCashflow() {
+  const { money, currencySymbol } = useFormat()
+  const gbp = (n) => money(Number(n) || 0)
+  const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState('day')            // 'day' | 'week'
@@ -783,6 +787,9 @@ export default function ProjectCashflow() {
 }
 
 function Row({ p, days, weekGroups, view, data, meta, countOnDay, sel, onCellDown, onCellEnter, todayKey, forecasts = [], superseded, stale, focusKey, onFocus, onView, neg, onRemove }) {
+  const { money, currencySymbol } = useFormat()
+  const gbp = (n) => money(Number(n) || 0)
+  const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
   const complD = parseISO(meta.completionDate || '')
   const projDays = (data.allocations || {})[p.key] || {}
   let plannedStart = ''
@@ -935,8 +942,6 @@ const ghostBtn = { background: '#f2f2f0', border: '1px solid #e2e2de', borderRad
 // the materials budget) and land on a single delivery day. Cumulative: each period
 // starts from the previous saved forecasted application. Never written to the real
 // applications store.
-function gbp(n) { return `\u00a3${(Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
-function gbpK(n) { const v = n || 0; return Math.abs(v) >= 1000 ? `£${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `£${Math.round(v)}` }
 function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n }
 
 // Compute the cash date from a reference date + a payment term.
@@ -1094,6 +1099,9 @@ function applyPriorPct(baseRows, priorWorks) {
 }
 
 function HypAppModal({ modal, onClose, onSaved }) {
+  const { money, currencySymbol } = useFormat()
+  const gbp = (n) => money(Number(n) || 0)
+  const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
   const { projectKey, projectName, xeroId, editId } = modal
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -2406,12 +2414,12 @@ function HypAppModal({ modal, onClose, onSaved }) {
                         <tr key={m.id} style={{ borderTop: '1px solid #f3f2ee' }}>
                           <td style={{ padding: '5px 10px' }}>
                             <select value={m.mode} onChange={e => upd({ mode: e.target.value })} style={{ ...inpS, padding: '5px 6px' }}>
-                              <option value="figure">£ figure</option>
+                              <option value="figure">{currencySymbol} figure</option>
                               <option value="pct">% of budget</option>
                             </select>
                           </td>
                           <td style={{ padding: '5px 10px' }}>
-                            <input type="number" value={m.value} onChange={e => upd({ value: e.target.value })} placeholder={m.mode === 'pct' ? '%' : '£'} style={{ ...inpS, width: 80, padding: '5px 6px' }} />
+                            <input type="number" value={m.value} onChange={e => upd({ value: e.target.value })} placeholder={m.mode === 'pct' ? '%' : currencySymbol} style={{ ...inpS, width: 80, padding: '5px 6px' }} />
                           </td>
                           <td style={{ padding: '5px 10px' }}>
                             <input type="text" value={m.comment} onChange={e => upd({ comment: e.target.value })} placeholder="Supplier / note" style={{ ...inpS, width: '100%', padding: '5px 6px' }} />
@@ -2622,6 +2630,9 @@ function TermEditor({ label, term, setTerm, refDate, refLabel, cycles, calendar,
 // apart. The override is stored against the forecast, so redoing the forecast after each
 // application is the natural moment to settle it.
 function PositionPanel({ title, colour, budget, claimed, claimedNote, spend, spendAt, rows, awaiting, awaitingOverride, onAwaiting }) {
+  const { money, currencySymbol } = useFormat()
+  const gbp = (n) => money(Number(n) || 0)
+  const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
   const pct = budget > 0 ? (spend / budget) * 100 : null
   const over = pct != null && pct > 100
   const Row = ({ k, v, note, strong, tone }) => (
@@ -2676,6 +2687,9 @@ function PositionPanel({ title, colour, budget, claimed, claimedNote, spend, spe
 // render, and these hold focused text inputs. Nested, they lose focus after every
 // keypress.
 function OverrideBox({ label, calculated, override, setOverride, colour, autoNote, sub2 }) {
+  const { money, currencySymbol } = useFormat()
+  const gbp = (n) => money(Number(n) || 0)
+  const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
   const on = override != null
   return (
     <div style={{ background: '#fff', border: on ? `1.5px solid ${colour}` : '1px solid #e6e3dc', borderRadius: 10, padding: '10px 16px', minWidth: 172 }}>

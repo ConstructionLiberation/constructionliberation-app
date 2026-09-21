@@ -3,7 +3,7 @@ import Head from 'next/head'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PreContractNav from '../components/PreContractNav'
 
-const fmt = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n)
+import { useFormat } from '../components/TenantProvider'
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
 const shortDate = (s) => s ? new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'
 const monthKey = (s) => s ? s.substring(0, 7) : null
@@ -56,6 +56,8 @@ function calcTrendline(data, key) {
 }
 
 export default function Dashboard() {
+  const { money, currencySymbol } = useFormat()
+  const fmt = (n) => (n == null ? '\u2014' : money(n, { dp: 0 }))
   const lastMonth = getLastMonthRange()
   const [page, setPage] = useState('Deals Researched')
   const [deals, setDeals] = useState([])
@@ -302,7 +304,7 @@ export default function Dashboard() {
         <LineChart data={trendData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0efec" />
           <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#888' }} />
-          <YAxis tick={{ fontSize: 11, fill: '#888' }} tickFormatter={v => valueKey === 'count' ? v : '£' + (v/1000).toFixed(0) + 'K'} />
+          <YAxis tick={{ fontSize: 11, fill: '#888' }} tickFormatter={v => valueKey === 'count' ? v : currencySymbol + (v/1000).toFixed(0) + 'K'} />
           <Tooltip formatter={(v, n) => [n === 'trend' ? null : valueKey === 'count' ? v : fmt(v), n === 'trend' ? 'Trend' : 'Value']} />
           <Line type="monotone" dataKey={valueKey} stroke={color} strokeWidth={2} dot={{ r: 3 }} />
           <Line type="monotone" dataKey="trend" stroke={color} strokeWidth={1} strokeDasharray="5 5" dot={false} />
@@ -658,7 +660,7 @@ export default function Dashboard() {
             <div style={{ background: '#fff', border: '1px solid #e1e0d9', borderRadius: 10, padding: 20, marginBottom: 20 }}>
               <div style={{ fontWeight: 500, marginBottom: 14 }}>Log value change</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 14 }}>
-                {[{ label: 'Deal title *', key: 'dealTitle', type: 'text' }, { label: 'Organisation', key: 'organizationName', type: 'text' }, { label: 'Old value (£)', key: 'oldValue', type: 'number' }, { label: 'New value (£) *', key: 'newValue', type: 'number' }, { label: 'Date *', key: 'changeDate', type: 'date' }].map(f => (
+                {[{ label: 'Deal title *', key: 'dealTitle', type: 'text' }, { label: 'Organisation', key: 'organizationName', type: 'text' }, { label: `Old value (${currencySymbol})`, key: 'oldValue', type: 'number' }, { label: `New value (${currencySymbol}) *`, key: 'newValue', type: 'number' }, { label: 'Date *', key: 'changeDate', type: 'date' }].map(f => (
                   <div key={f.key}>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 3 }}>{f.label}</label>
                     <input type={f.type} value={vcForm[f.key]} onChange={e => setVcForm(p => ({...p, [f.key]: e.target.value}))} style={{ width: '100%', fontSize: 13, padding: '6px 8px', border: '0.5px solid #d0d0cc', borderRadius: 6, boxSizing: 'border-box', fontFamily: 'inherit' }} />
@@ -699,7 +701,7 @@ export default function Dashboard() {
                       <td style={tdS}>{v.changeDate ? shortDate(v.changeDate) : <span style={{ color: '#c2410c', fontSize: 11 }}>No date</span>}</td>
                       <td style={tdS}>{v.stage || v.projectStage || '—'}</td>
                       <td style={{ ...tdS, textAlign: 'right' }}>{isWarning ? '—' : fmt(v.oldValue)}</td>
-                      <td style={{ ...tdS, textAlign: 'right', color: isWarning ? '#c2410c' : undefined }}>{isWarning ? <span style={{ color: '#c2410c', fontWeight: 500 }}>£0 — needs value</span> : fmt(v.newValue)}</td>
+                      <td style={{ ...tdS, textAlign: 'right', color: isWarning ? '#c2410c' : undefined }}>{isWarning ? <span style={{ color: '#c2410c', fontWeight: 500 }}>{currencySymbol}0 — needs value</span> : fmt(v.newValue)}</td>
                       <td style={{ ...tdS, textAlign: 'right', color: isWarning ? '#c2410c' : (v.valueChange || 0) >= 0 ? '#16a34a' : '#e63946', fontWeight: 500 }}>{isWarning ? '—' : fmt(v.valueChange)}</td>
                       <td style={{ ...tdS, color: '#888', fontSize: 12 }}>{isWarning ? `Stage: ${v.projectStage}` : v.notes}</td>
                       <td style={tdS}>{!isWarning && v.id && <button onClick={() => deleteValueChange(v.id)} style={{ fontSize: 11, padding: '2px 8px', border: '0.5px solid #e1e0d9', borderRadius: 4, background: '#fff', cursor: 'pointer', color: '#888' }}>×</button>}</td>
@@ -735,7 +737,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Deals won', secured.length)}
             {statCard('Avg won value', fmt(avgVal))}
-            {statCard('Won ≥£200K', over200)}
+            {statCard(`Won ≥${currencySymbol}200K`, over200)}
             {statCard('Total value', fmt(totalVal))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
@@ -766,7 +768,7 @@ export default function Dashboard() {
           <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Detail</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>{['Title','Organisation','Sales person','Estimator','Won date','Stage','≥£200K','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
+              <thead><tr>{['Title','Organisation','Sales person','Estimator','Won date','Stage',`≥${currencySymbol}200K`,'Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
               <tbody>{secured.map(d => (
                 <tr key={d.id} style={{ background: '#f0fdf4' }}>
                   <td style={tdS}>{d.title}</td>
@@ -899,11 +901,11 @@ export default function Dashboard() {
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
               <div>
-                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Min value (£)</label>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Min value ({currencySymbol})</label>
                 <input type="number" value={srValueMin} onChange={e => setSrValueMin(e.target.value)} placeholder="0" style={{ width: 100, fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Max value (£)</label>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Max value ({currencySymbol})</label>
                 <input type="number" value={srValueMax} onChange={e => setSrValueMax(e.target.value)} placeholder="No limit" style={{ width: 100, fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
               </div>
               <div>

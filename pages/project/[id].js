@@ -8,12 +8,10 @@ import { computeProjectWip } from '../../lib/wipCalc'
 import { missingProjectFields } from '../../lib/projectComplete'
 import ReportImprovementLink from '../../components/ReportImprovementLink'
 
-const fmt = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
-const fmtC = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)
+import { useFormat } from '../../components/TenantProvider'
 // Pence-accurate. Used in Edit Project Details, where variation lines have to add up
 // to the totals shown beneath them - rounding each figure to whole pounds made the
 // parts disagree with the sum.
-const fmtP = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
 
 const ROLES = ['Contracts Manager', 'Operations Manager', 'Quantity Surveyor', 'Estimator']
@@ -131,6 +129,8 @@ function marginBg(m) {
 }
 
 export default function ProjectPage() {
+  const { money } = useFormat()
+  const fmt = (n) => (n == null ? '\u2014' : money(n))
   const router = useRouter()
   const { id } = router.query
   const [project, setProject] = useState(null)
@@ -763,6 +763,8 @@ function CommentPill({ count, onClick }) {
 // Closes on the x and Escape only, never a backdrop click - a half-typed comment
 // should not vanish because somebody clicked past the edge of the box.
 function CostCommentsModal({ projectId, projectLabel, invoice, list, users, me, onClose, onChanged }) {
+  const { money } = useFormat()
+  const fmtC = (n) => money(n || 0)
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -923,6 +925,8 @@ function CostCommentsModal({ projectId, projectLabel, invoice, list, users, me, 
 }
 
 function CostsTab({ costLines, atDate, settings, projectId, projectLabel }) {
+  const { money, currencySymbol } = useFormat()
+  const fmtC = (n) => money(n || 0)
   const twoYearsAgo = new Date()
   twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
   const [fromDate, setFromDate] = useState(twoYearsAgo.toISOString().split('T')[0])
@@ -1040,7 +1044,7 @@ function CostsTab({ costLines, atDate, settings, projectId, projectLabel }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f8f8f8', borderBottom: '1px solid #eee' }}>
-              {['Category', 'Spend', 'Budget', 'Remaining £', 'Remaining %', 'Progress'].map(h => (
+              {['Category', 'Spend', 'Budget', `Remaining ${currencySymbol}`, 'Remaining %', 'Progress'].map(h => (
                 <th key={h} style={{ padding: '8px 12px', textAlign: h === 'Category' || h === 'Progress' ? 'left' : 'right', fontWeight: 600, color: '#555', fontSize: 11 }}>{h}</th>
               ))}
             </tr>
@@ -1163,6 +1167,8 @@ function CostsTab({ costLines, atDate, settings, projectId, projectLabel }) {
 }
 
 function IncomeTab({ invoiceLines, atDate }) {
+  const { money } = useFormat()
+  const fmtC = (n) => money(n || 0)
   const twoYearsAgo = new Date()
   twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
   const [fromDate, setFromDate] = useState(twoYearsAgo.toISOString().split('T')[0])
@@ -1305,6 +1311,8 @@ function IncomeTab({ invoiceLines, atDate }) {
 }
 
 function WipTab({ costLines, invoiceLines, settings, pastVDates, selectedVDate, id, onSettingsSaved }) {
+  const { money, currencySymbol } = useFormat()
+  const fmtC = (n) => money(n || 0)
   // Default the valuation-date filter to the last FULL month (previous month end),
   // matched to an available past valuation date if one exists.
   const lastFullMonthDate = React.useMemo(() => {
@@ -1674,7 +1682,7 @@ function WipTab({ costLines, invoiceLines, settings, pastVDates, selectedVDate, 
           </select>
           <input placeholder="Description" value={adjForm.description} onChange={e => setAdjForm({ ...adjForm, description: e.target.value })}
             style={{ flex: 1, minWidth: 140, padding: '6px 10px', border: '1px solid #e5e5e5', borderRadius: 6, fontSize: 12 }} />
-          <input placeholder="Amount (£, − to reduce)" type="number" value={adjForm.amount} onChange={e => setAdjForm({ ...adjForm, amount: e.target.value })}
+          <input placeholder={`Amount (${currencySymbol}, − to reduce)`} type="number" value={adjForm.amount} onChange={e => setAdjForm({ ...adjForm, amount: e.target.value })}
             style={{ width: 150, padding: '6px 10px', border: '1px solid #e5e5e5', borderRadius: 6, fontSize: 12 }}
             onKeyDown={e => e.key === 'Enter' && addAdjustment()} />
           <button onClick={addAdjustment} disabled={savingAdj || !adjForm.description || adjForm.amount === ''}
@@ -1695,6 +1703,8 @@ function WipTab({ costLines, invoiceLines, settings, pastVDates, selectedVDate, 
 }
 
 function RetentionTab({ p, settings, atDate }) {
+  const { money } = useFormat()
+  const fmtC = (n) => money(n || 0)
   const totalRetention = atDate.retention
   const firstRelease = totalRetention / 2
   const secondRelease = totalRetention / 2
@@ -1753,6 +1763,8 @@ function UseOpsBtn({ onClick }) {
 }
 
 function DetailsForm({ form, setForm, addVariation, updateVariation, removeVariation, afa, currentMargin, teamMembers, onAddMember, onRemoveMember, people, allUsers }) {
+  const { money, currencySymbol } = useFormat()
+  const fmtP = (n) => money(Number(n) || 0)
   const f = (field) => (e) => setForm({ ...form, [field]: e.target.value })
   // Open the monthly override table by default if the project already has any
   // manual dates set, so the user sees what's there.
@@ -2044,7 +2056,7 @@ function DetailsForm({ form, setForm, addVariation, updateVariation, removeVaria
             </table>
           </div>
         )}
-        <label style={labelStyle}>Original contract value (£)</label>
+        <label style={labelStyle}>Original contract value ({currencySymbol})</label>
         <input type="number" step="0.01" inputMode="decimal" value={form.contractValue || ''} onChange={f('contractValue')} style={inputStyle} placeholder="0.00" />
         {/* MCD. Mandatory, and 0 is a valid answer - blank means nobody asked, and the
             Final Account on the retention register then has no basis. Prefilled from the
@@ -2084,9 +2096,9 @@ function DetailsForm({ form, setForm, addVariation, updateVariation, removeVaria
           {' '}retention is calculated, so it sets the Final Account the retention register works from.
           {' '}Left blank it is treated as 0%.
         </div>
-        <label style={labelStyle}>Labour budget (£)</label>
+        <label style={labelStyle}>Labour budget ({currencySymbol})</label>
         <input type="number" step="0.01" inputMode="decimal" value={form.labourBudget || ''} onChange={f('labourBudget')} style={inputStyle} placeholder="0.00" />
-        <label style={labelStyle}>Materials budget (£)</label>
+        <label style={labelStyle}>Materials budget ({currencySymbol})</label>
         <input type="number" step="0.01" inputMode="decimal" value={form.materialsBudget || ''} onChange={f('materialsBudget')} style={inputStyle} placeholder="0.00" />
       </div>
       <div style={sectionStyle}>
@@ -2107,7 +2119,7 @@ function DetailsForm({ form, setForm, addVariation, updateVariation, removeVaria
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
                 {[['Materials', 'materials'], ['Labour', 'labour'], ['Profit', 'profit']].map(([label, key]) => (
                   <div key={key}>
-                    <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>{label} (£)</div>
+                    <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>{label} ({currencySymbol})</div>
                     <input type="number" step="0.01" inputMode="decimal" value={v[key] || ''} onChange={e => updateVariation(i, key, e.target.value)} placeholder="0.00" style={{ ...inputStyle, marginBottom: 0 }} />
                   </div>
                 ))}

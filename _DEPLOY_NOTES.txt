@@ -1,67 +1,78 @@
-PACKAGE 961 - the currency SYMBOL in labels
+PACKAGE 962 - money on the project, cash flow, WIP and sales screens
 ================================================================================
 
-Four files. Complete replacements. THE SAME FOUR FILES AS 960 - deploy 960
-first, check it, then this.
+Four files. Complete replacements. Note the FOLDER on the first one.
 
-  pages/commercial.js
-  pages/retention.js
-  pages/applications.js
-  pages/variations.js
+  pages/project/[id].js        <- literal square brackets, as always
+  pages/project-cashflow.js
+  pages/wip.js
+  pages/sales.js
+
+VALUES AND LABELS TOGETHER this time, unlike 960/961. 960 was split because it
+was already verified when I found the labels; here I started fresh, and making
+you paste four files of this size twice is worse than the attribution I would
+gain. If something reads wrong, the figures came from money() and the symbols
+from currencySymbol - both off the same feed.
+
+Seventeen components. Six formatter definitions moved off module scope.
+
+  project/[id]      ProjectPage(fmt), WipTab, CostsTab, IncomeTab,
+                    RetentionTab, CostCommentsModal (fmtC), DetailsForm (fmtP)
+  project-cashflow  HypAppModal, Row, ProjectCashflow, PositionPanel,
+                    OverrideBox (gbp, gbpK)
+  wip               ProjectSection, WipPage, ManualAdjustments, AdjRow (fmtC)
+  sales             Dashboard (fmt)
+
+Every call site keeps its name and shape. 135 calls unchanged.
 
 
-WHAT IT WAS
+TWO THINGS WORTH KNOWING
 ================================================================================
-960 fixed the figures. Twenty-nine pound signs remained in these four files as
-LABELS, which on demo meant a column headed "Profit £" above a column of
-dollars:
+project-cashflow's gbp and gbpK were FUNCTION DECLARATIONS at the bottom of
+the file, used by components three hundred lines above them. That works only
+because function declarations hoist. Nothing was wrong with it, but it is why
+a grep for "const gbp" found nothing in this file and my formatter count
+missed both.
 
-  commercial    Lab Left £, Mat Left £, Total Left £, Profit £, WIP £
-                (in the column list AND again in the legend), plus
-                Invoiced £ (inc WIP), Profit £ (inc WIP), WIP £
-  retention     Project Value £, Final Account £, Applied for £, Certified £,
-                Invoiced Net £, Manual VAT £, Release Value £ (twice),
-                and one tooltip reading "Reverse charge / 0% = £0"
-  applications  a bare £ prefix on an input, two "this line has a £0 value"
-                warnings and the matching cell tooltips
-  variations    Materials £, Labour £, Profit £, Total £ in the column list,
-                and Materials (£) / Labour / Lodge (£) / Profit (£) twice in
-                the add and edit forms
-
-Different mechanism from 960: this is currencySymbol off the same feed, not
-money(). Zero figures change.
+gbpK keeps its own rounding rather than going through money(): it prints
+"$12k" and "$1.5k", and money() would put the grouping and decimals back in.
+Only the symbol changed.
 
 
-CHECKED - AND ONE CHECK THAT MATTERS MORE THAN THE COMPILE
+A THRESHOLD THAT IS NOT CURRENCY-AWARE, AND I HAVE NOT TOUCHED IT
 ================================================================================
-A component that USES currencySymbol without destructuring it compiles
-perfectly and throws at runtime. So rather than trusting the build, every
-occurrence was mapped to its enclosing component and matched against the
-declarations:
+sales.js has "Won >=£200K" as a headline stat and a matching column. The
+LABEL now reads >=$200K on demo, but the threshold behind it is still the
+number 200,000 applied to whatever currency the figures are in. 200,000 NZD
+is not 200,000 GBP, so on a NZ tenant the label is honest about the number and
+the number is arguably the wrong one.
 
-  commercial   Dashboard           11 uses   declared
-  retention    RetentionPage        1 use    declared
-  retention    EntryForm            8 uses   declared  (hook added here)
-  applications ApplicationEditor    5 uses   declared
-  variations   VariationTracker    10 uses   declared
+Changing it means deciding what that band should be per customer, which is a
+business question, not a formatting one. Flagged rather than guessed at.
 
-EntryForm is the only component that gained a useFormat() in this package, and
-it takes currencySymbol alone - it has no formatted figures in it.
 
-Also: zero visible pound signs remain in any of the four, counted excluding
-comments. All four compile and bundle clean with no duplicate symbols.
+CHECKED
+================================================================================
+- Zero visible pound signs left in any of the four. The only two remaining are
+  inside JSX block comments explaining an old "Rev £0" bug.
+- Every formatter sits directly under its hook, and EVERY useFormat() is the
+  first line of its component - checked mechanically, not by eye, because a
+  hook below an early return is the fault this codebase keeps hitting.
+- All four compile and bundle for the browser with no duplicate symbols. That
+  check is what caught the two shadowing collisions in 960, so it is not
+  ceremonial.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo commercial: the Lab Left / Mat Left / Total Left / Profit / WIP column
-   headings read $ not £, and so does the legend behind the "?" - it is a
-   second copy of the same labels and it was the easiest one to miss.
-2. Demo retention: add or edit an entry. That form is EntryForm and it carries
-   eight of the twenty-nine.
-3. Demo variations: the column headings, then open Add Variation - Materials
-   (£) / Labour / Lodge (£) / Profit (£) appear in BOTH the add and the edit
-   form.
-4. Demo applications: open an application. The bare symbol in front of the
-   value input, and a line with a zero value should warn in dollars.
-5. Rock: all four unchanged, reading £ everywhere they did before.
+1. Demo, a project: open it and go through the tabs - Costs, Income, WIP,
+   Retention. Four different components, three different formatters.
+2. Demo, Edit Project Details: that is DetailsForm and fmtP, the pence-accurate
+   one, plus four "(£)" labels that should now read "($)".
+3. Demo, project cash flow: the timeline bars carry gbpK (the "$12k" form) and
+   the hover titles carry gbp. Open a hypothetical application - HypAppModal
+   has 32 of the calls on its own.
+4. Demo, WIP: the write-down confirm dialog mentions "$0", in two places.
+5. Demo, sales: the chart Y axis, the >=$200K stat and column, and the min and
+   max value filters.
+6. Rock, all four: unchanged, sterling everywhere, same decimals.

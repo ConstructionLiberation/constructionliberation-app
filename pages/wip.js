@@ -7,7 +7,7 @@ import ProjectDatesModal from '../components/ProjectDatesModal'
 
 const GOLD = '#ca8a04'
 const INK = '#1a1a19'
-const fmtC = (n) => `\u00a3${(Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+import { useFormat } from '../components/TenantProvider'
 const fmtDate = (s) => { if (!s) return '—'; const d = new Date(s); return isNaN(d) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 const monthLabel = (mk) => { if (!mk) return ''; const [y, m] = mk.split('-'); return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) }
 
@@ -23,6 +23,8 @@ function monthOptions() {
 }
 
 export default function WipPage() {
+  const { money, currencySymbol } = useFormat()
+  const fmtC = (n) => money(Number(n) || 0)
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [data, setData] = useState(null)
@@ -344,6 +346,8 @@ export default function WipPage() {
 }
 
 function ProjectSection({ p, month, onChange, onBusy, readOnly = false }) {
+  const { money, currencySymbol } = useFormat()
+  const fmtC = (n) => money(Number(n) || 0)
   // Every save in here goes through this, so the cursor covers the WRITE as well as the
   // refresh that follows it - the write is the slower half, and it is the half that
   // happens while somebody is wondering whether their click landed.
@@ -421,8 +425,8 @@ function ProjectSection({ p, month, onChange, onBusy, readOnly = false }) {
       return
     }
     const current = Number(p.wipValue) || 0
-    if (Math.abs(current) < 0.01) { alert('This project is already at £0.'); return }
-    if (!confirm(`Write ${p.jobNo || p.name} down to £0?\n\nCurrent WIP ${fmtC(current)}. An adjustment of ${fmtC(-current)} will be added, and can be removed again later.`)) return
+    if (Math.abs(current) < 0.01) { alert(`This project is already at ${currencySymbol}0.`); return }
+    if (!confirm(`Write ${p.jobNo || p.name} down to ${currencySymbol}0?\n\nCurrent WIP ${fmtC(current)}. An adjustment of ${fmtC(-current)} will be added, and can be removed again later.`)) return
     setZeroing(true)
     await withBusy(async () => {
       try {
@@ -497,7 +501,7 @@ function ProjectSection({ p, month, onChange, onBusy, readOnly = false }) {
                 the offsetting figure by hand and fiddling the margin until the number
                 comes right. */}
             <button onClick={zeroProject} disabled={savingMargin || zeroing}
-              title={isZeroed ? 'Remove the zeroing adjustment and restore the real WIP' : 'Write this project down to £0 WIP'}
+              title={isZeroed ? 'Remove the zeroing adjustment and restore the real WIP' : `Write this project down to ${currencySymbol}0 WIP`}
               style={{ background: isZeroed ? '#fff7ed' : '#fff', border: `1px solid ${isZeroed ? '#fdba74' : '#ddd'}`, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', color: isZeroed ? '#c2410c' : '#333', fontWeight: 600 }}>
               {zeroing ? '…' : (isZeroed ? 'Un-zero' : 'Zero')}
             </button>
@@ -593,6 +597,8 @@ function ProjectSection({ p, month, onChange, onBusy, readOnly = false }) {
 }
 
 function ManualAdjustments({ p, month, onChange, onBusy }) {
+  const { money, currencySymbol } = useFormat()
+  const fmtC = (n) => money(Number(n) || 0)
   const [desc, setDesc] = useState('')
   const [amount, setAmount] = useState('')
   const projMarginPct = p.margin != null ? (p.margin * 100).toFixed(1) : ''
@@ -671,6 +677,8 @@ function ManualAdjustments({ p, month, onChange, onBusy }) {
 // One existing adjustment row with an editable, clearable margin. Blank = inherit
 // the project margin.
 function AdjRow({ a, p, month, busy, onSaveMargin, onRemove }) {
+  const { money, currencySymbol } = useFormat()
+  const fmtC = (n) => money(Number(n) || 0)
   const [m, setM] = useState(a.margin != null && a.margin !== '' ? String(a.margin) : '')
   useEffect(() => { setM(a.margin != null && a.margin !== '' ? String(a.margin) : '') }, [a.margin])
   const usingProject = (a.margin == null || a.margin === '')
