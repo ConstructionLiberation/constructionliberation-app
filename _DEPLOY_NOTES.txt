@@ -1,80 +1,75 @@
-PACKAGE 997 - the empty Variations dropdowns
+PACKAGE 998 - "Project not found" when clicking a project
 ================================================================================
 
-One file. Complete replacement. No re-seed.
+One file. Complete replacement. Mind the folder and the brackets.
 
-  pages/api/dashboard.js
+  pages/api/project/[id].js
+
+No re-seed.
 
 
-THE CAUSE
+THE CAUSE - THE SAME ONE, A THIRD TIME
 ================================================================================
-pages/variations.js loads its project list with:
+Line 12 of that route:
 
-    fetch('/api/dashboard?sync=true')
-
-and dashboard.js treated sync=true as "skip the cache, go to Xero", where:
-
+    let tokens = await getTokens()
     if (!tokens) return res.status(401).json({ error: 'Not connected to Xero' })
 
-So on a tenant with no accounting connection every caller asking for fresh
-data got nothing at all - while the Budget Tracker, reading the SAME cache
-without sync=true, was full. That is why the projects were missing from the
-Variations tracker and the Variation Builder but present everywhere else.
+That ran BEFORE the dashboard cache lookup and before the project register
+fallback. So on a tenant without Xero every project page answered "Project
+not found" no matter how complete its data was - and clicking a project name
+from Project Financials is exactly that request.
 
-The seeded data was never wrong: the projects carry status 'INPROGRESS',
-which is exactly what the dropdown filters on.
+The file already argues the opposite case forty lines further down, for a
+project whose Xero tracking option has been deleted:
+
+    "we still hold its applications, contracted rates, variations and
+     retention, so the page must still open"
+
+Same reasoning applies when the ACCOUNTING is absent rather than the tracking
+option. The guard was written when Xero was always there.
 
 
 THE FIX
 ================================================================================
-The cache is now used when sync=true AND there is nothing to sync from. A
-sync that cannot happen is not a reason to withhold data we already hold.
-
-With tokens present nothing changes, so Rock still re-syncs on demand exactly
-as before.
-
-Same shape as 996, and worth naming as a pattern: three separate faults this
-evening have been the app refusing to serve something it had, because the
-thing that would normally refresh it was absent. On a single-tenant app with
-Xero permanently connected, "no tokens" only ever meant "broken". With a
-second tenant it means "not applicable", and those want opposite behaviour.
+No tokens is no longer a refusal. The route resolves the project from the
+dashboard cache, then from projects:registry, exactly as it already did. The
+Xero category lookup - the only step that genuinely needs a connection - is
+now skipped rather than attempted, and "no tenant id" is a 500 only when
+there ARE tokens, because a connection without one is broken while no
+connection at all is simply a customer who does not use Xero.
 
 
-THIS MAY ALSO FIX
+THE PATTERN, NOW WORTH WRITING DOWN
 ================================================================================
-"Project not found" when clicking a project name on Project Financials. That
-page may well be on the same 401 path. Worth re-testing after this rather
-than my guessing - if it still fails, tell me and I will trace it properly
-rather than assume this covered it.
+Three faults this evening, all the same:
+
+  996  28 routes deleted a cache nothing could rebuild
+  997  dashboard.js refused the cache when asked to sync without tokens
+  998  the project route refused before ever reading the cache
+
+On a single-tenant app with Xero permanently connected, "no tokens" only ever
+meant BROKEN. With a second tenant it means NOT APPLICABLE, and those want
+opposite behaviour. Every remaining `if (!tokens) return 401` is a candidate.
+I checked: three others remain, in business-financials.js, dashboard.js (the
+genuine sync path, correct) and sync-chart-of-accounts.js. The first is worth
+looking at when Business Financials gets its data.
 
 
-THE REST OF YOUR SWEEP - WHERE EACH ONE STANDS
+ONE THING THAT IS NOT A BUG
 ================================================================================
-CONTRACTED RATES, "no DESCRIPTION column". Not a demo data gap.
-lib/contractRatesParser.js is hardcoded to Rock's spreadsheet - tab name,
-header detection and eight column positions. Any other workbook is rejected.
-It is on the outstanding list as the contracted-rates mapping profile, and it
-needs a real piece of work, not a seed. For Friday: do not upload anything on
-that screen. The "not locked (15 live projects)" banner is that same parser
-never having succeeded.
+Your retention release ticks, and anything else you set by hand, went because
+you WIPED. retention:entries is in DEMO_KEY_PREFIXES, so a re-seed
+regenerates every record and discards what you had marked.
 
-PAYMENT CLAIM, "Hi Company Name" instead of the contact's first name. Real,
-small, and I have not touched it yet - I want to read the greeting logic
-before changing it rather than guess at which field it should use.
-
-COMMERCIAL SCORECARD. Gross Margin reads from the Xero P&L; Weekly and
-Monthly Commercial Tasks read tick history; Weekly Project Reports needs
-labour allocated on the Gantt; Average Days Beyond Terms needs paid-on dates
-that Xero's list endpoint omits - it says so on the card itself. Some of
-those are seedable, some are structurally Xero. That is its own piece of
-work, and after 995 it is also the page where hiding what does not apply is
-the honest answer.
+Nothing in the app is losing your work. But it does mean: once the sweep is
+finished, stop re-seeding. Anything you set up for the demo only survives
+until the next wipe.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Variations: the Add Variation project dropdown has projects.
-2. Demo Variation Builder: same.
-3. Demo Project Financials: click a project name.
-4. ROCK: open Variations and confirm the dropdown still lists live projects,
-   and that a manual re-sync still pulls fresh figures.
+1. Demo Project Financials: click a project name. It opens.
+2. The page carries its applications, variations, retention and costs.
+3. ROCK: open a project the same way. Unchanged - it has tokens, so every
+   step runs exactly as before, including the Xero category lookup.

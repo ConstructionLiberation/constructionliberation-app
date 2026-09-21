@@ -9,19 +9,37 @@ async function handler(req, res) {
   const { id } = req.query
 
   try {
+    // NO ACCOUNTING CONNECTION IS NOT THE SAME AS NO PROJECT.
+    //
+    // This returned 401 here, before the dashboard cache and the project
+    // register below had been consulted at all - so on a tenant without Xero
+    // every project page answered "Project not found", however complete its
+    // data was. Clicking a project name from Project Financials is exactly
+    // that request.
+    //
+    // The comment forty lines down already argues the point for a different
+    // case: "we still hold its applications, contracted rates, variations and
+    // retention, so the page must still open". The same is true when the
+    // ACCOUNTING is absent rather than the tracking option.
+    //
+    // Third instance tonight of refusing to serve what we already hold
+    // because the thing that would refresh it is missing. See pkg996 and 997.
     let tokens = await getTokens()
-    if (!tokens) return res.status(401).json({ error: 'Not connected to Xero' })
 
-    try {
-      const newTokens = await refreshXeroToken(tokens.refresh_token)
-      tokens = { ...tokens, ...newTokens }
-      await saveTokens(tokens)
-    } catch (e) {
-      console.error('Token refresh failed:', e.message)
+    if (tokens) {
+      try {
+        const newTokens = await refreshXeroToken(tokens.refresh_token)
+        tokens = { ...tokens, ...newTokens }
+        await saveTokens(tokens)
+      } catch (e) {
+        console.error('Token refresh failed:', e.message)
+      }
     }
 
-    const tenantId = tokens.tenant_id
-    if (!tenantId) return res.status(500).json({ error: 'No tenant ID' })
+    const tenantId = tokens ? tokens.tenant_id : null
+    // Only a fault when there ARE tokens: a connection with no tenant id is
+    // broken. No connection at all is a tenant that does not use Xero.
+    if (tokens && !tenantId) return res.status(500).json({ error: 'No tenant ID' })
 
     const redis = await getClient()
 
@@ -49,7 +67,7 @@ async function handler(req, res) {
     }
 
     // Fallback: fetch tracking categories from Xero
-    if (!cp) {
+    if (!cp && tokens) {
       try {
         const categoryProjects = await getProjectsFromCategories(tokens.access_token, tenantId)
         const found = categoryProjects.find(p => p.trackingOptionId === id)
