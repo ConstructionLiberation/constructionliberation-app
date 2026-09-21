@@ -1,69 +1,62 @@
-PACKAGE 992 - Glenigan and Actively Chased scored 5 or more
+PACKAGE 993 - why the left half of the strike-rate charts was still empty
 ================================================================================
 
-One file. Complete replacement. INCLUDES 974 and 985-991's seeder changes.
+One file. Complete replacement. INCLUDES 974 and 985-992's seeder changes.
 
   lib/demoSeed.js
 
-991's other two files (crmFieldSchema.js, crmDashboardAdapter.js) are
-unchanged and still needed - deploy them if you have not already.
+991's crmFieldSchema.js and crmDashboardAdapter.js are unchanged and still
+needed. 990's scorecard-crm.js likewise.
 
 
-THE SAME MISTAKE AS THE LOST REASONS
+IT WAS NEVER THE DATES
 ================================================================================
-Both metrics filter on the lead source BY NAME:
+991 widened deals to 20 months and spread decisions from 25% of a deal's
+life. That was necessary and it did not fix the charts, because the problem
+was never WHEN deals were decided - it was HOW FEW were.
 
-    scoredFiveFor('glenigan')         -> getLeadSource(d).includes('glenigan')
-    scoredFiveFor('actively chased')
+    status = stage === 'stage_mc_secured' ? 'won' : (r() < 0.12 ? 'lost' : 'open')
 
-The seeder was writing:
+38 decided deals out of 190. About thirteen per estimator, spread across
+fifteen months. Strike rate and value secured are computed over a ROLLING SIX
+MONTHS, so most windows contained nothing at all and there was simply no
+point to plot. Dating them further back moved the gap; it could not close it.
 
-    Referral | Tender list | Repeat client | Website | Cold approach
-
-Plausible words. NONE of them an option in lib/crmFieldSchema.js, which
-offers Glenigan / Website New Build / Website Refurb / Actively Chased /
-Other. So the dropdown on a deal showed one set and the data held another,
-and neither metric could ever match.
-
-Now weighted so both carry volume: four parts Glenigan, three Actively
-Chased, three Website, one Other. Checked against the schema - every value is
-a real option.
+Counted it rather than assuming: 19 won, 19 lost, 152 open.
 
 
-AND A SECOND CONDITION NOBODY COULD HAVE SEEN
+TWO CHANGES, BOTH OF WHICH ARE ALSO MORE HONEST
 ================================================================================
-Those metrics also need a score of five or more:
+1. STATUS DEPENDS ON AGE AND STAGE. A twenty-month-old deal still sitting
+   open is not something a real pipeline contains. Late-stage deals over
+   three months old mostly convert; early-stage deals over six months old
+   quietly die; recent ones stay open.
 
-    const score = parseInt(d.label)      // d.label <- f.project_score
+2. THE STAGE DISTRIBUTION IS WEIGHTED. Picking uniformly from fourteen
+   stages put only 4/14 of deals somewhere that could be won. Early stages
+   still hold the most deals, but MC Secured and Negotiating now carry the
+   volume a converting pipeline has.
 
-project_score was never seeded, so every score was NaN and both metrics would
-have read 0 even with the lead source fixed. Two conditions, one metric, and
-fixing either alone changes nothing on screen - which is exactly how the last
-three packages went.
+Result, checked across three different seeds so it is not one lucky run:
 
-Seeded 3 to 10, skewed away from the bottom: a project nobody rates above 4
-is not one anybody chases.
+    ~31 won, ~72 lost, ~87 open       strike rate 29-30%
 
+Deliberately near the 25% target rather than comfortably above it. A first
+pass came out at 39%, which made every card green in every month - and a
+scorecard that is green everywhere demonstrates nothing about the scorecard.
+Now some months beat the target and some miss.
 
-STILL BLANK, AND CORRECTLY SO
-================================================================================
-"Emails sent externally" reads /api/email-volume, which is fed by the
-Microsoft Graph sync. Demo has msSyncGroup empty, so there is nothing to
-report and the card shows a dash rather than a zero - the distinction the
-scorecard draws between "no data" and "none".
-
-Seeding a number there would invent a figure rather than demonstrate a
-feature, which is the opposite of what the rest of the demo does. Leave it,
-and say what it is if asked: it comes from the mailbox sync, which is not
-connected on the demo tenant.
+Wins land in eleven separate months, so every rolling six-month window on the
+chart has something in it - which is what actually draws the left-hand half.
 
 
 SMOKE TEST
 ================================================================================
 After deploying and re-seeding:
-1. Sales scorecard, Marama Tait: Glenigan scored 5+ and Actively Chased
-   scored 5+ have figures.
-2. Open a CRM deal: Lead Source shows one of the five real options, and
-   Project Score is set.
-3. Sales Dashboard, the Lead source filter: the dropdown and the data agree.
-4. Emails sent externally stays as a dash. That one is correct.
+1. Strike rate (overall) and Total value of work secured: points from the
+   left edge of the chart, not from March.
+2. A mix of green, amber and red across the months rather than all green.
+3. The pipeline board still looks like a pipeline - more deals in the early
+   columns than the late ones.
+4. Lost deals still carry a Lost Reason, and there are now noticeably more of
+   them, so the Lost Reasons chart gets a better spread too.
