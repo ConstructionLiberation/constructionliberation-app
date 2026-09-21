@@ -21,7 +21,7 @@ export default function ApplicationsPage() {
   // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
   // useFormat(), which is a hook, so it lives here instead. Same shape as
   // before, so every call site below is unchanged.
-  const { money } = useFormat()
+  const { money, companyName: brand } = useFormat()
   const fmt = (n) => money(Number(n) || 0)
   const [projects, setProjects] = useState([])
   const [projectId, setProjectId] = useState('')
@@ -270,7 +270,7 @@ export default function ApplicationsPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Applications · v29</title></Head>
+      <Head><title>{brand ? `${brand} - Applications · v29` : 'Applications · v29'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
         <CommercialNav active="/applications" />
         {/* Full width. 1280 was fine when this was two blocks side by side; with three

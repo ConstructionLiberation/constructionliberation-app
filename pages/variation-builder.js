@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import PreContractNav from '../components/PreContractNav'
@@ -11,6 +12,7 @@ import VariationBuilder from '../components/VariationBuilder'
 // one raised there: same numbering off the tracker, same workings, same PDF, same
 // instruction link.
 export default function PreContractVariationBuilder() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [projects, setProjects] = useState([])
@@ -48,7 +50,7 @@ export default function PreContractVariationBuilder() {
 
   return (
     <>
-      <Head><title>Variation Builder · Rock Roofing</title></Head>
+      <Head><title>{brand ? `Variation Builder · ${brand}` : 'Variation Builder'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
         <PreContractNav active="variation-builder" />
         <div style={{ padding: 24 }}>

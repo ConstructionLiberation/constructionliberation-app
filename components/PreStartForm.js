@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useFormat } from './TenantProvider'
 import { compressImage } from '../lib/compressImage'
 import { PRESTART_SECTIONS as DEFAULT_SECTIONS } from '../lib/preStartSchema'
 import { INK, GOLD, Loading, EmptyCard, primaryBtn, ghostBtn, linkBtn, inp2, fmtDateTime, AutoTextarea } from './opsUI'
@@ -302,6 +303,7 @@ function ResolvedRow({ resolved, comments }) {
 }
 
 function FieldRow({ field, value, editing, team, supervisors = [], custAttendees = [], ihmDocs, onView, onChange, onDismissIhm }) {
+  const { companyName: brand } = useFormat()
   const { type, label, help } = field
 
   if (type === 'qrow') {
@@ -362,7 +364,7 @@ function FieldRow({ field, value, editing, team, supervisors = [], custAttendees
                 <button onClick={() => onChange(rows.filter((_, j) => j !== i))} style={{ ...ghostBtn, flexShrink: 0 }}>Remove</button>
               </div>
             ))}
-            <button onClick={() => onChange([...rows, { role: '', name: '', email: '', phone: '' }])} style={ghostBtn}>+ Add Rock Roofing attendee</button>
+            <button onClick={() => onChange([...rows, { role: '', name: '', email: '', phone: '' }])} style={ghostBtn}>+ Add {brand} attendee</button>
           </>
         )}
       </div>
@@ -452,7 +454,7 @@ function FieldRow({ field, value, editing, team, supervisors = [], custAttendees
                     const n = [...rows]; n[i] = { ...r, responsible: e.target.value, responsibleLabel: opt ? opt.label : '', responsibleKind: opt ? opt.kind : '' }; onChange(n)
                   }} style={{ ...inp2, flex: '1 1 220px' }}>
                     <option value="">Person responsible…</option>
-                    {portalOpts.length > 0 && <optgroup label="Rock Roofing (portal users)">{portalOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>}
+                    {portalOpts.length > 0 && <optgroup label={`${brand} (portal users)`}>{portalOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>}
                     {custOpts.length > 0 && <optgroup label="Customer (in the meeting)">{custOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>}
                   </select>
                   <button onClick={() => onChange(rows.filter((_, j) => j !== i))} style={{ ...ghostBtn, flexShrink: 0 }}>Remove</button>

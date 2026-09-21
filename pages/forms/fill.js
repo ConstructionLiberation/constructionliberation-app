@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import { Shell, bigBtn } from './index'
 import { compressImage } from '../../lib/compressImage'
@@ -6,6 +7,7 @@ import { compressImage } from '../../lib/compressImage'
 const INK = '#1a1a19', BRAND = '#ca8a04'
 
 export default function Fill() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const { form: formId, project: projectParam, sendCustomer } = router.query
   const [submittedId, setSubmittedId] = useState(null)
@@ -274,7 +276,7 @@ export default function Fill() {
           ) : (
             <p style={{ color: '#555', fontSize: 15, lineHeight: 1.5 }}>
               Thank you for submitting the {form.title} form{selectedProject ? ` for ${selectedProject.name || selectedProject.projectName || ''}` : ''}.
-              {' '}Please ensure you call your Rock Roofing Contracts Manager if there is anything that needs to be resolved urgently.
+              {' '}Please ensure you call your {brand} Contracts Manager if there is anything that needs to be resolved urgently.
             </p>
           )}
           {flags.length > 0 && (

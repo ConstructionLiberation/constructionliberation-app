@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { compressImage } from '../../lib/compressImage'
 import { useRouter } from 'next/router'
 import { Shell, bigBtn } from './index'
@@ -8,6 +9,7 @@ const BRAND = '#ca8a04'
 const ISSUE_TYPES = ['Design', 'Quality', 'Health & Safety', 'Delay / Programme', 'Deliveries / Materials', 'Water ingress', 'Damage to our works', 'Interface issue', 'Access', 'Weather', 'Customer / Main Contractor', 'Workmanship', 'Other']
 
 export default function RaiseIssue() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [projects, setProjects] = useState([])
@@ -82,7 +84,7 @@ export default function RaiseIssue() {
       <div style={{ textAlign: 'center', padding: '48px 16px' }}>
         <div style={{ fontSize: 54 }}>✅</div>
         <h2 style={{ color: INK, margin: '12px 0 4px' }}>Issue raised</h2>
-        <p style={{ color: '#777', fontSize: 14, lineHeight: 1.5 }}>Thank you for raising this issue. Please call your Rock Roofing Contracts Manager if it needs to be resolved urgently.</p>
+        <p style={{ color: '#777', fontSize: 14, lineHeight: 1.5 }}>Thank you for raising this issue. Please call your {brand} Contracts Manager if it needs to be resolved urgently.</p>
         <button onClick={() => router.push('/forms')} style={{ ...bigBtn(false), marginTop: 20 }}>Back to home</button>
       </div>
     </Shell>

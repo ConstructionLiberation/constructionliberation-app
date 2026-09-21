@@ -328,7 +328,7 @@ export default function RetentionPage() {
   // term('vat') gives VAT for a UK tenant and GST for NZ and AU. It is marked
   // STATUTORY in lib/terms.js - the WORD maps, the TAX does not - so it is
   // used for labels here and nothing is computed from it.
-  const { money, currencySymbol, term } = useFormat()
+  const { money, currencySymbol, term, companyName: brand } = useFormat()
   const fmt = (n) => (n == null || n === '' ? '\u2014' : money(n))
   const fmtC = (n) => money(n || 0)
   const [entries, setEntries] = useState([])
@@ -975,7 +975,7 @@ export default function RetentionPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Retention Tracker</title></Head>
+      <Head><title>{brand ? `${brand} - Retention Tracker` : 'Retention Tracker'}</title></Head>
       {/* THE PAGE ITSELF DOES NOT SCROLL.
           Measuring the table's height was not enough on its own: while the page could
           scroll, scrolling down moved the box - and its horizontal bar - out of view,

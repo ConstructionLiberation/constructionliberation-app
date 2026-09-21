@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useFormat } from '../../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { useDesignProjectAuth, DesignNav, INK } from '../../../lib/designShell'
@@ -9,6 +10,7 @@ const BRAND = '#1c704f'   // Rock Roofing green (O&M accents)
 const fmtDateTime = (ts) => ts ? new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
 
 export default function OMsPage() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const projectNo = router.query.project ? String(router.query.project) : ''
   const auth = useDesignProjectAuth(projectNo)
@@ -52,7 +54,7 @@ export default function OMsPage() {
       const lines = []
       if (readiness.warnings && readiness.warnings.length) lines.push('Still to be marked Construction Issue:\n  - ' + readiness.warnings.join('\n  - '))
       if (readiness.missing && readiness.missing.length) lines.push('Missing sections (nothing to include):\n  - ' + readiness.missing.join('\n  - '))
-      const msg = 'The O&M Manual may not be ready to compile.\n\n' + lines.join('\n\n') + '\n\nPlease check with your Rock Roofing Design Manager that the O&Ms are ready to be compiled.\n\nBuild anyway?'
+      const msg = 'The O&M Manual may not be ready to compile.\n\n' + lines.join('\n\n') + `\n\nPlease check with your ${brand} Design Manager that the O&Ms are ready to be compiled.\n\nBuild anyway?`
       if (!confirm(msg)) return
     } else if (manual && !confirm('Rebuild the O&M Manual? This replaces the current version.')) {
       return
@@ -121,7 +123,7 @@ export default function OMsPage() {
             <div style={{ fontWeight: 800, marginBottom: 6 }}>&#9888; Check before compiling</div>
             {readiness.warnings && readiness.warnings.map((w, i) => <div key={`w${i}`} style={{ marginTop: 2 }}>&bull; {w}</div>)}
             {readiness.missing && readiness.missing.length > 0 && <div style={{ marginTop: 2 }}>&bull; No documents yet for: {readiness.missing.join(', ')}</div>}
-            <div style={{ marginTop: 8, fontWeight: 600 }}>Please check with your Rock Roofing Design Manager that the O&amp;Ms are ready to be compiled. Only Construction Issue documents are included.</div>
+            <div style={{ marginTop: 8, fontWeight: 600 }}>Please check with your {brand} Design Manager that the O&amp;Ms are ready to be compiled. Only Construction Issue documents are included.</div>
           </div>
         )}
 

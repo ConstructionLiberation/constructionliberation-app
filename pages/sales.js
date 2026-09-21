@@ -56,7 +56,7 @@ function calcTrendline(data, key) {
 }
 
 export default function Dashboard() {
-  const { money, currencySymbol } = useFormat()
+  const { money, currencySymbol, companyName: brand } = useFormat()
   const fmt = (n) => (n == null ? '\u2014' : money(n, { dp: 0 }))
   const lastMonth = getLastMonthRange()
   const [page, setPage] = useState('Deals Researched')
@@ -1266,7 +1266,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Sales Dashboard</title></Head>
+      <Head><title>{brand ? `${brand} - Sales Dashboard` : 'Sales Dashboard'}</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
         <PreContractNav active="sales">
           {lastSync && <span style={{ color: '#555', fontSize: 12 }}>Last sync: {shortDate(lastSync)}</span>}

@@ -118,7 +118,7 @@ export default function Dashboard() {
   // before, so every call site below is unchanged.
   // Column headings and helper text carried a literal pound sign while the
   // figures under them came from money(). The symbol comes from the same feed.
-  const { money, currencySymbol } = useFormat()
+  const { money, currencySymbol, companyName: brand } = useFormat()
   const fmt = (n) => (n == null ? '\u2014' : money(n))
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -404,7 +404,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Budget Tracker</title></Head>
+      <Head><title>{brand ? `${brand} - Budget Tracker` : 'Budget Tracker'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
 
         {/* Nav — slim version when embedded in iframe: controls only, no portal links */}

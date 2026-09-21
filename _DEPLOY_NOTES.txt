@@ -1,92 +1,83 @@
-PACKAGE 970 - GST instead of VAT, on the retention tracker
+PACKAGE 971 - the branding I said was finished, and was not
 ================================================================================
 
-One file. Complete replacement.
+Ten files. Complete replacements. Mind the folders.
 
+  pages/forms/fill.js
+  pages/forms/issue.js
+  pages/design/[project]/oms.js        <- literal square brackets
+  components/PreStartForm.js
+  pages/project-financials.js
+  pages/variation-builder.js
+  pages/applications.js
+  pages/sales.js
+  pages/commercial.js
   pages/retention.js
 
-THE FIRST CONSUMER OF term(). lib/terms.js has existed since pkg937 with
-nothing reading it - the same shape as logoUrl() before 955.
+pages/retention.js INCLUDES 970. If you have not deployed 970 yet, this file
+supersedes it - do not paste the older one afterwards.
 
 
-SMALLER THAN EXPECTED, AND THAT IS A FINDING
+WHAT I GOT WRONG
 ================================================================================
-OUTSTANDING-6 said GST was "applications and the retention tracker".
-pages/applications.js has NO user-visible VAT string at all. Every one is on
-the retention tracker. So this is the whole of the GST job on the demo
-screens, not half of it.
+After 966 I told you the client-side branding was done apart from two print
+builders. A proper sweep of every page and component finds FORTY-FIVE live
+references across roughly thirty-five files.
+
+The reason is simple and worth recording: I only ever fixed the files I
+happened to have open for something else. Every package from 960 onward went
+through a page for currency and left its <Head><title> alone. The sweep was
+never a sweep - it was a side effect of other work, and I reported it as
+though it had been systematic.
 
 
-WHAT CHANGED - ELEVEN LABELS
+WHAT IS IN THIS ONE - THE THINGS PEOPLE READ
 ================================================================================
-Two column headings (VAT, VAT Type), six tooltips, the mixed-treatment
-warning, and four labels in the add/edit form. All now term('vat'), which
-returns VAT for a UK tenant and GST for NZ and AU.
+Four are real sentences shown to someone who is not the customer's own staff:
+
+  forms/fill.js     "call your Rock Roofing Contracts Manager" - an operative,
+                    on a phone, after submitting a form
+  forms/issue.js    the same, on the issue confirmation screen
+  design/oms.js     "check with your Rock Roofing Design Manager" - twice,
+                    one of them in the Design portal a CUSTOMER logs into
+  PreStartForm      "+ Add Rock Roofing attendee" and a dropdown group headed
+                    "Rock Roofing (portal users)"
+
+Six are tab titles on the pages a demo would actually open: Project
+Financials, Variation Builder, Applications, Sales Dashboard, Budget Tracker,
+Retention Tracker.
 
 
-WHAT DELIBERATELY DID NOT CHANGE, AND WHY IT MATTERS
+WHAT IS LEFT - ABOUT TWENTY-FIVE, ALL TITLES
 ================================================================================
-1. The SPREADSHEET COLUMN at lines 463-464:
+admin, application-calendar, commercial-email-templates, commercial-scorecard,
+lessons-learnt, negotiating, procurement-savings, scorecard, scorecard-crm,
+sales-crm, business-financials and nine pages beneath it. All the same shape.
+That is 972 and it is dull, which is why it went unnoticed.
 
-       pick(r, 'VAT Type', 'vatRateLabel')
+Three are NOT titles and need decisions rather than a sweep:
 
-   That is the literal header in the Xero CSV being imported. Renaming it
-   would break the import for every existing file, and it is not a label -
-   nobody sees it.
-
-2. The DROPDOWN VALUES: '20%', '5%', '0% reverse charge', 'No VAT', 'Mixed'.
-   These are STORED on the record as vatRateLabel and parsed back into a rate
-   by parseVatRate(). Changing 'No VAT' to 'No GST' would change stored data
-   and stop the parser recognising its own values. They are data wearing the
-   appearance of labels, which is exactly the trap term() is easy to fall
-   into.
-
-   It also means an NZ tenant sees a heading that says GST above a dropdown
-   offering 20% and 5% - UK rates. That is honest rather than tidy: the rates
-   come from their Xero, and pretending otherwise would be worse. Making the
-   list locale-aware is a real change, not a relabel.
-
-3. Nothing COMPUTES from term('vat'). The word maps; the tax does not.
-   lib/terms.js marks this entry statutory with that note attached.
+  VariationBuilder      "Rock Roofing Limited" on a contractual document.
+                        legalName, still unanswered.
+  outstanding-invoices  '[Rock Roofing QS Name]' is a deliberate legacy merge
+                        token kept so customers' saved templates keep working.
+                        Leave it.
+  operations/forms.js,  the two print-window builders. Different shape.
+  operations/projects.js
 
 
 CHECKED
 ================================================================================
-- term() mapped to its enclosing component: RetentionPage 7 uses, EntryForm 4,
-  both declared. Run with the CORRECTED scanner - the one that knows about
-  `export function`.
-- Compiles and bundles clean.
+- Every `brand` mapped to its enclosing component and matched against the
+  declarations, with the CORRECTED scanner. Ten files, all clean.
+- All ten compile and bundle for the browser.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo retention: the two column headings read GST and GST Type, and the
-   tooltips behind them say GST.
-2. Demo: add or edit an entry - "(ex-GST)", "GST Type", "Manual GST".
-3. Rock: every one of those still reads VAT.
-
-
-PAYMENT CLAIM - I HAVE NOT DONE THIS AND IT NEEDS YOUR DECISION
-================================================================================
-term('application') maps to "payment claim" for NZ, and it is the change WPC
-would notice most. But the word appears in three quite different places:
-
-  ON SCREEN    the Commercial nav item, page headings, table labels
-  IN THE PDF   the document title on what you send a client
-  IN EMAILS    the subject line and body of the covering email
-
-The screen is a relabel and safe. THE PDF AND THE EMAIL ARE NOT. Under the
-NZ Construction Contracts Act a payment claim has prescribed content - it
-must state that it is made under the Act, and for residential work it must
-carry the prescribed outline of process. A document headed "Payment Claim"
-that does not do those things is worse than one headed "Application for
-Payment", because it looks like it is claiming a statutory status it has not
-earned. That is precisely what the statutory flag in lib/terms.js is warning
-about.
-
-My recommendation: relabel the SCREEN only, and leave the PDF and email in
-British wording until someone who knows the Act has looked at the document
-itself. Tell WPC that, in those words - it reads as competence rather than a
-gap.
-
-Say which and I will build it.
+1. Demo Site App: submit a form, and raise an issue. The confirmation text
+   should name Demo, not Rock Roofing. These are the two an operative reads.
+2. Demo Design portal, a project's O&M page - the compile warning.
+3. Demo Pre-Start form - the "+ Add ... attendee" button.
+4. Tab titles on the five commercial pages.
+5. Rock: all of it unchanged.
