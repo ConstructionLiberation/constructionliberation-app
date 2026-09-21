@@ -1,62 +1,67 @@
-PACKAGE 993 - why the left half of the strike-rate charts was still empty
+PACKAGE 994 - the Glenigan cards stop being dated to Rock's history
 ================================================================================
 
-One file. Complete replacement. INCLUDES 974 and 985-992's seeder changes.
+Three files. Complete replacements. scorecard-crm.js includes 990's changes.
 
-  lib/demoSeed.js
+  pages/api/tenant-brand.js
+  components/TenantProvider.js
+  pages/scorecard-crm.js
 
-991's crmFieldSchema.js and crmDashboardAdapter.js are unchanged and still
-needed. 990's scorecard-crm.js likewise.
+NO RE-SEED NEEDED. This is code and one record field.
 
 
-IT WAS NEVER THE DATES
+WHY ONLY TWO MONTHS HAD A LINE
 ================================================================================
-991 widened deals to 20 months and spread decisions from 25% of a deal's
-life. That was necessary and it did not fix the charts, because the problem
-was never WHEN deals were decided - it was HOW FEW were.
+pages/scorecard-crm.js line 66:
 
-    status = stage === 'stage_mc_secured' ? 'won' : (r() < 0.12 ? 'lost' : 'open')
+    const GLENIGAN_TRACKING_FROM = '2026-08-01'
+    ...
+    const measured = monthKey(GLENIGAN_TRACKING_FROM) <= m
+    const gs = measured ? gleniganScored5 : null
 
-38 decided deals out of 190. About thirteen per estimator, spread across
-fifteen months. Strike rate and value secured are computed over a ROLLING SIX
-MONTHS, so most windows contained nothing at all and there was simply no
-point to plot. Dating them further back moved the gap; it could not close it.
+Every month before August 2026 is marked UNMEASURED and returns null, which
+the chart draws as nothing at all - not as a zero. So the card correctly
+showed 2 and 8 for the only two months it considered measurable.
 
-Counted it rather than assuming: 19 won, 19 lost, 152 open.
+That date is the month ROCK started scoring Glenigan leads. Hardcoded in the
+page, exactly like ESTIMATORS was, and meaningless on any other tenant.
+
+Worth noting the gate itself is right and deliberate: the comment next to
+Actively Chased says it was NOT gated and therefore "reported 0 for months
+the CRM never measured", which is worse than reporting nothing. The fault is
+the date being one customer's, not the gating.
 
 
-TWO CHANGES, BOTH OF WHICH ARE ALSO MORE HONEST
+THE FIX
 ================================================================================
-1. STATUS DEPENDS ON AGE AND STAGE. A twenty-month-old deal still sitting
-   open is not something a real pipeline contains. Late-stage deals over
-   three months old mostly convert; early-stage deals over six months old
-   quietly die; recent ones stay open.
+gleniganTrackingFrom is now an optional field on the tenant record, carried on
+/api/tenant-brand and read through useFormat(). The page falls back to the
+'2026-08-01' constant when a tenant has not set one, so ROCK IS UNCHANGED -
+it has no field, it keeps its date, and its charts look exactly as they do
+today.
 
-2. THE STAGE DISTRIBUTION IS WEIGHTED. Picking uniformly from fourteen
-   stages put only 4/14 of deals somewhere that could be won. Early stages
-   still hold the most deals, but MC Secured and Negotiating now carry the
-   volume a converting pipeline has.
+Both branches of the feed return the field, the no-tenant one as null. A field
+present in one branch and absent in the other is how a client ends up reading
+undefined and nobody notices for a fortnight.
 
-Result, checked across three different seeds so it is not one lucky run:
 
-    ~31 won, ~72 lost, ~87 open       strike rate 29-30%
+ONE RECORD EDIT, ON tenant:demo
+================================================================================
+    "gleniganTrackingFrom": "2025-01-01",
 
-Deliberately near the 25% target rather than comfortably above it. A first
-pass came out at 39%, which made every card green in every month - and a
-scorecard that is green everywhere demonstrates nothing about the scorecard.
-Now some months beat the target and some miss.
+Any date earlier than the seeded data will do - it means "we have been
+tracking this the whole time", which for generated data is true. Then every
+month on those two cards is measured and the chart draws across the full
+range.
 
-Wins land in eleven separate months, so every rolling six-month window on the
-chart has something in it - which is what actually draws the left-hand half.
+Leave it off and demo keeps Rock's August date, which is the behaviour you
+just saw.
 
 
 SMOKE TEST
 ================================================================================
-After deploying and re-seeding:
-1. Strike rate (overall) and Total value of work secured: points from the
-   left edge of the chart, not from March.
-2. A mix of green, amber and red across the months rather than all green.
-3. The pipeline board still looks like a pipeline - more deals in the early
-   columns than the late ones.
-4. Lost deals still carry a Lost Reason, and there are now noticeably more of
-   them, so the Lost Reasons chart gets a better spread too.
+1. /api/tenant-brand on demo returns gleniganTrackingFrom after the record
+   edit.
+2. Demo scorecard: Glenigan scored 5+ and Actively Chased scored 5+ draw
+   across all months instead of the last two.
+3. ROCK scorecard: both cards still start at August 2026. Unchanged.

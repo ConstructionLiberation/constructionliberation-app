@@ -63,6 +63,8 @@ function computeTrendline(data) {
 // When the CRM started recording stage changes and value edits for itself. Months before
 // this have no data behind the three Glenigan metrics - not a score of zero. Move this
 // date if you ever backfill the history properly.
+// Rock's date, kept as the fallback so a tenant that has not set
+// gleniganTrackingFrom on its record behaves exactly as before.
 const GLENIGAN_TRACKING_FROM = '2026-08-01'
 
 function getLeadSource(d) {
@@ -311,7 +313,9 @@ function DrillModal({ title, projects, excluded, isValueChange, isGpMargin, onCl
 }
 
 export default function Scorecard() {
-  const { companyName: brand } = useFormat()
+  const { companyName: brand, gleniganTrackingFrom } = useFormat()
+  // The tenant's own date, or Rock's constant for anyone who has not set one.
+  const gleniganFrom = gleniganTrackingFrom || GLENIGAN_TRACKING_FROM
   const [person, setPerson] = useState('')
   const [deals, setDeals] = useState([])
   const [valueChanges, setValueChanges] = useState([])
@@ -799,7 +803,7 @@ export default function Scorecard() {
     // read 0, which the card then painted red against target. That is a year of failures
     // Edita did not have. Before the start date they are null, which the card already
     // renders as a dash with no rating.
-    const measured = monthKey(GLENIGAN_TRACKING_FROM) <= m
+    const measured = monthKey(gleniganFrom) <= m
     const gr = measured ? gleniganReceived : null
     const gp = measured ? gleniganPriced : null
     const gs = measured ? gleniganScored5 : null

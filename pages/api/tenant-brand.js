@@ -53,6 +53,9 @@ async function handler(req, res) {
       timezone: 'Europe/London',
       currency: 'GBP',
       currencySymbol: '\u00A3',
+      // Same shape both ways - a field present in one branch and absent in the
+      // other is how a client ends up reading undefined and nobody notices.
+      gleniganTrackingFrom: null,
       terms: {},
       resolved: false,
     })
@@ -84,6 +87,16 @@ async function handler(req, res) {
     // because every consumer of lib/businessDate.js is a CLIENT page, so this
     // feed is the only route the value has to the browser.
     timezone: payload.timezone,
+    // WHEN THIS CUSTOMER STARTED SCORING GLENIGAN LEADS.
+    //
+    // pages/scorecard-crm.js had '2026-08-01' hardcoded - the month ROCK began
+    // tracking it - and marks every earlier month UNMEASURED, so those cards
+    // render null rather than zero. Right for Rock, meaningless for anyone
+    // else, and the same shape of fault as the hardcoded estimator names.
+    //
+    // A business fact about one customer, so it belongs on their record. A
+    // tenant that has not set it keeps the old constant, so Rock is unchanged.
+    gleniganTrackingFrom: String((t && t.gleniganTrackingFrom) || '') || null,
     currency: payload.currency,
     currencySymbol: payload.currencySymbol,
     terms: payload.terms,
