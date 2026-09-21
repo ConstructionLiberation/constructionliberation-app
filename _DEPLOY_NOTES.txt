@@ -1,83 +1,78 @@
-PACKAGE 963 - money in CRM and Bookkeeping
+PACKAGE 964 - Rock's logo and name off the demo screens
 ================================================================================
 
-Two files. Complete replacements.
+Eight files. Complete replacements. Note the folder on the last one.
 
   pages/crm.js
+  pages/crm-scores.js
   pages/bookkeeping.js
+  pages/bookkeeping/admin.js
+  pages/wip.js
+  pages/variations.js
+  pages/project-cashflow.js
+  pages/contracted-rates.js
 
-These are the last two demo screens with real seeded data behind them - 190
-deals in the CRM and a full bookkeeping dataset with a September backlog.
 
-
-CRM - ELEVEN COMPONENTS, AND TWO THINGS THAT ARE NOT COMPONENTS
+WHY THIS, AND NOT BUSINESS FINANCIALS
 ================================================================================
-Four separate money formatters: two at module scope (money, money0) and two
-more written again inside CompanyHistoryModal and ContactPanel. Nine
-components now take the hook: ListView, BoardCard, BoardColumn,
-EditableField, EntityTable, CRMPageInner, CompanyHistoryModal, ContactPanel,
-AddProjectModal.
+955 fixed the logo in the four NAV components, which covers most of the
+portal. It did not fix the pages that build their own header - and two of
+those are pages WPC will definitely open. Rock Roofing's actual logo has been
+sitting at the top of demo's CRM and demo's Bookkeeping this whole time,
+above figures we have just spent the day converting to dollars.
 
-Two consumers are NOT components and cannot take a hook, so the formatter is
-threaded in, exactly as resolveMergeFields was in 957:
+That is worth more than an empty Business Financials, and it is the same
+finding as 19 September: the leak is never where the sweep is pointed.
 
-  displayCell(deal, key)  ->  displayCell(deal, key, money)
-
-  historyIcon(t)          ->  historyIcon(t, sym)
-
-historyIcon is worth a word. It is a map of emoji for deal-history events -
-note, call, stage change - and the icon for a VALUE CHANGE was a literal
-pound sign. The one non-emoji glyph in the set. It would have sat there in a
-demo history timeline looking exactly like the thing we spent the day
-removing, and no grep for a formatter would ever have found it.
+Six of these eight I had OPEN in 960, 962 and 963 and changed the currency in
+without touching the title tag. Worth saying plainly - being in the file is
+not the same as looking at it.
 
 
-BOOKKEEPING - AND A CATCH THAT WOULD HAVE THROWN
+WHAT CHANGED
 ================================================================================
-Two components, two formatters: fmt on BookkeepingPage, fmtL on ReconPanel.
+Logos, now <BrandLogo /> from 955:   crm, crm-scores, bookkeeping,
+                                     bookkeeping/admin
+Titles, now the tenant name:         crm-scores, wip, variations,
+                                     project-cashflow (TWICE - the embed
+                                     view has its own), contracted-rates
+Header text beside the logo:         crm-scores, which had the words "Rock
+                                     Roofing" rendered next to the image
 
-The reconciliation chart's Y axis prints its own k-suffix and needed
-currencySymbol. I put it on BookkeepingPage and the axis is in ReconPanel -
-so ReconPanel referenced a variable it had not declared. That compiles and
-bundles perfectly and throws the moment the panel renders. The
-declared-where-used check caught it; nothing else would have.
+Titles follow the login-page pattern: the tenant name, or just the page name
+while the feed is in flight. Never a hardcoded company.
 
 
 CHECKED
 ================================================================================
-- Every identifier mapped to its enclosing component and matched against the
-  declarations. Clean in both files.
-- Every useFormat() is the first line of its component.
-- Both compile and bundle for the browser with no duplicate symbols.
-- One pound sign remains in crm.js, and it is deliberate: the `sym || '£'`
-  fallback inside historyIcon.
+- No rock-logo and no "Rock Roofing" left in any of the eight, apart from one
+  JSX comment in crm.js describing the nav.
+- companyName and currencySymbol mapped to their enclosing components and
+  matched against the declarations. This caught a real one: I used
+  companyName in wip.js's title and left WipPage destructuring only money and
+  currencySymbol. Compiles, bundles, throws on render.
+- All eight compile and bundle clean.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo CRM, board view: deal values on the cards and the column totals -
-   those are two different formatters, money and money0.
-2. Demo CRM, list view: the Value column. That is displayCell, the threaded
-   one.
-3. Demo CRM: open a deal, look at the history timeline. A "value changed"
-   entry should have a $ in its circle, not a £.
-4. Demo CRM: Add Project - the "Value ($)" label.
-5. Demo bookkeeping: the figures, then the reconciliation panel and its
-   chart axis. The axis is the one that would have thrown.
-6. Rock: both pages unchanged.
+1. Demo CRM - the logo at the top left. This is the headline: it was Rock's.
+2. Demo Bookkeeping - same.
+3. Demo CRM Scores - logo AND the company name beside it, plus the tab title.
+4. Browser tab on WIP, Variations, Cash Flow, Contracted Rates.
+5. Cash flow in embed mode (?embed=true) - it has its own <Head> and its own
+   title tag, which is the sort of second copy this sweep keeps finding.
+6. Rock: all eight unchanged, logo and name as before.
 
 
-WHAT IS LEFT, AND ONE THING TO DECIDE
+STILL CARRYING ROCK'S LOGO - 965
 ================================================================================
-Business Financials is NOT in this package, and it is bigger than it looks:
-components/BizNav.js EXPORTS gbp and gbpK, and TWENTY pages import them by
-name. Converting those to a hook means touching all twenty.
+design/index, forms/index, operations/forms, operations/projects, staff,
+upload, upload-transactions, business-financials/export, reset-password,
+rams-approve, instruct/[token].
 
-It is also not seeded. The module is switched on now, but the 48 keys behind
-it are not there, so on Friday those pages render empty whatever currency
-they are in. Seeding it is the decision, and the currency work should follow
-that rather than lead it.
-
-After that the remainder is genuinely cosmetic - scorecards, contracted
-rates, procurement, the upload screens, and two PDF generators - none of
-which have demo data behind them either.
+The last three matter more than they look. reset-password is seen before
+anyone is logged in; rams-approve and instruct/[token] are what a CUSTOMER
+of the tenant sees when they follow a link from an email. A demo tenant
+sending a variation instruction that opens under Rock Roofing's logo is the
+login-page problem again, one layer out.

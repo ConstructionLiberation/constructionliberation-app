@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import BrandLogo from '../../components/BrandLogo'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 
@@ -45,7 +46,7 @@ export default function BookkeepingAdminHub() {
     <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
       <div style={{ background: INK, padding: '0 24px', position: 'sticky', top: 0, zIndex: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', height: 56, gap: 8 }}>
-          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
+          <BrandLogo />
           <Link href="/bookkeeping" style={{ color: '#aaa', fontSize: 13, textDecoration: 'none', padding: '4px 10px' }}>← Bookkeeping</Link>
           <span style={{ color: '#444' }}>|</span>
           <span style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>Bookkeeping Tools</span>

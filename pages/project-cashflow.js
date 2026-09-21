@@ -36,7 +36,7 @@ function cellCount(cell) {
 }
 
 export default function ProjectCashflow() {
-  const { money, currencySymbol } = useFormat()
+  const { money, currencySymbol, companyName } = useFormat()
   const gbp = (n) => money(Number(n) || 0)
   const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
   const [data, setData] = useState(null)
@@ -423,7 +423,7 @@ export default function ProjectCashflow() {
   if (loading || !data) {
     return (
       <>
-        <Head><title>Rock Roofing — Cash Flow</title></Head>
+        <Head><title>{companyName ? `${companyName} - Cash Flow` : 'Cash Flow'}</title></Head>
         <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
           <CommercialNav active="/project-cashflow" />
           <div style={{ padding: 40, color: '#888' }}>Loading planner…</div>
@@ -509,7 +509,7 @@ export default function ProjectCashflow() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Cash Flow</title></Head>
+      <Head><title>{companyName ? `${companyName} - Cash Flow` : 'Cash Flow'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
         <CommercialNav active="/project-cashflow" />
         <div style={{ padding: 20, maxWidth: '100%' }}>

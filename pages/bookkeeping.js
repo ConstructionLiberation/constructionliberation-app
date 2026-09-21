@@ -16,6 +16,7 @@ import ReportImprovementLink from '../components/ReportImprovementLink'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 
 import { useFormat } from '../components/TenantProvider'
+import BrandLogo from '../components/BrandLogo'
 const INK = '#1a1a2e'
 const th = { textAlign: 'left', padding: '10px 12px', fontSize: 11, color: '#777', fontWeight: 600, borderBottom: '2px solid #eee', whiteSpace: 'nowrap' }
 const td = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f2f0ec' }
@@ -320,7 +321,7 @@ export default function BookkeepingPage() {
     <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
       <div style={{ background: INK, padding: '0 24px', position: 'sticky', top: 0, zIndex: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', height: 56, gap: 8, overflowX: 'auto' }}>
-          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
+          <BrandLogo />
           <Link href="/" style={{ color: '#aaa', fontSize: 13, textDecoration: 'none', padding: '4px 10px' }}>← Portal</Link>
           <span style={{ color: '#444' }}>|</span>
           <span style={{ color: '#fff', fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap' }}>Bookkeeping</span>

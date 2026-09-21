@@ -195,7 +195,7 @@ export default function VariationTracker() {
   // before, so every call site below is unchanged.
   // Column headings and helper text carried a literal pound sign while the
   // figures under them came from money(). The symbol comes from the same feed.
-  const { money, currencySymbol } = useFormat()
+  const { money, currencySymbol, companyName } = useFormat()
   const fmt = (n) => (n == null || n === '' || isNaN(n) ? '\u2014' : money(parseFloat(n)))
   const router = useRouter()
   const isEmbed = router.query.embed === 'true'
@@ -491,7 +491,7 @@ const [addForm, setAddForm] = useState({ ...NEW_VARIATION })
 
   return (
     <>
-      <Head><title>Rock Roofing — Variation Tracker</title></Head>
+      <Head><title>{companyName ? `${companyName} - Variation Tracker` : 'Variation Tracker'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
 
         {/* Nav */}

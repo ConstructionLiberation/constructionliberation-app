@@ -12,6 +12,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useFormat } from '../components/TenantProvider';
+import BrandLogo from '../components/BrandLogo';
 import * as XLSX from 'xlsx';
 import { upload } from '@vercel/blob/client';
 import { mapPipedriveRows, mapOrganizationRows, mapPeopleRows, mapActivityRows, mapNoteRows, groupByDeal, detectExportType } from '../lib/crmImportMap';
@@ -4471,7 +4472,7 @@ function CRMPageInner() {
       <div style={{ background: C.nav, color: '#fff', padding: '10px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {/* Logo only - the wordmark is in the logo itself, and the Pre-Contract nav
             above does the same, so repeating the name here was redundant. */}
-        <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4, marginRight: 8 }} />
+        <BrandLogo style={{ marginRight: 8 }} />
         {/* Area toggle replaces the old back arrow. Same control as the one on the
             Pre-Contract nav, so it reads the same from either side. */}
         <AreaToggle active="crm" />

@@ -23,7 +23,7 @@ function monthOptions() {
 }
 
 export default function WipPage() {
-  const { money, currencySymbol } = useFormat()
+  const { money, currencySymbol, companyName } = useFormat()
   const fmtC = (n) => money(Number(n) || 0)
   const router = useRouter()
   const [ok, setOk] = useState(false)
@@ -204,7 +204,7 @@ export default function WipPage() {
 
   return (
     <>
-      <Head><title>WIP · Rock Roofing</title></Head>
+      <Head><title>{companyName ? `WIP · ${companyName}` : 'WIP'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
         {/* No nav in the embed - Bookkeeping reaches this through their own tabs, and a
             second navigation bar inside the frame is a way out of the read-only view. */}

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import Head from 'next/head'
+import BrandLogo from '../components/BrandLogo'
+import { useFormat } from '../components/TenantProvider'
 import * as XLSX from 'xlsx'
 
 // ONE-OFF TOOL. Reads the Pipedrive Deals export and writes ONLY the "Label" column
@@ -27,6 +29,7 @@ function pick(row, ...names) {
 }
 
 export default function CrmScoreImport() {
+  const { companyName } = useFormat()
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [preview, setPreview] = useState(null)
@@ -169,11 +172,11 @@ export default function CrmScoreImport() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f7f6f2', fontFamily: 'ui-sans-serif, system-ui, sans-serif', color: INK }}>
-      <Head><title>Rock Roofing — Project Scores</title></Head>
+      <Head><title>{companyName ? `${companyName} - Project Scores` : 'Project Scores'}</title></Head>
 
       <div style={{ background: '#1a1a19', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 17, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />Rock Roofing
+          <BrandLogo />{companyName}
         </span>
         <a href="/crm" style={{ color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '5px 12px', fontSize: 13, textDecoration: 'none' }}>&larr; CRM</a>
       </div>

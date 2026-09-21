@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { projectLabel } from '../lib/variationInstruct'
 import Head from 'next/head'
+import { useFormat } from '../components/TenantProvider'
 import Link from 'next/link'
 import { upload } from '@vercel/blob/client'
 import CommercialNav from '../components/CommercialNav'
@@ -14,6 +15,7 @@ const fmt = (n) => '£' + (Number(n) || 0).toLocaleString('en-GB', { minimumFrac
 const fmtRate = (n) => n == null || n === '' ? '' : (Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function ContractedRatesPage() {
+  const { companyName } = useFormat()
   const [projects, setProjects] = useState([])
   const [projectId, setProjectId] = useState('')
   const [me, setMe] = useState(null)
@@ -617,7 +619,7 @@ export default function ContractedRatesPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Contracted Rates · v16</title></Head>
+      <Head><title>{companyName ? `${companyName} - Contracted Rates · v16` : 'Contracted Rates · v16'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
         <CommercialNav active="/contracted-rates" />
 
