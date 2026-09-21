@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { projectLabel } from '../lib/variationInstruct'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
@@ -7,7 +8,6 @@ import ProjectSearchSelect from '../components/ProjectSearchSelect'
 import ProjectDatesModal from '../components/ProjectDatesModal'
 import { describeApplication, computeApplicationSummary, worksValueToDate, resolveAppDates, buildAppVariations, materialLineTotal, materialValueToDate, isMeasurableWorks } from '../lib/applications'
 
-const fmt = (n) => '£' + (Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (s) => { if (!s) return '—'; const d = new Date(s + (s.length === 10 ? 'T00:00:00' : '')); return isNaN(d) ? s : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 const monthLabel = (key) => {
   const [monthPart, periodNo] = String(key).split('#')
@@ -18,6 +18,11 @@ const monthLabel = (key) => {
 }
 
 export default function ApplicationsPage() {
+  // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
+  // useFormat(), which is a hook, so it lives here instead. Same shape as
+  // before, so every call site below is unchanged.
+  const { money } = useFormat()
+  const fmt = (n) => money(Number(n) || 0)
   const [projects, setProjects] = useState([])
   const [projectId, setProjectId] = useState('')
   const [me, setMe] = useState(null)
@@ -605,6 +610,8 @@ function PctInput({ value, onCommit, width = 58, max = 100, style }) {
 }
 
 function ApplicationEditor({ app: appProp, appNumber, prevGross, prevReleases, isFirstApp, projectId, me, settings = {}, trackerVariations = [], projectPOs = [], hiddenPOs = [], onHiddenPOsChange, onBack, onDelete, onSaved, onVariationChange }) {
+  const { money } = useFormat()
+  const fmt = (n) => money(Number(n) || 0)
   // The application is now EDITABLE state, not a read-only prop. Its dates and period
   // were fixed at creation, so getting the month wrong meant deleting a finished
   // application and doing the whole thing again.
@@ -1229,6 +1236,8 @@ function ApplicationEditor({ app: appProp, appNumber, prevGross, prevReleases, i
 }
 
 function SummaryBlock({ sum, app, prevReleases = null, locked = false, onToggleRelease }) {
+  const { money } = useFormat()
+  const fmt = (n) => money(Number(n) || 0)
   const row = (label, c) => (
     <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
       <td style={{ padding: '8px 12px', fontSize: 13 }}>{label}</td>
@@ -1366,7 +1375,10 @@ function SummaryBlock({ sum, app, prevReleases = null, locked = false, onToggleR
 
 // Pick variations from the project's tracker to add to the application.
 function AddMaterialsModal({ pos, addedPONumbers = [], addedLineKeys = [], hiddenPOs = [], onToggleHide, onClose, onAdd, onAddGroup, onRemove }) {
-  const money = (v) => '£' + (Number(v) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // This component has always had its own `money` rather than using the
+  // page's fmt, so the hook is aliased to avoid shadowing it.
+  const { money: tenantMoney } = useFormat()
+  const money = (v) => tenantMoney(Number(v) || 0)
   const [markups, setMarkups] = useState({})
   const [manual, setManual] = useState({ description: '', qty: '', unit: '', rate: '', markupPct: '' })
   const [showHidden, setShowHidden] = useState(false)

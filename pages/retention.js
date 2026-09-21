@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import * as XLSX from 'xlsx'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
@@ -14,13 +15,11 @@ import { calcRetentionOwed, calcReleaseHalf, released1, released2 } from '../lib
 const TABLE_MIN_WIDTH = 2400
 const naCell = { padding: '8px 10px', whiteSpace: 'nowrap', color: '#bbb', textAlign: 'center' }
 
-const fmt = (n) => n == null || n === '' ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 // Module scope, beside the other formatters. This file has no date formatter of its own
 // and gbp/fmtD live on OTHER pages - referencing one here compiles and then throws on
 // render, which is exactly how the tracker went down a moment ago.
 const fmtD = (iso) => { if (!iso) return '-'; const [y, m, d] = String(iso).split('-'); return `${d}/${m}/${String(y).slice(2)}` }
 
-const fmtC = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)
 
 const EMPTY_ENTRY = {
   ourRef: '', customerName: '', projectName: '', projectValue: '', finalAccount: '',
@@ -321,6 +320,12 @@ function statusBadge(entry) {
 }
 
 export default function RetentionPage() {
+  // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
+  // useFormat(), which is a hook, so it lives here instead. Same shape as
+  // before, so every call site below is unchanged.
+  const { money } = useFormat()
+  const fmt = (n) => (n == null || n === '' ? '\u2014' : money(n))
+  const fmtC = (n) => money(n || 0)
   const [entries, setEntries] = useState([])
   // Read-only embed mode (?embed=1): renders the page content only (cards, table,
   // filters) with NO navigation and no edit controls — for the Bookkeeping Portal.

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { isInstructed } from '../lib/applications'
+import { useFormat } from '../components/TenantProvider'
 import SearchableSelect from '../components/SearchableSelect'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -11,7 +12,6 @@ import { useRouter } from 'next/router'
 // Pence-accurate throughout. Variations are individually small and have to add up to
 // the totals shown, so rounding each to whole pounds made the parts disagree with
 // the sum.
-const fmt = (n) => n == null || n === '' || isNaN(n) ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(n))
 const fmtN = (n) => n == null || n === '' ? 0 : parseFloat(n) || 0
 
 // Display-only: remove a redundant leading job-number from a project name so the
@@ -44,6 +44,8 @@ function nextVarNumber(variations) {
 // during a phone call, and the workings are there when somebody asks how the rate was
 // arrived at - without putting them in front of the customer.
 function ViewVariationModal({ row, onClose }) {
+  // Its own `money` below, never the page's fmt - so the hook is aliased.
+  const { money: tenantMoney } = useFormat()
   const [showWorkings, setShowWorkings] = useState(false)
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -54,7 +56,7 @@ function ViewVariationModal({ row, onClose }) {
   const b = row.builder || {}
   const items = b.items || []
   const nn = (v) => { const x = parseFloat(v); return isNaN(x) ? 0 : x }
-  const money = (v) => '£' + nn(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const money = (v) => tenantMoney(nn(v))
   const total = items.reduce((s, it) => s + nn(it.total), 0)
   const th = { padding: '7px 9px', fontSize: 10.5, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', textAlign: 'left' }
   const td = { padding: '9px 9px', fontSize: 12.5, borderTop: '1px solid #eee', verticalAlign: 'top' }
@@ -188,6 +190,11 @@ function ViewVariationModal({ row, onClose }) {
 }
 
 export default function VariationTracker() {
+  // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
+  // useFormat(), which is a hook, so it lives here instead. Same shape as
+  // before, so every call site below is unchanged.
+  const { money } = useFormat()
+  const fmt = (n) => (n == null || n === '' || isNaN(n) ? '\u2014' : money(parseFloat(n)))
   const router = useRouter()
   const isEmbed = router.query.embed === 'true'
   const [projects, setProjects] = useState([])
