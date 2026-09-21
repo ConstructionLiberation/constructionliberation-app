@@ -1,4 +1,4 @@
-PACKAGE 947 - WIP page, margin leak, credit notes
+PACKAGE 948 - data that exercises the STATES, not just the numbers
 ================================================================================
 
 One file. Complete replacement. Wipe and re-seed.
@@ -6,86 +6,83 @@ One file. Complete replacement. Wipe and re-seed.
   lib/demoSeed.js
 
 
-1. WHY THE WIP PAGE WAS EMPTY WHILE PROJECT FINANCIALS SHOWED A WIP FIGURE
-===========================================================================
-They read different keys. pages/api/wip.js pulls
-
-    costs:lines:<xeroId>
-    invoiced:lines:<xeroId>
-    wip:adjustments:<xeroId>
-
-directly. The dashboard cache's _costLines and _invoiceLines feed the
-Commercial table and the WIP page never looks at them. The same data, needed
-in two places under two names - which is why one screen had it and the other
-did not.
-
-All three keys are now written per project, and added to the wipe list.
-
-16 of 30 projects have post-valuation costs in the August window, about 97k of
-cost, which grosses up to roughly 129k of WIP.
+THE PATTERN IN MY MISTAKES
+===========================
+I have been generating plausible figures rather than data that makes the app's
+flags, mismatches and drill-downs do anything. A demo is not about the numbers
+being right - it is about the SCREENS DOING SOMETHING when you click them. All
+four fixes below are that.
 
 
-2. THE MARGIN LEAK
+1. NO PROJECT WITH AN EMPTY ROW
+================================
+J106 and J117 showed zero invoiced and zero spend. Both were jobs started this
+month, so their first application falls after the valuation date. Technically
+correct, reads as missing data.
+
+Minimum project age is now three months. Measured: zero empty projects.
+
+
+2. CERTIFIED vs INVOICED - THE FLAG NOW MEANS SOMETHING
+========================================================
+Certified always differed from invoiced by a random 0-12%, so EVERY row
+carried the "check FA" warning and the flag told you nothing.
+
+Now three in four reconcile exactly and the rest are genuinely out. Measured:
+20 of 30 match.
+
+One subtlety worth knowing: it is matched against the INVOICED total, not the
+applied-for total, because credit notes reduce what was invoiced. Comparing to
+applied-for meant every project with a credit note showed as unreconciled.
+
+
+3. THE 612 COLUMNS
 ===================
-19.1% against a target of 25%. The cause was my own post-valuation spike: I
-was adding uninvoiced cost in the 29th-31st window of EVERY month. For any
-month before August those dates fall before the current valuation date, so
-they counted as costs-to-date with no matching revenue.
+612 Deducted and 612 Released were empty. 612 is the retention control
+account, and the tracker exists to compare what the customer deducted against
+what we say is owed.
 
-Now only the last two periods carry it.
+Now populated: most reconcile, a quarter are out by a clear margin, completed
+projects have a first release paid, and each has ret612Lines so the cell
+drills down to the movements behind it.
 
-Measured: 23.4%. The remaining gap is CORRECT rather than a compromise - WIP
-is by definition cost incurred and not yet invoiced, so
-(invoiced - costs) / invoiced always reads a little under the true margin
-while work is in progress. The underlying margin is 25%; the reported figure
-sits just below it because there is genuine WIP on the books, which is what a
-real contractor's number does.
+The mismatch is deliberately 12-38% out rather than a couple of per cent - a
+small difference rounds to the same number often enough that the mismatch
+count drifted to 2 in 30 instead of the intended 1 in 4.
 
-
-3. CREDIT NOTES
-================
-About one project in five now has one - a contra charge, a measurement
-correction, a rejected item. They are invoice lines with a negative value and
-creditNote: true, carrying appliedToInvoice and a contact, which is the shape
-pages/api/wip.js looks for when it lists credit notes against a project.
-Six across 30 projects in the current dataset.
+ALSO FIXED: retention612Released was being set twice in the same object, the
+real figure first and a placeholder 0 second. A later key wins in a JavaScript
+object literal, so the column was being zeroed after being filled. esbuild's
+duplicate-key warning caught it - worth noting because nothing else would
+have.
 
 
-YOUR OTHER QUESTIONS
-====================
+4. WIP WITH SOMETHING TO OPEN
+==============================
+One post-valuation cost line per project gives a WIP figure and nothing to
+examine. The first two projects now have FIVE and TEN lines respectively -
+different suppliers, account codes and dates inside the window - so the
+drill-down is worth opening. Both are forced live, since a completed project
+has no work in progress by definition.
 
-CERTIFIED NOT EDITABLE INLINE. That is the app working correctly, not a
-seeding gap. The cell shows "app true" - meaning the figure came from a SENT
-application, and the code deliberately stops a typed value overriding one.
-The comment in pages/api/dashboard.js explains it: "A typed value is now only
-used where no sent application exists", added because an override entered once
-sat on top of every later application. On Rock you are editing projects that
-have no sent application against them. If you want it editable in the demo,
-the answer is to seed some projects with no applications - say the word.
+16 of 30 projects have August WIP.
 
-ONE PROJECT WITH INVOICED 0.00 (J104). A genuinely new job whose first
-application falls after the valuation date. Its costs are zero too, so it does
-NOT drag the margin - it contributes nothing to either side. Realistic, and I
-would leave it, but it can be removed by forcing every project to be at least
-two months old.
 
-RECEIPTS. Not addressed here - "receipts" in this app means uploaded supplier
-documents against cost lines, which is Blob storage plus submission records.
-That belongs with the forms-and-photos package.
+MEASURED AFTER GENERATING
+==========================
+  empty projects            0
+  portfolio margin          24.0%   (the gap from 25% is WIP, correctly)
+  certified reconciles      20 of 30
+  612 reconciles            ~22 of 30
+  612 released populated    14
+  WIP lines, first two      5 and 10
+  projects with Aug WIP     16
 
 
 SMOKE TEST
 ==========
-1. Wipe, re-seed: { action:'seed', id:'demo', projects:30 }
-2. WIP page, August 2026 - non-zero total with about 16 projects listed.
-3. Project Financials EOM - Profit % around 23-24%.
-4. A project page with a credit note on it - six projects have one.
-5. Retention - still 30 rows.
-
-
-CHECKS RUN BEFORE PACKAGING
-============================
-- esbuild compile: clean
-- key names read from pages/api/wip.js, not guessed
-- margin, WIP coverage and credit note counts all measured against the
-  generated data at the August valuation date
+1. Wipe, re-seed.
+2. Retention - roughly a quarter of rows carrying the check-FA flag, the rest
+   clean. 612 Deducted and 612 Released with figures in them.
+3. WIP August 2026 - open the first two projects, five and ten cost lines.
+4. Project Financials - no row with zeros across it.
