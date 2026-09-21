@@ -1,87 +1,67 @@
-PACKAGE 972 - the last of the client-side branding
+PACKAGE 973 - four copies of the same email
 ================================================================================
 
-Twenty files. Complete replacements. Mind the two subfolders.
+One file. Complete replacement.
 
-  pages/admin.js
-  pages/application-calendar.js
-  pages/applications.js                 <- INCLUDES 971's change to this file
-  pages/business-financials.js
-  pages/business-financials/cash-schedule.js
-  pages/business-financials/cashflow.js
-  pages/business-financials/invoice-finance.js
-  pages/business-financials/margin.js
-  pages/business-financials/monthly.js
-  pages/business-financials/retentions-due.js
-  pages/business-financials/vat-refund.js
-  pages/commercial-email-templates.js
-  pages/commercial-scorecard.js
-  pages/lessons-learnt.js
-  pages/negotiating.js
-  pages/operations/project-financials.js
-  pages/procurement-savings.js
-  pages/sales-crm.js
-  pages/scorecard.js
-  pages/scorecard-crm.js
-
-Nineteen tab titles, plus three pieces of text people actually read:
-
-  commercial-email-templates   "Auto-CC Rock Roofing CM"
-  scorecard-crm                "To at least one address outside Rock Roofing"
-  applications                 the APPLICATION EMAIL SIGNATURE - it signed off
-                               "Rock Roofing Ltd" under the sender's name, on
-                               a document sent to a client. Also the recipient
-                               picker's group heading.
+  lib/crmDailyActivityEmail.js
 
 
-THE BUNDLE CHECK EARNED ITS KEEP AGAIN
+YOU WERE RIGHT ABOUT THE CAUSE
 ================================================================================
-I generated these edits from a table, and the relative import depth for the
-business-financials and operations subfolders was written as
+sendNoActivityEmail() builds its recipient list from portal users with the
+role pre-contract or admin, and then LOOPS, sending one email per user.
+Nothing dedupes by address.
 
-    '.../components/TenantProvider'
+On demo the seeder creates three pre-contract estimators - Callum Reid, Sofia
+Marchetti, Dev Patel - all with email DEMO_EMAIL, plus your own admin account
+on the same address. Four recipients, one inbox, four identical emails.
+Exactly the four you saw.
 
-Three dots. Not a path. Eight files.
-
-esbuild compiled every one of them CLEANLY - a single-file compile does not
-resolve imports. Only bundling caught it, and it would have failed the Vercel
-build exactly the way 965 did.
+It is not only a demo artefact. A real customer with a shared estimating@ or
+accounts@ mailbox on two user records gets two copies of every one of these.
 
 
-WHAT IS NOW LEFT, AND IT IS EIGHT LINES IN FIVE FILES
+THE FIX, AND THE SHAPE BEHIND IT
 ================================================================================
-After this the client-side sweep is finished except for:
+Recipients are now deduped on the lowercased, trimmed address. Ran it against
+the seeded shape: five matching users collapse to two distinct addresses, and
+a differently-cased duplicate with a trailing space is caught too.
 
-  VariationBuilder x2    "Rock Roofing Limited" on a contractual document and
-                         "Rock Roofing" above the signature block. Needs
-                         legalName decided, not a relabel.
-  operations/forms.js    the two print-window HTML strings. Different shape -
-  operations/projects.js they need the logo URL, not the component.
-  outstanding-invoices   '[Rock Roofing QS Name]' - LEAVE IT. A legacy merge
-                         token kept so customers' saved templates keep
-                         substituting. Renaming it silently breaks the
-                         templates someone bothered to customise.
-  platform/index.js      an example sender address on a page that 404s.
-  design/oms.js          a comment naming a hex colour.
+lib/ramsNotify.js ALREADY does this - it sends to a list it calls `uniq`. So
+the rule exists in the codebase and simply was not applied here. Nine other
+per-recipient loops have the same shape and no dedupe:
 
-Unrelated, noticed on the way past: components/ContactPicker.js line 106 sets
-`width` twice in one object literal. esbuild's duplicate-key warning. The
-later one wins, so the first is dead - the same shape of fault that was
-zeroing a retention column two days ago. Worth a look, not in this package.
+  pages/api/issue-notify.js
+  pages/api/design-rfis.js
+  pages/api/cron/design-rfi-outstanding.js
+  pages/api/cron/design-rockdrawing-daily.js
+  pages/api/cron/design-techsub-daily.js
+  pages/api/cron/design-calculation-daily.js
+  and the address lists in issue-send-customer and pre-start-notify-send
+
+One rule, eleven places, one of them correct. The proper answer is the shared
+sendEmail() helper that has been on the outstanding list since the start -
+this is one more argument for it. I have fixed the one that is actually
+firing rather than opening all eleven today.
 
 
-CHECKED
+WORTH DECIDING SEPARATELY
 ================================================================================
-- Full repo sweep: eight visible "Rock Roofing" left client-side, all five
-  files listed above, all deliberate.
-- Every `brand` declared in the component that uses it, corrected scanner.
-- All twenty compile AND bundle.
+Even deduped, demo will email you this EVERY DAY: "142 projects with no
+activity set". That is the app working correctly on seeded data where no
+activity dates were ever set.
+
+Three options, none of them code I would write without you choosing:
+  - leave it, and accept one a day from demo
+  - have the seeder set activity dates on most CRM deals, so the figure is
+    small and the screen demonstrates the feature rather than shouting
+  - stop the cron running for demo at all
+
+The second is the best demo, because 142 of 190 with nothing set is not a
+flattering screen for a prospect either.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo: tab titles across Scorecards, Lessons Learnt, Negotiating,
-   Procurement Savings, Admin, and the Business Financials pages.
-2. Demo applications: open the send modal and read the signature block. It
-   should sign off with the tenant name, not Rock Roofing Ltd.
-3. Rock: unchanged everywhere, and the same signature block still correct.
+Tomorrow at 6pm: ONE email from Demo, not four. Rock's is unaffected - its
+users have distinct addresses, so nothing there was ever duplicated.
