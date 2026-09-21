@@ -99,6 +99,11 @@ export default function OperationsNav({ active, section }) {
 }
 
 function SectionTabs({ active, section }) {
+  // SectionTabs is a SEPARATE component from OperationsNav, so the NAV built
+  // there is not in scope here. It built its own, rather than reaching for a
+  // module constant that no longer exists.
+  const { term } = useFormat()
+  const NAV = navFor(term)
   const parent = NAV.find(n => n.key === section && n.children)
   if (!parent) return null
   return (

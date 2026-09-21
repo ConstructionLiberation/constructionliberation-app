@@ -1,70 +1,53 @@
-PACKAGE 978 - the CRM deal that flashes and opens on the second click
+PACKAGE 979 - the fix for 976's build failure
 ================================================================================
 
-One file. Complete replacement.
+ONE file. Complete replacement.
 
-  pages/crm.js          <- SUPERSEDES 963 AND 964's changes to this file
+  components/OperationsNav.js
+
+Everything else from 976, 977 and 978 is already committed and correct - this
+unblocks all of it.
 
 
-WHAT WAS HAPPENING
+WHAT I DID WRONG, AGAIN
 ================================================================================
-Opening a deal does two things:
+976 turned NAV from a module constant into navFor(term), built per render,
+because two of its labels are now glossary terms.
 
-    const openDealById = (id) => { setOpenId(id); router.push({ query: { deal: id } }) }
+NAV was used in TWO components in that file:
 
-and an effect reads it back off the URL:
+  OperationsNav   line 73   - where I declared it
+  SectionTabs     line 102  - where I did not
 
-    setOpenId(Number(q))
+SectionTabs is a separate component, so the NAV built in OperationsNav is not
+in scope there. It referenced a module constant that no longer existed:
 
-Pipedrive ids are numeric, so on Rock that round-trips cleanly and always
-has. The demo generator produces ids like 'd1000'.
+    ReferenceError: NAV is not defined
 
-Number('d1000') is NaN. So:
+Twenty-five Operations pages failed to prerender - every page that renders a
+second-row tab strip.
 
-  click      -> setOpenId('d1000'), the deal view renders        <- the flash
-  URL push   -> effect fires -> setOpenId(NaN) -> deals.find()
-                matches nothing -> the view closes
-  click again-> setOpenId('d1000') again, but the query is ALREADY deal=d1000,
-                so the effect does NOT re-run, and it stays open
-
-Which is exactly "it flashes, then opens on the second click". Nothing to do
-with the seeded data being wrong - the data is fine, the app assumed every
-deal id is a number.
+Same fault as Shell in 965 and UpcomingTable in 975: a value declared in one
+component and used in another. Compiles every time.
 
 
-FOUR MORE OF THE SAME, WHICH WOULD HAVE BEEN WORSE
+WHY MY CHECK DID NOT CATCH IT
 ================================================================================
-The activity handlers do Number(dealId) in four places:
-completeActivity, addActivity and patch twice. Those do not flash - they
-silently do nothing, because NaN matches no deal. On demo, completing or
-editing an activity from the CRM would simply not have worked, with no error.
+The declared-where-used scan I have been running looks at the glossary
+values - term, rams, brand, money. It did not look at NAV, because NAV is not
+a glossary value: it is a constant I had just converted into one.
 
-And three lines above one of them, the same file already compares with
-String(a.dealId) === String(dealId). One rule, two spellings, sitting next to
-each other.
+The scan checked the thing I added and not the thing I changed.
 
-
-THE FIX
-================================================================================
-One module-scope helper, used at all five sites:
-
-    const dealKey = (v) => { const raw = String(v); return /^\d+$/.test(raw) ? Number(raw) : raw }
-
-Coerce only when the id really is all digits. Evaluated the line straight out
-of the file rather than trusting it by eye, because if that test failed for
-digits then ROCK's numeric ids would stop matching and the CRM would break
-for the live tenant:
-
-    '1234' -> 1234 (number)    1234 -> 1234 (number)    '0' -> 0 (number)
-    'd1000' -> 'd1000'         'abc' -> 'abc'           '' -> ''
+I have now run a scope check over ALL FOUR constants converted this way -
+NAV, CommercialNav's GROUPS, AdminShell's adminTabs and projects.js's
+subTabs - and every reference is in a scope that declares it. The other three
+were already correct; only NAV was wrong.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo CRM: click a deal from the board. It should open first time.
-2. Demo CRM: click a deal from the list view. Same.
-3. Demo: open a deal and complete an activity, then edit one. Both were
-   silently doing nothing.
-4. Reload the page on a deal URL - that is the effect path on its own.
-5. ROCK CRM: open a deal, complete an activity. This is the regression that
-   matters; Rock's ids are numeric and must still behave identically.
+1. The build goes green.
+2. Any Operations page with a second row of tabs - Projects, or H&S. That
+   second row IS SectionTabs, the component that was failing.
+3. Then the 976 checks: SWMS Matrix in the nav on demo, RAMS on Rock.
