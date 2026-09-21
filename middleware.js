@@ -56,6 +56,11 @@ export async function middleware(req) {
     const passthrough =
       pathname.startsWith('/_next') ||
       pathname.startsWith('/favicon') ||
+      // The manifest is now an API ROUTE, so it has no file extension and the
+      // rule below cannot see it. Without this line the rewrite turns it into
+      // the /forms PAGE, the phone asks for JSON and gets HTML, and the Site
+      // App silently loses its name and icon on install.
+      pathname === '/api/site-webmanifest' ||
       // See the note on the main list below. This one matters MORE: it is the
       // Site App, and site.webmanifest is what an operative's phone fetches when
       // they add it to their home screen.
@@ -143,6 +148,9 @@ export async function middleware(req) {
     // By extension rather than by filename, so the next icon or font added to
     // /public does not need remembering. None of these can carry data.
     /\.(webmanifest|ico|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|txt|xml)$/i.test(pathname) ||
+    // The manifest moved to an API route and so has no extension. The browser
+    // asks for it BEFORE anyone logs in, including on the login page.
+    pathname === '/api/site-webmanifest' ||
     pathname === '/rock-logo.jpg' ||
     pathname === '/login' ||
     pathname === '/reset-password' ||

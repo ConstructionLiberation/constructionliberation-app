@@ -1,64 +1,96 @@
-PACKAGE 980 - so tomorrow's error is worth reading
+PACKAGE 981 - the Site App installs under the customer's name
 ================================================================================
 
-One file. Complete replacement.
+Three files. ONE IS NEW.
 
-  lib/xero.js
+  pages/api/site-webmanifest.js   <- NEW
+  pages/_document.js
+  middleware.js                   <- repo root
 
-Deploy with 979. No overlap.
+No overlap with 979 or 980; all three can go together.
 
 
-WHY
+WHAT WAS WRONG
 ================================================================================
-Xero being connected rules out the obvious cause, so 977's message tomorrow
-is now the whole diagnosis - and half of it would still have been useless:
+public/site.webmanifest is ONE static file served to every tenant, and it
+says:
 
-    if (!res.ok) throw new Error('Token refresh failed')
+    "name": "Rock Roofing", "short_name": "Rock Roofing"
 
-No status, no body. Every caller that reports that message tells you
-nothing. It now throws:
+That is what appears under the icon when an operative adds the Site App to
+their phone. Every customer's phone would install it as Rock Roofing, and
+demo's already would.
 
-    Token refresh failed: 400 {"error":"invalid_grant"}
-
-Which matters because the three likely bodies are three different jobs:
-
-  invalid_grant   the refresh token has been consumed or revoked. Xero
-                  ROTATES the refresh token on every use, so two concurrent
-                  refreshes leave one caller holding a dead one.
-  invalid_client  the credentials are wrong - relevant since the secret was
-                  rotated on 19 September.
-  429             rate limiting. Xero allows 60 calls a minute per tenant and
-                  fetchPurchaseOrders pages at 100 POs a time.
-
-fetchPurchaseOrders already reports properly - it throws the status and the
-body - so with 977 in place tomorrow's alert will name whichever it is.
+No component can fix it. The phone's OS fetches the manifest directly, so
+this is the one piece of branding React never sees.
 
 
-WHAT I CHECKED AND RULED OUT
+THE FIX
 ================================================================================
-A refresh-token RACE was the best hypothesis once you said Xero was still
-connected: four crons fire at exactly 06:00, and Xero rotating the refresh
-token means two simultaneous refreshes kill one of them.
-
-It is not that. Of the four jobs at 06:00 - deliveries-sync, weekly-report,
-hs-renewals, crm-daily-activities - only deliveries-sync touches Xero at
-all, and it refreshes once.
-
-Worth keeping in mind anyway: TWELVE call sites across the app refresh the
-token, and most of them do it inside `catch {}`. Any two of those running
-together - a cron while someone has the WIP page open - is the same race,
-just not on a schedule. That is a real design issue for later, not tonight's
-bug.
+A route that builds the manifest per tenant, and _document.js points at it.
+Unauthenticated for the same reason /api/tenant-brand is - the browser asks
+for the manifest on first paint, including on the login page, possibly
+without cookies. It therefore returns only a name and an icon, written out
+field by field so nothing added to the tenant record later can leak.
 
 
-ALSO NOTICED, NOT FIXED
+MIDDLEWARE - AND THIS IS THE PART THAT WOULD HAVE BROKEN IT SILENTLY
 ================================================================================
-The comment at the top of deliveries-sync says "Scheduled hourly via
-vercel.json crons". It is daily, 0 6 * * *. Left alone because that file
-already carries 977's change and I did not want two packages editing it.
+Both passthrough lists match static files BY EXTENSION:
+
+    /\.(webmanifest|ico|png|jpg|...)$/i.test(pathname)
+
+An API route has no extension. So without the middleware change, on the Site
+App host the manifest request is rewritten to the /forms PAGE, and on the
+portal it is redirected to /login - which is EXACTLY the bug the comment at
+that line already describes happening to the static file once before:
+"the browser asked for JSON and got an HTML page".
+
+Added to both lists explicitly.
+
+
+ICONS DELIBERATELY DO NOT COME FROM logoUrl
+================================================================================
+I checked what Rock actually installs: favicon-512.png, a square green ROCK
+mark. Its logoUrl is a 565px JPEG - a different image for a different job. A
+home-screen icon is square, masked to a circle or squircle by the phone, and
+wants 192 and 512.
+
+So the icon comes from an OPTIONAL `iconUrl` on the tenant record and falls
+back to the existing static files. A tenant that sets nothing keeps exactly
+what it has today, which for Rock means nothing changes at all.
+
+To give demo the CL badge, add to tenant:demo:
+
+    "iconUrl": "/cl-logo.png"
+
+Optionally also "shortName" if you want something shorter than the company
+name under the icon - there is room for about twelve characters. "Demo" fits
+already, so demo needs nothing.
+
+
+RENDERED FOR ALL THREE CASES RATHER THAN EYEBALLED
+================================================================================
+  Rock, no iconUrl   name "Rock Roofing", icons favicon-192 and favicon-512
+  demo with iconUrl  name "Demo", icon /cl-logo.png
+  no tenant          name "Portal", static icons
+
+
+public/site.webmanifest IS LEFT IN PLACE
+================================================================================
+Nothing references it now, but a phone that has already installed the app
+may still ask for the old URL. Deleting it buys nothing and could 404 an
+existing install.
 
 
 SMOKE TEST
 ================================================================================
-Tomorrow's 06:00 alert, if there is one, should name a Xero status code and
-Xero's own words. Send it over and it will say what to do.
+1. Open /api/site-webmanifest on Rock - JSON, name "Rock Roofing", the two
+   favicon entries.
+2. Same on demo.constructionliberation.com - "Demo".
+3. Same on siteapp.demo.constructionliberation.com. THIS IS THE ONE THE
+   MIDDLEWARE CHANGE IS FOR - if it returns HTML, the middleware file did not
+   go up.
+4. On a phone, add the demo Site App to the home screen. It should say Demo.
+5. Rock: no manifest error in the console on any page, and an existing
+   installed app unchanged.
