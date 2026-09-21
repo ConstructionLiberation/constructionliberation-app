@@ -1,78 +1,86 @@
-PACKAGE 964 - Rock's logo and name off the demo screens
+PACKAGE 965 - the pages that are NOT the portal
 ================================================================================
 
-Eight files. Complete replacements. Note the folder on the last one.
+Five files. Complete replacements. Note the two folders.
 
-  pages/crm.js
-  pages/crm-scores.js
-  pages/bookkeeping.js
-  pages/bookkeeping/admin.js
-  pages/wip.js
-  pages/variations.js
-  pages/project-cashflow.js
-  pages/contracted-rates.js
+  middleware.js                 <- repo root
+  pages/reset-password.js
+  pages/rams-approve.js
+  pages/instruct/[token].js     <- literal square brackets
+  pages/forms/index.js
 
 
-WHY THIS, AND NOT BUSINESS FINANCIALS
+WHY THESE FOUR PAGES FIRST
 ================================================================================
-955 fixed the logo in the four NAV components, which covers most of the
-portal. It did not fix the pages that build their own header - and two of
-those are pages WPC will definitely open. Rock Roofing's actual logo has been
-sitting at the top of demo's CRM and demo's Bookkeeping this whole time,
-above figures we have just spent the day converting to dollars.
+Everything before this was the portal, seen by the customer's own staff after
+they have logged in. These four are seen by somebody else:
 
-That is worth more than an empty Business Financials, and it is the same
-finding as 19 September: the leak is never where the sweep is pointed.
+  reset-password    before anyone is logged in, like the login page
+  rams-approve      a SUBCONTRACTOR following a link from an email
+  instruct/[token]  a CUSTOMER instructing a variation from an email
+  forms/index       the Site App home, on an operative's phone
 
-Six of these eight I had OPEN in 960, 962 and 963 and changed the currency in
-without touching the title tag. Worth saying plainly - being in the file is
-not the same as looking at it.
+A demo tenant sending a variation instruction that opens under Rock Roofing's
+logo is the login-page problem from 19 September, one layer further out - and
+this time it is not an internal screen, it is the thing a customer's customer
+sees.
+
+rams-approve was the worst of them. Seven references, including the BODY
+COPY: "We've let the Rock Roofing team know", "contact your Rock Roofing
+Contracts Manager", "This will be sent to Rock Roofing's Contracts Manager
+and Director". All now the tenant's name.
 
 
-WHAT CHANGED
+MIDDLEWARE - AND THIS IS THE ONE THAT WOULD HAVE BITTEN
 ================================================================================
-Logos, now <BrandLogo /> from 955:   crm, crm-scores, bookkeeping,
-                                     bookkeeping/admin
-Titles, now the tenant name:         crm-scores, wip, variations,
-                                     project-cashflow (TWICE - the embed
-                                     view has its own), contracted-rates
-Header text beside the logo:         crm-scores, which had the words "Rock
-                                     Roofing" rendered next to the image
+forms/index.js is the Site App, and /api/tenant-brand was NOT in the Site App
+passthrough list in middleware.js.
 
-Titles follow the login-page pattern: the tenant name, or just the page name
-while the feed is in flight. Never a hardcoded company.
+Without the middleware change, the rewrite turns /api/tenant-brand into the
+/forms PAGE. The fetch gets HTML back, r.json() throws, TenantProvider
+catches it and carries on with empty defaults - so every operative, on ROCK,
+would have opened the Site App to no logo and a heading reading "Forms"
+instead of "Rock Roofing Forms". Silent, because the provider is deliberately
+built not to break a page over branding.
+
+The rule was already written down in the code nuances: a Site App route that
+is not in that list does not exist. I read it after writing the page, which
+is the wrong order, and it is the second time this session that the answer
+was already in the documentation.
 
 
 CHECKED
 ================================================================================
-- No rock-logo and no "Rock Roofing" left in any of the eight, apart from one
-  JSX comment in crm.js describing the nav.
-- companyName and currencySymbol mapped to their enclosing components and
-  matched against the declarations. This caught a real one: I used
-  companyName in wip.js's title and left WipPage destructuring only money and
-  currencySymbol. Compiles, bundles, throws on render.
-- All eight compile and bundle clean.
+- No "Rock Roofing" and no rock-logo left in any of the four pages.
+- `brand` mapped to its enclosing component in all five components
+  (forms/index has two: FormsHome and FormsList, and both needed it).
+- All five compile; the four pages bundle clean for the browser.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo CRM - the logo at the top left. This is the headline: it was Rock's.
-2. Demo Bookkeeping - same.
-3. Demo CRM Scores - logo AND the company name beside it, plus the tab title.
-4. Browser tab on WIP, Variations, Cash Flow, Contracted Rates.
-5. Cash flow in embed mode (?embed=true) - it has its own <Head> and its own
-   title tag, which is the sort of second copy this sweep keeps finding.
-6. Rock: all eight unchanged, logo and name as before.
+1. THE IMPORTANT ONE: siteapp.rockroofing.co.uk on a phone or a narrow
+   window. Rock's logo and "Rock Roofing Forms" should look exactly as they
+   do today. If the logo is missing and it just says "Forms", the middleware
+   file did not go up.
+2. siteapp.demo.constructionliberation.com - demo's initials, "Demo Forms".
+3. /reset-password on demo - no Rock logo, no Rock name.
+4. A RAMS approval link on demo, if you can raise one - the header, and the
+   body copy in each of the four states.
+5. Rock: all four unchanged.
 
 
-STILL CARRYING ROCK'S LOGO - 965
+STILL TO DO - 966
 ================================================================================
-design/index, forms/index, operations/forms, operations/projects, staff,
-upload, upload-transactions, business-financials/export, reset-password,
-rams-approve, instruct/[token].
+design/index, design/customers, staff, upload, upload-transactions,
+management, admin/templates, handover/form, handover/index, connect,
+business-financials/export, and the two print-window builders in
+operations/forms.js and operations/projects.js.
 
-The last three matter more than they look. reset-password is seen before
-anyone is logged in; rams-approve and instruct/[token] are what a CUSTOMER
-of the tenant sees when they follow a link from an email. A demo tenant
-sending a variation instruction that opens under Rock Roofing's logo is the
-login-page problem again, one layer out.
+Those two are different: they build a whole HTML document as a string for a
+print window, with `${window.location.origin}/rock-logo.jpg` baked in. They
+need the logo URL rather than the component, and they are plain functions
+rather than components, so the value has to be threaded.
+
+business-financials/export.js says "Rock Roofing Limited" twice - that is the
+legalName question again, not companyName.

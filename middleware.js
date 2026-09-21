@@ -61,6 +61,13 @@ export async function middleware(req) {
       // they add it to their home screen.
       /\.(webmanifest|ico|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|txt|xml)$/i.test(pathname) ||
       pathname === '/rock-logo.jpg' ||
+      // THE SITE APP NEEDS THE BRAND FEED TOO.
+      // Without this the rewrite below turns /api/tenant-brand into the
+      // /forms PAGE, the fetch gets HTML, r.json() throws, TenantProvider
+      // swallows it and every operative sees a portal with no name and no
+      // logo. The rule was already written down: a Site App route that is
+      // not in this list does not exist.
+      pathname === '/api/tenant-brand' ||
       pathname.startsWith('/api/forms') ||
       pathname.startsWith('/api/cron') ||
       pathname.startsWith('/api/submissions') ||

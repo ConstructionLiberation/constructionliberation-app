@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
+import BrandLogo from '../components/BrandLogo'
+import { useFormat } from '../components/TenantProvider'
 
 export default function ResetPassword() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [token, setToken] = useState('')
   const [email, setEmail] = useState('')
@@ -38,12 +41,12 @@ export default function ResetPassword() {
 
   return (
     <>
-      <Head><title>Reset password - Rock Roofing</title></Head>
+      <Head><title>{brand ? `Reset password - ${brand}` : 'Reset password'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#faf9f7', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: 'system-ui,-apple-system,sans-serif' }}>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 8px 30px rgba(0,0,0,0.08)', padding: 32, width: '100%', maxWidth: 400 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 34, width: 34, borderRadius: 6 }} />
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a19' }}>Rock Roofing</div>
+            <BrandLogo size={34} radius={6} />
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a19' }}>{brand}</div>
           </div>
           <div style={{ fontSize: 13, color: '#999', marginBottom: 18 }}>Reset your password</div>
 

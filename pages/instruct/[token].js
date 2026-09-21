@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
+import BrandLogo from '../../components/BrandLogo'
+import { useFormat } from '../../components/TenantProvider'
 
 // The page a customer lands on from the "Instruct variation" button.
 //
@@ -11,6 +13,7 @@ import Head from 'next/head'
 // on click would be quicker and would also mean a mis-click, a link preview or an email
 // scanner could commit us to work - so there is a page, and a button on it.
 export default function InstructVariation() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const { token } = router.query
   const [state, setState] = useState({ loading: true })
@@ -73,10 +76,10 @@ export default function InstructVariation() {
 
   return (
     <>
-      <Head><title>Instruct variation · Rock Roofing</title></Head>
+      <Head><title>{brand ? `Instruct variation · ${brand}` : 'Instruct variation'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5', padding: '6vh 16px' }}>
         <div style={{ maxWidth: 720, margin: '0 auto 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 42 }} />
+          <BrandLogo size={42} radius={8} />
           <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a2e' }}>Variation instruction</div>
         </div>
 

@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Head from 'next/head'
+import BrandLogo from '../../components/BrandLogo'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import { compressImage } from '../../lib/compressImage'
 import { nameMatches, cmSeesAll } from '../../lib/cmSiteApp'
@@ -17,6 +19,7 @@ const pinInput = {
 }
 
 export default function FormsHome() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [phone, setPhone] = useState('')
@@ -114,7 +117,7 @@ export default function FormsHome() {
       <Shell>
         <div style={{ maxWidth: 380, margin: '0 auto', paddingTop: 40 }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 56, width: 56, borderRadius: 12 }} />
+            <BrandLogo size={56} radius={12} />
             <h1 style={{ fontSize: 20, fontWeight: 700, color: INK, margin: '16px 0 4px' }}>Set your PIN</h1>
             <p style={{ color: '#777', fontSize: 14, margin: 0 }}>Hi {resetUser.name?.split(' ')[0] || 'there'} — choose a 4–6 digit PIN you'll remember.</p>
           </div>
@@ -139,8 +142,8 @@ export default function FormsHome() {
       <Shell>
         <div style={{ maxWidth: 380, margin: '0 auto', paddingTop: 40 }}>
           <div style={{ textAlign: 'center', marginBottom: 28 }}>
-            <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 64, width: 64, borderRadius: 12 }} />
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: '16px 0 4px' }}>Rock Roofing Forms</h1>
+            <BrandLogo size={64} radius={12} />
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: '16px 0 4px' }}>{brand ? `${brand} Forms` : 'Forms'}</h1>
             <p style={{ color: '#777', fontSize: 14, margin: 0 }}>
               {rememberedPhone ? 'Enter your PIN to start' : 'Log in with your mobile and PIN'}
             </p>
@@ -1358,6 +1361,7 @@ function SitePdfThumb({ url }) {
 
 // ── Forms list shown immediately after login ────────────────────────────────
 function FormsList({ user, onBack }) {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1433,7 +1437,7 @@ export function Shell({ children, onLogout, user }) {
   return (
     <>
       <Head>
-        <title>Rock Roofing Forms</title>
+        <title>{brand ? `${brand} Forms` : 'Forms'}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="theme-color" content="#1a1a19" />
       </Head>
@@ -1442,7 +1446,7 @@ export function Shell({ children, onLogout, user }) {
           background: INK, height: 56, display: 'flex', alignItems: 'center',
           padding: '0 16px', gap: 8, position: 'sticky', top: 0, zIndex: 10, overflowX: 'auto',
         }}>
-          <img src="/rock-logo.jpg" alt="" style={{ height: 32, width: 32, borderRadius: 6 }} />
+          <BrandLogo size={32} radius={6} />
           <span style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>Forms</span>
           <div style={{ flex: 1 }} />
           {user && (

@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import Head from 'next/head'
+import BrandLogo from '../components/BrandLogo'
+import { useFormat } from '../components/TenantProvider'
 import { useRouter } from 'next/router'
 
 // Tokenised, no-login RAMS approval page for the customer's Site Manager.
@@ -9,6 +11,7 @@ const BRAND = '#ca8a04'
 const BG = '#f6f5f2'
 
 export default function RamsApprovePage() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const { token } = router.query
   const [info, setInfo] = useState(null)     // { ok, status, projectName, fileName, fileUrl, smName }
@@ -66,12 +69,12 @@ export default function RamsApprovePage() {
 
   return (
     <>
-      <Head><title>RAMS Approval — Rock Roofing</title><meta name="viewport" content="width=device-width, initial-scale=1" /></Head>
+      <Head><title>{brand ? `RAMS Approval - ${brand}` : 'RAMS Approval'}</title><meta name="viewport" content="width=device-width, initial-scale=1" /></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: BG, padding: '24px 16px' }}>
         <div style={{ maxWidth: 640, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 44, width: 44, borderRadius: 10 }} />
-            <div style={{ fontWeight: 700, fontSize: 18, color: INK }}>Rock Roofing — RAMS Approval</div>
+            <BrandLogo size={44} radius={10} />
+            <div style={{ fontWeight: 700, fontSize: 18, color: INK }}>{brand ? `${brand} - RAMS Approval` : 'RAMS Approval'}</div>
           </div>
 
           {loading ? (
@@ -81,7 +84,7 @@ export default function RamsApprovePage() {
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: 48, marginBottom: 8 }}>✍️</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: INK }}>Thank you — your feedback has been sent</div>
-                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>We've let the Rock Roofing team know the RAMS for <strong>{info?.projectName}</strong> needs edits. They'll make the changes and re-issue it for your approval. You can close this page.</p>
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>We've let the {brand} team know the RAMS for <strong>{info?.projectName}</strong> needs edits. They'll make the changes and re-issue it for your approval. You can close this page.</p>
               </div>
             </Card>
           ) : done || info?.status === 'done' ? (
@@ -89,7 +92,7 @@ export default function RamsApprovePage() {
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: INK }}>Thank you — approval recorded</div>
-                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>The RAMS for <strong>{info?.projectName}</strong> has been approved. Rock Roofing's operatives can now sign onto it. You can close this page.</p>
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>The RAMS for <strong>{info?.projectName}</strong> has been approved. {brand}'s operatives can now sign onto it. You can close this page.</p>
               </div>
             </Card>
           ) : !info?.ok || info?.status === 'invalid' ? (
@@ -97,7 +100,7 @@ export default function RamsApprovePage() {
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: 40, marginBottom: 8 }}>⚠️</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: INK }}>This approval link is invalid or has expired</div>
-                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>If you believe this is a mistake, please contact your Rock Roofing Contracts Manager for a new link.</p>
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>If you believe this is a mistake, please contact your {brand} Contracts Manager for a new link.</p>
               </div>
             </Card>
           ) : info?.status === 'not-ready' ? (
@@ -105,7 +108,7 @@ export default function RamsApprovePage() {
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: 40, marginBottom: 8 }}>⏳</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: INK }}>Not ready for approval yet</div>
-                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>This RAMS is still going through Rock Roofing's internal approvals. Please check back shortly.</p>
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>This RAMS is still going through {brand}'s internal approvals. Please check back shortly.</p>
               </div>
             </Card>
           ) : (
@@ -148,7 +151,7 @@ export default function RamsApprovePage() {
                 ) : (
                   <div style={{ marginTop: 12, paddingTop: 14, borderTop: '1px solid #eee' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#b91c1c', marginBottom: 6 }}>Request edits</div>
-                    <div style={{ fontSize: 12.5, color: '#777', marginBottom: 8 }}>Describe what needs changing (required). This will be sent to Rock Roofing's Contracts Manager and Director — the RAMS will not be approved.</div>
+                    <div style={{ fontSize: 12.5, color: '#777', marginBottom: 8 }}>Describe what needs changing (required). This will be sent to {brand}'s Contracts Manager and Director — the RAMS will not be approved.</div>
                     <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={4} placeholder="What needs to be changed?"
                       style={{ width: '100%', boxSizing: 'border-box', padding: '11px 12px', border: '2px solid #e3e0d9', borderRadius: 12, fontSize: 15, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
                     <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
