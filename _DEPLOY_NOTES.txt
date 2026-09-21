@@ -1,77 +1,69 @@
-PACKAGE 991 - customer type, and the empty left half of every chart
+PACKAGE 992 - Glenigan and Actively Chased scored 5 or more
 ================================================================================
 
-Three files. Complete replacements. demoSeed INCLUDES 974 and 985-990.
+One file. Complete replacement. INCLUDES 974 and 985-991's seeder changes.
 
-  lib/crmFieldSchema.js
-  lib/crmDashboardAdapter.js
   lib/demoSeed.js
 
+991's other two files (crmFieldSchema.js, crmDashboardAdapter.js) are
+unchanged and still needed - deploy them if you have not already.
 
-VALUE PRICED - EXISTING CUSTOMERS
+
+THE SAME MISTAKE AS THE LOST REASONS
 ================================================================================
-This is not a demo gap. customerType is read in about TEN places - the Sales
-Dashboard, sales-crm and both scorecards - and NOTHING anywhere writes it.
-There was no such field in the CRM. lib/crmDashboardAdapter.js had:
+Both metrics filter on the lead source BY NAME:
 
-    customerType: null,
+    scoredFiveFor('glenigan')         -> getLeadSource(d).includes('glenigan')
+    scoredFiveFor('actively chased')
 
-So the metric returned 0 on every tenant including Rock, against a 300,000
-target, with a red dot beside it. And the Sales Dashboard filed every deal
-under "Prospect" with dashes against Existing and New, because Prospect is
-what a null falls through to.
+The seeder was writing:
 
-A concept with ten consumers and no producer. Fixed properly rather than
-seeded around:
+    Referral | Tender list | Repeat client | Website | Cold approach
 
-  1. crmFieldSchema gains customer_type - a select offering Existing
-     Customer / New Customer / Prospect, in the details group alongside Lead
-     Source. It appears in Manage Fields and on every deal, editable, for
-     every tenant.
-  2. The adapter reads it, falling back to 'Prospect' - which is what the
-     dashboard was already showing, so nothing moves for a deal nobody has
-     set.
-  3. The seeder sets a mix: roughly 45 existing, 64 new, 81 prospect out of
-     190.
+Plausible words. NONE of them an option in lib/crmFieldSchema.js, which
+offers Glenigan / Website New Build / Website Refurb / Actively Chased /
+Other. So the dropdown on a deal showed one set and the data held another,
+and neither metric could ever match.
 
-ROCK GETS THE FIELD TOO, blank until someone fills it in. Its deals will read
-Prospect, which is what they effectively read today - the difference is that
-now they CAN be set, and the metric will start moving.
+Now weighted so both carry volume: four parts Glenigan, three Actively
+Chased, three Website, one Other. Checked against the schema - every value is
+a real option.
 
 
-THE EMPTY LEFT HALF OF THE CHARTS
+AND A SECOND CONDITION NOBODY COULD HAVE SEEN
 ================================================================================
-Deals were created 0-13 months back, and a decision landed 45-98% through the
-deal's life. So the earliest decision was about seven months ago and
-everything before that was blank.
+Those metrics also need a score of five or more:
 
-The scorecard charts a rolling TWELVE months, and each point is itself a
-rolling SIX-month window - so it needs decisions up to eighteen months back
-to draw its earliest points.
+    const score = parseInt(d.label)      // d.label <- f.project_score
 
-Deals now span 0-20 months and decisions 25-98% of the way through. Checked:
-fifteen consecutive months carry decisions, from July 2025 to September 2026,
-weighted to recent the way a real pipeline is.
+project_score was never seeded, so every score was NaN and both metrics would
+have read 0 even with the lead source fixed. Two conditions, one metric, and
+fixing either alone changes nothing on screen - which is exactly how the last
+three packages went.
+
+Seeded 3 to 10, skewed away from the bottom: a project nobody rates above 4
+is not one anybody chases.
 
 
-WHAT WILL STILL LOOK ODD, AND IS CORRECT
+STILL BLANK, AND CORRECTLY SO
 ================================================================================
-Strike rate (MC Secured/Negotiating) reads 100%. The rolling window only
-contains deals in those two stages that were decided, and in the seeded data
-a deal that reaches MC Secured is marked won. So every decided deal in that
-window was won.
+"Emails sent externally" reads /api/email-volume, which is fed by the
+Microsoft Graph sync. Demo has msSyncGroup empty, so there is nothing to
+report and the card shows a dash rather than a zero - the distinction the
+scorecard draws between "no data" and "none".
 
-Real enough - MC Secured largely does convert - but if you would rather it
-showed a mix, the seeder needs some MC Secured deals marked lost. Say so and
-it is two lines.
+Seeding a number there would invent a figure rather than demonstrate a
+feature, which is the opposite of what the rest of the demo does. Leave it,
+and say what it is if asked: it comes from the mailbox sync, which is not
+connected on the demo tenant.
 
 
 SMOKE TEST
 ================================================================================
 After deploying and re-seeding:
-1. Scorecard, an estimator: Value priced - existing customers has a figure.
-2. Charts have points from the left-hand edge, not just the last five months.
-3. Sales Dashboard summary: Existing Customer and New Customer rows have
-   numbers instead of dashes.
-4. Open any CRM deal: a Customer Type dropdown with the three options.
-5. ROCK: the same dropdown appears, blank. Every existing figure unchanged.
+1. Sales scorecard, Marama Tait: Glenigan scored 5+ and Actively Chased
+   scored 5+ have figures.
+2. Open a CRM deal: Lead Source shows one of the five real options, and
+   Project Score is set.
+3. Sales Dashboard, the Lead source filter: the dropdown and the data agree.
+4. Emails sent externally stays as a dash. That one is correct.
