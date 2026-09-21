@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import PreContractNav from '../components/PreContractNav'
@@ -212,6 +213,7 @@ function DrillModal({ title, projects, isValueChange, isGpMargin, onClose }) {
 }
 
 export default function Scorecard() {
+  const { companyName: brand } = useFormat()
   const [person, setPerson] = useState('Roman')
   const [deals, setDeals] = useState([])
   const [valueChanges, setValueChanges] = useState([])
@@ -582,7 +584,7 @@ export default function Scorecard() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Scorecards</title></Head>
+      <Head><title>{brand ? `${brand} - Scorecards` : 'Scorecards'}</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
         {modal && <DrillModal title={modal.title} projects={modal.projects} isValueChange={modal.isValueChange} isGpMargin={modal.isGpMargin} onClose={() => setModal(null)} />}
 

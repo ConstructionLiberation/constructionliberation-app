@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
@@ -27,6 +28,7 @@ function trendline(points, key) {
 }
 
 export default function Margin() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [data, setData] = useState(null)
@@ -126,7 +128,7 @@ export default function Margin() {
 
   return (
     <>
-      <Head><title>Margin - Rock Roofing</title></Head>
+      <Head><title>{brand ? `Margin - ${brand}` : 'Margin'}</title></Head>
       <BizNav />
       <div style={{ maxWidth: '100%', padding: '24px 32px 80px' }}>
         <div style={{ marginBottom: 16 }}>

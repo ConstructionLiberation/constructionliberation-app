@@ -1,13 +1,15 @@
 import Head from 'next/head'
+import { useFormat } from '../components/TenantProvider'
 import NegotiatingTable from '../components/NegotiatingTable'
 import PreContractNav from '../components/PreContractNav'
 
 const INK = '#1a1a19'
 
 export default function Negotiating() {
+  const { companyName: brand } = useFormat()
   return (
     <>
-      <Head><title>Rock Roofing — Negotiating</title></Head>
+      <Head><title>{brand ? `${brand} - Negotiating` : 'Negotiating'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <PreContractNav active="negotiating" />
 

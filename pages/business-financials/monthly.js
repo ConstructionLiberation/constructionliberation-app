@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
@@ -105,6 +106,7 @@ function MonthTip({ active, payload, label }) {
 }
 
 export default function MonthlyCashFlow() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [data, setData] = useState(null)
@@ -466,7 +468,7 @@ export default function MonthlyCashFlow() {
 
   return (
     <>
-      <Head><title>12-Month Cash Flow - Rock Roofing</title></Head>
+      <Head><title>{brand ? `12-Month Cash Flow - ${brand}` : '12-Month Cash Flow'}</title></Head>
       <BizNav />
       {/* FULL WIDTH. A sixteen-column table inside a 1300px box meant horizontal
           scrolling on every screen, including ones with room to spare. */}

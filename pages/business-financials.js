@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import {
@@ -31,6 +32,7 @@ function trendline(points, key) {
 }
 
 export default function BusinessFinancials() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [data, setData] = useState(null)
@@ -101,7 +103,7 @@ export default function BusinessFinancials() {
 
   return (
     <>
-      <Head><title>Business Financials · Rock Roofing</title></Head>
+      <Head><title>{brand ? `Business Financials · ${brand}` : 'Business Financials'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
         {/* THE SHARED NAV.
             This page had its own hard-coded TABS array - five entries, a stale copy that

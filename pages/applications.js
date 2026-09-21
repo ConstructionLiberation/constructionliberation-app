@@ -1484,6 +1484,7 @@ function AddMaterialsModal({ pos, addedPONumbers = [], addedLineKeys = [], hidde
 // - CC: any number (customer contacts and/or portal users), plus free-text.
 // - Message from an editable template with placeholders filled in.
 function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, isSent, prevReleases = null, onClose, onSent }) {
+  const { companyName: brand } = useFormat()
   const [portalUsers, setPortalUsers] = useState([])
   useEffect(() => { (async () => {
     try { const d = await fetch('/api/portal-auth?action=directory').then(r => r.json()); setPortalUsers(d.users || []) } catch {}
@@ -1495,7 +1496,7 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
   const pushC = (name, email) => { const e = (email || '').trim(); if (!e || seenC.has(e.toLowerCase())) return; seenC.add(e.toLowerCase()); custContacts.push({ name: name || e, email: e, group: 'Customer' }) }
   ;(settings.customerContacts || []).forEach(c => pushC(c.name || c.title, c.email))
   pushC(settings.customerName, settings.customerEmail)
-  const users = (portalUsers || []).map(u => ({ name: u.name || u.email, email: u.email, phone: u.phone || '', group: 'Rock Roofing' }))
+  const users = (portalUsers || []).map(u => ({ name: u.name || u.email, email: u.email, phone: u.phone || '', group: brand }))
   const everyone = [...custContacts, ...users]
   const byEmail = (e) => everyone.find(x => x.email.toLowerCase() === (e || '').toLowerCase())
 
@@ -1541,7 +1542,7 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
     `${signer.name}\n` +
     `${signer.email}\n` +
     `${signer.phone}\n` +
-    `Rock Roofing Ltd`
+    brand
 
   const [subject, setSubject] = useState(defaultSubject)
   const [body, setBody] = useState(defaultBody)
@@ -1575,7 +1576,7 @@ function SendApplicationModal({ app, appNumber, projectId, settings = {}, me, is
 
   const optGroups = [
     { label: 'Customer contacts', items: custContacts },
-    { label: 'Rock Roofing portal users', items: users },
+    { label: `${brand} portal users`, items: users },
   ]
 
   return (

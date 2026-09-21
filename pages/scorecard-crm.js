@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import PreContractNav from '../components/PreContractNav'
@@ -310,6 +311,7 @@ function DrillModal({ title, projects, excluded, isValueChange, isGpMargin, onCl
 }
 
 export default function Scorecard() {
+  const { companyName: brand } = useFormat()
   const [person, setPerson] = useState('Roman')
   const [deals, setDeals] = useState([])
   const [valueChanges, setValueChanges] = useState([])
@@ -828,7 +830,7 @@ export default function Scorecard() {
 
   const salesMetricDefs = [
     { key: 'dealsResearched', label: 'Deals researched', sub: 'Projects added to Project In', format: v => v, targetKey: 'dealsResearched', drillKey: '_dealsResearchedList' },
-    { key: 'emailsSentExternal', label: 'Emails sent externally', sub: 'To at least one address outside Rock Roofing', format: v => v, targetKey: 'emailsSentExternal' },
+    { key: 'emailsSentExternal', label: 'Emails sent externally', sub: `To at least one address outside ${brand}`, format: v => v, targetKey: 'emailsSentExternal' },
     { key: 'gleniganScored5', label: 'Glenigan scored ≥5', format: v => v, targetKey: 'gleniganScored5', drillKey: '_gleniganScored5Projects' },
     { key: 'chasedScored5', label: 'Actively Chased scored ≥5', sub: 'Received in month, scored 5 or more', format: v => v, targetKey: 'chasedScored5', drillKey: '_chasedScored5Projects' },
     { key: 'strikeRateValue', label: 'Strike rate (value) — all estimators', sub: 'Rolling 6 months', format: pct, targetKey: 'strikeRateValue', drillKey: '_rolling6AllProjects' },
@@ -1022,7 +1024,7 @@ export default function Scorecard() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Scorecards (CRM)</title></Head>
+      <Head><title>{brand ? `${brand} - Scorecards (CRM)` : 'Scorecards (CRM)'}</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
         {modal && <DrillModal title={modal.title} projects={modal.projects} excluded={modal.excluded} isValueChange={modal.isValueChange} isGpMargin={modal.isGpMargin} onClose={() => setModal(null)} />}
 

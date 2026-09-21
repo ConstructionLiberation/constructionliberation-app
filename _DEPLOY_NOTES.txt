@@ -1,83 +1,87 @@
-PACKAGE 971 - the branding I said was finished, and was not
+PACKAGE 972 - the last of the client-side branding
 ================================================================================
 
-Ten files. Complete replacements. Mind the folders.
+Twenty files. Complete replacements. Mind the two subfolders.
 
-  pages/forms/fill.js
-  pages/forms/issue.js
-  pages/design/[project]/oms.js        <- literal square brackets
-  components/PreStartForm.js
-  pages/project-financials.js
-  pages/variation-builder.js
-  pages/applications.js
-  pages/sales.js
-  pages/commercial.js
-  pages/retention.js
+  pages/admin.js
+  pages/application-calendar.js
+  pages/applications.js                 <- INCLUDES 971's change to this file
+  pages/business-financials.js
+  pages/business-financials/cash-schedule.js
+  pages/business-financials/cashflow.js
+  pages/business-financials/invoice-finance.js
+  pages/business-financials/margin.js
+  pages/business-financials/monthly.js
+  pages/business-financials/retentions-due.js
+  pages/business-financials/vat-refund.js
+  pages/commercial-email-templates.js
+  pages/commercial-scorecard.js
+  pages/lessons-learnt.js
+  pages/negotiating.js
+  pages/operations/project-financials.js
+  pages/procurement-savings.js
+  pages/sales-crm.js
+  pages/scorecard.js
+  pages/scorecard-crm.js
 
-pages/retention.js INCLUDES 970. If you have not deployed 970 yet, this file
-supersedes it - do not paste the older one afterwards.
+Nineteen tab titles, plus three pieces of text people actually read:
+
+  commercial-email-templates   "Auto-CC Rock Roofing CM"
+  scorecard-crm                "To at least one address outside Rock Roofing"
+  applications                 the APPLICATION EMAIL SIGNATURE - it signed off
+                               "Rock Roofing Ltd" under the sender's name, on
+                               a document sent to a client. Also the recipient
+                               picker's group heading.
 
 
-WHAT I GOT WRONG
+THE BUNDLE CHECK EARNED ITS KEEP AGAIN
 ================================================================================
-After 966 I told you the client-side branding was done apart from two print
-builders. A proper sweep of every page and component finds FORTY-FIVE live
-references across roughly thirty-five files.
+I generated these edits from a table, and the relative import depth for the
+business-financials and operations subfolders was written as
 
-The reason is simple and worth recording: I only ever fixed the files I
-happened to have open for something else. Every package from 960 onward went
-through a page for currency and left its <Head><title> alone. The sweep was
-never a sweep - it was a side effect of other work, and I reported it as
-though it had been systematic.
+    '.../components/TenantProvider'
+
+Three dots. Not a path. Eight files.
+
+esbuild compiled every one of them CLEANLY - a single-file compile does not
+resolve imports. Only bundling caught it, and it would have failed the Vercel
+build exactly the way 965 did.
 
 
-WHAT IS IN THIS ONE - THE THINGS PEOPLE READ
+WHAT IS NOW LEFT, AND IT IS EIGHT LINES IN FIVE FILES
 ================================================================================
-Four are real sentences shown to someone who is not the customer's own staff:
+After this the client-side sweep is finished except for:
 
-  forms/fill.js     "call your Rock Roofing Contracts Manager" - an operative,
-                    on a phone, after submitting a form
-  forms/issue.js    the same, on the issue confirmation screen
-  design/oms.js     "check with your Rock Roofing Design Manager" - twice,
-                    one of them in the Design portal a CUSTOMER logs into
-  PreStartForm      "+ Add Rock Roofing attendee" and a dropdown group headed
-                    "Rock Roofing (portal users)"
+  VariationBuilder x2    "Rock Roofing Limited" on a contractual document and
+                         "Rock Roofing" above the signature block. Needs
+                         legalName decided, not a relabel.
+  operations/forms.js    the two print-window HTML strings. Different shape -
+  operations/projects.js they need the logo URL, not the component.
+  outstanding-invoices   '[Rock Roofing QS Name]' - LEAVE IT. A legacy merge
+                         token kept so customers' saved templates keep
+                         substituting. Renaming it silently breaks the
+                         templates someone bothered to customise.
+  platform/index.js      an example sender address on a page that 404s.
+  design/oms.js          a comment naming a hex colour.
 
-Six are tab titles on the pages a demo would actually open: Project
-Financials, Variation Builder, Applications, Sales Dashboard, Budget Tracker,
-Retention Tracker.
-
-
-WHAT IS LEFT - ABOUT TWENTY-FIVE, ALL TITLES
-================================================================================
-admin, application-calendar, commercial-email-templates, commercial-scorecard,
-lessons-learnt, negotiating, procurement-savings, scorecard, scorecard-crm,
-sales-crm, business-financials and nine pages beneath it. All the same shape.
-That is 972 and it is dull, which is why it went unnoticed.
-
-Three are NOT titles and need decisions rather than a sweep:
-
-  VariationBuilder      "Rock Roofing Limited" on a contractual document.
-                        legalName, still unanswered.
-  outstanding-invoices  '[Rock Roofing QS Name]' is a deliberate legacy merge
-                        token kept so customers' saved templates keep working.
-                        Leave it.
-  operations/forms.js,  the two print-window builders. Different shape.
-  operations/projects.js
+Unrelated, noticed on the way past: components/ContactPicker.js line 106 sets
+`width` twice in one object literal. esbuild's duplicate-key warning. The
+later one wins, so the first is dead - the same shape of fault that was
+zeroing a retention column two days ago. Worth a look, not in this package.
 
 
 CHECKED
 ================================================================================
-- Every `brand` mapped to its enclosing component and matched against the
-  declarations, with the CORRECTED scanner. Ten files, all clean.
-- All ten compile and bundle for the browser.
+- Full repo sweep: eight visible "Rock Roofing" left client-side, all five
+  files listed above, all deliberate.
+- Every `brand` declared in the component that uses it, corrected scanner.
+- All twenty compile AND bundle.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Site App: submit a form, and raise an issue. The confirmation text
-   should name Demo, not Rock Roofing. These are the two an operative reads.
-2. Demo Design portal, a project's O&M page - the compile warning.
-3. Demo Pre-Start form - the "+ Add ... attendee" button.
-4. Tab titles on the five commercial pages.
-5. Rock: all of it unchanged.
+1. Demo: tab titles across Scorecards, Lessons Learnt, Negotiating,
+   Procurement Savings, Admin, and the Business Financials pages.
+2. Demo applications: open the send modal and read the signature block. It
+   should sign off with the tenant name, not Rock Roofing Ltd.
+3. Rock: unchanged everywhere, and the same signature block still correct.

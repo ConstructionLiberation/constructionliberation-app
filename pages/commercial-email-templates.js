@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 import { CHASE_MERGE_FIELDS } from '../lib/chaseEmailTemplates'
 
 export default function EmailTemplatesPage() {
+  const { companyName: brand } = useFormat()
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -38,7 +40,7 @@ export default function EmailTemplatesPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Chase Email Templates</title></Head>
+      <Head><title>{brand ? `${brand} - Chase Email Templates` : 'Chase Email Templates'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f5f5f4' }}>
         <div style={{ background: '#1a1a19', padding: '0 24px', position: 'sticky', top: 0, zIndex: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 56, flexWrap: 'wrap' }}>
@@ -78,7 +80,7 @@ export default function EmailTemplatesPage() {
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                   <input type="checkbox" checked={!!t.ccRockCM} onChange={e => update(t.key, 'ccRockCM', e.target.checked)} />
-                  Auto-CC Rock Roofing CM
+                  Auto-CC {brand} CM
                 </label>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import Head from 'next/head'
+import { useFormat } from '../components/TenantProvider'
 import { useState, useEffect, useMemo } from 'react'
 import PreContractNav from '../components/PreContractNav'
 import ProcurementSavings from '../components/ProcurementSavings'
@@ -7,6 +8,7 @@ import { INK, GOLD } from '../components/opsUI'
 // Pre-Contract Procurement Savings page. Shows a "needs finalising" worklist
 // at the top, then a project selector + the shared editable savings grid.
 export default function ProcurementSavingsPage() {
+  const { companyName: brand } = useFormat()
   const [projects, setProjects] = useState([])
   const [summary, setSummary] = useState({})       // { projectNo: {total, incomplete} }
   const [projectNo, setProjectNo] = useState('')
@@ -40,7 +42,7 @@ export default function ProcurementSavingsPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Procurement Savings</title></Head>
+      <Head><title>{brand ? `${brand} - Procurement Savings` : 'Procurement Savings'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <PreContractNav active="procurement-savings" />
         <div style={{ maxWidth: 1600, margin: '0 auto', padding: '24px 28px' }}>

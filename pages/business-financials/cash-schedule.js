@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { BizNav, INK, GOLD, gbp, monthLbl, Card } from '../../components/BizNav'
@@ -14,6 +15,7 @@ function futureMonths(n = 12) {
 }
 
 export default function CashSchedule() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -95,7 +97,7 @@ export default function CashSchedule() {
 
   return (
     <>
-      <Head><title>Cash Schedule - Rock Roofing</title></Head>
+      <Head><title>{brand ? `Cash Schedule - ${brand}` : 'Cash Schedule'}</title></Head>
       <BizNav />
       <div style={{ maxWidth: '100%', padding: '24px 32px 90px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>

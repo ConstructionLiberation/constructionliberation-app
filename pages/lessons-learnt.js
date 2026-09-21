@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 
 const DEPT_LABEL = { estimating: 'Estimating', commercial: 'Commercial', operations: 'Operations', accounting: 'Accounting', sales: 'Sales' }
@@ -22,10 +23,11 @@ const SECTIONS = [
 ]
 
 export default function LessonsLearnt() {
+  const { companyName: brand } = useFormat()
   const [tab, setTab] = useState('table')
   return (
     <>
-      <Head><title>Rock Roofing - Lessons Learnt</title></Head>
+      <Head><title>{brand ? `${brand} - Lessons Learnt` : 'Lessons Learnt'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <div style={{ background: '#1a1a19', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
           <a href="/" style={{ color: '#888', fontSize: 13, textDecoration: 'none' }}>&larr; Portal</a>

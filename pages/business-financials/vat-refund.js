@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
@@ -12,6 +13,7 @@ const fyOfMonth = (mo) => { const [y, m] = mo.split('-').map(Number); return m >
 const fyOfNow = () => fyOfMonth(nowMonth())
 
 export default function VatRefund() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -116,7 +118,7 @@ export default function VatRefund() {
 
   return (
     <>
-      <Head><title>VAT Refund - Rock Roofing</title></Head>
+      <Head><title>{brand ? `VAT Refund - ${brand}` : 'VAT Refund'}</title></Head>
       <BizNav />
 
       {/* AN INCOMPLETE ESTIMATE MUST SAY SO.

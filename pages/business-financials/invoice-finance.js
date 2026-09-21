@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { BizNav, INK, GOLD, gbp, SyncButton } from '../../components/BizNav'
@@ -140,6 +141,7 @@ function eligibleFor(project, evidenceApps, settings, debt, invoices) {
 }
 
 export default function InvoiceFinance() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [data, setData] = useState(null)
@@ -705,7 +707,7 @@ export default function InvoiceFinance() {
 
   return (
     <>
-      <Head><title>Invoice Finance - Rock Roofing</title></Head>
+      <Head><title>{brand ? `Invoice Finance - ${brand}` : 'Invoice Finance'}</title></Head>
       <BizNav />
       <div style={{ maxWidth: '100%', padding: '24px 32px 80px' }}>
         <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>

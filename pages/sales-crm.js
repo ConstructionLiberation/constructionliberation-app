@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PreContractNav from '../components/PreContractNav'
@@ -56,6 +57,7 @@ function calcTrendline(data, key) {
 }
 
 export default function Dashboard() {
+  const { companyName: brand } = useFormat()
   const lastMonth = getLastMonthRange()
   const [page, setPage] = useState('Deals Researched')
   const [deals, setDeals] = useState([])
@@ -1306,7 +1308,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Sales Dashboard</title></Head>
+      <Head><title>{brand ? `${brand} - Sales Dashboard` : 'Sales Dashboard'}</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
         <PreContractNav active="sales-crm">
         </PreContractNav>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { businessToday, businessNow } from '../../lib/businessDate'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
@@ -318,6 +319,7 @@ function retentionEvents(entries) {
 }
 
 export default function CashFlow() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [data, setData] = useState(null)
@@ -1742,7 +1744,7 @@ export default function CashFlow() {
 
   return (
     <>
-      <Head><title>Cash Flow (13 week) - Rock Roofing</title></Head>
+      <Head><title>{brand ? `Cash Flow (13 week) - ${brand}` : 'Cash Flow (13 week)'}</title></Head>
       <BizNav />
       <div style={{ maxWidth: '100%', padding: '24px 32px 80px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>

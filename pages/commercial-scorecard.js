@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
@@ -175,6 +176,7 @@ const LAST_6_MONTHS = (() => {
 })()
 
 export default function CommercialScorecard() {
+  const { companyName: brand } = useFormat()
   const [metrics, setMetrics] = useState(null)
   const [xeroGM, setXeroGM] = useState(null)
   const [xeroGMLoading, setXeroGMLoading] = useState(true)
@@ -492,7 +494,7 @@ export default function CommercialScorecard() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Commercial Scorecard</title></Head>
+      <Head><title>{brand ? `${brand} - Commercial Scorecard` : 'Commercial Scorecard'}</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#f0f2f5' }}>
         {modal && <DrillModal title={modal.title} rows={modal.rows} columns={modal.columns} allowEmpty={modal.allowEmpty} footer={modal.footer} onClose={() => setModal(null)} />}
         {paylessOpen && <PaylessModal

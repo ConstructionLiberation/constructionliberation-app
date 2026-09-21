@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
@@ -120,6 +121,7 @@ function CalendarMonth({ year, month, projects, onProjectClick }) {
 }
 
 export default function ApplicationCalendar() {
+  const { companyName: brand } = useFormat()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
@@ -221,7 +223,7 @@ export default function ApplicationCalendar() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Application Calendar</title></Head>
+      <Head><title>{brand ? `${brand} - Application Calendar` : 'Application Calendar'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
 
         <CommercialNav active="/application-calendar" />

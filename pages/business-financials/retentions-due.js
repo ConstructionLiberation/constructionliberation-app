@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
@@ -25,6 +26,7 @@ const retStatusOf = (e) => e.retStatus || (e.markedComplete ? 'complete' : 'live
 // application decide.
 
 export default function RetentionsDue() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -195,7 +197,7 @@ export default function RetentionsDue() {
 
   return (
     <>
-      <Head><title>Retentions Due - Rock Roofing</title></Head>
+      <Head><title>{brand ? `Retentions Due - ${brand}` : 'Retentions Due'}</title></Head>
       <BizNav />
       <div style={{ maxWidth: '100%', padding: '24px 32px 80px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
