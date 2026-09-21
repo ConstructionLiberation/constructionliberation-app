@@ -1,108 +1,51 @@
-PACKAGE 957 - outstanding invoices in the customer's currency
+PACKAGE 958 - the PDF 957 missed
 ================================================================================
 
-Two files. Complete replacements.
+One file. Complete replacement.
 
-  pages/outstanding-invoices.js
-  lib/outstandingInvoicesReport.js
-
-This is ONE FILE'S WORTH of the money sweep, on purpose. Confirm the pattern
-looks right on a screen you know and I will apply it to the other twenty.
-
-Requires 956 to be deployed first.
+  lib/outstandingInvoicesPdf.js
 
 
-WHAT WAS WRONG
+WHAT I MISSED
 ================================================================================
-I told you this page was already routed through money(). It was not. It
-imports useFormat() and takes only `companyName` off it. The money came from
-line 8:
+957 said "the server side of the same screen". It did the weekly report EMAIL
+BODY and not the PDF ATTACHED TO IT, which has its own module-scope formatter
+at line 13, hardcoded en-GB/GBP, with a literal '£0.00' as its NaN case.
 
-    const fmt = (n) => ... Intl.NumberFormat('en-GB', { currency: 'GBP' }) ...
+So on demo the mail would have said $ and the attachment £, on the same send.
+Same mistake shape as the one before it: I checked the file I was editing
+rather than every output path off that screen.
 
-Module scope, hardcoded, seven call sites. I inferred it from the file being
-in the useFormat consumer list instead of reading what it destructured, which
-is the read-the-consumer rule, missed.
-
-Checking whether that was typical is the useful part: THIRTY such helpers
-across TWENTY-ONE files, under six different names - fmt, fmtC, fmtP, gbp,
-gbpK, money, fmtMoney. pages/project/[id].js has three of them in four lines.
-One rule, thirty copies, and nobody would find the thirtieth from the first.
-
-
-THE PATTERN, WHICH IS THE POINT OF THIS PACKAGE
-================================================================================
-A module-scope const cannot call useFormat(), because that is a hook. So:
-
-  1. Each COMPONENT that formats money declares its own one-liner:
-
-         const { money } = useFormat()
-         const fmt = (n) => (n == null || n === '' ? '\u2014' : money(n))
-
-     The shape stays whatever that file's helper already did - the em dash
-     here, zero decimal places on sales.js, the k suffix on business
-     financials. No shared abstraction to agree on, which is the trap that
-     would make this take a week.
-
-  2. Module-scope HELPERS take the formatter as an argument. This file already
-     solved that problem for `brand` and wrote down why: "a missing argument
-     is far easier to spot than a global that is silently wrong." Same
-     pattern, same reason. resolveMergeFields() and buildBody() now take fmt,
-     and all four call sites pass it.
-
-  3. Nothing at module scope formats money any more. Verified: no GBP and no
-     pound sign left in the file.
-
-If you would rather it worked some other way, now is the moment - this is one
-file, the other twenty are not written yet.
-
-
-THE SERVER SIDE OF THE SAME SCREEN
-================================================================================
-lib/outstandingInvoicesReport.js built the weekly chase report with its own
-hardcoded en-GB/GBP formatter, so the email and PDF arrived in sterling
-whoever they were for. That one can read the tenant directly - it already
-imports tenantSettings, so it is always inside a tenant context - and now
-calls money() from lib/locale.js.
-
-ONE THING I GOT WRONG AND CAUGHT: I first wrote that as { dp: 0 }. The old
-formatter passed no fractionDigits option at all, and Intl's currency style
-defaults to the CURRENCY's own digits, which is 2 - so the absence of an
-option did not mean whole pounds. Ran both: old and new both give
-"£1,234.50" for Rock, and "$1,234.50" for demo. Identical for Rock, which is
-the property that matters.
+Now reads money() from lib/locale.js, like the report body. The NaN case still
+returns a formatted zero rather than an empty cell, which is what the old one
+did.
 
 
 CHECKED
 ================================================================================
-- All four resolveMergeFields/buildBody call sites pass fmt. Grepped, not
-  assumed.
-- In ChaseComposeModal the useFormat() call is ABOVE the two useState
-  initialisers that read it. The modal mounts on a click, long after the feed
-  has landed, so those values are real.
-- The page bundles for the browser with no async_hooks, no tenantContext, no
-  locale.js. It does not import the report.
-- Both files compile clean, no warnings.
+- Standard PDF fonts use WinAnsi, and this file already strips anything
+  outside it. Ran the four locales: en-GB gives U+00A3, en-NZ, en-AU and en-US
+  all give a plain dollar sign at U+0024. Everything inside WinAnsi, so no
+  currency symbol can come out as a blank in a PDF.
+- Compiles clean.
+
+
+THE HONEST COUNT, CORRECTED
+================================================================================
+I told you thirty money formatters across twenty-one files. That grep covered
+pages/ and components/ only. Including lib/ and pages/api/ it is THIRTY-FIVE,
+and the three extra that matter are all PDF generators:
+
+  lib/outstandingInvoicesPdf.js   <- this package
+  lib/projectReportPdf.js
+  lib/applicationPdf.js
+
+Those two remaining are the same one-line change and are worth doing with
+whichever package touches their screens.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo, outstanding invoices: the total due, overdue value, unassigned value
-   and both money columns in the table read $ and not £.
-2. Rock, same page: unchanged. Every figure identical, to the penny.
-3. Open a chase compose modal on demo and put [Invoice Value] in the body.
-   The merge field should resolve in dollars - that is the threaded path, and
-   it is the one worth actually clicking.
-4. Rock's weekly report email: still £1,234.50 with two decimals.
-
-
-NOT IN THIS, DELIBERATELY
-================================================================================
-- fmtDate() on the page is still en-GB. NZ and the UK both render "21 Sep
-  2026" from it, so there is nothing to see - it goes in the date work.
-- lib/outstandingInvoicesReport.js line 164 builds the PDF logo as
-  `${baseUrl}/rock-logo.jpg`, hardcoded. logoUrl() could supply it now, but it
-  needs to handle both an absolute URL and a relative one, because Rock's
-  record currently holds the absolute form and I have suggested you switch it.
-  That is the logo work, not the money work, and mixing them makes a fault
-  harder to attribute.
+Download the weekly report PDF from outstanding invoices on demo. Dollars,
+two decimals, and the columns still line up - the symbol is one character
+either way so nothing should shift.
