@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import PreContractNav from '../../components/PreContractNav'
 import { INK, th, td, Loading, EmptyCard, primaryBtn, linkBtn, fmtDate } from '../../components/opsUI'
 
 export default function HandoverList() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -27,7 +29,7 @@ export default function HandoverList() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Internal Handover Minutes</title></Head>
+      <Head><title>{brand ? `${brand} - Internal Handover Minutes` : 'Internal Handover Minutes'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <PreContractNav active="handover" />
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px' }}>

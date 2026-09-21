@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { AdminTabs } from '../../components/AdminShell'
@@ -21,6 +22,7 @@ const ADDABLE_TYPES = [
 const uid = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`
 
 export default function TemplatesAdmin() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [me, setMe] = useState(null)
   const [role, setRole] = useState(null)
@@ -117,7 +119,7 @@ export default function TemplatesAdmin() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Admin Templates</title></Head>
+      <Head><title>{brand ? `${brand} - Admin Templates` : 'Admin Templates'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <div style={{ background: '#1a1a19', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
           <a href="/" style={{ color: '#888', fontSize: 13, textDecoration: 'none' }}>← Portal</a>

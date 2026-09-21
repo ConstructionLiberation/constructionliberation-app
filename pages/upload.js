@@ -1,8 +1,11 @@
 import { useState } from 'react'
+import BrandLogo from '../components/BrandLogo'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 
 export default function UploadPage() {
+  const { companyName: brand } = useFormat()
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -32,13 +35,13 @@ export default function UploadPage() {
 
   return (
     <>
-      <Head><title>Upload Bills — Rock Roofing</title></Head>
+      <Head><title>{brand ? `Upload Bills - ${brand}` : 'Upload Bills'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
         <div style={{ background: '#1a1a2e', padding: '0 24px' }}>
           <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
-              <span style={{ color: '#fff', fontWeight: 600, fontSize: 16 }}>Rock Roofing Ltd</span>
+              <BrandLogo />
+              <span style={{ color: '#fff', fontWeight: 600, fontSize: 16 }}>{brand}</span>
             </div>
             <Link href="/commercial" style={{ color: '#aaa', fontSize: 13 }}>← Budget Tracker</Link>
           </div>

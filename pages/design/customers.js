@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
@@ -10,6 +11,7 @@ const btn = { background: '#7c3aed', color: '#fff', border: 'none', borderRadius
 const link = { background: 'none', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 13, marginLeft: 10 }
 
 export default function DesignCustomers() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [me, setMe] = useState(null)
   const [users, setUsers] = useState([])
@@ -96,7 +98,7 @@ export default function DesignCustomers() {
 
   return (
     <>
-      <Head><title>Design Customers — Rock Roofing</title></Head>
+      <Head><title>{brand ? `Design Customers - ${brand}` : 'Design Customers'}</title></Head>
       <div style={{ background: '#1a1a19', color: '#fff', padding: '16px 24px' }}>
         {/* This page BELONGS to Design now, so back always means Design.
             

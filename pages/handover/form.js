@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { uploadFile } from '../../lib/uploadFile'
 import { compressImage } from '../../lib/compressImage'
 import { useRouter } from 'next/router'
@@ -11,9 +12,10 @@ import { IHM_SECTIONS as IHM_DEFAULT, CONTACT_ROLES, emptyRoofType } from '../..
 const tmName = (m) => [m.firstName, m.lastName].filter(Boolean).join(' ') || m.name || ''
 
 function Wrap({ children }) {
+  const { companyName: brand } = useFormat()
   return (
     <>
-      <Head><title>Rock Roofing — Internal Handover</title></Head>
+      <Head><title>{brand ? `${brand} - Internal Handover` : 'Internal Handover'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <PreContractNav active="handover" />
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px' }}>{children}</div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import { useRouter } from 'next/router'
 
 // Xero rejects the ENTIRE authorize request with invalid_scope if one scope is
@@ -36,6 +37,7 @@ function ScopeTester({ value, onChange }) {
 }
 
 export default function ConnectPage() {
+  const { companyName: brand } = useFormat()
   const [connected, setConnected] = useState(null)
   const [loading, setLoading] = useState(true)
   // Extra scopes to try on the next authorize. Kept OUT of the base list so a rejected
@@ -68,7 +70,7 @@ const redirectUri = encodeURIComponent(window.location.origin + '/xero-callback'
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f5' }}>
       <div style={{ background: '#fff', borderRadius: 12, padding: '40px 48px', textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: 420 }}>
         <div style={{ width: 48, height: 48, background: '#1a1a2e', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: '#fff', fontWeight: 700, fontSize: 18 }}>RR</div>
-        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}>Rock Roofing Financials</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}>{brand ? `${brand} Financials` : 'Financials'}</h1>
         {loading ? (
           <p style={{ color: '#888' }}>Checking connection...</p>
         ) : connected ? (

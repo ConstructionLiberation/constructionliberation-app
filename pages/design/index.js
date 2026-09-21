@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import BrandLogo from '../../components/BrandLogo'
+import { useFormat } from '../../components/TenantProvider'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { useDesignAuth, designHref, designLogout, PURPLE, INK } from '../../lib/designShell'
 import ReportImprovementLink from '../../components/ReportImprovementLink'
 
 export default function DesignHome() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const auth = useDesignAuth()
   const [q, setQ] = useState('')
@@ -23,9 +26,9 @@ export default function DesignHome() {
 
   return (
     <>
-      <Head><title>Design Portal - Rock Roofing</title></Head>
+      <Head><title>{brand ? `Design Portal - ${brand}` : 'Design Portal'}</title></Head>
       <div style={{ background: '#1a1a19', padding: '0 20px', display: 'flex', alignItems: 'center', height: 52 }}>
-        <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 30, width: 30, borderRadius: 4, marginRight: 8 }} />
+        <BrandLogo size={30} style={{ marginRight: 8 }} />
         {!auth.isExternal && <>
           <a href="/" style={{ color: '#888', fontSize: 13, textDecoration: 'none', padding: '4px 10px' }}>&lt;- Portal</a>
           <span style={{ color: '#3a3a38', padding: '0 2px' }}>|</span>

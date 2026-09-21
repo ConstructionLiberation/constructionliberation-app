@@ -1,8 +1,10 @@
 import Head from 'next/head'
+import { useFormat } from '../components/TenantProvider'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 
 export default function ManagementPage() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   useEffect(() => {
@@ -15,7 +17,7 @@ export default function ManagementPage() {
   if (!ok) return null
   return (
     <>
-      <Head><title>Rock Roofing — Management</title></Head>
+      <Head><title>{brand ? `${brand} - Management` : 'Management'}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <div style={{ background: '#1a1a19', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
           <a href="/" style={{ color: '#888', fontSize: 13, textDecoration: 'none' }}>← Portal</a>

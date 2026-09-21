@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import BrandLogo from '../components/BrandLogo'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 
 export default function StaffPage() {
+  const { companyName: brand } = useFormat()
   const [cms, setCms] = useState([])
   const [estimators, setEstimators] = useState([])
   const [newCm, setNewCm] = useState('')
@@ -74,7 +77,7 @@ export default function StaffPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Staff</title></Head>
+      <Head><title>{brand ? `${brand} - Staff` : 'Staff'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
         <div style={{ background: '#1a1a2e', padding: '0 24px', position: 'sticky', top: 0, zIndex: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56 }}>
@@ -82,7 +85,7 @@ export default function StaffPage() {
               <Link href="/commercial" style={{ color: '#888', fontSize: 13 }}>← Budget Tracker</Link>
               <span style={{ color: '#444' }}>|</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
+                <BrandLogo />
                 <span style={{ color: '#fff', fontWeight: 600, fontSize: 16 }}>Staff Management</span>
               </div>
             </div>

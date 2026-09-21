@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import BrandLogo from '../../components/BrandLogo'
+import { useFormat } from '../../components/TenantProvider'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { INK } from '../../components/BizNav'
@@ -64,6 +66,7 @@ const btn = { background: '#fff', border: '1px solid #ddd9d2', borderRadius: 6, 
 const btnMain = { ...btn, background: INK, color: '#fff', border: `1px solid ${INK}`, fontWeight: 600, padding: '8px 18px', fontSize: 13 }
 
 export default function ExportFinancials() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [ok, setOk] = useState(false)
   const [picked, setPicked] = useState({})
@@ -227,9 +230,9 @@ export default function ExportFinancials() {
           {/* COVER. Its own sheet - page-break-after on the section below it. */}
           <div className="rr-pg rr-cover">
             <div style={{ minHeight: '150mm', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 30mm' }}>
-              <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 74, width: 'auto', objectFit: 'contain', marginBottom: 34 }} />
+              <BrandLogo size={74} radius={8} style={{ width: 'auto', marginBottom: 34 }} />
               <div style={{ fontSize: 34, fontWeight: 800, color: INK, letterSpacing: -0.5 }}>Business Financials</div>
-              <div style={{ fontSize: 17, color: '#8a857c', marginTop: 6 }}>Rock Roofing Limited</div>
+              <div style={{ fontSize: 17, color: '#8a857c', marginTop: 6 }}>{brand}</div>
               <div style={{ height: 3, width: 90, background: INK, margin: '22px 0' }} />
               <div style={{ fontSize: 13, color: '#57534e', lineHeight: 1.7 }}>
                 <div><strong>Prepared</strong> {new Date().toLocaleString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
@@ -269,7 +272,7 @@ export default function ExportFinancials() {
                     <div style={{ fontSize: 30, fontWeight: 800, color: INK, marginTop: 6 }}>{t[1]}</div>
                     <div style={{ height: 3, width: 70, background: INK, marginTop: 16 }} />
                     <div style={{ fontSize: 11.5, color: '#a8a49c', marginTop: 14 }}>
-                      Rock Roofing Limited &middot; Business Financials &middot; section {i + 1} of {chosen.length}
+                      {brand} &middot; Business Financials &middot; section {i + 1} of {chosen.length}
                     </div>
                   </div>
                 </div>

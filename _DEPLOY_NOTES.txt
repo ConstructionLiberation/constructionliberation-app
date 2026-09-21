@@ -1,86 +1,70 @@
-PACKAGE 965 - the pages that are NOT the portal
+PACKAGE 966 - the internal tail
 ================================================================================
 
-Five files. Complete replacements. Note the two folders.
+Eleven files. Complete replacements. Mind the folders.
 
-  middleware.js                 <- repo root
-  pages/reset-password.js
-  pages/rams-approve.js
-  pages/instruct/[token].js     <- literal square brackets
-  pages/forms/index.js
+  pages/design/index.js
+  pages/design/customers.js
+  pages/staff.js
+  pages/upload.js
+  pages/upload-transactions.js
+  pages/management.js
+  pages/admin/templates.js
+  pages/handover/form.js
+  pages/handover/index.js
+  pages/connect.js
+  pages/business-financials/export.js
+
+All one- and two-line changes: five logos to <BrandLogo />, nine tab titles
+to the tenant name, and four pieces of header text. Nothing structural.
 
 
-WHY THESE FOUR PAGES FIRST
+ONE THING TO LOOK AT
 ================================================================================
-Everything before this was the portal, seen by the customer's own staff after
-they have logged in. These four are seen by somebody else:
+business-financials/export.js printed "Rock Roofing Limited" in two places -
+the cover page of an exported financial pack and the footer of every section
+after it. It now prints companyName, which for Rock is "Rock Roofing" - so
+that document LOSES the word "Limited".
 
-  reset-password    before anyone is logged in, like the login page
-  rams-approve      a SUBCONTRACTOR following a link from an email
-  instruct/[token]  a CUSTOMER instructing a variation from an email
-  forms/index       the Site App home, on an operative's phone
+That is the legalName question, and this is the strongest argument yet for
+splitting the field: a display name in a nav bar and a company name at the
+top of a financial pack are not the same string. Same issue as
+VariationBuilder's "Rock Roofing Limited" on a contractual document.
 
-A demo tenant sending a variation instruction that opens under Rock Roofing's
-logo is the login-page problem from 19 September, one layer further out - and
-this time it is not an internal screen, it is the thing a customer's customer
-sees.
-
-rams-approve was the worst of them. Seven references, including the BODY
-COPY: "We've let the Rock Roofing team know", "contact your Rock Roofing
-Contracts Manager", "This will be sent to Rock Roofing's Contracts Manager
-and Director". All now the tenant's name.
-
-
-MIDDLEWARE - AND THIS IS THE ONE THAT WOULD HAVE BITTEN
-================================================================================
-forms/index.js is the Site App, and /api/tenant-brand was NOT in the Site App
-passthrough list in middleware.js.
-
-Without the middleware change, the rewrite turns /api/tenant-brand into the
-/forms PAGE. The fetch gets HTML back, r.json() throws, TenantProvider
-catches it and carries on with empty defaults - so every operative, on ROCK,
-would have opened the Site App to no logo and a heading reading "Forms"
-instead of "Rock Roofing Forms". Silent, because the provider is deliberately
-built not to break a page over branding.
-
-The rule was already written down in the code nuances: a Site App route that
-is not in that list does not exist. I read it after writing the page, which
-is the wrong order, and it is the second time this session that the answer
-was already in the documentation.
+I have not invented a legalName field on my own. Say the word and it goes in
+as one change across both places.
 
 
 CHECKED
 ================================================================================
-- No "Rock Roofing" and no rock-logo left in any of the four pages.
-- `brand` mapped to its enclosing component in all five components
-  (forms/index has two: FormsHome and FormsList, and both needed it).
-- All five compile; the four pages bundle clean for the browser.
+- No "Rock Roofing" and no rock-logo left in any of the eleven.
+- `brand` mapped to its enclosing component and matched against the
+  declarations in all eleven. Clean.
+- All eleven compile and bundle clean for the browser.
 
 
 SMOKE TEST
 ================================================================================
-1. THE IMPORTANT ONE: siteapp.rockroofing.co.uk on a phone or a narrow
-   window. Rock's logo and "Rock Roofing Forms" should look exactly as they
-   do today. If the logo is missing and it just says "Forms", the middleware
-   file did not go up.
-2. siteapp.demo.constructionliberation.com - demo's initials, "Demo Forms".
-3. /reset-password on demo - no Rock logo, no Rock name.
-4. A RAMS approval link on demo, if you can raise one - the header, and the
-   body copy in each of the four states.
-5. Rock: all four unchanged.
+Nothing here is on the demo path, so this is a Rock regression check rather
+than a demo improvement. Worth a glance at Staff and the Design portal home,
+since those are the two with a visible logo rather than just a tab title.
+
+Rock's exported financial pack is the one that actually changed content - the
+cover now reads "Rock Roofing" rather than "Rock Roofing Limited".
 
 
-STILL TO DO - 966
+WHAT IS LEFT AFTER THIS
 ================================================================================
-design/index, design/customers, staff, upload, upload-transactions,
-management, admin/templates, handover/form, handover/index, connect,
-business-financials/export, and the two print-window builders in
-operations/forms.js and operations/projects.js.
+Two files, and they are a different shape:
 
-Those two are different: they build a whole HTML document as a string for a
-print window, with `${window.location.origin}/rock-logo.jpg` baked in. They
-need the logo URL rather than the component, and they are plain functions
-rather than components, so the value has to be threaded.
+  pages/operations/forms.js      _legacyPrintSubmissions()
+  pages/operations/projects.js   openPrintView()
 
-business-financials/export.js says "Rock Roofing Limited" twice - that is the
-legalName question again, not companyName.
+Both build a complete HTML document as a STRING for a print window, with
+`${window.location.origin}/rock-logo.jpg` baked in and "Rock Roofing" in the
+title. A React component is no use inside a string, so they need the logo URL
+itself - which means handling both the relative and absolute forms, since
+Rock's record currently holds an absolute one. And both are plain functions,
+not components, so the value has to be threaded in from the caller.
+
+That is 967, and it is the last of the client-side branding.

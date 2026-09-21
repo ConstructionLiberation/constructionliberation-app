@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
+import BrandLogo from '../components/BrandLogo'
+import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 
 const fmt = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n)
 
 export default function UploadPage() {
+  const { companyName: brand } = useFormat()
   const [projects, setProjects] = useState([])
 
   // Costs state
@@ -173,7 +176,7 @@ export default function UploadPage() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Data Upload</title></Head>
+      <Head><title>{brand ? `${brand} - Data Upload` : 'Data Upload'}</title></Head>
       <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
         <div style={{ background: '#1a1a2e', padding: '0 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56 }}>
@@ -181,7 +184,7 @@ export default function UploadPage() {
               <Link href="/" style={{ color: '#888', fontSize: 13 }}>← Portal</Link>
               <span style={{ color: '#444' }}>|</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 6 }} />
+                <BrandLogo radius={6} />
                 <span style={{ color: '#fff', fontWeight: 600, fontSize: 16 }}>Data Upload</span>
               </div>
             </div>
