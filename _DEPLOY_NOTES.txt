@@ -1,96 +1,70 @@
-PACKAGE 949 - the weekly and monthly checklists are now editable
+PACKAGE 950 - bookkeeping data, with September left to work through
 ================================================================================
 
-Seven files. THREE ARE NEW and must be created by hand in GitHub.
+One file. Complete replacement. Wipe and re-seed.
 
-CREATE
-  lib/taskDefaults.js             the default lists, out of the components
-  components/TaskDefsEditor.js    the editor
-  pages/api/task-definitions.js   per-tenant storage
-
-REPLACE
-  components/CommercialTaskTable.js
-  components/TaskGrid.js
-  pages/bookkeeping-weekly-tasks.js
-  pages/bookkeeping-monthly-tasks.js
+  lib/demoSeed.js
 
 
-WHAT IT DOES
-============
-An "Edit tasks" button under the heading on all four checklist pages -
-Commercial weekly and monthly, Bookkeeping weekly and monthly. Add, reword,
-reorder, remove. Saves to the tenant's own database.
+THE POINT OF THE SECTION IS THE RECONCILIATION
+===============================================
+Bookkeeping exists to get every cost, wage and sales invoice out of Xero and
+onto a project. Its value is the WORKING THROUGH: an unassigned line sits in
+the list until somebody gives it a project, and then it clears. Seeding
+everything as already-assigned would show a set of empty tabs and prove
+nothing.
 
-The pattern is the one pages/api/templates.js already uses for the Pre-Start
-and IHM templates, and it is the right one: a CODE DEFAULT every tenant starts
-from, an OVERRIDE in their own database, and the stored one wins. Nothing is
-written until someone actually edits something, so a new customer inherits a
-usable list rather than a blank screen, and Rock's lists are untouched until
-somebody changes one.
+So April through August are fully assigned and balance, and SEPTEMBER has a
+pile waiting:
 
+    26 untagged bills      16 project costs to allocate, 10 genuine overheads
+    11 untagged wages      direct wages, week 36-39, no project
+     7 unassigned sales    invoices with no tracking category
+     9 in-query costs      parked, deliberately excluded from project spend
 
-WHY IT MATTERED
-===============
-The lists were literal arrays inside the components. Unmistakably Rock's:
+Assign one and watch the line clear - that is the demo.
 
-  "Does the Retention Owed match 612 Allocated"     <- a Xero account code
-  "Obtain the WIP schedule from Nathan"             <- a member of your staff
-  "request Cotton to file VAT for the month"        <- your accountant
-
-A customer would have been handed instructions naming an account they do not
-have and people they have never met, with no way to change any of it.
+The mix of project costs and real overheads in the untagged bills is
+deliberate. If everything needed a project, categorising would be mechanical;
+the judgement is in telling the two apart, which is what the screen is for.
 
 
-DELETING DOES NOT DESTROY HISTORY
-==================================
-Ticks are stored against the task id in a separate key. Removing a task hides
-it from the grid and leaves every tick alone - so deleting one by mistake
-loses nothing, and re-adding the same id brings the history back.
+WHAT ELSE WENT IN
+=================
+CHART OF ACCOUNTS and ACCOUNT CATEGORISATION. 16 codes with names and
+categories - sales, materials, labour, overheads. Without these every code
+reads as "uncategorised" and the app raises a banner about it, so the
+categorisation feature could not be shown working.
 
-That is also why an existing task's id is not editable: changing it would
-orphan every tick ever recorded against it. New tasks get a generated id
-prefixed by scope and cadence so a weekly and a monthly task can never
-collide.
-
-
-PERMISSIONS
-===========
-Reading: commercial, bookkeeping, post-contract, management, admin.
-Saving: MANAGEMENT AND ADMIN ONLY - editing the checklist changes what
-everyone else is asked to confirm each week.
-
-The button is shown to everyone. A refused save explains itself more clearly
-than a button that is silently absent.
+THE IN QUERY BUCKET. Matched on the tracking option NAME, not a flag -
+pages/api/bookkeeping.js compares the project name to "inquery" with spaces
+stripped. It is now a real row in the project list called "In Query" with nine
+costs against it: a queried price, a wrong site, a suspected duplicate. Those
+are deliberately excluded from project spend until somebody decides where they
+belong.
 
 
-ONE THING WORTH NOTING
-======================
-pages/api/task-definitions.js originally imported the defaults from
-components/CommercialTaskTable, which dragged React, next/head and two nav
-components into a server route. Moved to lib/taskDefaults.js instead. Worth
-remembering as a shape: if an API route needs a constant that lives in a
-component, the constant is in the wrong place.
+ONE THING WORTH RECORDING
+==========================
+The In Query cost lines were being referenced in the dashboard cache before
+they were declared. JavaScript hoists the declaration but not the value, so it
+would have been undefined at that point - no compile error, and an empty
+In Query tab with nothing to explain it. Caught by running the generator
+rather than by the compiler.
 
-Also: the page titles on these four pages said "Rock Roofing - ..." and now
-just show the page name. The full branding fix for titles comes with the
-client-side sweep.
+
+STILL NOT SEEDED
+================
+Business Financials - a further 48 keys including bank balances, the overhead
+ledger, the sales ledger and VAT. Scorecard entries and targets. Forms,
+submissions and photos. Contracted rates.
 
 
 SMOKE TEST
 ==========
-1. Commercial -> Weekly Tasks. "Edit tasks" under the heading. The six
-   existing tasks appear in the editor.
-2. Reword one, add one, reorder, save. The grid updates.
-3. Reload - the change persists.
-4. Previously recorded ticks are still there against the tasks that remain.
-5. Bookkeeping weekly and monthly - same.
-6. On DEMO, the lists should show Rock's defaults until edited. Edit one there
-   and confirm Rock's is unaffected. THAT IS THE ONE THAT MATTERS.
-
-
-CHECKS RUN BEFORE PACKAGING
-============================
-- esbuild compile on all seven files: clean
-- no other file imported WEEKLY/MONTHLY from the component
-- lib/taskDefaults.js has no imports, so it is safe in both bundles
-- hooks declared before any early return in both grid components
+1. Wipe, re-seed.
+2. Bookkeeping - Costs, Wages, Sales and In Query tabs all populated.
+3. Filter to September: the untagged pile. April to August: everything
+   assigned.
+4. Assign a project to one untagged line and confirm it clears.
+5. No "uncategorised account codes" banner, since the chart is now seeded.
