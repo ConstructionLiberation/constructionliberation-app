@@ -1,78 +1,77 @@
-PACKAGE 990 - four blank scorecard metrics, one missing pair of fields
+PACKAGE 991 - customer type, and the empty left half of every chart
 ================================================================================
 
-Two files. Complete replacements. The seeder INCLUDES 974, 985-989.
+Three files. Complete replacements. demoSeed INCLUDES 974 and 985-990.
 
+  lib/crmFieldSchema.js
+  lib/crmDashboardAdapter.js
   lib/demoSeed.js
-  pages/scorecard-crm.js      <- includes 988
 
 
-WHY THIS TOOK THREE GOES
+VALUE PRICED - EXISTING CUSTOMERS
 ================================================================================
-I was fixing one input per package. The blanks were never separate problems.
-
-lib/crmDashboardAdapter.js builds two date fields:
-
-    wonTime:   f.won_time
-    closeTime: f.won_time || f.lost_time
-
-and the scorecard hangs FOUR metrics off them:
-
-    monthWon         -> Total value of work secured        was $0
-    rolling6         -> Strike rate, overall and MC        was blank
-    avgSecuredWindow -> Average secured project value      was blank
-    dealsOver200k    -> Deals secured over 200k            was 0
-
-The seeder set status to 'won' or 'lost' and never said WHEN. Status alone is
-not a decision - the date is. Every one of those filters matched nothing, so
-four cards read as though the metric were broken rather than the data absent.
-
-Now every won deal carries won_time and every lost deal lost_time, dated
-between halfway through the deal's life and almost now. Not a fixed fraction:
-that closes every old deal in the last month and leaves a trend line with one
-spike. Checked the spread - decisions land across seven months, weighted to
-recent, which is how a pipeline actually looks.
-
-
-ONE THAT IS NOT A DEMO PROBLEM, AND WILL NOT BE FIXED BY SEEDING
-================================================================================
-"Value priced - existing customers" reads:
-
-    deal?.customerType === 'Existing Customer'
-
-and lib/crmDashboardAdapter.js line 108 is:
+This is not a demo gap. customerType is read in about TEN places - the Sales
+Dashboard, sales-crm and both scorecards - and NOTHING anywhere writes it.
+There was no such field in the CRM. lib/crmDashboardAdapter.js had:
 
     customerType: null,
 
-Hardcoded, with a note at the top of the file: "Per product decision:
-customerType / firstContactDate / receivedDate are NOT in the Pipedrive export
-and are left blank here - they will be captured going forward, not
-back-filled."
+So the metric returned 0 on every tenant including Rock, against a 300,000
+target, with a red dot beside it. And the Sales Dashboard filed every deal
+under "Prospect" with dashes against Existing and New, because Prospect is
+what a null falls through to.
 
-So that metric returns 0 on EVERY tenant, Rock included, and always has. It
-has a target of 300,000 and a red dot next to it on your own live scorecard.
-No seeding can change that - it needs customerType captured on the deal, and
-the field exists in the CRM schema.
+A concept with ten consumers and no producer. Fixed properly rather than
+seeded around:
 
-Worth knowing the note is now partly stale: firstContactDate IS computed, at
-line 104 of the same file. customerType is the one still hardcoded.
+  1. crmFieldSchema gains customer_type - a select offering Existing
+     Customer / New Customer / Prospect, in the details group alongside Lead
+     Source. It appears in Manage Fields and on every deal, editable, for
+     every tenant.
+  2. The adapter reads it, falling back to 'Prospect' - which is what the
+     dashboard was already showing, so nothing moves for a deal nobody has
+     set.
+  3. The seeder sets a mix: roughly 45 existing, 64 new, 81 prospect out of
+     190.
+
+ROCK GETS THE FIELD TOO, blank until someone fills it in. Its deals will read
+Prospect, which is what they effectively read today - the difference is that
+now they CAN be set, and the metric will start moving.
 
 
-THE ROLE UNDER THE NAME
+THE EMPTY LEFT HALF OF THE CHARTS
 ================================================================================
-Each tab now shows the person's role in light grey beneath their name -
-Estimator or Sales. Derived from which field they appear in on a deal, the
-same source as the tab list itself, so it is correct on every tenant with
-nothing to configure and no second place to keep in step.
+Deals were created 0-13 months back, and a decision landed 45-98% through the
+deal's life. So the earliest decision was about seven months ago and
+everything before that was blank.
+
+The scorecard charts a rolling TWELVE months, and each point is itself a
+rolling SIX-month window - so it needs decisions up to eighteen months back
+to draw its earliest points.
+
+Deals now span 0-20 months and decisions 25-98% of the way through. Checked:
+fifteen consecutive months carry decisions, from July 2025 to September 2026,
+weighted to recent the way a real pipeline is.
+
+
+WHAT WILL STILL LOOK ODD, AND IS CORRECT
+================================================================================
+Strike rate (MC Secured/Negotiating) reads 100%. The rolling window only
+contains deals in those two stages that were decided, and in the seeded data
+a deal that reaches MC Secured is marked won. So every decided deal in that
+window was won.
+
+Real enough - MC Secured largely does convert - but if you would rather it
+showed a mix, the seeder needs some MC Secured deals marked lost. Say so and
+it is two lines.
 
 
 SMOKE TEST
 ================================================================================
 After deploying and re-seeding:
-1. Demo scorecard, an estimator: Total value of work secured, both strike
-   rates and average secured project value all have figures, across months.
-2. The tabs show a role under each name.
-3. "Value priced - existing customers" will STILL be 0. That is the
-   customerType finding above, not the seed.
-4. ROCK scorecard: tabs show roles. Every figure unchanged - nothing in the
-   code path changed, only the tab markup.
+1. Scorecard, an estimator: Value priced - existing customers has a figure.
+2. Charts have points from the left-hand edge, not just the last five months.
+3. Sales Dashboard summary: Existing Customer and New Customer rows have
+   numbers instead of dashes.
+4. Open any CRM deal: a Customer Type dropdown with the three options.
+5. ROCK: the same dropdown appears, blank. Every existing figure unchanged.
