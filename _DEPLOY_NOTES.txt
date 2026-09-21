@@ -1,71 +1,65 @@
-PACKAGE 983 - the tab favicon, which 981 did not fix
+PACKAGE 984 - make the browser actually fetch the new favicon
 ================================================================================
 
-Three files. ONE IS NEW.
+One file. Complete replacement. Supersedes 983's copy.
 
-  pages/api/favicon.js    <- NEW
-  pages/_document.js      <- supersedes 981
-  middleware.js           <- supersedes 981, repo root
+  pages/_document.js
 
 
-WHAT I MISSED
+NOTHING WAS BROKEN
 ================================================================================
-981 made the WEB APP MANIFEST per tenant - the name and icon a phone uses
-when someone adds the Site App to their home screen. It did not touch the
-four hardcoded links in _document.js:
+View source on the Site App confirmed the link is there:
 
-  /favicon.ico   /favicon-32x32.png   /favicon-16x16.png   /apple-touch-icon.png
+    <link rel="icon" href="/api/favicon"/>
 
-Those are the BROWSER TAB icon, a completely separate mechanism, and they
-are Rock's on every page of every tenant. Two icons, two mechanisms, and
-fixing one looked like fixing both. It didn't, which is what you saw.
+and /api/favicon on that host redirects to the CL badge. Route, middleware,
+record and deployment are all correct.
+
+The empty Network tab WAS the answer, not a failed test. Chrome keys its
+favicon store on the ICON URL and keeps one for days. The URL did not
+change, so Chrome never asked - which is also why incognito did not help:
+the favicon database is shared, unlike the page cache.
 
 
-HOW IT WORKS
+THE FIX
 ================================================================================
-_document.js is server-rendered with no hook available, so the links point at
-/api/favicon and that route redirects to the tenant's iconUrl, or to
-/favicon.ico when it has none. A redirect rather than piping bytes, so the
-file is still served as a static asset by the CDN.
+    <link rel="icon" type="image/png" href="/api/favicon?v=2" />
 
-302, not 301: a permanent redirect is cached by the browser effectively for
-ever, and a tenant that set an icon later would never see it.
+The query string changes the cache key, so every browser fetches it once.
+Bump v whenever the icon has to change for everyone at once.
 
-Rock has no iconUrl, so it redirects to /favicon.ico and nothing changes.
+`type` added because the route 302s to a PNG, and a browser should not have
+to guess what it is about to receive from a redirect.
 
-Same middleware problem as the manifest - an API route has no file extension,
-so the passthrough rules that match .ico and .png cannot see it. Added to
-both lists.
+Middleware still matches: it tests `pathname`, which excludes the query
+string, so /api/favicon?v=2 hits the same rule. Checked rather than assumed.
 
 
-WHERE TO PASTE THE PATH - YOUR QUESTION
+WHY THE PORTAL WORKED AND THE SITE APP DID NOT
 ================================================================================
-Upstash, the CONTROL database (control-registry), key tenant:demo. Add:
-
-    "iconUrl": "/cl-logo.png"
-
-Same place you put logoUrl and timezone. Not the demo tenant's own data
-store - the control registry. It drives BOTH the tab favicon (this package)
-and the home-screen install icon (981), so one field does both.
-
-Allow two minutes for the registry cache, then a hard reload - browsers hold
-onto a favicon harder than almost anything else. Incognito is the quick test.
+Different origins. You had been on demo.constructionliberation.com since
+before any of this, so its favicon entry was refreshed at some point;
+siteapp.demo.constructionliberation.com is a separate origin whose entry was
+set on your very first visit - when the tenant record was still broken - and
+never revisited.
 
 
-A NOTE ON THE IMAGE ITSELF
+ONE THING TO CHECK WHILE YOU ARE THERE
 ================================================================================
-cl-logo.png is 256px with transparent corners. As a 16px tab icon the
-lettering around the badge will not be legible - it will read as a green
-circle. That is normal for a detailed logo at favicon size and Rock's own
-solution is a separate simplified mark (the square green ROCK tile). If the
-demo wants the same, it needs a simplified square version, not the badge.
+The prerendered HTML shows the Site App heading as "Site App" and the logo
+as an empty placeholder span. That is CORRECT for the static HTML - the
+brand feed has not run yet at build time, so BrandLogo renders its
+reserved-space box and the heading falls back.
+
+On the live page it should fill in to "Demo Site App" with the badge a
+moment after load. If it stays as plain "Site App" after hydration, that is
+a different problem from the favicon and worth telling me.
 
 
 SMOKE TEST
 ================================================================================
-1. /api/favicon on Rock redirects to /favicon.ico. Tab icon unchanged
-   everywhere.
-2. /api/favicon on demo, AFTER the record edit, redirects to /cl-logo.png.
-3. Demo Site App tab in incognito - the green badge, not the ROCK tile.
-4. siteapp.demo.constructionliberation.com specifically: if the icon is still
-   Rock's there but right on the portal, the middleware file did not go up.
+1. Site App tab on demo: the CL badge. Normal window is fine now - the URL
+   changed, so the old cache entry cannot win.
+2. Rock: unchanged. It has no iconUrl, so /api/favicon still redirects to
+   /favicon.ico and the tab keeps the green ROCK tile.
+3. Portal tab on demo: still the badge.
