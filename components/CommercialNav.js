@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import ReportImprovementLink from './ReportImprovementLink'
+import BrandLogo from './BrandLogo'
 
 // Commercial Portal nav. Most items are single pages. Two items are GROUPS with their
 // own sub-nav row: "Applications" and "Scorecards".
@@ -48,7 +49,7 @@ export default function CommercialNav({ active, right = null }) {
       <div style={{ background: '#1a1a19', padding: '0 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 56 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
+            <BrandLogo />
             <a href="/" style={mainLink(false)}>&larr; Portal</a>
             {MAIN.map((item, i) => {
               if (item.group) {

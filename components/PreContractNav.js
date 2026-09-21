@@ -2,6 +2,7 @@
 // Fixed order, a divider between every tab, and the current page highlighted.
 // Order: [CRM|Pre-Contract] Portal | Sales Dashboard | Scorecards | Negotiating | ...
 import ReportImprovementLink from './ReportImprovementLink'
+import BrandLogo from './BrandLogo'
 import AreaToggle from './AreaToggle'
 
 export default function PreContractNav({ active, children }) {
@@ -19,7 +20,7 @@ export default function PreContractNav({ active, children }) {
   ]
   return (
     <div style={{ background: '#1a1a19', padding: '0 24px', display: 'flex', alignItems: 'center', gap: 0, height: 52, overflowX: 'auto' }}>
-      <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4, marginRight: 8 }} />
+      <BrandLogo style={{ marginRight: 8 }} />
       {/* Area toggle, left-most. CRM is no longer also a tab below - it would have been
           the same destination twice, one click apart. */}
       <AreaToggle active="pre-contract" />

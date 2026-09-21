@@ -1,51 +1,142 @@
-PACKAGE 954 - a tenant with no Xero is not a failed cron
+PACKAGE 955 - the customer's logo and name, from the tenant record
 ================================================================================
 
-One file. Complete replacement.
+Eight files. Seven complete replacements, ONE NEW FILE.
 
-  pages/api/cron/deliveries-sync.js
+  components/BrandLogo.js          <-- NEW, create this one
+  components/BookkeepingNav.js
+  components/CommercialNav.js
+  components/OperationsNav.js
+  components/PreContractNav.js
+  components/OperationsShell.js
+  components/AdminShell.js
+  pages/index.js
+
+
+DO STEP 1 BEFORE YOU DEPLOY
+================================================================================
+Set logoUrl on Rock's tenant record FIRST. It does nothing while the current
+code is live, and if you deploy without it Rock's nav bar loses its logo and
+shows the letters RR instead until you do.
+
+In the Upstash console for the CONTROL database (control-registry), open the
+key
+
+    tenant:rock
+
+and add one field to the JSON object:
+
+    "logoUrl": "/rock-logo.jpg"
+
+That is a real value, not a placeholder - type it exactly as written. The file
+is in public/ and is served from every host, so the relative path is correct.
+
+The registry is cached for 60 seconds and /api/tenant-brand sets a 60-second
+browser cache, so allow about two minutes before it shows.
+
+Do the same for tenant:demo if you have a demo logo. If you leave it unset,
+demo renders its initials on a white square instead, which is a deliberate
+fallback and looks fine - just never Rock's logo.
 
 
 WHAT IT WAS
-===========
-deliveries-sync returned
+================================================================================
+This exact line existed NINETEEN times across the codebase:
 
-    { ok: false, reason: 'not connected' }
+    <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, ... }} />
 
-when a tenant has no Xero tokens. lib/forEachTenant.js reads the BODY, not
-just the status - so ok:false counts as a failed run. Demo has no Xero, and
-correctly never will, so it produced a failed cron, an error email and a
-cron-health alert every single day for a normal condition.
+Four of those nineteen are in the nav components, and those four navs are
+imported by forty-four pages between them. So on demo - on a
+constructionliberation.com hostname - Rock Roofing's actual logo was rendering
+in the nav bar of most of the portal.
 
-Seen within hours of demo being registered. This is the second instance of
-exactly the same shape - pkg931 added msConfigured() to the email sync for the
-same reason - and the reasoning is the same: an alert that fires for a normal
-condition is an alert people stop reading, and then it costs you the one
-morning it says something different.
+Same shape as the login page found on 19 September, just further in. And the
+same fault class as everything else this fortnight: logoUrl() has been
+tenant-aware since pkg937 and had ZERO CONSUMERS. The guard existed, was
+correct, and was never called.
 
-Now returns { ok: true, skipped: true, reason: '...' }. `skipped` is the flag
-forEachTenant ALREADY understands: it does not count as a failure and it does
-not overwrite the heartbeat of a real run.
+Two shared shells were doing the same with the title tag:
 
+    <Head><title>Rock Roofing - {title}</title></Head>
 
-CHECKED THE OTHERS
-==================
-deep-sync and wip-sync also bail on missing tokens, but with a 401 - and both
-are UNSCHEDULED (they are in the deliberately-unreachable list in
-lib/cronHealth.js), so neither is looping tenants. deliveries-sync was the
-only scheduled one with this shape.
+OperationsShell covers 25 pages, AdminShell 11. Both now read the tenant name.
 
 
-NOT A FAULT, FOR THE RECORD
-============================
-Two of the three error emails you sent were historic: the
-"PASTE_THE_HTTPS_URL" one is from yesterday's registry mistake, already fixed,
-and the cron-health alert was reporting this same deliveries-sync failure.
+WHAT IT IS NOW
+================================================================================
+components/BrandLogo.js is the single consumer of logoUrl(). It renders, in
+order:
+
+  1. feed not back yet    -> a transparent box of the right size
+  2. tenant has a logo    -> the image
+  3. no logo, has a name  -> initials on a white square (RR, CL, WPC)
+  4. neither              -> the transparent box
+
+The transparent box matters. Every page in the portal mounts one of these, and
+a 32px element appearing a moment after paint shifts the whole nav row
+sideways.
+
+There is NO fallback to /rock-logo.jpg anywhere in it. A default that renders
+somebody else's brand is the bug this file exists to remove.
+
+Props: size (default 32), radius (default 4), style (merged, used for the
+marginRight the Operations and Pre-Contract navs already had).
+
+
+ONE THING TO LOOK AT AND DECIDE
+================================================================================
+The portal home header currently reads "Rock Roofing". After this it reads
+whatever `name` is on the tenant record, which lib/tenants.js documents as
+"Rock Roofing Ltd". So the header and the footer will both gain the "Ltd".
+
+Do not fix that by editing the header. `name` is also what goes into email
+bodies and document headers, where "Ltd" is right. This is the legalName
+question already on the outstanding list - a display name and a name on a
+contractual document are two fields, not one. Tell me which way you want it
+and it goes in 956.
+
+
+CHECKED, NOT ASSUMED
+================================================================================
+- /api/tenant-brand does send both `name` and `logoUrl`. Read the feed, not
+  the field name - that is the "client reads a field the feed never sends"
+  fault.
+- useFormat() is useContext(). In AdminShell it is placed ABOVE
+  `if (!ok) return null`, not below it.
+- TenantProvider wraps every page in _app.js, so there is no page where
+  BrandLogo can mount without the context.
+- esbuild compiles all eight clean, no warnings, and bundling each one for the
+  browser pulls in nothing server-only.
+- initialsOf() was RUN, not eyeballed: Rock Roofing Ltd -> RR, Construction
+  Liberation Ltd -> CL, WPC Ltd -> WPC, Demo -> DE, empty -> empty. It briefly
+  turned "Construction Liberation" into "LI" because the skip list had
+  "construction" in it. Running it found that; reading it did not.
+- BizNav was in the plan and is NOT in this package. It carries no logo and no
+  company name, so there was nothing to change.
 
 
 SMOKE TEST
-==========
-1. Tomorrow morning: no deliveries-sync failure for demo, and no cron-health
-   alert naming it.
-2. Rock's deliveries-sync unchanged - it has Xero, so it never reaches this
-   line.
+================================================================================
+1. app.rockroofing.co.uk - the logo is unchanged in the nav on Commercial,
+   Bookkeeping, Operations and Pre-Contract, and on the portal home. If it
+   shows RR instead, step 1 did not take: check tenant:rock and wait two
+   minutes.
+2. Browser tab on any Operations page and any Admin page: reads the company
+   name, not "Rock Roofing", and still names the page.
+3. demo.constructionliberation.com - the nav bar shows the demo initials or
+   the demo logo. Rock's logo appears NOWHERE. This is the one that matters.
+4. Narrow the window until the nav wraps: the logo stays square and does not
+   squash.
+
+
+STILL CARRYING ROCK'S LOGO AFTER THIS
+================================================================================
+Fifteen of the nineteen are in pages that build their own header rather than
+using a nav: crm, crm-scores, forms/index, design/index, staff, upload,
+upload-transactions, bookkeeping, bookkeeping/admin, operations/forms,
+operations/projects, rams-approve, reset-password, instruct/[token],
+business-financials/export. Plus the PDF and email generators in pages/api,
+which need the shared header helper, not this component.
+
+Those are 956 - along with the money sweep, which is the bigger win for
+Friday.

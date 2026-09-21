@@ -1,14 +1,19 @@
 import Head from 'next/head'
 import OperationsNav from './OperationsNav'
+import { useFormat } from './TenantProvider'
 
 const INK = '#1a1a19'
 
 // Standard chrome for every Operations page: title tag, nav, and a content
 // container. Pass `wide` for full-width pages (tables, planning grids).
 export default function OperationsShell({ active, section, title, children, wide }) {
+  const { companyName: brand } = useFormat()
+  const page = title || 'Operations'
   return (
     <>
-      <Head><title>Rock Roofing — {title || 'Operations'}</title></Head>
+      {/* Same shape as the login page (pkg937): the tenant's name, or just the
+          page name while the feed is in flight. Never a hard-coded company. */}
+      <Head><title>{brand ? `${brand} - ${page}` : page}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <OperationsNav active={active} section={section} />
         <div style={{ maxWidth: wide ? 'none' : 1100, margin: '0 auto', padding: wide ? '24px' : '24px' }}>

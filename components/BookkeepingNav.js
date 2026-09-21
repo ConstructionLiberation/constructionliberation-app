@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import ReportImprovementLink from './ReportImprovementLink'
+import BrandLogo from './BrandLogo'
 
 const INK = '#1a1a2e'
 const SUBS = [
@@ -13,7 +14,7 @@ export default function BookkeepingNav({ active }) {
     <div style={{ position: 'sticky', top: 0, zIndex: 20 }}>
       <div style={{ background: INK, padding: '0 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', height: 56, gap: 8 }}>
-          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
+          <BrandLogo />
           <Link href="/" style={{ color: '#aaa', fontSize: 13, textDecoration: 'none', padding: '4px 10px' }}>&larr; Portal</Link>
           <span style={{ color: '#444' }}>|</span>
           <span style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>Bookkeeping</span>

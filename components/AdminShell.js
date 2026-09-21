@@ -1,6 +1,7 @@
 import Head from 'next/head'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
+import { useFormat } from './TenantProvider'
 
 const MGMT = ['management', 'admin']
 
@@ -49,6 +50,8 @@ export function AdminTabs({ active, role, tabs }) {
 // Chrome for Admin-area pages: dark bar + admin sub-nav, admin-gated.
 export default function AdminShell({ active, title, children, wide, allow }) {
   const router = useRouter()
+  // ABOVE the `if (!ok) return null` below. useFormat() is useContext().
+  const { companyName: brand } = useFormat()
   const [ok, setOk] = useState(false)
   const [role, setRole] = useState(null)
   // Roles permitted on this page. Defaults to admin-only; pages can widen it
@@ -64,9 +67,10 @@ export default function AdminShell({ active, title, children, wide, allow }) {
   }, [])
   if (!ok) return null
   const isBk = ['/admin/account-categorisation', '/admin/xero-upload', '/admin/data-management'].includes(active)
+  const page = title || (isBk ? 'Bookkeeping' : 'Admin')
   return (
     <>
-      <Head><title>Rock Roofing — {title || (isBk ? 'Bookkeeping' : 'Admin')}</title></Head>
+      <Head><title>{brand ? `${brand} - ${page}` : page}</title></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#fafaf9' }}>
         <div style={{ background: '#1a1a19', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
           <a href={isBk ? '/bookkeeping' : '/'} style={{ color: '#888', fontSize: 13, textDecoration: 'none' }}>{isBk ? '← Bookkeeping' : '← Portal'}</a>

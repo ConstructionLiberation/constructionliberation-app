@@ -3,6 +3,8 @@ import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import { canSeeArea } from '../lib/modules'
 import ReportImprovementLink from '../components/ReportImprovementLink'
+import BrandLogo from '../components/BrandLogo'
+import { useFormat } from '../components/TenantProvider'
 
 const departments = [
   {
@@ -161,6 +163,7 @@ const departments = [
 ]
 
 export default function Portal() {
+  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [modules, setModules] = useState(null)
@@ -184,7 +187,7 @@ export default function Portal() {
 
   return (
     <>
-      <Head><title>Rock Roofing — Portal</title></Head>
+      <Head><title>{brand ? `${brand} - Portal` : 'Portal'}</title></Head>
       <div style={{
         fontFamily: 'system-ui,-apple-system,sans-serif',
         minHeight: '100vh',
@@ -202,9 +205,9 @@ export default function Portal() {
           alignItems: 'center',
           gap: 12,
         }}>
-          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 36, width: 36, borderRadius: 6 }} />
+          <BrandLogo size={36} radius={6} />
           <div>
-            <div style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>Rock Roofing</div>
+            <div style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>{brand}</div>
             <div style={{ color: '#555', fontSize: 11 }}>Company Portal</div>
           </div>
           <div style={{ flex: 1 }} />
@@ -338,7 +341,7 @@ export default function Portal() {
           display: 'flex',
           justifyContent: 'center',
         }}>
-          <span style={{ color: '#333', fontSize: 11 }}>Rock Roofing Ltd — Internal Portal</span>
+          <span style={{ color: '#333', fontSize: 11 }}>{brand ? `${brand} - Internal Portal` : 'Internal Portal'}</span>
         </div>
       </div>
     </>

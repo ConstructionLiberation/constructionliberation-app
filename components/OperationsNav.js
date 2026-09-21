@@ -1,4 +1,5 @@
 import ReportImprovementLink from './ReportImprovementLink'
+import BrandLogo from './BrandLogo'
 // Two-tier Operations navigation.
 // Top row: main sections (no dropdowns). Clicking a section navigates to it.
 // Sections with sub-pages render a SECOND ROW of tabs underneath (like the
@@ -56,7 +57,7 @@ export default function OperationsNav({ active, section }) {
     <div>
       {/* Top row: main sections */}
       <div style={{ background: '#1a1a19', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 0, height: 58, overflowX: 'auto' }}>
-        <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4, marginRight: 8, flexShrink: 0 }} />
+        <BrandLogo style={{ marginRight: 8 }} />
         <a href="/" style={linkStyle}>← Portal</a>
         <Divider />
         {NAV.filter(n => !n.hidden).map((item) => {
