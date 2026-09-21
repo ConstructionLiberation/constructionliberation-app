@@ -1,53 +1,64 @@
-PACKAGE 979 - the fix for 976's build failure
+PACKAGE 980 - so tomorrow's error is worth reading
 ================================================================================
 
-ONE file. Complete replacement.
+One file. Complete replacement.
 
-  components/OperationsNav.js
+  lib/xero.js
 
-Everything else from 976, 977 and 978 is already committed and correct - this
-unblocks all of it.
+Deploy with 979. No overlap.
 
 
-WHAT I DID WRONG, AGAIN
+WHY
 ================================================================================
-976 turned NAV from a module constant into navFor(term), built per render,
-because two of its labels are now glossary terms.
+Xero being connected rules out the obvious cause, so 977's message tomorrow
+is now the whole diagnosis - and half of it would still have been useless:
 
-NAV was used in TWO components in that file:
+    if (!res.ok) throw new Error('Token refresh failed')
 
-  OperationsNav   line 73   - where I declared it
-  SectionTabs     line 102  - where I did not
+No status, no body. Every caller that reports that message tells you
+nothing. It now throws:
 
-SectionTabs is a separate component, so the NAV built in OperationsNav is not
-in scope there. It referenced a module constant that no longer existed:
+    Token refresh failed: 400 {"error":"invalid_grant"}
 
-    ReferenceError: NAV is not defined
+Which matters because the three likely bodies are three different jobs:
 
-Twenty-five Operations pages failed to prerender - every page that renders a
-second-row tab strip.
+  invalid_grant   the refresh token has been consumed or revoked. Xero
+                  ROTATES the refresh token on every use, so two concurrent
+                  refreshes leave one caller holding a dead one.
+  invalid_client  the credentials are wrong - relevant since the secret was
+                  rotated on 19 September.
+  429             rate limiting. Xero allows 60 calls a minute per tenant and
+                  fetchPurchaseOrders pages at 100 POs a time.
 
-Same fault as Shell in 965 and UpcomingTable in 975: a value declared in one
-component and used in another. Compiles every time.
+fetchPurchaseOrders already reports properly - it throws the status and the
+body - so with 977 in place tomorrow's alert will name whichever it is.
 
 
-WHY MY CHECK DID NOT CATCH IT
+WHAT I CHECKED AND RULED OUT
 ================================================================================
-The declared-where-used scan I have been running looks at the glossary
-values - term, rams, brand, money. It did not look at NAV, because NAV is not
-a glossary value: it is a constant I had just converted into one.
+A refresh-token RACE was the best hypothesis once you said Xero was still
+connected: four crons fire at exactly 06:00, and Xero rotating the refresh
+token means two simultaneous refreshes kill one of them.
 
-The scan checked the thing I added and not the thing I changed.
+It is not that. Of the four jobs at 06:00 - deliveries-sync, weekly-report,
+hs-renewals, crm-daily-activities - only deliveries-sync touches Xero at
+all, and it refreshes once.
 
-I have now run a scope check over ALL FOUR constants converted this way -
-NAV, CommercialNav's GROUPS, AdminShell's adminTabs and projects.js's
-subTabs - and every reference is in a scope that declares it. The other three
-were already correct; only NAV was wrong.
+Worth keeping in mind anyway: TWELVE call sites across the app refresh the
+token, and most of them do it inside `catch {}`. Any two of those running
+together - a cron while someone has the WIP page open - is the same race,
+just not on a schedule. That is a real design issue for later, not tonight's
+bug.
+
+
+ALSO NOTICED, NOT FIXED
+================================================================================
+The comment at the top of deliveries-sync says "Scheduled hourly via
+vercel.json crons". It is daily, 0 6 * * *. Left alone because that file
+already carries 977's change and I did not want two packages editing it.
 
 
 SMOKE TEST
 ================================================================================
-1. The build goes green.
-2. Any Operations page with a second row of tabs - Projects, or H&S. That
-   second row IS SectionTabs, the component that was failing.
-3. Then the 976 checks: SWMS Matrix in the nav on demo, RAMS on Rock.
+Tomorrow's 06:00 alert, if there is one, should name a Xero status code and
+Xero's own words. Send it over and it will say what to do.
