@@ -610,7 +610,7 @@ function PctInput({ value, onCommit, width = 58, max = 100, style }) {
 }
 
 function ApplicationEditor({ app: appProp, appNumber, prevGross, prevReleases, isFirstApp, projectId, me, settings = {}, trackerVariations = [], projectPOs = [], hiddenPOs = [], onHiddenPOsChange, onBack, onDelete, onSaved, onVariationChange }) {
-  const { money } = useFormat()
+  const { money, currencySymbol } = useFormat()
   const fmt = (n) => money(Number(n) || 0)
   // The application is now EDITABLE state, not a read-only prop. Its dates and period
   // were fixed at creation, so getting the month wrong meant deleting a finished
@@ -798,9 +798,9 @@ function ApplicationEditor({ app: appProp, appNumber, prevGross, prevReleases, i
     const noMk = matItems.filter(m => !num2(m.markupPct))
     if (noMk.length) w.push(`${noMk.length} material line${noMk.length === 1 ? ' has' : 's have'} no mark-up applied`)
     const zeroMats = matItems.filter(m => num2(m.total != null ? m.total : num2(m.qty) * num2(m.rate)) === 0)
-    if (zeroMats.length) w.push(`${zeroMats.length} material line${zeroMats.length === 1 ? ' has' : 's have'} a £0 value`)
+    if (zeroMats.length) w.push(`${zeroMats.length} material line${zeroMats.length === 1 ? ' has' : 's have'} a ${currencySymbol}0 value`)
     const zeroWorks = rows.filter(r => r.kind === 'item' && (r.qty != null || String(r.unit || '').trim() !== '') && (r.total == null || num2(r.total) === 0))
-    if (zeroWorks.length) w.push(`${zeroWorks.length} contract-works line${zeroWorks.length === 1 ? ' has' : 's have'} a £0 value`)
+    if (zeroWorks.length) w.push(`${zeroWorks.length} contract-works line${zeroWorks.length === 1 ? ' has' : 's have'} a ${currencySymbol}0 value`)
     return w
   }
   function trySubmit() {
@@ -998,7 +998,7 @@ function ApplicationEditor({ app: appProp, appNumber, prevGross, prevReleases, i
           </div>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 15, color: '#374151' }}>£</span>
+            <span style={{ fontSize: 15, color: '#374151' }}>{currencySymbol}</span>
             <input type="number" step="0.01" min="0" disabled={locked} value={prevCertGross}
               onChange={e => { setPrevCertGross(e.target.value); setDirty(true) }}
               placeholder="0.00"
@@ -1039,7 +1039,7 @@ function ApplicationEditor({ app: appProp, appNumber, prevGross, prevReleases, i
                 return (
                   <tr key={r.id} style={{ borderBottom: '1px solid #f0f0f0', background: zeroWorks ? '#fef2f2' : 'transparent' }}>
                     <td style={{ ...td, color: '#6b7280', fontWeight: 600 }}>{r.code}</td>
-                    <td style={{ ...td, minWidth: 240, whiteSpace: 'normal', ...fs }}>{zeroWorks && <span title="This line has a £0 value" style={{ color: '#dc2626', fontWeight: 700, marginRight: 5 }}>⚠</span>}{r.description}</td>
+                    <td style={{ ...td, minWidth: 240, whiteSpace: 'normal', ...fs }}>{zeroWorks && <span title={`This line has a ${currencySymbol}0 value`} style={{ color: '#dc2626', fontWeight: 700, marginRight: 5 }}>⚠</span>}{r.description}</td>
                     <td style={tdR}>{r.qty ?? ''}</td>
                     <td style={td}>{r.unit || ''}</td>
                     <td style={tdR}>{r.rate != null ? Number(r.rate).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : ''}</td>
@@ -1186,7 +1186,7 @@ function ApplicationEditor({ app: appProp, appNumber, prevGross, prevReleases, i
                 const zeroLine = num(netTotal) === 0
                 return (
                   <tr key={m.id} style={{ borderBottom: '1px solid #f0f0f0', background: zeroLine ? '#fef2f2' : 'transparent' }}>
-                    <td style={{ ...td, minWidth: 180, whiteSpace: 'normal' }}>{zeroLine && <span title="This line has a £0 value" style={{ color: '#dc2626', fontWeight: 700, marginRight: 5 }}>⚠</span>}{m.description}</td>
+                    <td style={{ ...td, minWidth: 180, whiteSpace: 'normal' }}>{zeroLine && <span title={`This line has a ${currencySymbol}0 value`} style={{ color: '#dc2626', fontWeight: 700, marginRight: 5 }}>⚠</span>}{m.description}</td>
                     <td style={{ ...td, color: '#6b7280' }}>{m.poNumber || '—'}</td>
                     <td style={tdR}>{locked ? (m.qty ?? '') : <input type="number" value={m.qty ?? ''} onChange={e => setMatField(m.id, 'qty', e.target.value === '' ? null : parseFloat(e.target.value))} style={{ width: 52, padding: '4px 6px', border: '1px solid #d5d9e0', borderRadius: 5, fontSize: 12.5, textAlign: 'right' }} />}</td>
                     <td style={td}>{m.unit || ''}</td>

@@ -116,7 +116,9 @@ export default function Dashboard() {
   // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
   // useFormat(), which is a hook, so it lives here instead. Same shape as
   // before, so every call site below is unchanged.
-  const { money } = useFormat()
+  // Column headings and helper text carried a literal pound sign while the
+  // figures under them came from money(). The symbol comes from the same feed.
+  const { money, currencySymbol } = useFormat()
   const fmt = (n) => (n == null ? '\u2014' : money(n))
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -380,19 +382,19 @@ export default function Dashboard() {
     { key: 'remainingInc', label: 'Remaining (Inc.)', group: 'contract', tip: 'Remaining to claim including retention outstanding (and net of WIP).' },
     { key: 'labourSpend', label: 'Lab Spend', group: 'labour', tip: 'Labour cost to the valuation date (wages + labour-coded bills).' },
     { key: 'labourBudget', label: 'Lab Budget', group: 'labour', tip: 'Labour budget incl. instructed variations.' },
-    { key: 'labourLeft', label: 'Lab Left £', group: 'labour', tip: 'Labour budget − labour spend to the valuation date.' },
+    { key: 'labourLeft', label: `Lab Left ${currencySymbol}`, group: 'labour', tip: 'Labour budget − labour spend to the valuation date.' },
     { key: 'labourLeftPct', label: 'Lab Left %', group: 'labour', tip: 'Labour budget remaining as a %.' },
     { key: 'matsSpend', label: 'Mat Spend', group: 'materials', tip: 'Materials cost to the valuation date.' },
     { key: 'matsBudget', label: 'Mat Budget', group: 'materials', tip: 'Materials budget incl. instructed variations.' },
-    { key: 'matsLeft', label: 'Mat Left £', group: 'materials', tip: 'Materials budget − materials spend to the valuation date.' },
+    { key: 'matsLeft', label: `Mat Left ${currencySymbol}`, group: 'materials', tip: 'Materials budget − materials spend to the valuation date.' },
     { key: 'matsLeftPct', label: 'Mat Left %', group: 'materials', tip: 'Materials budget remaining as a %.' },
     { key: 'totalSpend', label: 'Total Spend', group: 'budget', tip: 'Total cost (labour + materials) to the valuation date.' },
     { key: 'totalBudget', label: 'Total Budget', group: 'budget', tip: 'Total budget incl. instructed variations.' },
-    { key: 'totalLeft', label: 'Total Left £', group: 'budget', tip: 'Total budget − total spend to the valuation date.' },
+    { key: 'totalLeft', label: `Total Left ${currencySymbol}`, group: 'budget', tip: 'Total budget − total spend to the valuation date.' },
     { key: 'totalLeftPct', label: 'Total Left %', group: 'budget', tip: 'Total budget remaining as a %.' },
-    { key: 'profit', label: 'Profit £', group: 'profit', tip: 'Invoiced (incl. retention) − total cost, to the valuation date.' },
+    { key: 'profit', label: `Profit ${currencySymbol}`, group: 'profit', tip: 'Invoiced (incl. retention) − total cost, to the valuation date.' },
     { key: 'profitPct', label: 'Profit %', group: 'profit', tip: 'Profit ÷ invoiced (incl. retention), to the valuation date.' },
-    { key: 'wip', label: 'WIP £', group: 'wip', tip: 'Value of work done after the valuation date but not yet invoiced (cost grossed up by margin).' },
+    { key: 'wip', label: `WIP ${currencySymbol}`, group: 'wip', tip: 'Value of work done after the valuation date but not yet invoiced (cost grossed up by margin).' },
     { key: 'wipMargin', label: 'WIP Margin %', group: 'wip', tip: 'Margin used to gross up WIP — the WIP margin override if set, otherwise the current margin.' },
   ]
 
@@ -702,11 +704,11 @@ export default function Dashboard() {
                   <div title={barTip} style={{ background: GROUP.profit.bg, border: `1px solid ${GROUP.profit.border}`, borderRadius: 8, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
                     <span style={{ fontSize: 11, color: '#888' }}>{isSelection ? `${selectedProjects.size} selected` : `All ${filtered.length} projects`} — incl. WIP, to end of {monthLabel}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#888' }}>Invoiced £ (inc WIP)</span>
+                      <span style={{ fontSize: 12, color: '#888' }}>Invoiced {currencySymbol} (inc WIP)</span>
                       <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a2e' }}>{fmt(invoicedInclWip)}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#888' }}>Profit £ (inc WIP)</span>
+                      <span style={{ fontSize: 12, color: '#888' }}>Profit {currencySymbol} (inc WIP)</span>
                       <span style={{ fontSize: 18, fontWeight: 700, color: profitInclWip >= 0 ? '#16a34a' : '#e63946' }}>{fmt(profitInclWip)}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -714,7 +716,7 @@ export default function Dashboard() {
                       <span style={{ fontSize: 18, fontWeight: 700, color: profitPctInclWip != null ? (profitPctInclWip >= 0.25 ? '#16a34a' : profitPctInclWip >= 0.21 ? '#ca8a04' : '#e63946') : '#888' }}>{profitPctInclWip != null ? (profitPctInclWip * 100).toFixed(1) + '%' : '—'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#888' }}>WIP £</span>
+                      <span style={{ fontSize: 12, color: '#888' }}>WIP {currencySymbol}</span>
                       <span style={{ fontSize: 18, fontWeight: 700, color: '#2563eb' }}>{fmt(selWip)}</span>
                     </div>
                     {isSelection && (
@@ -773,19 +775,19 @@ export default function Dashboard() {
                       {[
                         ['Lab Spend', 'Labour cost to date (wages + labour-coded bills).'],
                         ['Lab Budget', 'Labour budget incl. instructed variations.'],
-                        ['Lab Left £', 'Labour budget − labour spend.'],
+                        [`Lab Left ${currencySymbol}`, 'Labour budget − labour spend.'],
                         ['Lab Left %', 'Labour budget remaining as a %.'],
                       ].map(([h, tip]) => <th key={h} style={thStyle(GROUP.labour)} title={tip}>{h}</th>)}
                       {[
                         ['Mat Spend', 'Materials cost to date.'],
                         ['Mat Budget', 'Materials budget incl. instructed variations.'],
-                        ['Mat Left £', 'Materials budget − materials spend.'],
+                        [`Mat Left ${currencySymbol}`, 'Materials budget − materials spend.'],
                         ['Mat Left %', 'Materials budget remaining as a %.'],
                       ].map(([h, tip]) => <th key={h} style={thStyle(GROUP.materials)} title={tip}>{h}</th>)}
                       {[
                         ['Total Spend', 'Total cost to date (labour + materials).'],
                         ['Total Budget', 'Total budget incl. instructed variations.'],
-                        ['Total Left £', 'Total budget − total spend.'],
+                        [`Total Left ${currencySymbol}`, 'Total budget − total spend.'],
                         ['Total Left %', 'Total budget remaining as a %.'],
                       ].map(([h, tip]) => <th key={h} style={thStyle(GROUP.budget)} title={tip}>{h}</th>)}
                       <th style={thStyle(GROUP.none, true)}>Comments</th>

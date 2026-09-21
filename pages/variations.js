@@ -193,7 +193,9 @@ export default function VariationTracker() {
   // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
   // useFormat(), which is a hook, so it lives here instead. Same shape as
   // before, so every call site below is unchanged.
-  const { money } = useFormat()
+  // Column headings and helper text carried a literal pound sign while the
+  // figures under them came from money(). The symbol comes from the same feed.
+  const { money, currencySymbol } = useFormat()
   const fmt = (n) => (n == null || n === '' || isNaN(n) ? '\u2014' : money(parseFloat(n)))
   const router = useRouter()
   const isEmbed = router.query.embed === 'true'
@@ -607,10 +609,10 @@ const [addForm, setAddForm] = useState({ ...NEW_VARIATION })
                         { label: 'CM', col: 'cm' },
                         { label: 'Description', col: 'description' },
                         { label: 'Instructed?', col: 'instructed' },
-                        { label: 'Materials £', col: 'materials' },
-                        { label: 'Labour £', col: 'labour' },
-                        { label: 'Profit £', col: 'profit' },
-                        { label: 'Total £', col: 'total' },
+                        { label: `Materials ${currencySymbol}`, col: 'materials' },
+                        { label: `Labour ${currencySymbol}`, col: 'labour' },
+                        { label: `Profit ${currencySymbol}`, col: 'profit' },
+                        { label: `Total ${currencySymbol}`, col: 'total' },
                         { label: '', col: 'actions' },
                       ].map(({ label, col }) => (
                         <th key={col} onClick={() => toggleSort(col)}
@@ -715,7 +717,7 @@ const [addForm, setAddForm] = useState({ ...NEW_VARIATION })
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
-                {[['materials', 'Materials (£)'], ['labour', 'Labour / Lodge (£)'], ['profit', 'Profit (£)']].map(([key, label]) => (
+                {[['materials', `Materials (${currencySymbol})`], ['labour', `Labour / Lodge (${currencySymbol})`], ['profit', `Profit (${currencySymbol})`]].map(([key, label]) => (
                   <div key={key}>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>{label}</label>
                     <input type="number" step="0.01" inputMode="decimal" value={editModal.form[key]}
@@ -794,7 +796,7 @@ const [addForm, setAddForm] = useState({ ...NEW_VARIATION })
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
-                {[['materials', 'Materials (£)'], ['labour', 'Labour / Lodge (£)'], ['profit', 'Profit (£)']].map(([key, label]) => (
+                {[['materials', `Materials (${currencySymbol})`], ['labour', `Labour / Lodge (${currencySymbol})`], ['profit', `Profit (${currencySymbol})`]].map(([key, label]) => (
                   <div key={key}>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>{label}</label>
                     <input type="number" step="0.01" inputMode="decimal" value={addForm[key]} onChange={e => setAddForm(f => ({ ...f, [key]: e.target.value }))}

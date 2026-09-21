@@ -1,78 +1,67 @@
-PACKAGE 959 - "No chase emails sent yet" on every invoice
+PACKAGE 961 - the currency SYMBOL in labels
 ================================================================================
 
-Two files. Complete replacements. No overlap with 958 - deploy both together.
+Four files. Complete replacements. THE SAME FOUR FILES AS 960 - deploy 960
+first, check it, then this.
 
-  lib/chaseEmailTemplates.js
-  lib/outstandingInvoicesReport.js
+  pages/commercial.js
+  pages/retention.js
+  pages/applications.js
+  pages/variations.js
 
 
 WHAT IT WAS
 ================================================================================
-Every invoice in the weekly PDF says
+960 fixed the figures. Twenty-nine pound signs remained in these four files as
+LABELS, which on demo meant a column headed "Profit £" above a column of
+dollars:
 
-    Emails sent
-    No chase emails sent yet.
+  commercial    Lab Left £, Mat Left £, Total Left £, Profit £, WIP £
+                (in the column list AND again in the legend), plus
+                Invoiced £ (inc WIP), Profit £ (inc WIP), WIP £
+  retention     Project Value £, Final Account £, Applied for £, Certified £,
+                Invoiced Net £, Manual VAT £, Release Value £ (twice),
+                and one tooltip reading "Reverse charge / 0% = £0"
+  applications  a bare £ prefix on an input, two "this line has a £0 value"
+                warnings and the matching cell tooltips
+  variations    Materials £, Labour £, Profit £, Total £ in the column list,
+                and Materials (£) / Labour / Lodge (£) / Profit (£) twice in
+                the add and edit forms
 
-including ones whose Comments list four sent chases. INV-1743 has four. It has
-been wrong since the chase system was built.
-
-The row builder in lib/outstandingInvoicesReport.js reads
-
-    emails: m.emails || [],
-
-and m.emails DOES NOT EXIST. Chases are stored under m.chases, keyed by
-stage, written by the record-chase action in pages/api/outstanding-invoices.js.
-So the field was always an empty array and the PDF always printed the empty
-state.
-
-This is the second fault class from the lessons, server to server instead of
-client to server: a reader taking a field off a structure that never carries
-it. Nothing in the build, the compile or the bundlecheck looks at that. The
-PDF's own line even says "placeholder until chase emails are built" - the
-chase system was built and this was never wired back up.
-
-The email that carries the PDF makes it worse by promising the opposite:
-"The full list, with comments and emails to date for each invoice, is attached
-as a PDF."
-
-NOT CAUSED BY 957 OR 958. Predates both.
+Different mechanism from 960: this is currencySymbol off the same feed, not
+money(). Zero figures change.
 
 
-WHAT IT IS NOW
+CHECKED - AND ONE CHECK THAT MATTERS MORE THAN THE COMPILE
 ================================================================================
-chaseList() reshapes m.chases into what the PDF renders - { at, type, to } -
-sorted oldest first. `to` is stored as an array in some records and a bare
-string in others, so both are handled and joined with a comma.
+A component that USES currencySymbol without destructuring it compiles
+perfectly and throws at runtime. So rather than trusting the build, every
+occurrence was mapped to its enclosing component and matched against the
+declarations:
 
-The stage LABEL comes from a new CHASE_STAGE_LABELS export, DERIVED from the
-CHASE_TEMPLATES array rather than typed out again. There were already three
-hand-written copies of that map and two had drifted - chaseEmailTemplates.js
-calls the last stage "Withdrawal from Contractual Obligations", the API calls
-it "Withdrawal notice".
+  commercial   Dashboard           11 uses   declared
+  retention    RetentionPage        1 use    declared
+  retention    EntryForm            8 uses   declared  (hook added here)
+  applications ApplicationEditor    5 uses   declared
+  variations   VariationTracker    10 uses   declared
 
+EntryForm is the only component that gained a useFormat() in this package, and
+it takes currencySymbol alone - it has no formatted figures in it.
 
-CHECKED
-================================================================================
-- Ran chaseList against realistic records: three stages out of order, one with
-  `to` as a string, one with `to` as a two-address array, one with no subject.
-  Comes back chronological with the right labels. Undefined and {} both give
-  [], which is the empty state the PDF already handles.
-- Both files compile clean.
-
-
-DELIBERATELY NOT FIXED HERE
-================================================================================
-pages/api/outstanding-invoices.js line 107 still has its own inline stage
-label map, and it is the one that has drifted. Pointing it at
-CHASE_STAGE_LABELS is a one-line change, but it would alter the text written
-into future comment records, which is stored data rather than a rendering.
-Worth doing on purpose, not as a side effect of this.
+Also: zero visible pound signs remain in any of the four, counted excluding
+comments. All four compile and bundle clean with no duplicate symbols.
 
 
 SMOKE TEST
 ================================================================================
-Download the outstanding invoices PDF on Rock again. INV-1743 (Gas Lane - App
-15) should list four emails under "Emails sent" - Upcoming invoice, Overdue 1,
-Overdue 2, Overdue 3 - with dates and recipients. INV-1729 (Hollis Croft) has
-none and should still say "No chase emails sent yet".
+1. Demo commercial: the Lab Left / Mat Left / Total Left / Profit / WIP column
+   headings read $ not £, and so does the legend behind the "?" - it is a
+   second copy of the same labels and it was the easiest one to miss.
+2. Demo retention: add or edit an entry. That form is EntryForm and it carries
+   eight of the twenty-nine.
+3. Demo variations: the column headings, then open Add Variation - Materials
+   (£) / Labour / Lodge (£) / Profit (£) appear in BOTH the add and the edit
+   form.
+4. Demo applications: open an application. The bare symbol in front of the
+   value input, and a line with a zero value should warn in dollars.
+5. Rock: all four unchanged, reading £ everywhere they did before.

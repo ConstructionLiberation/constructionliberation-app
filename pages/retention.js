@@ -323,7 +323,9 @@ export default function RetentionPage() {
   // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
   // useFormat(), which is a hook, so it lives here instead. Same shape as
   // before, so every call site below is unchanged.
-  const { money } = useFormat()
+  // Column headings and helper text carried a literal pound sign while the
+  // figures under them came from money(). The symbol comes from the same feed.
+  const { money, currencySymbol } = useFormat()
   const fmt = (n) => (n == null || n === '' ? '\u2014' : money(n))
   const fmtC = (n) => money(n || 0)
   const [entries, setEntries] = useState([])
@@ -1387,7 +1389,7 @@ export default function RetentionPage() {
                         ['1st Date', 'left', 'Due date of the first retention release (manual).', 'r1date'],
                         ['2nd Value \u2013 click to release', 'right', 'Second retention release - half of the retention on APPLIED FOR (Applied for x retention %). Retention comes from the application - it is deducted on what has been applied for - so that is the source of truth. It converges on the Final Account as the job completes. CLICK THE CELL to confirm this half has been released; click again to undo. A half ticked in the retention section of an application marks itself. Amber = still to confirm, blue = Xero looks paid so it probably has been, green = released.', null],
                         ['2nd Date', 'left', 'Due date of the second retention release (manual).', 'r2date'],
-                        ['VAT', 'right', 'VAT on the Final Account = Final Account × VAT-type rate. Reverse charge / 0% = £0.', null],
+                        ['VAT', 'right', `VAT on the Final Account = Final Account × VAT-type rate. Reverse charge / 0% = ${currencySymbol}0.`, null],
                         ['VAT Type', 'left', 'VAT treatment from Xero: reverse charge, 5%, 20%, zero-rated, etc.', null],
                         ['Total Due', 'right', 'Final Account + VAT. The full amount due including VAT.', null],
                         ['Total Paid', 'right', 'Total received from the customer (including VAT). From Xero / the imported CSV.', 'paid'],
@@ -1825,6 +1827,8 @@ export default function RetentionPage() {
 // steal focus from inputs). Project Name is an autocomplete: typing suggests
 // matching existing projects; picking one auto-fills and links the entry.
 function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], allProjects = [], inputStyle, existingXeroIds = new Set(), existingKeys = new Set() }) {
+  // Labels only - this form has no formatted figures in it.
+  const { currencySymbol } = useFormat()
   const f = field => e => setForm({ ...form, [field]: e.target.value })
   const fb = field => e => setForm({ ...form, [field]: e.target.checked })
   const [showSuggest, setShowSuggest] = useState(false)
@@ -1917,7 +1921,7 @@ function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], al
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 12 }}>
-        {[['projectValue', 'Project Value £'], ['finalAccount', 'Final Account £'], ['retentionPct', 'Retention %'], ['completionDate', 'Completion Date']].map(([key, label]) => (
+        {[['projectValue', `Project Value ${currencySymbol}`], ['finalAccount', `Final Account ${currencySymbol}`], ['retentionPct', 'Retention %'], ['completionDate', 'Completion Date']].map(([key, label]) => (
           <div key={key}>
             <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>{label}</div>
             <input type={key.includes('Date') ? 'date' : key.includes('Value') || key.includes('Pct') || key.includes('pct') ? 'number' : 'text'}
@@ -1935,15 +1939,15 @@ function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], al
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Applied for £ <span style={{ color: '#bbb' }}>(sent application wins)</span></div>
+          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Applied for {currencySymbol} <span style={{ color: '#bbb' }}>(sent application wins)</span></div>
           <input type="number" value={form.appliedFor || ''} onChange={f('appliedFor')} style={inputStyle} />
         </div>
         <div>
-          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Certified £ <span style={{ color: '#bbb' }}>(next application overwrites)</span></div>
+          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Certified {currencySymbol} <span style={{ color: '#bbb' }}>(next application overwrites)</span></div>
           <input type="number" value={form.certified || ''} onChange={f('certified')} style={inputStyle} />
         </div>
         <div>
-          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Invoiced Net £ <span style={{ color: '#bbb' }}>(ex-VAT)</span></div>
+          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Invoiced Net {currencySymbol} <span style={{ color: '#bbb' }}>(ex-VAT)</span></div>
           <input type="number" value={form.invoicedNet != null ? form.invoicedNet : (form.invoiced || '')} onChange={f('invoicedNet')} style={inputStyle} />
         </div>
         <div>
@@ -1955,7 +1959,7 @@ function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], al
         </div>
         <div>
           <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>
-            Manual VAT £ {(form.vatRateLabel || '').toLowerCase() === 'mixed' && <span style={{ color: '#c77700' }}>(required — mixed)</span>}
+            Manual VAT {currencySymbol} {(form.vatRateLabel || '').toLowerCase() === 'mixed' && <span style={{ color: '#c77700' }}>(required — mixed)</span>}
           </div>
           <input type="number" value={form.vatManual || ''} onChange={f('vatManual')} placeholder={(form.vatRateLabel || '').toLowerCase() === 'mixed' ? 'Enter VAT' : 'auto'} style={inputStyle} />
         </div>
@@ -1965,7 +1969,7 @@ function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], al
           <div style={{ fontSize: 11, fontWeight: 600, color: '#4f46e5', marginBottom: 8 }}>1st Retention Release</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Release Value £</div>
+              <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Release Value {currencySymbol}</div>
               <input type="number" value={form.release1Value || ''} onChange={f('release1Value')} style={inputStyle} />
             </div>
             <div>
@@ -1979,7 +1983,7 @@ function EntryForm({ form, setForm, onSave, onCancel, saving, qsOptions = [], al
           <div style={{ fontSize: 11, fontWeight: 600, color: '#16a34a', marginBottom: 8 }}>2nd Retention Release</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Release Value £</div>
+              <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>Release Value {currencySymbol}</div>
               <input type="number" value={form.release2Value || ''} onChange={f('release2Value')} style={inputStyle} />
             </div>
             <div>
