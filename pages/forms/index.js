@@ -143,7 +143,7 @@ export default function FormsHome() {
         <div style={{ maxWidth: 380, margin: '0 auto', paddingTop: 40 }}>
           <div style={{ textAlign: 'center', marginBottom: 28 }}>
             <BrandLogo size={64} radius={12} />
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: '16px 0 4px' }}>{brand ? `${brand} Forms` : 'Forms'}</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: '16px 0 4px' }}>{brand ? `${brand} Site App` : 'Site App'}</h1>
             <p style={{ color: '#777', fontSize: 14, margin: 0 }}>
               {rememberedPhone ? 'Enter your PIN to start' : 'Log in with your mobile and PIN'}
             </p>
@@ -1442,7 +1442,7 @@ export function Shell({ children, onLogout, user }) {
   return (
     <>
       <Head>
-        <title>{brand ? `${brand} Forms` : 'Forms'}</title>
+        <title>{brand ? `${brand} Site App` : 'Site App'}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="theme-color" content="#1a1a19" />
       </Head>
@@ -1452,7 +1452,7 @@ export function Shell({ children, onLogout, user }) {
           padding: '0 16px', gap: 8, position: 'sticky', top: 0, zIndex: 10, overflowX: 'auto',
         }}>
           <BrandLogo size={32} radius={6} />
-          <span style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>Forms</span>
+          <span style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>Site App</span>
           <div style={{ flex: 1 }} />
           {user && (
             <>

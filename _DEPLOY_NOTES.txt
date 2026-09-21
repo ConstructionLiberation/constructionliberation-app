@@ -1,61 +1,59 @@
-PACKAGE 968 - the fix for the failed builds
+PACKAGE 969 - "Forms" becomes "Site App"
 ================================================================================
 
-ONE file. Complete replacement.
+One file. Complete replacement.
 
   pages/forms/index.js
 
-This unblocks 965, 966 AND 967 in one go. All three are already committed to
-main; they have simply never built, so 964 has remained live throughout.
-Nothing needs re-pasting.
 
-
-WHAT I DID WRONG
+WHAT CHANGED
 ================================================================================
-pages/forms/index.js has, at line 1436:
+Three places, not one. You asked for the login, but changing only that would
+have left the header bar on every page still saying "Forms" two lines below a
+heading saying "Site App".
 
-    export function Shell({ children, onLogout, user }) {
+  login heading     {brand} Forms      ->  {brand} Site App
+  browser tab       {brand} Forms      ->  {brand} Site App
+  header bar        Forms              ->  Site App
 
-Shell is the shared Site App chrome, and EVERY page under /forms imports it.
-The title and the logo I changed in 965 are inside Shell.
-
-My ownership scan - the one I have been quoting all day as the check that
-catches what the compiler misses - matched only
-
-    function X            and      export default function X
-
-and NOT `export function X`. So it could not see Shell at all, and attributed
-Shell's lines to FormsList, the previous plain function. I put the hook into
-FormsList, which never uses brand, and left Shell referencing a variable that
-does not exist.
-
-    ReferenceError: brand is not defined
-
-Sixteen /forms pages failed to prerender. The compile passed cleanly - it
-always does for this - and the failure only appeared at static generation.
+Both of the last two are inside Shell, so they change on EVERY page of the
+Site App, not just the login.
 
 
-WHAT I DID ABOUT IT
+WHAT I DID NOT CHANGE
 ================================================================================
-The hook now sits in Shell, and the one in FormsList is removed.
+"Project Forms" as the heading of the list you land on after login, and
+"Missing Forms" in the CM menu. Those are about forms specifically and are
+still the right word - the app is called the Site App, the things inside it
+are still forms.
 
-Then I fixed the scanner and re-ran it over every page and component in the
-repo that uses useFormat. Six things came back. Four were my scanner being
-wrong about its own output; two more - contracted-rates and
-upload-transactions - are real but pre-existing: both still have a
-module-scope hardcoded pound formatter, because neither has been converted
-yet. They are in the remaining tail, not a regression.
 
-Shell was the only genuine fault. Nothing else from 955 to 967 has an
-undeclared reference.
+ONE THING THIS DOES NOT REACH, AND IT MATTERS ON A PHONE
+================================================================================
+public/site.webmanifest says:
+
+    "name": "Rock Roofing",
+    "short_name": "Rock Roofing"
+
+That is what an operative sees under the icon when they add the Site App to
+their home screen. Every customer's phone would install it as "Rock Roofing",
+and on demo it already would.
+
+It cannot be fixed the same way: it is a static JSON file, not a React
+component, so it cannot read the tenant. The fix is to serve it from a route
+that can - pages/api/site-webmanifest.js returning the JSON with companyName
+and logoUrl substituted, and _document.js pointing the <link rel="manifest">
+at it. That is a small package on its own; it was already on the outstanding
+list and this is the second reason to do it.
+
+Worth deciding whether it should read "Demo Site App" or just "Demo" on the
+home screen - short_name is what actually shows under the icon, and there is
+not much room.
 
 
 SMOKE TEST
 ================================================================================
-1. The build goes green. That is the first thing.
-2. siteapp.rockroofing.co.uk - logo and "Rock Roofing Forms", as now.
-3. siteapp.demo.constructionliberation.com - the CL badge and "Demo Forms".
-4. Any Contracts Manager page under /forms/cm/ - those all render Shell and
-   were all failing.
-5. Then everything from 965, 966 and 967 goes live at once, so the demo logo
-   should appear the moment the record edit takes effect.
+1. Demo Site App login - "Demo Site App" under the CL badge.
+2. Log in and look at the dark bar at the top of any page - "Site App".
+3. Rock - "Rock Roofing Site App". Tell your operatives, since the wording
+   they have been looking at for months has changed.
