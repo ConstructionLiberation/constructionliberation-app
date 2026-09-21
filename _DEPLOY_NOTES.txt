@@ -1,64 +1,71 @@
-PACKAGE 982 - Rock's retention page is broken. Deploy this first.
+PACKAGE 983 - the tab favicon, which 981 did not fix
 ================================================================================
 
-ONE file. Complete replacement. AHEAD OF 979, 980 AND 981.
+Three files. ONE IS NEW.
 
-  pages/retention.js      <- includes 960, 961, 970 and 971
+  pages/api/favicon.js    <- NEW
+  pages/_document.js      <- supersedes 981
+  middleware.js           <- supersedes 981, repo root
 
-This is a LIVE page on Rock throwing on load, and it has been since 960
-deployed this morning.
 
-
-WHAT BROKE
+WHAT I MISSED
 ================================================================================
-960 moved `fmt` off module scope into RetentionPage, because money() comes
-from a hook. pages/retention.js has a SECOND component - InlineNumberCell -
-which renders a formatted value in two places and was left reaching for a
-const that no longer exists:
+981 made the WEB APP MANIFEST per tenant - the name and icon a phone uses
+when someone adds the Site App to their home screen. It did not touch the
+four hardcoded links in _document.js:
 
-    ReferenceError: fmt is not defined
+  /favicon.ico   /favicon-32x32.png   /favicon-16x16.png   /apple-touch-icon.png
 
-Same fault as Shell (965), UpcomingTable (975) and NAV (979): a value
-declared in one component and used in another.
+Those are the BROWSER TAB icon, a completely separate mechanism, and they
+are Rock's on every page of every tenant. Two icons, two mechanisms, and
+fixing one looked like fixing both. It didn't, which is what you saw.
 
 
-WHY MY CHECK MISSED IT, WHICH IS THE PART THAT MATTERS
+HOW IT WORKS
 ================================================================================
-IT DIDN'T. The ownership scan flagged it when I built 960 - it printed
-"2 fmt calls in InlineNumberCell". I then ran a second check to confirm:
+_document.js is server-rendered with no hook available, so the links point at
+/api/favicon and that route redirects to the tenant's iconUrl, or to
+/favicon.ico when it has none. A redirect rather than piping bytes, so the
+file is still served as a static asset by the CDN.
 
-    awk 'NR>46 && NR<330 && /\bfmt[A-Z]?\(/' pages/retention.js
+302, not 301: a permanent redirect is cached by the browser effectively for
+ever, and a tenant that set an icon later would never see it.
 
-It printed nothing, so I recorded InlineNumberCell as a false positive and
-moved on.
+Rock has no iconUrl, so it redirects to /favicon.ico and nothing changes.
 
-awk does not support \b as a word boundary. In POSIX ERE, \b is a BACKSPACE
-character. The pattern could never match anything. My verification tool was
-broken, and I trusted it over the scan that was right.
-
-The lesson this codebase already had written down - a diagnostic must be
-able to state what it did not look at - and I built one that silently
-matched nothing and read that as proof.
+Same middleware problem as the manifest - an API route has no file extension,
+so the passthrough rules that match .ico and .png cannot see it. Added to
+both lists.
 
 
-WHAT I DID AFTER FIXING IT
+WHERE TO PASTE THE PATH - YOUR QUESTION
 ================================================================================
-Re-ran the scan across EVERY file touched today that uses useFormat, in
-Python, with three corrections to the scan itself:
+Upstash, the CONTROL database (control-registry), key tenant:demo. Add:
 
-  - module-scope declarations count as in scope for components below them
-    (the previous version flagged 27 files that were fine)
-  - imported names count as declared
-  - only CALLS count as uses, not the bare word appearing in a string
+    "iconUrl": "/cl-logo.png"
 
-Result: clean, with InlineNumberCell the only real fault. That scan is now
-worth something; the awk one never was.
+Same place you put logoUrl and timezone. Not the demo tenant's own data
+store - the control registry. It drives BOTH the tab favicon (this package)
+and the home-screen install icon (981), so one field does both.
+
+Allow two minutes for the registry cache, then a hard reload - browsers hold
+onto a favicon harder than almost anything else. Incognito is the quick test.
+
+
+A NOTE ON THE IMAGE ITSELF
+================================================================================
+cl-logo.png is 256px with transparent corners. As a 16px tab icon the
+lettering around the badge will not be legible - it will read as a green
+circle. That is normal for a detailed logo at favicon size and Rock's own
+solution is a separate simplified mark (the square green ROCK tile). If the
+demo wants the same, it needs a simplified square version, not the badge.
 
 
 SMOKE TEST
 ================================================================================
-1. app.rockroofing.co.uk/retention loads.
-2. Click into a cell that takes a typed figure - Applied for, Certified,
-   Invoiced Net. InlineNumberCell IS that cell, and the formatted value it
-   shows when not editing is the line that was throwing.
-3. Demo retention: same, in dollars, with GST headings.
+1. /api/favicon on Rock redirects to /favicon.ico. Tab icon unchanged
+   everywhere.
+2. /api/favicon on demo, AFTER the record edit, redirects to /cl-logo.png.
+3. Demo Site App tab in incognito - the green badge, not the ROCK tile.
+4. siteapp.demo.constructionliberation.com specifically: if the icon is still
+   Rock's there but right on the portal, the middleware file did not go up.

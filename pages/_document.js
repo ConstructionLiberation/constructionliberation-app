@@ -1,15 +1,17 @@
 import { Html, Head, Main, NextScript } from 'next/document'
 
-// Global document: sets the Rock Roofing favicon / touch icons on every page
-// (portal + Site App).
+// Global document. The favicon and the manifest are both PER TENANT now -
+// see pages/api/favicon.js and pages/api/site-webmanifest.js.
 export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        {/* PER TENANT. These were four hardcoded Rock files on every page of
+            every customer - the tab icon, which is a different mechanism from
+            the manifest pkg981 fixed. /api/favicon redirects to the tenant's
+            iconUrl, or to /favicon.ico when it has none, so Rock is unchanged. */}
+        <link rel="icon" href="/api/favicon" />
+        <link rel="apple-touch-icon" href="/api/favicon" />
         {/* Per tenant - see pages/api/site-webmanifest.js. The static file said
             "Rock Roofing" to every customer's phone. */}
         <link rel="manifest" href="/api/site-webmanifest" />

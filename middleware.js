@@ -61,6 +61,8 @@ export async function middleware(req) {
       // the /forms PAGE, the phone asks for JSON and gets HTML, and the Site
       // App silently loses its name and icon on install.
       pathname === '/api/site-webmanifest' ||
+      // The tab icon, same reason: an API route has no extension.
+      pathname === '/api/favicon' ||
       // See the note on the main list below. This one matters MORE: it is the
       // Site App, and site.webmanifest is what an operative's phone fetches when
       // they add it to their home screen.
@@ -151,6 +153,8 @@ export async function middleware(req) {
     // The manifest moved to an API route and so has no extension. The browser
     // asks for it BEFORE anyone logs in, including on the login page.
     pathname === '/api/site-webmanifest' ||
+    // The tab icon, same reason: an API route has no extension.
+    pathname === '/api/favicon' ||
     pathname === '/rock-logo.jpg' ||
     pathname === '/login' ||
     pathname === '/reset-password' ||
