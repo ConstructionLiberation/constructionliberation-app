@@ -1,67 +1,76 @@
-PACKAGE 973 - four copies of the same email
+PACKAGE 974 - why the email says 142 and the CRM screen says none
 ================================================================================
 
 One file. Complete replacement.
 
-  lib/crmDailyActivityEmail.js
+  lib/demoSeed.js
+
+DEPLOYING THIS ALONE CHANGES NOTHING. It fixes what a seed WRITES; the demo
+data already in the database was written by the old version. See the two
+commands at the bottom.
 
 
-YOU WERE RIGHT ABOUT THE CAUSE
+THE CAUSE - AND YOU SPOTTED IT BY LOOKING AT A SCREEN
 ================================================================================
-sendNoActivityEmail() builds its recipient list from portal users with the
-role pre-contract or admin, and then LOOPS, sending one email per user.
-Nothing dedupes by address.
+The open-activity list exists in TWO places.
 
-On demo the seeder creates three pre-contract estimators - Callum Reid, Sofia
-Marchetti, Dev Patel - all with email DEMO_EMAIL, plus your own admin account
-on the same address. Four recipients, one inbox, four identical emails.
-Exactly the four you saw.
+  deal.activities        an array on each deal. This is what the CRM page
+                         reads, which is why every deal shows an activity.
 
-It is not only a demo artefact. A real customer with a shared estimating@ or
-accounts@ mailbox on two user records gets two copies of every one of these.
+  crm:activities:open    a SEPARATE flat index across every deal, written by
+                         pages/api/crm.js whenever an activity is saved
+                         through the app. This is the ONLY thing the daily
+                         email reads.
+
+The seeder wrote the deals and never built the index. So on demo the index is
+empty, and collectProjectsWithoutActivity() - which asks "is this deal id in
+the index?" - answers no for all of them. 142 open deals not in the exempt
+stage, 142 flagged, every evening, while the screen showed an activity on
+every one.
+
+Nothing was updated after 6pm. The two sources have never agreed.
+
+This is the project-list-in-three-keys lesson wearing a new coat: one
+concept, two storage locations, no shared accessor, and a screen that looks
+right because it happens to read the correct one.
 
 
-THE FIX, AND THE SHAPE BEHIND IT
+THE FIX
 ================================================================================
-Recipients are now deduped on the lowercased, trimmed address. Ran it against
-the seeded shape: five matching users collapse to two distinct addresses, and
-a differently-cased duplicate with a trailing space is caught too.
+The seeder now builds crm:activities:open from the activities it puts on the
+deals - open deals only, undone activities only. Field names copied from the
+writer in pages/api/crm.js rather than invented: { id, dealId, text, due,
+assignee }.
 
-lib/ramsNotify.js ALREADY does this - it sends to a list it calls `uniq`. So
-the rule exists in the codebase and simply was not applied here. Nine other
-per-recipient loops have the same shape and no dedupe:
+It is also added to DEMO_KEY_PREFIXES, so a wipe removes it. Without that a
+re-seed would leave an index pointing at deal ids that no longer exist, which
+is a worse failure than the one being fixed.
 
-  pages/api/issue-notify.js
-  pages/api/design-rfis.js
-  pages/api/cron/design-rfi-outstanding.js
-  pages/api/cron/design-rockdrawing-daily.js
-  pages/api/cron/design-techsub-daily.js
-  pages/api/cron/design-calculation-daily.js
-  and the address lists in issue-send-customer and pre-start-notify-send
-
-One rule, eleven places, one of them correct. The proper answer is the shared
-sendEmail() helper that has been on the outstanding list since the start -
-this is one more argument for it. I have fixed the one that is actually
-firing rather than opening all eleven today.
+Ran the email's OWN filter against the generated index rather than eyeballing
+the shape: of four test deals it flags exactly the one whose only activity is
+marked done, and leaves the lost deal and the exempt-stage deal alone.
 
 
-WORTH DECIDING SEPARATELY
+TO ACTUALLY FIX THE DEMO DATA
 ================================================================================
-Even deduped, demo will email you this EVERY DAY: "142 projects with no
-activity set". That is the app working correctly on seeded data where no
-activity dates were ever set.
+From the browser console on a host you have an admin session on:
 
-Three options, none of them code I would write without you choosing:
-  - leave it, and accept one a day from demo
-  - have the seeder set activity dates on most CRM deals, so the figure is
-    small and the screen demonstrates the feature rather than shouting
-  - stop the cron running for demo at all
+    wipe:  { action:'wipe', id:'demo', confirm:'demo' }
+    seed:  { action:'seed', id:'demo', projects:30 }
 
-The second is the best demo, because 142 of 190 with nothing set is not a
-flattering screen for a prospect either.
+posted to /api/admin/seed-demo, as before. The data is generated, so nothing
+is lost - but it IS regenerated, so any figure you have memorised from
+rehearsing will change.
+
+If you would rather not re-seed this close to Friday, the alternative is to
+leave it and accept one email a day. The CRM screen is correct either way -
+this only affects the email.
 
 
-SMOKE TEST
+WORTH CHECKING ON ROCK, AND I HAVE NOT
 ================================================================================
-Tomorrow at 6pm: ONE email from Demo, not four. Rock's is unaffected - its
-users have distinct addresses, so nothing there was ever duplicated.
+The same two sources exist on Rock. There the index is maintained properly by
+the app, so it should be right - but the test is free and it is the one you
+just did by accident: does the number in tomorrow's email match what the CRM
+actually shows? If Rock's email over-reports too, the index has drifted there
+as well, and that is a different job.
