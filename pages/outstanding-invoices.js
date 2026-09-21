@@ -5,7 +5,19 @@ import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
 import SyncBar from '../components/SyncBar'
 
-const fmt = (n) => n == null || n === '' ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+// THE MONEY FORMATTER IS NOT HERE ANY MORE.
+//
+// It was a module-scope const hardcoded to en-GB/GBP, so this page showed
+// pound signs on a New Zealand tenant whose record says NZD. It is one of
+// THIRTY such helpers across twenty-one files, under six different names -
+// fmt, fmtC, fmtP, gbp, gbpK, money, fmtMoney. One rule, thirty copies.
+//
+// It cannot live at module scope because money() comes from useFormat(),
+// which is a hook. So each component that needs it declares its own one-line
+// version, and the module-scope helpers below take it as an ARGUMENT - the
+// same pattern this file already uses for `brand`, and for the same reason
+// given there: a missing argument is far easier to spot than a global that is
+// silently wrong.
 const parseDMY = (s) => {
   if (!s) return null
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s)
@@ -45,8 +57,13 @@ const CHASE_STAGES = [
 // Resolve [merge fields] for a given invoice row into a template string.
 // greetingName (optional) is the name for "Hi [Customer First Name]" — it comes
 // from the selected To recipient, so it's blank until one is chosen.
-function resolveMergeFields(str, row, me, greetingName) {
+// `fmt` is the caller's money formatter. Not optional in practice - all four
+// call sites pass it - but if one is ever missed the guard below renders a
+// bare number, which is visibly odd, rather than throwing or quietly printing
+// the wrong currency.
+function resolveMergeFields(str, row, me, greetingName, fmt) {
   if (!str) return ''
+  const fmtMoney = typeof fmt === 'function' ? fmt : (n) => String(n == null ? '' : n)
   const people = row.people || {}
   const cqs = people.customerQS || null
   const customerFirst = (greetingName || '').trim().split(/\s+/)[0] || ''
@@ -67,8 +84,8 @@ function resolveMergeFields(str, row, me, greetingName) {
     '[Sub-Contract Ref]': people.orderRef || row.orderRef || row.subContractRef || '',
     '[Due Date]': fmtDate(row.dueDate),
     "[Today's Date]": new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
-    '[Invoice Value]': fmt(row.due),
-    '[Invoice Value inc VAT]': fmt(row.due),
+    '[Invoice Value]': fmtMoney(row.due),
+    '[Invoice Value inc VAT]': fmtMoney(row.due),
     // OUR QS, THEIRS. The seeded examples use '[Our QS Name]'; the old
     // '[Rock Roofing QS Name]' is kept because templates a customer has ALREADY
     // EDITED are saved in their own database and still contain it. Removing it
@@ -105,8 +122,8 @@ function senderSignature(me, brand) {
 // (name / email / phone / company). Templates sign off with [Our QS Name] -
 // or [Rock Roofing QS Name] in templates saved before pkg940 - and we replace
 // that final token with the signature block.
-function buildBody(tplBody, row, me, greetingName, brand) {
-  let out = resolveMergeFields(tplBody, row, me, greetingName)
+function buildBody(tplBody, row, me, greetingName, brand, fmt) {
+  let out = resolveMergeFields(tplBody, row, me, greetingName, fmt)
   const sig = senderSignature(me, brand)
   // Replace the resolved sender name on its own sign-off line with the full block.
   const senderName = (me && (me.name || [me.firstName, me.lastName].filter(Boolean).join(' '))) || ''
@@ -170,9 +187,13 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
   const cmName = cmPerson?.name || row.contractsManager || ''
 
   const [to, setTo] = useState('')
-  const [subject, setSubject] = useState(fresh ? '' : resolveMergeFields(tpl.subject, row, me))
-  const { companyName: brand } = useFormat()
-  const [body, setBody] = useState(fresh ? '' : buildBody(tpl.body, row, me, undefined, brand))
+  // Declared ABOVE the two useState initialisers that read them. The modal
+  // mounts on a click, long after the brand feed has landed, so the values are
+  // real by the time these run.
+  const { companyName: brand, money } = useFormat()
+  const fmt = (n) => (n == null || n === '' ? '—' : money(n))
+  const [subject, setSubject] = useState(fresh ? '' : resolveMergeFields(tpl.subject, row, me, undefined, fmt))
+  const [body, setBody] = useState(fresh ? '' : buildBody(tpl.body, row, me, undefined, brand, fmt))
   // Seed CCs from the template's auto-CC flags.
   const [ccList, setCcList] = useState(() => {
     const seed = []
@@ -189,7 +210,7 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
   function switchToFresh(v) {
     setFresh(v)
     if (v) { setSubject(''); setBody('') }
-    else { setSubject(resolveMergeFields(tpl.subject, row, me)); setBody(buildBody(tpl.body, row, me, undefined, brand)) }
+    else { setSubject(resolveMergeFields(tpl.subject, row, me, undefined, fmt)); setBody(buildBody(tpl.body, row, me, undefined, brand, fmt)) }
   }
   function addCc() {
     const parts = ccInput.split(/[;,]/).map(s => s.trim()).filter(Boolean)
@@ -205,7 +226,7 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
     setTo(email)
     const hit = contactOptions.find(c => c.email === email)
     const name = hit?.name || ''
-    if (!fresh) setBody(buildBody(tpl.body, row, me, name, brand))
+    if (!fresh) setBody(buildBody(tpl.body, row, me, name, brand, fmt))
   }
 
   async function send() {
@@ -355,7 +376,11 @@ function ChaseComposeModal({ row, stage, templates, members, me, chases, onClose
 const quickCc = { padding: '3px 9px', background: '#fff', border: '1px dashed #c7d2fe', borderRadius: 12, fontSize: 11, cursor: 'pointer', color: '#4f46e5' }
 
 export default function OutstandingInvoicesPage() {
-  const { companyName: brandTitle } = useFormat()
+  const { companyName: brandTitle, money } = useFormat()
+  // The page's own money formatter. Same shape the module-scope one had, so
+  // the five call sites below are unchanged - an em dash for nothing, two
+  // decimal places for everything else, in the customer's own currency.
+  const fmt = (n) => (n == null || n === '' ? '—' : money(n))
   const [invoices, setInvoices] = useState([])
   const [meta, setMeta] = useState({})
   const [members, setMembers] = useState([])
