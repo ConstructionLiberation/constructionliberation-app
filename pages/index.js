@@ -207,7 +207,10 @@ export default function Portal() {
         }}>
           <BrandLogo size={36} radius={6} />
           <div>
-            <div style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>{brand}</div>
+            {/* A hard space, not an empty string: an empty div is zero pixels
+                tall, so "Company Portal" jumped up and back down as the brand
+                feed landed. */}
+            <div style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>{brand || '\u00a0'}</div>
             <div style={{ color: '#555', fontSize: 11 }}>Company Portal</div>
           </div>
           <div style={{ flex: 1 }} />

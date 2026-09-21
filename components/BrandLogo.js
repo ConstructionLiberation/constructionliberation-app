@@ -73,7 +73,12 @@ export default function BrandLogo({ size = 32, radius = 4, style = {} }) {
 
   // flexShrink stops the logo being squeezed to nothing when a nav row wraps
   // on a narrow window. OperationsNav set it by hand; every consumer wants it.
-  const box = { height: size, width: size, borderRadius: radius, flexShrink: 0, ...style }
+  //
+  // display MATTERS. An inline span ignores width and height, so the
+  // placeholder box would collapse to nothing. All five consumers today are
+  // flex containers, which blockifies their children and hides that - which is
+  // exactly the kind of thing that works until the sixth consumer is not.
+  const box = { display: 'inline-block', height: size, width: size, borderRadius: radius, flexShrink: 0, ...style }
 
   if (!loaded) return <span style={box} aria-hidden="true" />
 

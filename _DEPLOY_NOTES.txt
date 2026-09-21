@@ -96,6 +96,21 @@ contractual document are two fields, not one. Tell me which way you want it
 and it goes in 956.
 
 
+TWO THINGS FOUND ON A SECOND PASS, BOTH FIXED IN THIS ZIP
+================================================================================
+1. The placeholder box was a <span>, and an inline span IGNORES width and
+   height. All five consumers today are flex containers, which blockifies
+   their children and hid it completely. It now sets display: inline-block, so
+   the sixth consumer does not get a box of nothing.
+
+2. The portal home name line was {brand}, which is an empty string until the
+   feed lands - an empty div is zero pixels tall, so "Company Portal" jumped up
+   and back down on every load. It now renders a hard space while it waits.
+
+Neither would have shown up in a compile, and the first would not have shown
+up on any screen in the portal as it stands today.
+
+
 CHECKED, NOT ASSUMED
 ================================================================================
 - /api/tenant-brand does send both `name` and `logoUrl`. Read the feed, not
@@ -111,6 +126,12 @@ CHECKED, NOT ASSUMED
   Liberation Ltd -> CL, WPC Ltd -> WPC, Demo -> DE, empty -> empty. It briefly
   turned "Construction Liberation" into "LI" because the skip list had
   "construction" in it. Running it found that; reading it did not.
+- public/rock-logo.jpg exists and is 565x565, i.e. square - so the objectFit:
+  contain added to the img changes nothing for Rock. A WIDE wordmark logo
+  would letterbox down to almost nothing inside a 32px square; that is a
+  question for the logo upload screen, not for this package.
+- No page passes a Rock-branded `title` into either shell, so fixing the two
+  shells actually fixes all 36 pages.
 - BizNav was in the plan and is NOT in this package. It carries no logo and no
   company name, so there was nothing to change.
 
