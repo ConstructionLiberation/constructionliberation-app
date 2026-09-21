@@ -1,10 +1,13 @@
 import ReportImprovementLink from './ReportImprovementLink'
 import BrandLogo from './BrandLogo'
+import { useFormat } from './TenantProvider'
 // Two-tier Operations navigation.
 // Top row: main sections (no dropdowns). Clicking a section navigates to it.
 // Sections with sub-pages render a SECOND ROW of tabs underneath (like the
 // Sales Dashboard). Every sub-page has its own route.
-export const NAV = [
+export const navFor = (term) => {
+  const rams = term('rams')
+  return [
   {
     key: 'forms', label: 'Forms', href: '/operations/forms',
     children: [
@@ -37,8 +40,8 @@ export const NAV = [
     // `hidden: true` to bring one back. Deleting them would lose the work and
     // make returning to it a rebuild rather than a decision.
     children: [
-      { key: 'hs:rams-builder', label: 'RAMS Builder', href: '/operations/hs/rams-builder', hidden: true },
-      { key: 'hs:rams-matrix', label: 'RAMS Matrix', href: '/operations/hs/rams-matrix' },
+      { key: 'hs:rams-builder', label: `${rams} Builder`, href: '/operations/hs/rams-builder', hidden: true },
+      { key: 'hs:rams-matrix', label: `${rams} Matrix`, href: '/operations/hs/rams-matrix' },
       { key: 'hs:hs-matrix', label: 'H&S Matrix', href: '/operations/hs/hs-matrix' },
       { key: 'hs:operatives', label: 'Operatives', href: '/operations/hs/operatives' },
       { key: 'hs:onboarding', label: 'Sub-Contractor Onboarding', href: '/operations/hs/onboarding', hidden: true },
@@ -47,12 +50,19 @@ export const NAV = [
   },
   { key: 'negotiating', label: 'Negotiating', href: '/operations/negotiating', hidden: true },
   { key: 'scorecards', label: 'Scorecards', href: '/operations/scorecards' },
-]
+  ]
+}
 
 const RIGHT = []
 
 
 export default function OperationsNav({ active, section }) {
+  // NAV was a module constant. Two of its labels are glossary terms - RAMS is
+  // SWMS in New Zealand and Australia - and a module constant cannot call a
+  // hook, so it is built per render instead. Keys and hrefs are untouched:
+  // they are routing, not language.
+  const { term } = useFormat()
+  const NAV = navFor(term)
   return (
     <div>
       {/* Top row: main sections */}

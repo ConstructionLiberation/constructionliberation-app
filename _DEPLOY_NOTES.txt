@@ -1,110 +1,70 @@
-PACKAGE 975 - payment claim, everywhere
+PACKAGE 978 - the CRM deal that flashes and opens on the second click
 ================================================================================
 
-Seven files. Complete replacements.
+One file. Complete replacement.
 
-  lib/applications.js
-  lib/applicationPdf.js
-  components/CommercialNav.js
-  pages/applications.js          <- includes 971 and 972's changes to this file
-  pages/application-calendar.js  <- includes 972's change
-  pages/api/application-send.js
-  pages/api/application-pdf.js
-
-Screen, PDF and email, as you asked. Rock is untouched - term() is per
-tenant, and the UK phrasing is the DEFAULT, so anything that does not pass a
-term behaves exactly as it does today.
+  pages/crm.js          <- SUPERSEDES 963 AND 964's changes to this file
 
 
-PROVED, NOT ASSUMED, THAT ROCK IS UNCHANGED
+WHAT WAS HAPPENING
 ================================================================================
-Ran describeApplication's title logic for both locales across four cases:
+Opening a deal does two things:
 
-  UK, interim          "Application for Payment"
-  UK, final account    "Proposed Final Account and Interim Application for Payment"
-  NZ, interim          "Payment Claim"
-  NZ, final account    "Proposed Final Account and Interim Payment Claim"
+    const openDealById = (id) => { setOpenId(id); router.push({ query: { deal: id } }) }
 
-The UK strings are byte-identical to the ones hardcoded before. That string
-is the PDF headline, the email subject and the download filename, so it had
-to be exact.
+and an effect reads it back off the URL:
+
+    setOpenId(Number(q))
+
+Pipedrive ids are numeric, so on Rock that round-trips cleanly and always
+has. The demo generator produces ids like 'd1000'.
+
+Number('d1000') is NaN. So:
+
+  click      -> setOpenId('d1000'), the deal view renders        <- the flash
+  URL push   -> effect fires -> setOpenId(NaN) -> deals.find()
+                matches nothing -> the view closes
+  click again-> setOpenId('d1000') again, but the query is ALREADY deal=d1000,
+                so the effect does NOT re-run, and it stays open
+
+Which is exactly "it flashes, then opens on the second click". Nothing to do
+with the seeded data being wrong - the data is fine, the app assumed every
+deal id is a number.
 
 
-THE ONE PLACE THE WORDING LIVES
+FOUR MORE OF THE SAME, WHICH WOULD HAVE BEEN WORSE
 ================================================================================
-describeApplication() in lib/applications.js already produced the title used
-by the PDF, the email subject and the filename - one rule, one place, which
-is why this was a small job rather than a sweep.
+The activity handlers do Number(dealId) in four places:
+completeActivity, addActivity and patch twice. Those do not flash - they
+silently do nothing, because NaN matches no deal. On demo, completing or
+editing an activity from the CRM would simply not have worked, with no error.
 
-It cannot call term() itself: lib/applications.js is imported by client
-pages, so importing lib/locale.js would drag AsyncLocalStorage into the
-browser bundle. The term is threaded in, as with resolveMergeFields in 957.
-
-Two helpers now live beside it, because English does not cooperate:
-
-  claimTitle()        'application for payment' -> 'Application for Payment'
-                      A blunt capitalise-every-word gives "For".
-  claimTitlePlural()  'Applications for Payment' moves the s to the FIRST
-                      word; 'Payment Claims' to the last. The joining word is
-                      the tell. Checked against all four locales.
+And three lines above one of them, the same file already compares with
+String(a.dealId) === String(dealId). One rule, two spellings, sitting next to
+each other.
 
 
-WHAT CHANGED ON SCREEN
+THE FIX
 ================================================================================
-Commercial nav group and its two sub-items, the page title, the "Upcoming"
-heading and its column header, the month label, and the list badges. The
-Application Calendar becomes the Payment Claim Calendar.
+One module-scope helper, used at all five sites:
 
-IN THE PDF: the headline, "Payment Claim no.", "Payment Claim date", the
-"Payment Claim Total" column and the "Gross Payment Claim Total" row.
+    const dealKey = (v) => { const raw = String(v); return /^\d+$/.test(raw) ? Number(raw) : raw }
 
-IN THE EMAIL: subject line, the "please find attached our ..." sentence and
-the retention-release sentence.
+Coerce only when the id really is all digits. Evaluated the line straight out
+of the file rather than trusting it by eye, because if that test failed for
+digits then ROCK's numeric ids would stop matching and the CRM would break
+for the live tenant:
 
-
-THE CHECK EARNED ITS KEEP AGAIN
-================================================================================
-The "Upcoming" heading and its column header are not in ApplicationsPage -
-they are in a separate UpcomingTable component. I put the hook in the page
-and UpcomingTable referenced two variables it did not have. Exactly the Shell
-fault from 965, caught this time by the declared-where-used scan before it
-shipped rather than by your build failing.
-
-
-WHAT THIS STILL NEEDS BEFORE A REAL NZ CUSTOMER SENDS ONE
-================================================================================
-The word is right. The DOCUMENT is not yet verified. A payment claim under
-the Construction Contracts Act has prescribed content - it must state that it
-is made under the Act, and for residential work it must be accompanied by the
-prescribed outline of process.
-
-None of that is in the PDF, and nothing here added it. For a demo that is
-fine and you have decided so deliberately. Before an NZ customer sends a real
-one it needs someone who knows the Act to read the document. That belongs on
-the onboarding checklist, not in the code.
-
-
-WHAT I HAVE DELIBERATELY NOT RENAMED
-================================================================================
-valuation -> progress claim. It is cosmetic in the glossary, but "valuation
-date" is your internal cut-off date and runs through dozens of API routes and
-stored fields. "Progress claim date" sitting next to "Payment Claim" would
-confuse rather than localise.
-
-RAMS -> SWMS. The glossary's own note says an AU SWMS has prescribed content
-and a relabelled UK RAMS is not a compliant one. Payment claim is a document
-you can fix before anyone pays; a RAMS is a safety document a worker signs
-onto, and calling it a SWMS invites "so you are SWMS-compliant?" - to which
-the answer is no. Leaving it reads as a UK product being straight.
+    '1234' -> 1234 (number)    1234 -> 1234 (number)    '0' -> 0 (number)
+    'd1000' -> 'd1000'         'abc' -> 'abc'           '' -> ''
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Commercial nav: the group reads "Payment Claims", and its two
-   sub-items are "Payment Claims" and "Payment Claim Calendar".
-2. Demo applications page: headings, the month label, the column header.
-3. Demo: open one and download the PDF. Headline, "Payment Claim no.", the
-   table column, and the filename.
-4. Demo: open the send modal. Subject line and the body sentence.
-5. ROCK, the same five. Every one must read exactly as it does today - the
-   PDF headline and the email subject especially.
+1. Demo CRM: click a deal from the board. It should open first time.
+2. Demo CRM: click a deal from the list view. Same.
+3. Demo: open a deal and complete an activity, then edit one. Both were
+   silently doing nothing.
+4. Reload the page on a deal URL - that is the effect path on its own.
+5. ROCK CRM: open a deal, complete an activity. This is the regression that
+   matters; Rock's ids are numeric and must still behave identically.

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useFormat } from '../../../components/TenantProvider'
 import { businessToday, businessNow } from '../../../lib/businessDate'
 import SearchableSelect from '../../../components/SearchableSelect'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
@@ -616,6 +617,10 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select', minW
 }
 
 function GanttRow({ p, days, weekGroups, view, data, neg, countOnDay, comp, rams = {}, sel, onCellDown, onCellEnter, onSaveMeta, ops = [], onClashes, readOnly = false }) {
+  // NOT `rams` - this file already has a `rams` state variable holding
+  // the sign-off map. Shadowing it would break the Gantt.
+  const { term } = useFormat()
+  const ramsWord = term('rams')
   const meta = data.meta[p.key] || {}
   const todayCellKey = businessToday()
   const [start, setStart] = useState(meta.startDate || '')
@@ -710,7 +715,7 @@ function GanttRow({ p, days, weekGroups, view, data, neg, countOnDay, comp, rams
         {overrun && <div title="Man days allocated after the contracted completion date" style={warnLine}>⚠ Runs past completion date</div>}
         {historicNeedsActual && <div title="Historic allocations still need confirming as Actual" style={{ ...warnLine, color: '#ea580c' }}>⚑ Historic dates need confirming actual</div>}
         {noProjectSupervisor && <div title="No supervisor assigned in Project Details or allocated on the Gantt" style={warnLine}>⚠ No supervisor</div>}
-        {anyNotOnRams && <div title="An allocated installer is not signed onto this project's RAMS Matrix" style={{ ...warnLine, color: '#c2410c' }}>⚠ Installer(s) not on RAMS</div>}
+        {anyNotOnRams && <div title={`An allocated installer is not signed onto this project's ${ramsWord} Matrix`} style={{ ...warnLine, color: '#c2410c' }}>⚠ Installer(s) not on RAMS</div>}
         {p.location && <div style={{ fontSize: 10, color: '#aaa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: NAME_W - 16 }}>{p.location}</div>}
       </Frozen>
       {/* inline date editors */}
@@ -1779,6 +1784,10 @@ function OperativeSearchSelect({ options, comp = {}, onPick, placeholder = 'Sear
 
 // ── Allocate / edit labour for the selected dates ──
 function AllocateModal({ proj, dates, mode = 'add', data, ops, comp = {}, ramsSigned = {}, onClose, onDone, reloadOps }) {
+  // NOT `rams` - this file already has a `rams` state variable holding
+  // the sign-off map. Shadowing it would break the Gantt.
+  const { term } = useFormat()
+  const ramsWord = term('rams')
   const isEdit = mode === 'edit'
   // In edit mode, pre-load everyone currently allocated across ANY of the selected dates,
   // plus the max unnamed count and a common status.
@@ -1920,7 +1929,7 @@ function AllocateModal({ proj, dates, mode = 'add', data, ops, comp = {}, ramsSi
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{opName(id)}</div>
                   {opTrades(id) && <div style={{ fontSize: 10.5, color: '#999' }}>{opTrades(id)}</div>}
-                  {!ramsOk && <div style={{ fontSize: 10.5, fontWeight: 700, color: '#c2410c', marginTop: 2 }}>⚠ Not signed onto this project's RAMS</div>}
+                  {!ramsOk && <div style={{ fontSize: 10.5, fontWeight: 700, color: '#c2410c', marginTop: 2 }}>⚠ Not signed onto this project's {ramsWord}</div>}
                 </div>
                 <button onClick={() => removePick(id)} style={{ ...linkBtn, color: '#dc2626' }}>Remove</button>
               </div>
@@ -1928,7 +1937,7 @@ function AllocateModal({ proj, dates, mode = 'add', data, ops, comp = {}, ramsSi
           })}
           {picked.some(id => !ramsSigned[id]) && (
             <div style={{ fontSize: 11.5, color: '#c2410c', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '8px 10px', marginBottom: 6 }}>
-              One or more installers aren't signed onto this project's RAMS Matrix. You can still allocate them, but please ensure RAMS are signed before they start on site.
+              One or more installers aren't signed onto this project's {ramsWord} Matrix. You can still allocate them, but please ensure {ramsWord} are signed before they start on site.
             </div>
           )}
 

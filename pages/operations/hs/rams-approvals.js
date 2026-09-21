@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useFormat } from '../../../components/TenantProvider'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, Loading, ghostBtn, primaryBtn } from '../../../components/opsUI'
 
@@ -8,6 +9,8 @@ import { INK, GOLD, Loading, ghostBtn, primaryBtn } from '../../../components/op
 const STATEMENT = 'I confirm I have read, fully understood and will work to this and any other documents relating to this method statement. If at any point I feel it is unsafe to continue I will stop works and contact my supervisor. Any amendments to this method statement must be made by the person who originally completed it. It must then be communicated to the relevant persons.'
 
 export default function RamsApprovalsPage() {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [me, setMe] = useState(null)
@@ -25,16 +28,16 @@ export default function RamsApprovalsPage() {
   useEffect(() => { fetch('/api/portal-auth?action=me').then(r => r.json()).then(d => setMe(d.user || null)).catch(() => {}) }, [])
 
   if (loading) return (
-    <OperationsShell active="hs:rams-approvals" section="hs" title="RAMS Approvals" wide><PageHeading title="RAMS Approvals" /><Loading /></OperationsShell>
+    <OperationsShell active="hs:rams-approvals" section="hs" title={`${rams} Approvals`} wide><PageHeading title={`${rams} Approvals`} /><Loading /></OperationsShell>
   )
 
   return (
-    <OperationsShell active="hs:rams-approvals" section="hs" title="RAMS Approvals" wide>
-      <PageHeading title="RAMS Approvals" sub="RAMS awaiting Director approval. Approving confirms a safe method of work and signs you onto the RAMS." />
+    <OperationsShell active="hs:rams-approvals" section="hs" title={`${rams} Approvals`} wide>
+      <PageHeading title={`${rams} Approvals`} sub={`${rams} awaiting Director approval. Approving confirms a safe method of work and signs you onto the ${rams}.`} />
 
       {items.length === 0 ? (
         <div style={{ padding: 24, fontSize: 14, color: '#888', background: '#faf9f7', borderRadius: 12, textAlign: 'center' }}>
-          No RAMS are currently awaiting your approval.
+          No {rams} are currently awaiting your approval.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -47,7 +50,7 @@ export default function RamsApprovalsPage() {
                   <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>{it.fileName}</div>
                   <div style={{ fontSize: 12, color: '#16a34a', marginTop: 4 }}>✓ CM approved{it.cmName ? ` by ${it.cmName}` : ''}{it.cmDate ? ` · ${it.cmDate}` : ''}</div>
                 </div>
-                {it.fileUrl && <a href={`/api/download?url=${encodeURIComponent(it.fileUrl)}&name=${encodeURIComponent(it.fileName || 'RAMS.pdf')}`} style={{ ...ghostBtn, textDecoration: 'none' }}>Download</a>}
+                {it.fileUrl && <a href={`/api/download?url=${encodeURIComponent(it.fileUrl)}&name=${encodeURIComponent(it.fileName || `${rams}.pdf`)}`} style={{ ...ghostBtn, textDecoration: 'none' }}>Download</a>}
                 <button onClick={() => setSignItem(it)} style={primaryBtn}>Review &amp; approve</button>
               </div>
             </div>
@@ -63,6 +66,8 @@ export default function RamsApprovalsPage() {
 }
 
 function DirectorApproveModal({ item, me, onClose, onDone }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [step, setStep] = useState('read')   // read | sign
   const [reachedBottom, setReachedBottom] = useState(false)
   const [sigData, setSigData] = useState('')
@@ -140,7 +145,7 @@ function DirectorApproveModal({ item, me, onClose, onDone }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 720, maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ background: INK, padding: '14px 18px', color: '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1, fontWeight: 600 }}>{step === 'read' ? 'Review RAMS' : 'Approve & sign'} — {item.projectNo}</div>
+          <div style={{ flex: 1, fontWeight: 600 }}>{step === 'read' ? `Review ${rams}` : 'Approve & sign'} — {item.projectNo}</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
 
@@ -161,7 +166,7 @@ function DirectorApproveModal({ item, me, onClose, onDone }) {
         ) : (
           <div style={{ flex: 1, overflow: 'auto', padding: 18 }}>
             <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#92400e', marginBottom: 14 }}>
-              By approving, you confirm this is a safe method of work and has been properly risk-assessed. You also sign onto the RAMS with the statement below.
+              By approving, you confirm this is a safe method of work and has been properly risk-assessed. You also sign onto the {rams} with the statement below.
             </div>
             <div style={{ background: '#f7f6f3', border: '1px solid #e3e0d9', borderRadius: 12, padding: 14, fontSize: 13, color: '#444', lineHeight: 1.5, marginBottom: 16 }}>{STATEMENT}</div>
             <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>

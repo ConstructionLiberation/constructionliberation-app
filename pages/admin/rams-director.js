@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import AdminShell from '../../components/AdminShell'
 
 // Admin -> RAMS Director. Choose the Portal User (job role: Director) who approves
@@ -6,6 +7,8 @@ import AdminShell from '../../components/AdminShell'
 const GOLD = '#ca8a04', INK = '#1a1a19'
 
 export default function RamsDirectorPage() {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [director, setDirector] = useState(null)
   const [candidates, setCandidates] = useState([])
   const [choice, setChoice] = useState('')
@@ -36,22 +39,22 @@ export default function RamsDirectorPage() {
       const d = await r.json()
       if (!r.ok || !d.ok) { setErr(d.error || 'Could not save.'); setBusy(false); return }
       setDirector(d.director || null)
-      setNotice(d.director ? `RAMS Director set to ${d.director.name}.` : 'RAMS Director cleared.')
+      setNotice(d.director ? `${rams} Director set to ${d.director.name}.` : `${rams} Director cleared.`)
     } catch (e) { setErr(e?.message || 'Could not save.') }
     setBusy(false)
   }
 
   return (
-    <AdminShell active="/admin/rams-director" title="RAMS Director" allow={['management', 'admin']}>
+    <AdminShell active="/admin/rams-director" title={`${rams} Director`} allow={['management', 'admin']}>
       <div style={{ maxWidth: 640 }}>
-        <h1 style={{ fontSize: 22, color: INK, margin: '0 0 6px' }}>RAMS Director</h1>
-        <p style={{ color: '#777', fontSize: 14, margin: '0 0 20px' }}>Choose who approves and signs RAMS at the Director stage of the approval chain. They approve in the Site App (matched by their email), so the chosen person must also be a Site App user with the same email address.</p>
+        <h1 style={{ fontSize: 22, color: INK, margin: '0 0 6px' }}>{rams} Director</h1>
+        <p style={{ color: '#777', fontSize: 14, margin: '0 0 20px' }}>Choose who approves and signs {rams} at the Director stage of the approval chain. They approve in the Site App (matched by their email), so the chosen person must also be a Site App user with the same email address.</p>
 
         {loading ? <div style={{ color: '#aaa', padding: 20 }}>Loading…</div> : (
           <div style={{ background: '#fff', border: '1px solid #e6e3dc', borderRadius: 14, padding: 20 }}>
             {director
-              ? <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: '#166534' }}>Current RAMS Director: <strong>{director.name}</strong> ({director.email})</div>
-              : <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: '#92400e' }}>No RAMS Director set yet — the approval chain will stall at the Director stage until one is chosen.</div>}
+              ? <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: '#166534' }}>Current {rams} Director: <strong>{director.name}</strong> ({director.email})</div>
+              : <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: '#92400e' }}>No {rams} Director set yet — the approval chain will stall at the Director stage until one is chosen.</div>}
 
             <div style={{ fontSize: 12, fontWeight: 600, color: '#777', marginBottom: 6 }}>Director (Portal Users with job role &ldquo;Director&rdquo;)</div>
             {candidates.length === 0 ? (
@@ -67,7 +70,7 @@ export default function RamsDirectorPage() {
             {notice && <div style={{ color: '#16a34a', fontSize: 13, marginTop: 12 }}>{notice}</div>}
 
             <button onClick={save} disabled={busy} style={{ marginTop: 16, background: busy ? '#c9c4ba' : GOLD, color: '#fff', border: 'none', borderRadius: 10, padding: '11px 20px', fontSize: 14, fontWeight: 600, cursor: busy ? 'default' : 'pointer' }}>
-              {busy ? 'Saving…' : 'Save RAMS Director'}
+              {busy ? 'Saving…' : `Save ${rams} Director`}
             </button>
           </div>
         )}

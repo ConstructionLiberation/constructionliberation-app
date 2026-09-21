@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useFormat } from '../../components/TenantProvider'
 import { uploadFile } from '../../lib/uploadFile'
 import { compressImage } from '../../lib/compressImage'
 import OperationsShell, { PageHeading, SubTabs, ComingSoon } from '../../components/OperationsShell'
@@ -9,12 +10,14 @@ import PreStartForm from '../../components/PreStartForm'
 import SubmissionModal from '../../components/SubmissionModal'
 import ProjectConcerns from '../../components/ProjectConcerns'
 
-const SUB_TABS = [
+// One label is a glossary term, so the list is built per render. Keys are
+// routing and do not change.
+const subTabs = (term) => [
   { key: 'details', label: 'Project Details' },
   { key: 'handover', label: 'Handover' },
   { key: 'prestart', label: 'Pre-Start' },
   { key: 'drawings', label: 'Drawings' },
-  { key: 'rams', label: 'RAMS' },
+  { key: 'rams', label: term('rams') },
   { key: 'submissions', label: 'Project Forms' },
   { key: 'images', label: 'Project Images' },
   { key: 'concerns', label: 'Project Concerns' },
@@ -23,6 +26,7 @@ const SUB_TABS = [
 const STATUS_LABEL = { active: 'Live', complete: 'Complete', archived: 'Archived', draft: 'Draft' }
 
 export default function ProjectsPage() {
+  const { term } = useFormat()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [openNo, setOpenNo] = useState(null)   // project detail open
@@ -114,7 +118,7 @@ export default function ProjectsPage() {
       <OperationsShell active="projects" title="Projects" wide>
         <button onClick={() => setOpenNo(null)} style={{ background: 'transparent', border: 'none', color: '#888', fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 8 }}>‹ All projects</button>
         <PageHeading title={`${p?.projectNo || ''} — ${p?.projectName || ''}`} sub={p?.location || ''} />
-        <SubTabs tabs={SUB_TABS} active={sub} onChange={setSub} />
+        <SubTabs tabs={subTabs(term)} active={sub} onChange={setSub} />
         {sub === 'details' && <ProjectDetails projectNo={openNo} onSaved={load} />}
         {sub === 'handover' && <HandoverReadOnly projectNo={openNo} />}
         {sub === 'prestart' && <PreStartForm projectNo={openNo} />}
@@ -956,6 +960,8 @@ function openPrintView(subs, labelFor) {
 
 // ── RAMS as a revisions table (latest at top) ──
 function RamsTable({ projectNo }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -991,7 +997,7 @@ function RamsTable({ projectNo }) {
     load()
   }
   async function del(id) {
-    if (!confirm('Delete this RAMS revision?')) return
+    if (!confirm(`Delete this ${rams} revision?`)) return
     await fetch('/api/project-files', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectNo, id }) })
     load()
   }
@@ -1002,15 +1008,15 @@ function RamsTable({ projectNo }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
-        <div><div style={{ fontSize: 16, fontWeight: 700, color: INK }}>RAMS</div><div style={{ fontSize: 13, color: '#999', marginTop: 2 }}>Revisions listed newest first. Visible to operatives in the Forms App.</div></div>
+        <div><div style={{ fontSize: 16, fontWeight: 700, color: INK }}>{rams}</div><div style={{ fontSize: 13, color: '#999', marginTop: 2 }}>Revisions listed newest first. Visible to operatives in the Forms App.</div></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={inputRef} type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
-          <button onClick={() => setSignedOpen(true)} style={{ ...primaryBtn, background: '#fff', color: '#92400e', border: '1px solid #e6b567' }}>⬇ Download Signed RAMS</button>
-          <button onClick={() => inputRef.current?.click()} disabled={uploading} style={primaryBtn}>{uploading ? 'Uploading…' : '+ Upload RAMS'}</button>
+          <button onClick={() => setSignedOpen(true)} style={{ ...primaryBtn, background: '#fff', color: '#92400e', border: '1px solid #e6b567' }}>⬇ Download Signed {rams}</button>
+          <button onClick={() => inputRef.current?.click()} disabled={uploading} style={primaryBtn}>{uploading ? 'Uploading…' : `+ Upload ${rams}`}</button>
         </div>
       </div>
       {err && <div style={{ fontSize: 13, color: '#dc2626', marginBottom: 10 }}>{err}</div>}
-      {loading ? <Loading /> : !sorted.length ? <EmptyCard title="No RAMS yet" body="Upload a RAMS document using the button above." /> : (
+      {loading ? <Loading /> : !sorted.length ? <EmptyCard title={`No ${rams} yet`} body={`Upload a ${rams} document using the button above.`} /> : (
         <div style={{ background: '#fff', border: '1px solid #ececec', borderRadius: 12, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
             <thead><tr style={{ background: '#faf9f7' }}>{['Revision', 'Document', 'Uploaded', ''].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
@@ -1060,6 +1066,8 @@ function RamsTable({ projectNo }) {
 // Pick a RAMS revision and download the signed version (original + appended
 // signature/approval audit trail).
 function SignedRamsPicker({ projectNo, onClose }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [revs, setRevs] = useState(null)
   const [busyId, setBusyId] = useState('')
   const [err, setErr] = useState('')
@@ -1075,13 +1083,13 @@ function SignedRamsPicker({ projectNo, onClose }) {
     setErr(''); setBusyId(fileId)
     try {
       const r = await fetch(`/api/rams-signed-pdf?no=${encodeURIComponent(projectNo)}&fileId=${encodeURIComponent(fileId)}`)
-      if (!r.ok) { let m = 'Could not generate the signed RAMS.'; try { m = (await r.json()).error || m } catch {} ; setErr(m); setBusyId(''); return }
+      if (!r.ok) { let m = `Could not generate the signed ${rams}.`; try { m = (await r.json()).error || m } catch {} ; setErr(m); setBusyId(''); return }
       const blob = await r.blob()
       const cd = r.headers.get('Content-Disposition') || ''
       const nameMatch = /filename="?([^"]+)"?/.exec(cd)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = nameMatch ? nameMatch[1] : 'RAMS-signed.pdf'
+      a.href = url; a.download = nameMatch ? nameMatch[1] : `${rams}-signed.pdf`
       document.body.appendChild(a); a.click(); a.remove()
       setTimeout(() => URL.revokeObjectURL(url), 4000)
     } catch (e) { setErr(e?.message || 'Download failed.') }
@@ -1092,11 +1100,11 @@ function SignedRamsPicker({ projectNo, onClose }) {
   const total = revs ? revs.length : 0
 
   return (
-    <Modal onClose={onClose} title="Download Signed RAMS">
-      <div style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>Select a revision to download. The signed file is the original RAMS with the full approval workflow and every signature (names, dates and times) appended to the back.</div>
+    <Modal onClose={onClose} title={`Download Signed ${rams}`}>
+      <div style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>Select a revision to download. The signed file is the original {rams} with the full approval workflow and every signature (names, dates and times) appended to the back.</div>
       {err && <div style={{ fontSize: 13, color: '#dc2626', marginBottom: 10 }}>{err}</div>}
       {revs === null ? <div style={{ fontSize: 13, color: '#999', padding: '10px 0' }}>Loading…</div>
-        : revs.length === 0 ? <div style={{ fontSize: 13, color: '#999', padding: '10px 0' }}>No RAMS uploaded for this project yet.</div>
+        : revs.length === 0 ? <div style={{ fontSize: 13, color: '#999', padding: '10px 0' }}>No {rams} uploaded for this project yet.</div>
         : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {revs.map((rv, i) => (

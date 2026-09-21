@@ -11,7 +11,8 @@ const BRAND = '#ca8a04'
 const BG = '#f6f5f2'
 
 export default function RamsApprovePage() {
-  const { companyName: brand } = useFormat()
+  const { companyName: brand, term } = useFormat()
+  const rams = term('rams')
   const router = useRouter()
   const { token } = router.query
   const [info, setInfo] = useState(null)     // { ok, status, projectName, fileName, fileUrl, smName }
@@ -69,12 +70,12 @@ export default function RamsApprovePage() {
 
   return (
     <>
-      <Head><title>{brand ? `RAMS Approval - ${brand}` : 'RAMS Approval'}</title><meta name="viewport" content="width=device-width, initial-scale=1" /></Head>
+      <Head><title>{brand ? `${rams} Approval - ${brand}` : `${rams} Approval`}</title><meta name="viewport" content="width=device-width, initial-scale=1" /></Head>
       <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: BG, padding: '24px 16px' }}>
         <div style={{ maxWidth: 640, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
             <BrandLogo size={44} radius={10} />
-            <div style={{ fontWeight: 700, fontSize: 18, color: INK }}>{brand ? `${brand} - RAMS Approval` : 'RAMS Approval'}</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: INK }}>{brand ? `${brand} - ${rams} Approval` : `${rams} Approval`}</div>
           </div>
 
           {loading ? (
@@ -84,7 +85,7 @@ export default function RamsApprovePage() {
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: 48, marginBottom: 8 }}>✍️</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: INK }}>Thank you — your feedback has been sent</div>
-                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>We've let the {brand} team know the RAMS for <strong>{info?.projectName}</strong> needs edits. They'll make the changes and re-issue it for your approval. You can close this page.</p>
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>We've let the {brand} team know the {rams} for <strong>{info?.projectName}</strong> needs edits. They'll make the changes and re-issue it for your approval. You can close this page.</p>
               </div>
             </Card>
           ) : done || info?.status === 'done' ? (
@@ -92,7 +93,7 @@ export default function RamsApprovePage() {
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: INK }}>Thank you — approval recorded</div>
-                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>The RAMS for <strong>{info?.projectName}</strong> has been approved. {brand}'s operatives can now sign onto it. You can close this page.</p>
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>The {rams} for <strong>{info?.projectName}</strong> has been approved. {brand}'s operatives can now sign onto it. You can close this page.</p>
               </div>
             </Card>
           ) : !info?.ok || info?.status === 'invalid' ? (
@@ -108,14 +109,14 @@ export default function RamsApprovePage() {
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: 40, marginBottom: 8 }}>⏳</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: INK }}>Not ready for approval yet</div>
-                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>This RAMS is still going through {brand}'s internal approvals. Please check back shortly.</p>
+                <p style={{ color: '#666', fontSize: 14, marginTop: 8 }}>This {rams} is still going through {brand}'s internal approvals. Please check back shortly.</p>
               </div>
             </Card>
           ) : (
             <>
               <Card>
                 <div style={{ fontSize: 15, color: '#444', lineHeight: 1.5 }}>
-                  <p style={{ marginTop: 0 }}>You've been asked to approve the RAMS (Risk Assessment &amp; Method Statement) for:</p>
+                  <p style={{ marginTop: 0 }}>You've been asked to approve the {rams} ({term('ramsFull')}) for:</p>
                   <p style={{ fontSize: 16, fontWeight: 700, color: INK }}>{info.projectName}</p>
                   <p>Please review the document below, then confirm your approval.</p>
                 </div>
@@ -123,9 +124,9 @@ export default function RamsApprovePage() {
                   <div style={{ marginTop: 12 }}>
                     <PdfPreview url={`/api/download?inline=1&url=${encodeURIComponent(info.fileUrl)}&name=${encodeURIComponent(info.fileName || '')}`} rawUrl={info.fileUrl} />
                     <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-                      <a href={`/api/download?url=${encodeURIComponent(info.fileUrl)}&name=${encodeURIComponent(info.fileName || 'RAMS.pdf')}`}
+                      <a href={`/api/download?url=${encodeURIComponent(info.fileUrl)}&name=${encodeURIComponent(info.fileName || `${rams}.pdf`)}`}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: BRAND, color: '#fff', fontSize: 14, fontWeight: 700, textDecoration: 'none', padding: '10px 18px', borderRadius: 10 }}>
-                        ⬇ Download RAMS
+                        ⬇ Download {rams}
                       </a>
                     </div>
                   </div>
@@ -139,9 +140,9 @@ export default function RamsApprovePage() {
                 <div style={{ fontSize: 12, color: '#999', marginTop: 6 }}>Date: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                 {err && <div style={{ color: '#dc2626', fontSize: 14, marginTop: 10 }}>{err}</div>}
                 <button onClick={approve} disabled={busy} style={{ width: '100%', marginTop: 14, padding: '15px 0', fontSize: 16, fontWeight: 700, color: '#fff', background: busy ? '#c9c4ba' : BRAND, border: 'none', borderRadius: 12, cursor: busy ? 'default' : 'pointer' }}>
-                  {busy ? 'Recording…' : '✓ Approve this RAMS'}
+                  {busy ? 'Recording…' : `✓ Approve this ${rams}`}
                 </button>
-                <p style={{ fontSize: 12, color: '#999', marginTop: 10, textAlign: 'center' }}>By approving, you confirm you have reviewed the RAMS for this project.</p>
+                <p style={{ fontSize: 12, color: '#999', marginTop: 10, textAlign: 'center' }}>By approving, you confirm you have reviewed the {rams} for this project.</p>
 
                 {/* Do not approve — requires edits */}
                 {!showReject ? (
@@ -151,7 +152,7 @@ export default function RamsApprovePage() {
                 ) : (
                   <div style={{ marginTop: 12, paddingTop: 14, borderTop: '1px solid #eee' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#b91c1c', marginBottom: 6 }}>Request edits</div>
-                    <div style={{ fontSize: 12.5, color: '#777', marginBottom: 8 }}>Describe what needs changing (required). This will be sent to {brand}'s Contracts Manager and Director — the RAMS will not be approved.</div>
+                    <div style={{ fontSize: 12.5, color: '#777', marginBottom: 8 }}>Describe what needs changing (required). This will be sent to {brand}'s Contracts Manager and Director — the {rams} will not be approved.</div>
                     <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={4} placeholder="What needs to be changed?"
                       style={{ width: '100%', boxSizing: 'border-box', padding: '11px 12px', border: '2px solid #e3e0d9', borderRadius: 12, fontSize: 15, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
                     <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>

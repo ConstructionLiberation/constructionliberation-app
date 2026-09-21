@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../../../components/TenantProvider'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, Loading, ghostBtn } from '../../../components/opsUI'
 
@@ -7,6 +8,8 @@ const HEADER_ORANGE = '#f5c77e'
 const ROW_ALT = '#f7f6f3'
 
 export default function RamsMatrixPage() {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [projects, setProjects] = useState([])
   const [ops, setOps] = useState([])
   const [signoffs, setSignoffs] = useState({})
@@ -42,7 +45,7 @@ export default function RamsMatrixPage() {
   const shownProjects = useMemo(() => projects.filter(p => !filters.project || p.key === filters.project), [projects, filters])
 
   if (loading) return (
-    <OperationsShell active="hs:rams-matrix" section="hs" title="RAMS Matrix" wide><PageHeading title="RAMS Matrix" /><Loading /></OperationsShell>
+    <OperationsShell active="hs:rams-matrix" section="hs" title={`${rams} Matrix`} wide><PageHeading title={`${rams} Matrix`} /><Loading /></OperationsShell>
   )
 
   const opName = (o) => `${o.firstName} ${o.lastName}`
@@ -72,14 +75,14 @@ export default function RamsMatrixPage() {
   }
 
   return (
-    <OperationsShell active="hs:rams-matrix" section="hs" title="RAMS Matrix" wide>
-      <PageHeading title="RAMS Matrix" sub="Which installers have signed onto each project's RAMS. Projects down the side, installers across the top." />
+    <OperationsShell active="hs:rams-matrix" section="hs" title={`${rams} Matrix`} wide>
+      <PageHeading title={`${rams} Matrix`} sub={`Which installers have signed onto each project's ${rams}. Projects down the side, installers across the top.`} />
 
       {/* Key */}
       <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 12, fontSize: 12.5, flexWrap: 'wrap' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 18, height: 18, borderRadius: 4, background: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>Yes</span> Signed RAMS</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 18, height: 18, borderRadius: 4, background: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>Yes</span> Signed {rams}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 18, height: 18, borderRadius: 4, background: '#fed7aa', color: '#9a3412', fontWeight: 700, fontSize: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>PS</span> Pending Signature</span>
-        <button onClick={() => setResendOpen(true)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e6b567', background: '#fff7ec', color: '#92400e', fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>✉ Resend RAMS to Site Manager</button>
+        <button onClick={() => setResendOpen(true)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e6b567', background: '#fff7ec', color: '#92400e', fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>✉ Resend {rams} to Site Manager</button>
         <button onClick={load} style={{ ...ghostBtn, padding: '6px 12px', marginLeft: 'auto' }}>↻ Refresh</button>
       </div>
 
@@ -122,7 +125,7 @@ export default function RamsMatrixPage() {
             <div style={{ minWidth: NAME_W + shownOps.length * CELL_W }}>
               {/* header: operative names, rotated — frozen to the top on vertical scroll */}
               <div style={{ display: 'flex', borderBottom: '2px solid #e6b567', background: HEADER_ORANGE, alignItems: 'flex-end', position: 'sticky', top: 0, zIndex: 5 }}>
-                <div style={{ width: NAME_W, minWidth: NAME_W, position: 'sticky', left: 0, zIndex: 6, background: HEADER_ORANGE, padding: '8px', fontSize: 12, fontWeight: 700, color: '#3a2e12', alignSelf: 'flex-end' }}>Project RAMS</div>
+                <div style={{ width: NAME_W, minWidth: NAME_W, position: 'sticky', left: 0, zIndex: 6, background: HEADER_ORANGE, padding: '8px', fontSize: 12, fontWeight: 700, color: '#3a2e12', alignSelf: 'flex-end' }}>Project {rams}</div>
                 {shownOps.map(o => (
                   <div key={o.id} title={`${opName(o)}${o.company ? ` · ${o.company}` : ''}`} style={{ width: CELL_W, minWidth: CELL_W, height: 130, position: 'relative', borderLeft: '1px solid #eab968' }}>
                     <div style={{ position: 'absolute', bottom: 8, left: '50%', transformOrigin: 'left bottom', transform: 'rotate(-60deg)', whiteSpace: 'nowrap', fontSize: 10.5, color: '#3a2e12', fontWeight: 600 }}>{opName(o)}</div>
@@ -145,7 +148,7 @@ export default function RamsMatrixPage() {
                     <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>{p.name}</div>
                     {p.hasRams
                       ? <StageLine stage={allSigned ? 'complete' : p.stage} />
-                      : <div style={{ fontSize: 10, color: '#bbb', marginTop: 2 }}>No RAMS uploaded</div>}
+                      : <div style={{ fontSize: 10, color: '#bbb', marginTop: 2 }}>No {rams} uploaded</div>}
                   </div>
                   {shownOps.map(o => {
                     const key = opName(o).trim().toLowerCase()
@@ -171,7 +174,7 @@ export default function RamsMatrixPage() {
           </div>
         </div>
       )}
-      <div style={{ fontSize: 11.5, color: '#999', marginTop: 8 }}>Cells update automatically as operatives sign in the Site App. <strong>Yes</strong> = signed all current RAMS; <strong>PS</strong> = RAMS approved through to operatives and awaiting their signature. The line under each project shows the approval stage (current stage in red, completed stages in green).</div>
+      <div style={{ fontSize: 11.5, color: '#999', marginTop: 8 }}>Cells update automatically as operatives sign in the Site App. <strong>Yes</strong> = signed all current {rams}; <strong>PS</strong> = {rams} approved through to operatives and awaiting their signature. The line under each project shows the approval stage (current stage in red, completed stages in green).</div>
     </OperationsShell>
   )
 }
@@ -180,6 +183,8 @@ const lbl = { fontSize: 11, color: '#888', marginBottom: 3 }
 const fInput = { padding: '7px 9px', borderRadius: 8, border: '1px solid #e0e0e0', fontSize: 12.5 }
 
 function ResendSiteManagerModal({ projects, onClose, onSent }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   // A Site Manager exists once the Director has signed — so a project can be
   // (re)sent when its current RAMS is at the Site Manager stage or beyond.
   const eligible = (projects || []).filter(p => p.hasRams && ['site-manager', 'operatives', 'complete'].includes(p.stage))
@@ -205,7 +210,7 @@ function ResendSiteManagerModal({ projects, onClose, onSent }) {
       ])
       const files = (filesRes.files || []).slice().sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0))
       const current = files[0]
-      if (!current) { setErr('No RAMS file found for this project.'); setLoading(false); return }
+      if (!current) { setErr(`No ${rams} file found for this project.`); setLoading(false); return }
       setFileId(current.id)
       const rec = (apprRes.approvals || {})[current.id] || {}
       setName(rec.siteManagerName || '')
@@ -229,7 +234,7 @@ function ResendSiteManagerModal({ projects, onClose, onSent }) {
       })
       let d = {}; try { d = await r.json() } catch {}
       if (!r.ok || !d.ok) { setErr(d.error || 'Could not resend.'); setBusy(false); return }
-      setOkMsg(`RAMS approval email resent to ${email.trim()}.`); setBusy(false)
+      setOkMsg(`${rams} approval email resent to ${email.trim()}.`); setBusy(false)
     } catch (e) { setErr(e?.message || 'Could not resend.'); setBusy(false) }
   }
 
@@ -238,7 +243,7 @@ function ResendSiteManagerModal({ projects, onClose, onSent }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '6vh 2vw', overflowY: 'auto' }}>
       <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderBottom: '1px solid #eee' }}>
-          <h2 style={{ margin: 0, fontSize: 16, color: INK }}>Resend RAMS to Site Manager</h2>
+          <h2 style={{ margin: 0, fontSize: 16, color: INK }}>Resend {rams} to Site Manager</h2>
           <button onClick={onClose} style={{ fontSize: 24, border: 'none', background: 'none', cursor: 'pointer', color: '#999' }}>×</button>
         </div>
         <div style={{ padding: '18px 22px' }}>
@@ -255,7 +260,7 @@ function ResendSiteManagerModal({ projects, onClose, onSent }) {
                 <option value="">Select a project…</option>
                 {eligible.map(p => <option key={p.key} value={p.key}>{p.name}</option>)}
               </select>
-              {eligible.length === 0 && <div style={{ fontSize: 12.5, color: '#999', marginTop: -8, marginBottom: 12 }}>No projects are ready to send to a Site Manager yet — the Director must sign the RAMS first.</div>}
+              {eligible.length === 0 && <div style={{ fontSize: 12.5, color: '#999', marginTop: -8, marginBottom: 12 }}>No projects are ready to send to a Site Manager yet — the Director must sign the {rams} first.</div>}
 
               {loading ? <div style={{ fontSize: 13, color: '#999', padding: '10px 0' }}>Loading…</div> : projKey && fileId && (
                 <>

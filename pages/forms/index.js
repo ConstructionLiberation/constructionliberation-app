@@ -193,6 +193,8 @@ export default function FormsHome() {
 
 // ── Home: Complete a Form / Drawings / RAMS / Deliveries etc. ────────────────
 function FormsHomeMenu({ user }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   const router = useRouter()
   const [mode, setMode] = useState('menu')  // menu | forms | details
   // Keep the current view in the URL so returning to /forms?mode=forms (e.g. Back to
@@ -296,7 +298,7 @@ function FormsHomeMenu({ user }) {
         </button>
         <button onClick={() => goMode('rams')} style={homeCard}>
           <div style={{ fontSize: 30 }}>📑</div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 700, color: INK }}>RAMS</div><div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>Sign your project RAMS</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 700, color: INK }}>{rams}</div><div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>Sign your project RAMS</div></div>
           {ramsBadge > 0 && <span style={homeBadge('#dc2626')}>{ramsBadge}</span>}
           <div style={{ color: BRAND, fontSize: 24 }}>›</div>
         </button>
@@ -552,6 +554,8 @@ function PdfCanvas({ url }) {
 }
 
 function ProjectDetailsView({ onBack, only }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [proj, setProj] = useState(null)
@@ -666,7 +670,7 @@ function ProjectDetailsView({ onBack, only }) {
     return (
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
         <button onClick={onBack} style={backLink}>‹ Back</button>
-        <h2 style={{ fontSize: 18, color: INK, margin: '8px 0 16px' }}>{only === 'rams' ? 'RAMS — select a project' : only === 'drawings' ? 'Drawings — select a project' : 'Select a project'}</h2>
+        <h2 style={{ fontSize: 18, color: INK, margin: '8px 0 16px' }}>{only === 'rams' ? `${rams} — select a project` : only === 'drawings' ? 'Drawings — select a project' : 'Select a project'}</h2>
         {!projects.length ? <div style={{ color: '#999', fontSize: 14 }}>No live projects.</div> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {projects.map(p => (
@@ -687,12 +691,12 @@ function ProjectDetailsView({ onBack, only }) {
       <button onClick={() => setProj(null)} style={backLink}>‹ All projects</button>
       <h2 style={{ fontSize: 18, color: INK, margin: '8px 0 2px' }}>{proj.projectNo} — {proj.projectName}</h2>
       <div style={{ display: 'flex', gap: 8, margin: '14px 0' }}>
-        {(only ? [[only, only === 'drawings' ? 'Drawings' : 'RAMS']] : [['drawings', 'Drawings'], ['rams', 'RAMS']]).map(([k, label]) => (
+        {(only ? [[only, only === 'drawings' ? 'Drawings' : rams]] : [['drawings', 'Drawings'], ['rams', rams]]).map(([k, label]) => (
           <button key={k} onClick={() => !only && setTab(k)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1px solid ' + (tab === k ? BRAND : '#e3e0d9'), background: tab === k ? BRAND : '#fff', color: tab === k ? '#fff' : INK, fontWeight: 600, fontSize: 14, cursor: only ? 'default' : 'pointer' }}>{label}</button>
         ))}
       </div>
       {filesLoading ? <div style={{ textAlign: 'center', color: '#aaa', padding: 24 }}>Loading…</div>
-        : !files.length ? <div style={{ background: '#fff', border: '1px dashed #d9d5cc', borderRadius: 14, padding: 24, textAlign: 'center', color: '#999', fontSize: 14 }}>{tab === 'drawings' ? 'No drawings have been issued for construction on this project yet.' : 'No RAMS uploaded for this project yet.'}</div>
+        : !files.length ? <div style={{ background: '#fff', border: '1px dashed #d9d5cc', borderRadius: 14, padding: 24, textAlign: 'center', color: '#999', fontSize: 14 }}>{tab === 'drawings' ? 'No drawings have been issued for construction on this project yet.' : `No ${rams} uploaded for this project yet.`}</div>
         : tab === 'drawings' ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12 }}>
             {files.map((f, i) => (
@@ -772,7 +776,7 @@ function ProjectDetailsView({ onBack, only }) {
                         <span style={{ fontWeight: 600 }}>{appr.siteManagerRejection.name || 'Site Manager'} said:</span> {appr.siteManagerRejection.notes}
                       </div>
                     )}
-                    <div style={{ fontSize: 12.5, color: '#991b1b', marginTop: 8 }}>Please make the edits and upload a new set of RAMS in the portal — this restarts the approval chain.</div>
+                    <div style={{ fontSize: 12.5, color: '#991b1b', marginTop: 8 }}>Please make the edits and upload a new set of {rams} in the portal — this restarts the approval chain.</div>
                   </div>
                 )}
 
@@ -780,7 +784,7 @@ function ProjectDetailsView({ onBack, only }) {
                 {stage !== 'rejected' && !sigMap[f.id] && (
                   opsUnlocked ? (
                     <button onClick={() => setSignFile(f)} style={{ ...bigBtn(false), marginTop: 10, background: '#dc2626' }}>
-                      ✍ Sign RAMS now
+                      ✍ Sign {rams} now
                     </button>
                   ) : (
                     <div style={{ marginTop: 10, background: '#f7f6f3', border: '1px solid #e3e0d9', borderRadius: 12, padding: '11px 14px', fontSize: 13, color: '#777', textAlign: 'center' }}>
@@ -868,6 +872,8 @@ function StagePipeline({ stage }) {
 }
 
 function RamsSignFlow({ file, projectNo, onClose, onSigned, mode = 'operative' }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [step, setStep] = useState('read')        // read | sign
   const [reachedBottom, setReachedBottom] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -992,7 +998,7 @@ function RamsSignFlow({ file, projectNo, onClose, onSigned, mode = 'operative' }
       {/* Header */}
       <div style={{ background: INK, height: 52, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 10, flexShrink: 0 }}>
         <div style={{ color: '#fff', fontWeight: 600, fontSize: 15, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {step === 'read' ? 'Read the RAMS' : step === 'allocate-sm' ? 'Allocate a Site Manager' : (isApproveMode ? 'Approve & sign the RAMS' : 'Sign the RAMS')}
+          {step === 'read' ? `Read the ${rams}` : step === 'allocate-sm' ? 'Allocate a Site Manager' : (isApproveMode ? `Approve & sign the ${rams}` : 'Sign the RAMS')}
         </div>
         <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', lineHeight: 1 }}>×</button>
       </div>
@@ -1020,7 +1026,7 @@ function RamsSignFlow({ file, projectNo, onClose, onSigned, mode = 'operative' }
           <div style={{ flex: 1, overflow: 'auto', padding: '18px 16px' }}>
             <div style={{ maxWidth: 520, margin: '0 auto' }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: INK, marginBottom: 4 }}>Allocate the customer's Site Manager</div>
-              <div style={{ fontSize: 13.5, color: '#777', marginBottom: 16, lineHeight: 1.5 }}>Choose who will approve the RAMS on behalf of the customer. They'll be emailed automatically <strong>after the Director signs</strong> — nothing is sent now.</div>
+              <div style={{ fontSize: 13.5, color: '#777', marginBottom: 16, lineHeight: 1.5 }}>Choose who will approve the {rams} on behalf of the customer. They'll be emailed automatically <strong>after the Director signs</strong> — nothing is sent now.</div>
 
               {smContacts.filter(c => c.email).length > 0 && (
                 <>
@@ -1065,7 +1071,7 @@ function RamsSignFlow({ file, projectNo, onClose, onSigned, mode = 'operative' }
         <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
           <div style={{ maxWidth: 560, margin: '0 auto' }}>
             <div style={{ background: '#fff', border: '1px solid #e3e0d9', borderRadius: 14, padding: 16, marginBottom: 16 }}>
-              {isApproveMode && <div style={{ fontSize: 13, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>By approving, you confirm this is a safe method of work and has been properly risk-assessed. You also sign onto the RAMS with the statement below.</div>}
+              {isApproveMode && <div style={{ fontSize: 13, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>By approving, you confirm this is a safe method of work and has been properly risk-assessed. You also sign onto the {rams} with the statement below.</div>}
               <div style={{ fontSize: 13, color: '#444', lineHeight: 1.5 }}>{RAMS_STATEMENT}</div>
             </div>
 
@@ -1163,6 +1169,8 @@ function SignaturePad({ onChange }) {
 
 // CM picks/confirms the Site Manager recipient and sends the tokenised email.
 function SiteManagerPicker({ file, projectNo, existingEmail, existingName, onClose, onSent }) {
+  const { term } = useFormat()
+  const rams = term('rams')
   const [contacts, setContacts] = useState([])
   const [email, setEmail] = useState(existingEmail || '')
   const [name, setName] = useState(existingName || '')
@@ -1206,10 +1214,10 @@ function SiteManagerPicker({ file, projectNo, existingEmail, existingName, onClo
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3600, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 520, padding: '20px 18px 28px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: INK }}>Send RAMS to Site Manager</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: INK }}>Send {rams} to Site Manager</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#999' }}>×</button>
         </div>
-        <p style={{ fontSize: 13, color: '#777', margin: '0 0 14px' }}>They'll get an email with the RAMS attached and a one-click approval link — no login needed.</p>
+        <p style={{ fontSize: 13, color: '#777', margin: '0 0 14px' }}>They'll get an email with the {rams} attached and a one-click approval link — no login needed.</p>
 
         {loading ? <div style={{ color: '#aaa', textAlign: 'center', padding: 16 }}>Loading contacts…</div> : (
           <>

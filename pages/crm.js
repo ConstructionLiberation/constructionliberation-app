@@ -31,6 +31,19 @@ const STAGES = [
   { id: 'stage_mc_secured', label: 'MC Secured' }, { id: 'stage_negotiating', label: 'Negotiating' },
 ];
 const STAGE_INDEX = Object.fromEntries(STAGES.map((s, i) => [s.id, i]));
+
+// A DEAL ID IS A STRING OR A NUMBER, DEPENDING WHERE IT CAME FROM.
+//
+// Pipedrive ids are numeric; ids generated here, and the demo generator's
+// 'd1000', are not. Anything that has been through a URL or an index key
+// arrives as a string, and Number('d1000') is NaN - which matches no deal,
+// silently.
+//
+// This file already compared with String(a.dealId) === String(dealId) in one
+// place and Number(dealId) three lines later. One rule, two spellings. This
+// is the rule: coerce only when the id really is all digits, so a numeric
+// pipeline behaves exactly as it did before.
+const dealKey = (v) => { const raw = String(v); return /^\d+$/.test(raw) ? Number(raw) : raw };
 const stageLabel = (id) => (STAGES.find((s) => s.id === id) || {}).label || id;
 
 // ===========================================================================
@@ -2972,7 +2985,29 @@ function CRMPageInner() {
   // Now seeded above the highest id actually present, once the deals have loaded.
   const nextId = useRef(900000);
 
-  useEffect(() => { if (!router.isReady) return; const q = router.query.deal; if (q) { setOpenId(Number(q)); loadDealSubs(Number(q)); } }, [router.isReady, router.query.deal]);
+  // A DEAL ID IS NOT ALWAYS A NUMBER.
+  //
+  // This read the id back off the URL as Number(q). Pipedrive ids are numeric
+  // so it round-tripped cleanly on an imported pipeline - but a deal id is a
+  // STRING as far as the rest of this file is concerned, and the demo
+  // generator produces 'd1000'.
+  //
+  // Number('d1000') is NaN, so `deals.find(d => d.id === openId)` matched
+  // nothing and the deal view closed the instant it opened. Clicking a second
+  // time worked only because the query was already set, so this effect did
+  // not re-run - which is exactly what "it flashes, then opens on the second
+  // click" looks like.
+  //
+  // Coerce only when the id really is all digits, so numeric pipelines behave
+  // exactly as before and everything else survives the round trip.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const q = router.query.deal;
+    if (!q) return;
+    const id = dealKey(q);
+    setOpenId(id);
+    loadDealSubs(id);
+  }, [router.isReady, router.query.deal]);
 
   // Keep the id counter above everything that exists. Runs whenever the list changes, so
   // a project created by somebody else between loads cannot be collided with either.
@@ -4372,7 +4407,7 @@ function CRMPageInner() {
       setOpenActivities((prev) => prev.filter((a) => !(String(a.dealId) === String(dealId) && a.id === row.rawId)));
 
       if (isManualActivity(dealId, row.rawId)) {
-        completeActivity(Number(dealId), row.rawId);
+        completeActivity(dealKey(dealId), row.rawId);
       } else {
         try {
           await patchImportedActivity(dealId, row.rawId, { done: true, doneAt: Date.now() });
@@ -4384,14 +4419,14 @@ function CRMPageInner() {
       }
 
       if (outcome && outcome.trim()) {
-        patch(Number(dealId), (d) => ({
+        patch(dealKey(dealId), (d) => ({
           ...d,
           history: [...d.history, { id: uid(), type: 'activity', ts: nowIso(), text: `Activity completed: ${row.text}`, body: outcome.trim(), outcome: outcome.trim(), author: me?.name || '' }],
         }));
       }
 
       if (next && next.text && next.text.trim()) {
-        addActivity(Number(dealId), next.text.trim(), next.due || today, next.assignee || null);
+        addActivity(dealKey(dealId), next.text.trim(), next.due || today, next.assignee || null);
       }
     } catch (e) { console.error('Could not complete the activity:', e); }
     finally { pendingWrites.current = Math.max(0, pendingWrites.current - 1); }
@@ -4410,7 +4445,7 @@ function CRMPageInner() {
     pendingWrites.current++;
     try {
       if (isManualActivity(dealId, row.rawId)) {
-        patch(Number(dealId), (d) => ({
+        patch(dealKey(dealId), (d) => ({
           ...d,
           activities: d.activities.map((a) => a.id === row.rawId ? { ...a, text, due, assignee: assignee || a.assignee || null } : a),
         }));

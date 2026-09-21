@@ -15,14 +15,16 @@ const MGMT = ['management', 'admin']
 // The two that were missing are admin-only, which reproduces exactly who could see them
 // before: they only ever appeared on Portal Users, and that page is admin-only. Widening
 // them to management is a decision, not a side effect of fixing the nav.
-export const ADMIN_TABS = [
+// A function now, because one label is a glossary term. The only consumer is
+// AdminTabs below; nothing else imports it.
+export const adminTabs = (term) => [
   ['Portal Users', '/admin', ['admin']],
   ['Templates', '/admin/templates', MGMT],
   ['Email Notifications', '/admin/notifications', ['admin']],
   ['Form Builder', '/operations/forms-builder', MGMT],
   ['Site App Users', '/operations/users', MGMT],
   ['Documents', '/admin/documents', MGMT],
-  ['RAMS Director', '/admin/rams-director', MGMT],
+  [`${term('rams')} Director`, '/admin/rams-director', MGMT],
   ['App Improvements', '/admin/problem-reports', MGMT],
   ['Xero Connection', '/connect', ['admin']],
 ]
@@ -37,7 +39,8 @@ const BK_TABS = [
 // The bar itself, so the markup lives in one place too. Both callers rendered an
 // identical div and identical anchors; that is how the two lists drifted unnoticed.
 export function AdminTabs({ active, role, tabs }) {
-  const list = (tabs || ADMIN_TABS).filter(([, , roles]) => !roles || roles.includes(role))
+  const { term } = useFormat()
+  const list = (tabs || adminTabs(term)).filter(([, , roles]) => !roles || roles.includes(role))
   return (
     <div style={{ background: '#232321', padding: '0 24px', display: 'flex', gap: 4, height: 44, alignItems: 'center', overflowX: 'auto' }}>
       {list.map(([label, href]) => (

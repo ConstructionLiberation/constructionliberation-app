@@ -30,11 +30,25 @@ async function handler(req, res) {
     // count as a failure and it does not overwrite the heartbeat of a real
     // run.
     if (!tokens) return res.status(200).json({ ok: true, skipped: true, reason: 'Xero not connected for this customer' })
-    try { const nt = await refreshXeroToken(tokens.refresh_token); tokens = { ...tokens, ...nt }; await saveTokens(tokens) } catch {}
+    // THE REFRESH FAILING IS THE MOST LIKELY CAUSE OF THE FETCH FAILING, and
+    // it was swallowed whole. Kept and reported alongside, because "po fetch
+    // failed" with an expired token is a different problem from "po fetch
+    // failed" with a live one.
+    let refreshError = null
+    try { const nt = await refreshXeroToken(tokens.refresh_token); tokens = { ...tokens, ...nt }; await saveTokens(tokens) }
+    catch (e) { refreshError = (e && e.message) || String(e) }
 
     let pos = []
     try { pos = await fetchPurchaseOrders(tokens.access_token, tokens.tenant_id, { status: 'AUTHORISED' }) }
-    catch (e) { return res.status(200).json({ ok: false, reason: 'po fetch failed' }) }
+    catch (e) {
+      // `error`, not `reason` - see lib/forEachTenant.js failureFromBody. A
+      // reason alone never reached the alert email.
+      const detail = (e && e.message) || String(e)
+      return res.status(200).json({
+        ok: false,
+        error: `po fetch failed: ${detail}${refreshError ? ` (token refresh also failed: ${refreshError})` : ''}`,
+      })
+    }
 
     let seen = await getSeenIds()
     // If no baseline yet, set it and add nothing (matches the page's first-run).
