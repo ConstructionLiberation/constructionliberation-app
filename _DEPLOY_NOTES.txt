@@ -1,67 +1,61 @@
-PACKAGE 967 - the Construction Liberation logo on demo
+PACKAGE 968 - the fix for the failed builds
 ================================================================================
 
-One file, and it is an IMAGE, not code.
+ONE file. Complete replacement.
 
-  public/cl-logo.png
+  pages/forms/index.js
 
-It cannot be pasted like the others. In GitHub use Add file -> Upload files
-and drop it into the public/ folder.
-
-No code change. BrandLogo has been reading logoUrl since 955 and there has
-simply been nothing to read.
+This unblocks 965, 966 AND 967 in one go. All three are already committed to
+main; they have simply never built, so 964 has remained live throughout.
+Nothing needs re-pasting.
 
 
-WHAT I DID TO THE FILE
+WHAT I DID WRONG
 ================================================================================
-Your original is 500x500 and 79 KB. It renders at 32px in the nav bars, 56
-and 64 on the Site App home, and 74 on the financial pack cover.
+pages/forms/index.js has, at line 1436:
 
-Resized to 256x256 and quantised to 64 colours: 8.7 KB, which is a ninth of
-the original and still sharper than anything on screen needs, including at
-2x on a phone. The flat greens and the black survive quantisation without
-banding - I checked a composite at 64px on both nav backgrounds rather than
-trusting it.
+    export function Shell({ children, onLogout, user }) {
 
-Transparency kept. That matters and I checked it: the badge has its own
-white disc inside the ring, so it reads on the dark nav (#1a1a19 and
-#1a1a2e) AND on the white login card. A transparent logo with no disc would
-have vanished on one or the other.
+Shell is the shared Site App chrome, and EVERY page under /forms imports it.
+The title and the logo I changed in 965 are inside Shell.
 
-Worth noting for comparison: rock-logo.jpg is still 565x565 and 64 KB to
-draw a 32px square, on every page of the portal.
+My ownership scan - the one I have been quoting all day as the check that
+catches what the compiler misses - matched only
+
+    function X            and      export default function X
+
+and NOT `export function X`. So it could not see Shell at all, and attributed
+Shell's lines to FormsList, the previous plain function. I put the hook into
+FormsList, which never uses brand, and left Shell referencing a variable that
+does not exist.
+
+    ReferenceError: brand is not defined
+
+Sixteen /forms pages failed to prerender. The compile passed cleanly - it
+always does for this - and the failure only appeared at static generation.
 
 
-THEN ONE RECORD EDIT
+WHAT I DID ABOUT IT
 ================================================================================
-On tenant:demo in control-registry:
+The hook now sits in Shell, and the one in FormsList is removed.
 
-    "logoUrl": "/cl-logo.png"
+Then I fixed the scanner and re-ran it over every page and component in the
+repo that uses useFormat. Six things came back. Four were my scanner being
+wrong about its own output; two more - contracted-rates and
+upload-transactions - are real but pre-existing: both still have a
+module-scope hardcoded pound formatter, because neither has been converted
+yet. They are in the remaining tail, not a regression.
 
-A RELATIVE path is correct here, and I checked why rather than assuming.
-Middleware rewrites almost everything on a siteapp.* host to /forms, which
-would break a relative image - except there is an extension passthrough
-covering .png, so /cl-logo.png is served on BOTH demo hosts. Rock's absolute
-URL works for the same reason it always has, so nothing to change there.
-
-Allow two minutes for the registry and feed caches.
+Shell was the only genuine fault. Nothing else from 955 to 967 has an
+undeclared reference.
 
 
-WHAT YOU SHOULD SEE
+SMOKE TEST
 ================================================================================
-1. Demo portal nav, any area - the badge instead of the "DE" square.
-2. demo login page - at 54px, on the white card.
-3. siteapp.demo.constructionliberation.com - 56 and 64px on the home screen.
-   This is the one that proves the relative path works through middleware.
-4. Rock - completely unchanged. Different record, different file.
-
-
-AND THE THING THIS DOES NOT SOLVE
-================================================================================
-This is a file in the repo, which means every customer's logo would end up
-committed to the codebase. Fine for a demo of your own brand; not how
-customer two gets a logo.
-
-The real answer is still the per-customer Blob store and an upload screen,
-both on the outstanding list, and the Blob store is the one that genuinely
-blocks a paying customer.
+1. The build goes green. That is the first thing.
+2. siteapp.rockroofing.co.uk - logo and "Rock Roofing Forms", as now.
+3. siteapp.demo.constructionliberation.com - the CL badge and "Demo Forms".
+4. Any Contracts Manager page under /forms/cm/ - those all render Shell and
+   were all failing.
+5. Then everything from 965, 966 and 967 goes live at once, so the demo logo
+   should appear the moment the record edit takes effect.

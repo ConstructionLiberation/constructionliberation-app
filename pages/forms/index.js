@@ -1361,7 +1361,6 @@ function SitePdfThumb({ url }) {
 
 // ── Forms list shown immediately after login ────────────────────────────────
 function FormsList({ user, onBack }) {
-  const { companyName: brand } = useFormat()
   const router = useRouter()
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1434,6 +1433,12 @@ function FormsList({ user, onBack }) {
 
 // ── Shared shell ────────────────────────────────────────────────────────────
 export function Shell({ children, onLogout, user }) {
+  // Shell is the shared Site App chrome - EVERY /forms page renders it.
+  // The hook went into FormsList first because an ownership scan that
+  // only knew `function` and `export default function` could not see an
+  // `export function`. Shell referenced brand and never declared it, and
+  // all sixteen forms pages failed to prerender.
+  const { companyName: brand } = useFormat()
   return (
     <>
       <Head>
