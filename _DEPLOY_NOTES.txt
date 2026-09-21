@@ -1,67 +1,80 @@
-PACKAGE 994 - the Glenigan cards stop being dated to Rock's history
+PACKAGE 995 - hide the metrics a customer does not want
 ================================================================================
 
-Three files. Complete replacements. scorecard-crm.js includes 990's changes.
+Two files. Complete replacements. scorecard-crm.js includes 990 and 994.
 
-  pages/api/tenant-brand.js
-  components/TenantProvider.js
+  pages/api/targets.js
   pages/scorecard-crm.js
 
-NO RE-SEED NEEDED. This is code and one record field.
+No re-seed. Works on every tenant immediately.
 
 
-WHY ONLY TWO MONTHS HAD A LINE
+YOUR IDEA, AND IT IS THE BETTER ANSWER
 ================================================================================
-pages/scorecard-crm.js line 66:
+We were about to seed a number into "emails sent externally" so a card would
+not look broken. That would have been inventing data to hide a gap. Hiding
+the card says the truthful thing instead: this customer does not measure
+that.
 
-    const GLENIGAN_TRACKING_FROM = '2026-08-01'
-    ...
-    const measured = monthKey(GLENIGAN_TRACKING_FROM) <= m
-    const gs = measured ? gleniganScored5 : null
-
-Every month before August 2026 is marked UNMEASURED and returns null, which
-the chart draws as nothing at all - not as a zero. So the card correctly
-showed 2 and 8 for the only two months it considered measurable.
-
-That date is the month ROCK started scoring Glenigan leads. Hardcoded in the
-page, exactly like ESTIMATORS was, and meaningless on any other tenant.
-
-Worth noting the gate itself is right and deliberate: the comment next to
-Actively Chased says it was NOT gated and therefore "reported 0 for months
-the CRM never measured", which is worse than reporting nothing. The fault is
-the date being one customer's, not the gating.
+It also generalises past the three cards in front of us. Glenigan is a UK
+data source a New Zealand contractor has never heard of. Actively Chased is
+Rock's own lead category. Another customer will want measures neither of us
+has thought of. A fixed list of metrics was always going to be wrong for
+somebody.
 
 
-THE FIX
+HOW IT WORKS
 ================================================================================
-gleniganTrackingFrom is now an optional field on the tenant record, carried on
-/api/tenant-brand and read through useFormat(). The page falls back to the
-'2026-08-01' constant when a tenant has not set one, so ROCK IS UNCHANGED -
-it has no field, it keeps its date, and its charts look exactly as they do
-today.
+A "Metrics" button sits at the right of the person tabs. It opens a row of
+tick boxes - every metric for that scorecard - and unticking one hides it.
+Saves immediately, no OK button. The button shows a count when anything is
+hidden, so a hidden metric is never a mystery.
 
-Both branches of the feed return the field, the no-tenant one as null. A field
-present in one branch and absent in the other is how a client ends up reading
-undefined and nobody notices for a fortnight.
+Stored per tenant as scorecard:hidden, an array of metric keys. Empty for
+every existing tenant, so ROCK SEES NO CHANGE until somebody hides
+something.
+
+The filter is applied at ONE point:
+
+    const metricDefs = allMetricDefs.filter(m => !hidden.includes(m.key))
+
+metricDefs already fed all three renderers - the last-full-month cards, the
+current-month cards and the trend table - so hiding a metric hides it in all
+three. No second list to keep in step, which is the fault this codebase
+produces more than any other.
+
+Estimator and sales scorecards have separate metric sets and the picker shows
+whichever you are on. The hidden list is shared, and the keys do not collide,
+so hiding "total value of work priced" on one does not touch the other unless
+the key is the same metric.
 
 
-ONE RECORD EDIT, ON tenant:demo
+ONE THING IN THE API WORTH KNOWING
 ================================================================================
-    "gleniganTrackingFrom": "2025-01-01",
+The POST used to be:
 
-Any date earlier than the seeded data will do - it means "we have been
-tracking this the whole time", which for generated data is true. Then every
-month on those two cards is measured and the chart draws across the full
-range.
+    await set('scorecard:targets', req.body.targets)
 
-Leave it off and demo keeps Rock's August date, which is the behaviour you
-just saw.
+unconditional. A POST carrying only `hidden` would have written undefined
+over every target the customer had set. It now writes each only if present.
+
+
+NOT DONE, DELIBERATELY
+================================================================================
+pages/operations/scorecards.js has its own metric layout and is untouched.
+Same idea applies there; it is a different page with fixed columns rather
+than cards, so it is its own change.
+
+And this hides metrics rather than adding them. Adding a measure we have not
+written is a bigger piece - it needs somewhere to define how it is computed.
 
 
 SMOKE TEST
 ================================================================================
-1. /api/tenant-brand on demo returns gleniganTrackingFrom after the record
-   edit.
-2. Demo scorecard: Glenigan scored 5+ and Actively Chased scored 5+ draw
-   across all months instead of the last two.
-3. ROCK scorecard: both cards still start at August 2026. Unchanged.
+1. Demo scorecard, sales tab: Metrics, untick Emails sent externally,
+   Glenigan scored 5+ and Actively Chased scored 5+. The cards go, and so do
+   their rows in the trend table at the bottom.
+2. The button reads "Metrics (3 hidden)".
+3. Reload - still hidden. It is stored, not local state.
+4. Tick one back on: it returns, with its figures intact.
+5. ROCK: the button appears, nothing is hidden, every card as before.

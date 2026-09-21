@@ -326,6 +326,10 @@ export default function Scorecard() {
   const [hiddenProjects, setHiddenProjects] = useState([])
   const [targets, setTargets] = useState(null)
   const [editingTarget, setEditingTarget] = useState(null)
+  // Metric keys this customer has chosen not to see. Empty for everyone until
+  // somebody hides one.
+  const [hidden, setHidden] = useState([])
+  const [showMetricPicker, setShowMetricPicker] = useState(false)
   const [editValue, setEditValue] = useState('')
   const [modal, setModal] = useState(null) // { title, projects }
   const [xeroProjects, setXeroProjects] = useState([])
@@ -396,6 +400,7 @@ export default function Scorecard() {
       try { setGpSnapshots((await gs.json()).snapshots || {}) } catch { setGpSnapshots({}) }
       const td = await tr.json()
       setTargets(td.targets || DEFAULT_TARGETS)
+      setHidden(Array.isArray(td.hidden) ? td.hidden : [])
       // Load Xero project data for GP margin cards
       // The EOM report hides these; the scorecard was counting them.
       try { setHiddenProjects((await fetch('/api/hidden-projects').then(r => r.json())).hidden || []) } catch { setHiddenProjects([]) }
@@ -871,7 +876,20 @@ export default function Scorecard() {
     { key: 'avgValueSecured', label: 'Average value of projects secured', sub: 'Rolling 6 months, vs the 6 months before', format: fmt, targetKey: 'avgValueSecured', drillKey: '_avgValueSecuredList', comparePriorKey: '_avgValueSecuredPrior' },
   ]
 
-  const metricDefs = isEstimator ? estimatorMetricDefs : salesMetricDefs
+  const allMetricDefs = isEstimator ? estimatorMetricDefs : salesMetricDefs
+  // One filter point, and metricDefs feeds all three renderers - both card
+  // grids and the trend table - so hiding a metric hides it everywhere.
+  const metricDefs = allMetricDefs.filter(m => !hidden.includes(m.key))
+
+  const toggleHidden = async (key) => {
+    const next = hidden.includes(key) ? hidden.filter(k => k !== key) : [...hidden, key]
+    setHidden(next)
+    // targets deliberately not sent - see the note in pages/api/targets.js.
+    await fetch('/api/targets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hidden: next }),
+    })
+  }
 
   const targetDisplay = (key) => {
     const val = t[key]
@@ -1078,7 +1096,39 @@ export default function Scorecard() {
           ))}
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 12, color: '#aaa', alignSelf: 'center' }}>{isEstimator ? 'Estimator scorecard' : 'Sales scorecard'}</span>
+          <button
+            onClick={() => setShowMetricPicker(v => !v)}
+            style={{ marginLeft: 14, alignSelf: 'center', background: 'none', border: '0.5px solid #d0d0cc', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#555', cursor: 'pointer', fontFamily: 'inherit' }}
+          >{showMetricPicker ? 'Done' : 'Metrics'}{hidden.length ? ` (${hidden.length} hidden)` : ''}</button>
         </div>
+
+        {/* WHICH METRICS THIS CUSTOMER WANTS TO SEE.
+            Not every metric applies to every business: Glenigan is a UK data
+            source, emails sent needs the mailbox sync connected, and a customer
+            will have measures we have never thought of. Hiding beats seeding a
+            number that means nothing.
+            Stored per tenant, and it hides the metric on BOTH month cards and
+            in the trend table, because all three read the same filtered list. */}
+        {showMetricPicker ? (
+          <div style={{ background: '#f8f8f7', borderBottom: '0.5px solid #e1e0d9', padding: '14px 24px' }}>
+            <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
+              Untick a metric to hide it from the {isEstimator ? 'estimator' : 'sales'} scorecard. Nothing is deleted - the figures are still there if you turn it back on.
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 22px' }}>
+              {allMetricDefs.map(m => (
+                <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#1a1a19', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!hidden.includes(m.key)}
+                    onChange={() => toggleHidden(m.key)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {m.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
           {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#888' }}>Loading…</div> : (
