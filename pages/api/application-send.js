@@ -58,7 +58,18 @@ async function handler(req, res) {
     // same as the one the QS has on file.
     const fname = `${describeApplication(app, { prevReleases: prev || null }).titleShort} ${app.seq || ''} - ${(jobNo || name || 'application')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
 
-    const FROM = fromEmail('commercial')
+    // ACCOUNTS, NOT A KIND OF ITS OWN.
+    //
+    // This asked for 'commercial' and the chase emails asked for 'accounts',
+    // and at Rock both have always gone from the same address - Rock Roofing
+    // Accounts <accountsreceivable@rockroofing.co.uk>. Two names for one
+    // identity is the fault this codebase keeps hitting: it works until
+    // somebody sets one and not the other, and then applications and chases
+    // start arriving from different senders with nothing to explain why.
+    //
+    // One kind. An application for payment and a chase for payment are both
+    // accounts receivable writing to the customer about money.
+    const FROM = fromEmail('accounts')
     const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.5">${esc(text).replace(/\n/g, '<br>')}</div>`
 

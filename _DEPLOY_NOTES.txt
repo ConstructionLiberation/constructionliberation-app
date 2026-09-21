@@ -1,40 +1,71 @@
-PACKAGE 952 - staff names removed from the Lessons Learnt hints
+PACKAGE 953 - two sender identities, not four kinds
 ================================================================================
 
-One file. Complete replacement. No re-seed needed.
+Two files. Complete replacements.
 
-  pages/lessons-learnt.js
+  lib/tenantSettings.js
+  pages/api/application-send.js
 
 
-WHAT IT WAS
-===========
-The grey prompt under each section heading on the Monthly Minutes named Rock
-Roofing staff, hard-coded:
+WHAT CHANGED
+============
+The code asked for four sender kinds. Two of them - 'accounts' (chase emails)
+and 'commercial' (applications for payment) - have ALWAYS gone from the same
+address at Rock: Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>.
+Confirmed from real sends on 15 and 16 September.
 
-  Wins this month              "... (James / Carl)"
-  General performance / KPIs   "... (Dori)"
-  Up and coming news           "James / Carl / Nathan"
-  Big focus for next month     "James / Carl / Nathan"
+Two names for one identity is the fault this codebase keeps hitting. It works
+until somebody sets one key and not the other, and then applications and
+chases start arriving from different senders with nothing to explain why -
+which is EXACTLY what pkg932 caused: Rock's record has senders.commercial and
+no senders.accounts, so once fromEmail() actually started running, chase
+emails quietly fell back to the notifications address.
 
-Every tenant saw them. On another company's portal that is four strangers
-being told to write their minutes.
+application-send now asks for 'accounts'. Three kinds remain:
 
-They now describe what the section is FOR, which is what a hint is meant to
-do:
+    accounts   2 sites   applications for payment, and chases for payment
+    notify     7 sites   variations, notifications, project process, reports
+    forms     28 sites   design emails, RFIs, form notifications
 
-  Wins as a business, and anything worth learning from
-  Main KPI data points against target
-  Anything the team should know is coming
-  The one or two things that matter most next month
+In practice that is TWO identities, because forms and notify both fall through
+to the customer's default sender unless they override one.
 
-Who fills a section in is a matter for whoever chairs the meeting, not grey
-text nobody can edit.
 
-Applies to Rock as well as demo, which is what you asked for. Nothing else on
-the page changes and no stored minutes are touched.
+BACKWARDS COMPATIBLE - NOTHING TO FIX ON ROCK FIRST
+====================================================
+'commercial' is now an ALIAS. A record that sets senders.commercial answers a
+request for 'accounts', and the reverse. So Rock's existing record keeps
+working untouched and chase emails go back to accountsreceivable@ the moment
+this deploys - no record edit required.
+
+The alias is marked for removal once no record uses the old key.
+
+
+WHAT TO SET ON A RECORD FROM NOW ON
+====================================
+Rock (tidy-up, optional - the alias covers it):
+
+  "senders": { "accounts": "Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>" }
+
+Demo, once the domain verifies:
+
+  "sendingAddress": "notifications@send.demo.constructionliberation.com",
+  "senderName": "Demo",
+  "replyTo": "james@constructionliberation.com",
+  "senders": { "accounts": "Demo Accounts <accountsreceivable@send.demo.constructionliberation.com>" }
 
 
 SMOKE TEST
 ==========
-Lessons Learnt -> Monthly minutes -> open any month. The four grey prompts
-read as above, with no names. Existing minutes content is unaffected.
+1. On ROCK, open a chase email from Outstanding Invoices. From line should
+   read Rock Roofing Accounts <accountsreceivable@rockroofing.co.uk>. If it
+   has been showing notifications@ since Monday, this is the fix.
+2. Send an application. Same From line.
+3. Everything else - variations, RFIs, form notifications - unchanged from
+   notifications@send.rockroofing.co.uk.
+
+
+CHECKS RUN
+==========
+- esbuild compile on both files: clean
+- kinds counted after the change: accounts 2, notify 7, forms 28, commercial 0
