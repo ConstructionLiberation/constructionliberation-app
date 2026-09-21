@@ -1,83 +1,80 @@
-PACKAGE 996 - why the commercial data vanished, and why it would have done
-              it again in front of WPC
+PACKAGE 997 - the empty Variations dropdowns
 ================================================================================
 
-28 files. One is NEW: lib/dashboardCache.js. The other 27 are one-line
-changes - an import, and a call swapped.
+One file. Complete replacement. No re-seed.
 
-RE-SEED AFTERWARDS to get the data back. This stops it happening again; it
-cannot recover what has already gone.
+  pages/api/dashboard.js
 
 
-WHAT HAPPENED
+THE CAUSE
 ================================================================================
-Nothing to do with time, and not a fault in anything you clicked. Twenty-eight
-routes did this whenever something changed that would alter the commercial
-figures:
+pages/variations.js loads its project list with:
 
-    await redis.del('dashboard:cache')
+    fetch('/api/dashboard?sync=true')
 
-pages/api/retention.js does it in FOUR places - including on saving a row.
-contracted-rates.js, applications.js, variation-instruct.js and the upload
-routes all do it too. Sweeping the commercial screens and saving anything was
-enough.
+and dashboard.js treated sync=true as "skip the cache, go to Xero", where:
 
-On ROCK that is correct. The next Xero sync rebuilds the cache, and a stale
-cache is worse than a missing one.
+    if (!tokens) return res.status(401).json({ error: 'Not connected to Xero' })
 
-On DEMO it is destructive and permanent. pages/api/dashboard.js returns 401
-before it ever reaches the cache when there are no Xero tokens - which is the
-only reason a seeded cache works at all. Delete it and NOTHING can put it
-back. Budget Tracker, Project Financials, Retention and WIP all go blank and
-stay blank.
+So on a tenant with no accounting connection every caller asking for fresh
+data got nothing at all - while the Budget Tracker, reading the SAME cache
+without sync=true, was full. That is why the projects were missing from the
+Variations tracker and the Variation Builder but present everywhere else.
 
-HANDOVER-6 wrote down half of this: "If the commercial pages go blank after a
-change to dashboard.js, that function is why." The other half - that any of
-twenty-eight routes could delete the cache outright - was never the danger on
-a single-tenant app, because Rock always had Xero.
+The seeded data was never wrong: the projects carry status 'INPROGRESS',
+which is exactly what the dropdown filters on.
 
 
 THE FIX
 ================================================================================
-One function, lib/dashboardCache.js, and all 28 routes call it instead:
+The cache is now used when sync=true AND there is nothing to sync from. A
+sync that cannot happen is not a reason to withhold data we already hold.
 
-    await invalidateDashboardCache(redis)
+With tokens present nothing changes, so Rock still re-syncs on demand exactly
+as before.
 
-It deletes the cache only if something can rebuild it. No accounting
-connection, no delete. If it cannot even determine that, it also does not
-delete - keeping a cache you were unsure about is recoverable, deleting one
-you needed is not.
-
-Checked both paths: with tokens it deletes, without tokens it skips. And
-checked that `redis` is actually in scope at all 28 call sites, since the
-replacement passes it as an argument where the old code closed over it.
-
-One rule, twenty-eight places, now one place. Same shape as every other fix
-this week.
+Same shape as 996, and worth naming as a pattern: three separate faults this
+evening have been the app refusing to serve something it had, because the
+thing that would normally refresh it was absent. On a single-tenant app with
+Xero permanently connected, "no tokens" only ever meant "broken". With a
+second tenant it means "not applicable", and those want opposite behaviour.
 
 
-WHY THIS MATTERED MORE THAN IT LOOKS
+THIS MAY ALSO FIX
 ================================================================================
-You found it by sweeping. On Friday, one save on a commercial screen in front
-of WPC would have blanked the demo mid-sentence, with no way back inside the
-meeting.
+"Project not found" when clicking a project name on Project Financials. That
+page may well be on the same 401 path. Worth re-testing after this rather
+than my guessing - if it still fails, tell me and I will trace it properly
+rather than assume this covered it.
 
 
-AFTER DEPLOYING
+THE REST OF YOUR SWEEP - WHERE EACH ONE STANDS
 ================================================================================
-    wipe:  { action:'wipe', id:'demo', confirm:'demo' }
-    seed:  { action:'seed', id:'demo', projects:30 }
+CONTRACTED RATES, "no DESCRIPTION column". Not a demo data gap.
+lib/contractRatesParser.js is hardcoded to Rock's spreadsheet - tab name,
+header detection and eight column positions. Any other workbook is rejected.
+It is on the outstanding list as the contracted-rates mapping profile, and it
+needs a real piece of work, not a seed. For Friday: do not upload anything on
+that screen. The "not locked (15 live projects)" banner is that same parser
+never having succeeded.
 
-Then the commercial screens come back, and stay back however much you click.
+PAYMENT CLAIM, "Hi Company Name" instead of the contact's first name. Real,
+small, and I have not touched it yet - I want to read the greeting logic
+before changing it rather than guess at which field it should use.
+
+COMMERCIAL SCORECARD. Gross Margin reads from the Xero P&L; Weekly and
+Monthly Commercial Tasks read tick history; Weekly Project Reports needs
+labour allocated on the Gantt; Average Days Beyond Terms needs paid-on dates
+that Xero's list endpoint omits - it says so on the card itself. Some of
+those are seedable, some are structurally Xero. That is its own piece of
+work, and after 995 it is also the page where hiding what does not apply is
+the honest answer.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo, after re-seeding: edit a retention row and save it. Budget Tracker
-   and Project Financials still have data. That is the exact sequence that
-   emptied them.
-2. Demo: instruct a variation, save contracted rates. Same.
-3. ROCK: change something on retention, then check the commercial pages
-   refresh as they always have. The cache must STILL be dropped there - if
-   Rock starts showing stale figures after an edit, that is this package and
-   I want to know.
+1. Demo Variations: the Add Variation project dropdown has projects.
+2. Demo Variation Builder: same.
+3. Demo Project Financials: click a project name.
+4. ROCK: open Variations and confirm the dropdown still lists live projects,
+   and that a manual re-sync still pulls fresh figures.

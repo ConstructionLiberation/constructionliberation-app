@@ -20,7 +20,21 @@ async function handler(req, res) {
 
   // Try cache first unless sync=true. Ignore a cache built before the completeness
   // field existed (so the "details incomplete" banner works without a manual sync).
-  if (req.query.sync !== 'true') {
+  //
+  // ...OR WHENEVER THERE IS NOTHING TO SYNC FROM.
+  //
+  // sync=true used to go straight past the cache to the Xero path, which
+  // answers 401 for a tenant with no accounting connection. Every caller that
+  // asks for fresh data then gets nothing at all - pages/variations.js loads
+  // its project dropdown with ?sync=true, which is why the Variations tracker
+  // and the Variation Builder had no projects to choose from on demo while
+  // the Budget Tracker, reading the same cache without sync, was full.
+  //
+  // A sync that cannot happen is not a reason to withhold the data we
+  // already hold. With tokens this is unchanged, so Rock still re-syncs on
+  // demand exactly as before.
+  const canSync = await getTokens().catch(() => null)
+  if (req.query.sync !== 'true' || !canSync) {
     try {
       const cached = await redis.get('dashboard:cache')
       if (cached && Array.isArray(cached) && cached.length > 0 && cached[0] && 'detailsMissing' in cached[0] && cached[0].completeV6 === true && 'hasContractedRates' in cached[0] && 'wipAdjustments' in cached[0] && cached[0].stageSource === 'retention' && 'appliedForLatest' in cached[0] && cached[0].cmResolved === true && cached[0].estimatorResolved === true && cached[0].qsResolved === true && 'pcType' in cached[0] && 'inXero' in cached[0] && 'retention612Released' in cached[0] && 'appRelease1' in cached[0] && 'latestAppEnd' in cached[0] && cached[0].certifiedPrevCert_v2 === true && cached[0].ret612Match_v1 === true && cached[0].appliedForSent_v1 === true && cached[0].certifiedTypedBox_v1 === true && cached[0].appsBothRecords_v1 === true && cached[0].finalAccountMcdPlacement_v1 === true && cached[0].accountBaseNetOfMcd_v1 === true && cached[0].afaDecomp_v1 === true && cached[0].afaAsIssued_v1 === true && cached[0].afaOneRule_v1 === true && cached[0].afaLiveNotStamp_v1 === true && cached[0].appsIdRecordWins_v1 === true && cached[0].dashFields_v1 === true && cached[0].afaShown_v1 === true && cached[0].varsIdWins_v1 === true) {
