@@ -1,77 +1,78 @@
-PACKAGE 989 - Deals Researched, properly this time
+PACKAGE 990 - four blank scorecard metrics, one missing pair of fields
 ================================================================================
 
-One file. Complete replacement. INCLUDES 974, 985, 986, 987 AND 988's seeder
-change.
+Two files. Complete replacements. The seeder INCLUDES 974, 985-989.
 
   lib/demoSeed.js
+  pages/scorecard-crm.js      <- includes 988
 
 
-I FIXED THE WRONG FIELD IN 987
+WHY THIS TOOK THREE GOES
 ================================================================================
-987 set everIn1stContact and firstContactDate on the deal, because that is
-what the filter in pages/scorecard-crm.js reads.
+I was fixing one input per package. The blanks were never separate problems.
 
-lib/crmDashboardAdapter.js OVERRIDES both:
+lib/crmDashboardAdapter.js builds two date fields:
 
-    firstContactDate: (milestone && milestone.projectInDate) || null,
-    everIn1stContact: !!(milestone && milestone.everInProjectIn),
+    wonTime:   f.won_time
+    closeTime: f.won_time || f.lost_time
 
-It never looks at the deal's own values. They are computed from
-lib/crmMilestones.js. Reading the consumer was not enough - the consumer had
-a consumer, and I stopped one layer short.
+and the scorecard hangs FOUR metrics off them:
 
-crmMilestones takes projectInDate from fields.created, which the seeder never
-set. The page then drops any deal without one:
+    monthWon         -> Total value of work secured        was $0
+    rolling6         -> Strike rate, overall and MC        was blank
+    avgSecuredWindow -> Average secured project value      was blank
+    dealsOver200k    -> Deals secured over 200k            was 0
 
-    if (!d.firstContactDate) return false
+The seeder set status to 'won' or 'lost' and never said WHEN. Status alone is
+not a decision - the date is. Every one of those filters matched nothing, so
+four cards read as though the metric were broken rather than the data absent.
 
-everInProjectIn was ALREADY true, because the generated history moves OUT of
-Project In and crmMilestones counts that as having been there. Which is why
-the metric read 0 rather than looking obviously broken - half the condition
-was satisfied.
-
-fields.created is now the day the deal was created, matching addedAt and the
-first entry in its history.
+Now every won deal carries won_time and every lost deal lost_time, dated
+between halfway through the deal's life and almost now. Not a fixed fraction:
+that closes every old deal in the last month and leaves a trend line with one
+spike. Checked the spread - decisions land across seven months, weighted to
+recent, which is how a pipeline actually looks.
 
 
-HOW MANY WILL ACTUALLY COUNT, AND WHY NOT ALL 190
+ONE THAT IS NOT A DEMO PROBLEM, AND WILL NOT BE FIXED BY SEEDING
 ================================================================================
-CRM_LIVE_FROM is 2026-08-16 - the day the CRM started recording its own stage
-moves. A deal created before that is "historical" and judged by a stand-in
-rule: created within twelve months AND still sitting in one of four research
-stages (Project In, 1st Contact, Calls x 3, TBF).
+"Value priced - existing customers" reads:
 
-So roughly the deals in those four stages, created in the last year, will
-count - order of fifty rather than a hundred and ninety. That is the rule
-working correctly, not a shortfall: it mirrors exactly what Rock sees, where
-there is no history before the webhook went live.
+    deal?.customerType === 'Existing Customer'
 
-I have NOT fabricated a "moved into Project In" event to bypass it.
-crmMilestones says outright that creating a project IS adding it to Project
-In and there is no separate move to record - so inventing one would put an
-event in the history that the real app never writes.
+and lib/crmDashboardAdapter.js line 108 is:
+
+    customerType: null,
+
+Hardcoded, with a note at the top of the file: "Per product decision:
+customerType / firstContactDate / receivedDate are NOT in the Pipedrive export
+and are left blank here - they will be captured going forward, not
+back-filled."
+
+So that metric returns 0 on EVERY tenant, Rock included, and always has. It
+has a target of 300,000 and a red dot next to it on your own live scorecard.
+No seeding can change that - it needs customerType captured on the deal, and
+the field exists in the CRM schema.
+
+Worth knowing the note is now partly stale: firstContactDate IS computed, at
+line 104 of the same file. customerType is the one still hardcoded.
 
 
-TWO THINGS FROM YOUR SCREENSHOTS I HAVE NOT TOUCHED
+THE ROLE UNDER THE NAME
 ================================================================================
-1. THE SALES DASHBOARD AND SCORECARD ARE STILL IN POUNDS. Both pages hold
-   inline Intl formatters - new Intl.NumberFormat('en-GB', currency 'GBP')
-   written straight into the JSX, with no named helper and no pound character
-   in the source. They are five of the thirty I found after the currency
-   sweep, invisible to both of the checks I had been using. That is its own
-   package.
-
-2. THE SUMMARY TABLE HAS TWO COLUMNS HEADED "Mar 26". Genuinely wrong, not a
-   data problem, and worth a look - a duplicate month key usually means the
-   month list is built one way and the cells another.
+Each tab now shows the person's role in light grey beneath their name -
+Estimator or Sales. Derived from which field they appear in on a deal, the
+same source as the tab list itself, so it is correct on every tenant with
+nothing to configure and no second place to keep in step.
 
 
 SMOKE TEST
 ================================================================================
-After wipe and re-seed:
-1. Sales Dashboard, Deals Researched: a figure, and a trend line with months
-   in it rather than a flat zero.
-2. The Detail table at the bottom lists deals with dates.
-3. CRM scorecard, an estimator tab: Deals Researched populated there too -
-   same source, so the two must agree.
+After deploying and re-seeding:
+1. Demo scorecard, an estimator: Total value of work secured, both strike
+   rates and average secured project value all have figures, across months.
+2. The tabs show a role under each name.
+3. "Value priced - existing customers" will STILL be 0. That is the
+   customerType finding above, not the seed.
+4. ROCK scorecard: tabs show roles. Every figure unchanged - nothing in the
+   code path changed, only the tab markup.

@@ -1062,7 +1062,15 @@ export default function Scorecard() {
 
         <div style={{ borderBottom: '0.5px solid #e1e0d9', background: '#fff', padding: '0 24px', display: 'flex' }}>
           {PEOPLE.map(p => (
-            <button key={p} onClick={() => navigateTo(p)} style={{ padding: '12px 20px', border: 'none', borderBottom: person === p ? '2px solid #1a1a19' : '2px solid transparent', background: 'transparent', fontSize: 13, fontWeight: person === p ? 500 : 400, color: person === p ? '#1a1a19' : '#888', cursor: 'pointer', fontFamily: 'inherit' }}>{p}</button>
+            <button key={p} onClick={() => navigateTo(p)} style={{ padding: '10px 20px', border: 'none', borderBottom: person === p ? '2px solid #1a1a19' : '2px solid transparent', background: 'transparent', fontSize: 13, fontWeight: person === p ? 500 : 400, color: person === p ? '#1a1a19' : '#888', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', lineHeight: 1.25 }}>
+              <div>{p}</div>
+              {/* The role, under the name. Derived from which field the person
+                  appears in on a deal - the same source as the lists - so it is
+                  right on every tenant without anybody configuring it. */}
+              <div style={{ fontSize: 10.5, fontWeight: 400, color: '#aaa', marginTop: 1 }}>
+                {ESTIMATORS.includes(p) ? 'Estimator' : 'Sales'}
+              </div>
+            </button>
           ))}
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 12, color: '#aaa', alignSelf: 'center' }}>{isEstimator ? 'Estimator scorecard' : 'Sales scorecard'}</span>
