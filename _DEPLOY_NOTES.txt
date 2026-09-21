@@ -1,103 +1,81 @@
-PACKAGE 945 - margins, WIP, retention duplicates, pipeline and Site App users
+PACKAGE 946 - one timeline, and the retention merge key
 ================================================================================
 
-Two files. Complete replacements. Wipe and re-seed after deploying.
+One file. Complete replacement. Wipe and re-seed.
 
   lib/demoSeed.js
-  pages/api/admin/seed-demo.js   (default deal count only)
-
-Re-seed with just: { action:'seed', id:'demo', projects:30 }
-Deals now default to 190.
 
 
-WHAT WAS WRONG, AND WHY
-========================
+WHY THE LAST THREE PACKAGES DID NOT FIX THIS
+=============================================
+I was correcting field names while the underlying model was wrong. Costs were
+generated scattered at random across each project's life; invoices were
+generated from the applications. TWO UNRELATED TIMELINES.
 
-MARGINS SWUNG FROM -50% TO +71%. The page computes
-(invoiced - costs) / invoiced. Costs were derived from certifiedGross, which
-lags invoiced by a random 0-12%, so the division was against a different
-figure from the one the margin was set on. Costs now derive from the same
-number the page divides by. Measured after the change: average 26.5%, range
-12% to 38%.
+At any given valuation date the two did not correspond. A project whose first
+application fell after the valuation date had all of its costs counted and
+none of its revenue - hence Invoiced 0.00 against six figures of spend, and a
+portfolio margin of -16.9% on a dataset built to average 25%.
 
-WIP WAS STILL EMPTY, AND THE WINDOW IS THE REASON. computeProjectWip takes
-costs where date > valuationDate AND date <= monthEnd. With a valuation day of
-28 that is a THREE DAY window - the 29th, 30th and 31st. My "post-valuation"
-costs were dated within the last 26 days, which put them in the current month
-and outside every closed month's window. Now a few lines land on the 29th-31st
-of each of the last six months, so every selectable month has WIP. 16 of 30
-projects have WIP in the August window.
+No amount of renaming fields was going to fix that, and I should have seen it
+two packages ago rather than treating each symptom as a separate bug.
 
-RETENTION SHOWED 60 ROWS FOR 30 PROJECTS. The tracker merges retention:entries
-with project-derived rows by project name. Mine said "Vogel Street Apartments"
-where the project row says "J101-Vogel Street Apartments", so they did not
-match and both appeared. Now matched exactly.
+THE FIX: costs and invoices are now generated in the SAME LOOP, period by
+period. Each month the project earns revenue and spends (1 - margin) of it. So
+at any valuation date, costs-to-date over invoiced-to-date gives the margin BY
+CONSTRUCTION rather than by coincidence.
 
-TOO MANY OVERDUE INVOICES. 46% of live invoices unpaid put nearly everything
-in the debtor book. Now 25 overdue out of 206, about 12%, still spread across
-all four ageing buckets.
-
-
-WHAT IS NEW
-===========
-
-PIPELINE FOUR TIMES THE SIZE. 190 deals, all 14 stages populated. 48 across 14
-columns reads as a dead pipeline.
-
-AN ACTIVITY ON EVERY DEAL. 14 overdue (7%), 3 due today, the rest spread 2-45
-days out. A CRM demo where nothing is due does not show what the CRM is for.
-
-FIFTEEN SITE APP OPERATIVES, with training records - Site Safe Passport,
-Working at Height, First Aid, Hot Works, EWP, Confined Space. Expiries are
-deliberately mixed: some lapsed, some inside 60 days, most current, and about
-a fifth of certificates simply not held. So the H&S matrix shows red, amber
-and green rather than one colour. Three are supervisors, four are
-subcontractor staff. All on your email address.
+Measured by simulating the page's own calculation at the August valuation
+date:
+    portfolio margin        25.1%
+    per-project range       6% to 38%
+    projects with zero      2 (brand-new jobs, and their costs are zero too,
+      invoiced                so no negative margin)
 
 
-YOUR QUESTIONS
-==============
+RETENTION: THE MERGE KEY IS xeroId
+===================================
+The tracker merges saved entries onto project rows with
+`if (e.xeroId && xeroByXid.has(e.xeroId))`. My entries had no xeroId, so they
+could never attach - they appeared as separate tracker-only rows, giving 60
+rows for 30 projects and leaving the project rows with no release dates.
 
-IS THE SITE APP SET UP FOR DEMO? Yes - siteapp.demo.constructionliberation.com
-is in demo's hosts list and the CNAME is live. With ops:users now seeded it
-should have people in it. Worth testing on a phone.
-
-SCORECARDS - ADD A PERSON AND ROLE. Not a seeding problem. The names are
-hardcoded in pages/scorecard-crm.js (ESTIMATORS) and pages/operations/
-scorecards.js (Will, Mike, Dori as fixed columns). Making them add-a-person
-needs a code change plus somewhere to store the list. That is a build, and
-the right one - it is on the Friday list as item 6.
-
-RAMS -> SWMS FOR NZ. Also a code change, not seeding. lib/terms.js already
-maps it and flags it STATUTORY: an Australian or NZ SWMS has prescribed
-content and a relabelled UK RAMS is not a compliant one. Wiring term() into
-the RAMS pages is straightforward; whether the DOCUMENT is fit for NZ is a
-separate question you may want to be careful about in the room.
+I had matched on projectName in pkg945, which was a guess. It is xeroId.
+Now set on every entry.
 
 
-STILL NOT GENERATED
-====================
-Contracted rates (Applications still says "required"), forms, submissions and
-site photos, scorecard entries and targets, Business Financials.
+OVERDUE INVOICES: A QUARTER OF THE LIST
+========================================
+"Most are overdue" was correct and my measurement was answering the wrong
+question - I measured overdue as a share of ALL invoices, most of which are
+paid and never appear. The Outstanding Invoices page lists only UNPAID ones,
+so that is the denominator that matters.
+
+Now: anything not yet due is outstanding (normal), and only about one in six
+older invoices is still unpaid. Measured: 41 invoices on the list, 11 overdue
+= 27% of the list.
+
+
+WIP
+===
+Costs now include a deliberate post-valuation spend in the 29th-31st window of
+each month, sized at 5-22% of that period's cost. 13 of 30 projects have WIP
+in the August window.
 
 
 SMOKE TEST
 ==========
-1. Wipe, re-seed with { action:'seed', id:'demo', projects:30 }
-2. Project Financials, EOM Report mode - profit percentages clustered around
-   25%, not swinging wildly.
-3. WIP for August 2026 - non-zero, with projects listed.
-4. Retention - 30 rows, not 60. Some releases flagged overdue.
-5. CRM - 190 deals, every stage column populated, a handful of overdue
-   activities.
-6. Operations - the H&S matrix should show 15 people with mixed expiry states.
-7. Outstanding Invoices - about 25 overdue.
+1. Wipe, re-seed: { action:'seed', id:'demo', projects:30 }
+2. Project Financials, EOM Report - Profit % near 25% on the totals row, and
+   no project showing Invoiced 0.00 with large costs.
+3. Retention - THIRTY rows, not sixty, and the "no release date" banner gone.
+4. WIP for August 2026 - non-zero with projects listed.
+5. Outstanding Invoices - around 41 listed, about 11 flagged overdue.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
 - esbuild compile: clean
-- every figure measured after generating, not assumed: margin 26.5% avg,
-  12% overdue, 16 projects with August WIP, 190 deals over 14 stages,
-  190 activities with 14 overdue and 3 due today, 15 operatives,
-  30 retention entries
+- the page's own calculation simulated against the generated data at the
+  August valuation date, rather than checking the raw numbers and hoping the
+  page agreed. That is the check that should have been run three packages ago.
