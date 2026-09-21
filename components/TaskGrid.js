@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import TaskDefsEditor from './TaskDefsEditor'
 import Head from 'next/head'
 
 // Generic weekly/monthly Yes-No task grid. Reused by Commercial and Bookkeeping.
@@ -44,7 +45,18 @@ function completionPct(cadence, tasks, data, startDate, weekAnchor) {
   return Math.round((done / total) * 100)
 }
 
-export default function TaskGrid({ cadence, tasks, apiPath, title, subtitle, nav, startDate = new Date(2026, 6, 30), weekAnchor = 4 }) {
+export default function TaskGrid({ cadence, tasks: initialTasks, apiPath, title, subtitle, nav, scope = 'bookkeeping', startDate = new Date(2026, 6, 30), weekAnchor = 4 }) {
+  // Same as CommercialTaskTable: the passed-in list is the DEFAULT, and the
+  // customer's stored list wins if they have edited one.
+  const [tasks, setTasks] = useState(initialTasks)
+  const [editing, setEditing] = useState(false)
+  useEffect(() => { (async () => {
+    try {
+      const d = await fetch(`/api/task-definitions?scope=${scope}`).then(r => r.json())
+      const list = cadence === 'weekly' ? d.weekly : d.monthly
+      if (Array.isArray(list) && list.length) setTasks(list)
+    } catch { /* keep the default */ }
+  })() }, [cadence, scope])
   const colType = cadence === 'weekly' ? 'week' : 'month'
   const colLabel = cadence === 'weekly' ? weekLabel : monthLabel
   const todayKey = cadence === 'weekly' ? weekKey(new Date(), weekAnchor) : monthKey(new Date())
@@ -82,7 +94,11 @@ export default function TaskGrid({ cadence, tasks, apiPath, title, subtitle, nav
 
   return (
     <>
-      <Head><title>Rock Roofing — {title}</title></Head>
+      <Head><title>{title}</title></Head>
+      {editing && (
+        <TaskDefsEditor scope={scope} cadence={cadence} tasks={tasks}
+          onClose={() => setEditing(false)} onSaved={setTasks} />
+      )}
       <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
         {nav}
         <div style={{ padding: '20px 28px 50px' }}>
@@ -90,6 +106,14 @@ export default function TaskGrid({ cadence, tasks, apiPath, title, subtitle, nav
             <div>
               <h1 style={{ margin: '0 0 2px', fontSize: 23, color: '#1a1a2e' }}>{title}</h1>
               <div style={{ fontSize: 13, color: '#8a857c' }}>{subtitle}</div>
+              {/* Editing the checklist changes what everyone else is asked to
+                  confirm, so the API restricts saving to management and admin.
+                  The button is shown to all - a refused save explains itself
+                  more clearly than a button that is simply not there. */}
+              <button onClick={() => setEditing(true)}
+                style={{ marginTop: 8, padding: '5px 12px', borderRadius: 8, border: '1px solid #d6d3d1', background: '#fff', color: '#57534e', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Edit tasks
+              </button>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '6px 16px', textAlign: 'center' }}>

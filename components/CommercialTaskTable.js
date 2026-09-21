@@ -1,23 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import Head from 'next/head'
 import CommercialNav from './CommercialNav'
+import TaskDefsEditor from './TaskDefsEditor'
+// Defaults live in lib so an API route can read them without importing a
+// React component tree into a server handler.
+import { COM_WEEKLY as WEEKLY, COM_MONTHLY as MONTHLY } from '../lib/taskDefaults'
 
-export const WEEKLY = [
-  { id: 'w1', text: 'Have the project financials been updated? (Sync Bills, Sync Wages, Upload Bills)' },
-  { id: 'w2', text: 'Have the project cash flows been updated for the next 13 weeks?' },
-  { id: 'w3', text: 'Have the Project Details been fully completed?' },
-  { id: 'w4', text: 'Has the Variation tracker been fully updated? (new variations added, correctly marked instructed / not instructed, correct amounts)' },
-  { id: 'w5', text: 'Have the project financials been checked for accuracy? (budgets & spends accurate? correct cost allocations? missing costs? any projects strangely under/over performing?)' },
-  { id: 'w6', text: 'Have all project reports been completed for all projects we were on site this week?' },
-]
-export const MONTHLY = [
-  { id: 'm1', text: 'Has the retention tracker been updated and is it accurate? (correct numbers? correct stages?)' },
-  { id: 'm2', text: 'Have we raised invoices for any retentions that have become due?' },
-  { id: 'm3', text: 'Does the applied-for amount match the invoiced amount in the retention tracker?' },
-  { id: 'm4', text: 'Does the Retention Owed match 612 Allocated in the retention tracker?' },
-  { id: 'm5', text: 'Have the project cash flows been updated for at least the next 12 months?' },
-  { id: 'm6', text: 'Has the WIP been completed?' },
-]
 
 const pad = (n) => String(n).padStart(2, '0')
 const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -56,7 +44,19 @@ function completionPct(cadence, objectives, data) {
 
 // cadence: 'weekly' | 'monthly'
 export default function CommercialTaskTable({ cadence, active, title, subtitle }) {
-  const objectives = cadence === 'weekly' ? WEEKLY : MONTHLY
+  // THE LIST COMES FROM THE CUSTOMER'S OWN RECORD, falling back to the code
+  // default above. Loaded rather than imported so a customer can reword,
+  // reorder, add and remove without a deploy.
+  const [objectives, setObjectives] = useState(cadence === 'weekly' ? WEEKLY : MONTHLY)
+  const [editing, setEditing] = useState(false)
+  useEffect(() => { (async () => {
+    try {
+      const d = await fetch('/api/task-definitions?scope=commercial').then(r => r.json())
+      const list = cadence === 'weekly' ? d.weekly : d.monthly
+      if (Array.isArray(list) && list.length) setObjectives(list)
+    } catch { /* keep the code default - a checklist that fails to load is
+                better than an empty page */ }
+  })() }, [cadence])
   const colType = cadence === 'weekly' ? 'week' : 'month'
   const colLabel = cadence === 'weekly' ? weekLabel : monthLabel
   const todayKey = cadence === 'weekly' ? weekKey(new Date()) : monthKey(new Date())
@@ -94,7 +94,11 @@ export default function CommercialTaskTable({ cadence, active, title, subtitle }
 
   return (
     <>
-      <Head><title>Rock Roofing — {title}</title></Head>
+      <Head><title>{title}</title></Head>
+      {editing && (
+        <TaskDefsEditor scope="commercial" cadence={cadence} tasks={objectives}
+          onClose={() => setEditing(false)} onSaved={setObjectives} />
+      )}
       <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
         <CommercialNav active={active} />
         <div style={{ padding: '20px 28px 50px' }}>
@@ -102,6 +106,14 @@ export default function CommercialTaskTable({ cadence, active, title, subtitle }
             <div>
               <h1 style={{ margin: '0 0 2px', fontSize: 23, color: '#1a1a2e' }}>{title}</h1>
               <div style={{ fontSize: 13, color: '#8a857c' }}>{subtitle}</div>
+              {/* Editing the checklist changes what everyone else is asked to
+                  confirm, so the API restricts saving to management and admin.
+                  The button is shown to all - a refused save explains itself
+                  more clearly than a button that is simply not there. */}
+              <button onClick={() => setEditing(true)}
+                style={{ marginTop: 8, padding: '5px 12px', borderRadius: 8, border: '1px solid #d6d3d1', background: '#fff', color: '#57534e', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Edit tasks
+              </button>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '6px 16px', textAlign: 'center' }}>

@@ -1,88 +1,96 @@
-PACKAGE 948 - data that exercises the STATES, not just the numbers
+PACKAGE 949 - the weekly and monthly checklists are now editable
 ================================================================================
 
-One file. Complete replacement. Wipe and re-seed.
+Seven files. THREE ARE NEW and must be created by hand in GitHub.
 
-  lib/demoSeed.js
+CREATE
+  lib/taskDefaults.js             the default lists, out of the components
+  components/TaskDefsEditor.js    the editor
+  pages/api/task-definitions.js   per-tenant storage
 
-
-THE PATTERN IN MY MISTAKES
-===========================
-I have been generating plausible figures rather than data that makes the app's
-flags, mismatches and drill-downs do anything. A demo is not about the numbers
-being right - it is about the SCREENS DOING SOMETHING when you click them. All
-four fixes below are that.
-
-
-1. NO PROJECT WITH AN EMPTY ROW
-================================
-J106 and J117 showed zero invoiced and zero spend. Both were jobs started this
-month, so their first application falls after the valuation date. Technically
-correct, reads as missing data.
-
-Minimum project age is now three months. Measured: zero empty projects.
+REPLACE
+  components/CommercialTaskTable.js
+  components/TaskGrid.js
+  pages/bookkeeping-weekly-tasks.js
+  pages/bookkeeping-monthly-tasks.js
 
 
-2. CERTIFIED vs INVOICED - THE FLAG NOW MEANS SOMETHING
-========================================================
-Certified always differed from invoiced by a random 0-12%, so EVERY row
-carried the "check FA" warning and the flag told you nothing.
+WHAT IT DOES
+============
+An "Edit tasks" button under the heading on all four checklist pages -
+Commercial weekly and monthly, Bookkeeping weekly and monthly. Add, reword,
+reorder, remove. Saves to the tenant's own database.
 
-Now three in four reconcile exactly and the rest are genuinely out. Measured:
-20 of 30 match.
-
-One subtlety worth knowing: it is matched against the INVOICED total, not the
-applied-for total, because credit notes reduce what was invoiced. Comparing to
-applied-for meant every project with a credit note showed as unreconciled.
-
-
-3. THE 612 COLUMNS
-===================
-612 Deducted and 612 Released were empty. 612 is the retention control
-account, and the tracker exists to compare what the customer deducted against
-what we say is owed.
-
-Now populated: most reconcile, a quarter are out by a clear margin, completed
-projects have a first release paid, and each has ret612Lines so the cell
-drills down to the movements behind it.
-
-The mismatch is deliberately 12-38% out rather than a couple of per cent - a
-small difference rounds to the same number often enough that the mismatch
-count drifted to 2 in 30 instead of the intended 1 in 4.
-
-ALSO FIXED: retention612Released was being set twice in the same object, the
-real figure first and a placeholder 0 second. A later key wins in a JavaScript
-object literal, so the column was being zeroed after being filled. esbuild's
-duplicate-key warning caught it - worth noting because nothing else would
-have.
+The pattern is the one pages/api/templates.js already uses for the Pre-Start
+and IHM templates, and it is the right one: a CODE DEFAULT every tenant starts
+from, an OVERRIDE in their own database, and the stored one wins. Nothing is
+written until someone actually edits something, so a new customer inherits a
+usable list rather than a blank screen, and Rock's lists are untouched until
+somebody changes one.
 
 
-4. WIP WITH SOMETHING TO OPEN
-==============================
-One post-valuation cost line per project gives a WIP figure and nothing to
-examine. The first two projects now have FIVE and TEN lines respectively -
-different suppliers, account codes and dates inside the window - so the
-drill-down is worth opening. Both are forced live, since a completed project
-has no work in progress by definition.
+WHY IT MATTERED
+===============
+The lists were literal arrays inside the components. Unmistakably Rock's:
 
-16 of 30 projects have August WIP.
+  "Does the Retention Owed match 612 Allocated"     <- a Xero account code
+  "Obtain the WIP schedule from Nathan"             <- a member of your staff
+  "request Cotton to file VAT for the month"        <- your accountant
+
+A customer would have been handed instructions naming an account they do not
+have and people they have never met, with no way to change any of it.
 
 
-MEASURED AFTER GENERATING
-==========================
-  empty projects            0
-  portfolio margin          24.0%   (the gap from 25% is WIP, correctly)
-  certified reconciles      20 of 30
-  612 reconciles            ~22 of 30
-  612 released populated    14
-  WIP lines, first two      5 and 10
-  projects with Aug WIP     16
+DELETING DOES NOT DESTROY HISTORY
+==================================
+Ticks are stored against the task id in a separate key. Removing a task hides
+it from the grid and leaves every tick alone - so deleting one by mistake
+loses nothing, and re-adding the same id brings the history back.
+
+That is also why an existing task's id is not editable: changing it would
+orphan every tick ever recorded against it. New tasks get a generated id
+prefixed by scope and cadence so a weekly and a monthly task can never
+collide.
+
+
+PERMISSIONS
+===========
+Reading: commercial, bookkeeping, post-contract, management, admin.
+Saving: MANAGEMENT AND ADMIN ONLY - editing the checklist changes what
+everyone else is asked to confirm each week.
+
+The button is shown to everyone. A refused save explains itself more clearly
+than a button that is silently absent.
+
+
+ONE THING WORTH NOTING
+======================
+pages/api/task-definitions.js originally imported the defaults from
+components/CommercialTaskTable, which dragged React, next/head and two nav
+components into a server route. Moved to lib/taskDefaults.js instead. Worth
+remembering as a shape: if an API route needs a constant that lives in a
+component, the constant is in the wrong place.
+
+Also: the page titles on these four pages said "Rock Roofing - ..." and now
+just show the page name. The full branding fix for titles comes with the
+client-side sweep.
 
 
 SMOKE TEST
 ==========
-1. Wipe, re-seed.
-2. Retention - roughly a quarter of rows carrying the check-FA flag, the rest
-   clean. 612 Deducted and 612 Released with figures in them.
-3. WIP August 2026 - open the first two projects, five and ten cost lines.
-4. Project Financials - no row with zeros across it.
+1. Commercial -> Weekly Tasks. "Edit tasks" under the heading. The six
+   existing tasks appear in the editor.
+2. Reword one, add one, reorder, save. The grid updates.
+3. Reload - the change persists.
+4. Previously recorded ticks are still there against the tasks that remain.
+5. Bookkeeping weekly and monthly - same.
+6. On DEMO, the lists should show Rock's defaults until edited. Edit one there
+   and confirm Rock's is unaffected. THAT IS THE ONE THAT MATTERS.
+
+
+CHECKS RUN BEFORE PACKAGING
+============================
+- esbuild compile on all seven files: clean
+- no other file imported WEEKLY/MONTHLY from the component
+- lib/taskDefaults.js has no imports, so it is safe in both bundles
+- hooks declared before any early return in both grid components
