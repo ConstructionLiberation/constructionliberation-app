@@ -312,7 +312,7 @@ function DrillModal({ title, projects, excluded, isValueChange, isGpMargin, onCl
 
 export default function Scorecard() {
   const { companyName: brand } = useFormat()
-  const [person, setPerson] = useState('Roman')
+  const [person, setPerson] = useState('')
   const [deals, setDeals] = useState([])
   const [valueChanges, setValueChanges] = useState([])
   const [loading, setLoading] = useState(true)
@@ -334,7 +334,32 @@ export default function Scorecard() {
   const [dateFrom, setDateFrom] = useState(_yearAgo.toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState(_now.toISOString().split('T')[0])
 
-  const ESTIMATORS = ['Roman', 'Niall', 'James']
+  // WHO THE PEOPLE ARE, TAKEN FROM THE DATA.
+  //
+  // This was ['Roman', 'Niall', 'James'] - Rock's team, hardcoded, matched by
+  // FIRST NAME. On any other tenant isEstimator was false for everybody, so
+  // the estimator metric set never rendered and the page looked like it had
+  // no data. Seeding cannot fix a hardcoded list.
+  //
+  // The discriminator is already in the deals and needs no second source: a
+  // person is an estimator if they appear as the estimator on a deal, and a
+  // salesperson if they appear as the sales person. Nothing to configure, and
+  // it cannot drift from what the metrics below actually filter on.
+  const ESTIMATORS = useMemo(
+    () => [...new Set(deals.map(d => (d.estimator || '').trim()).filter(Boolean))].sort(),
+    [deals])
+  const SALESPEOPLE = useMemo(
+    () => [...new Set(deals.map(d => (getSalesPerson(d) || '').trim()).filter(Boolean))]
+      .filter(n => !ESTIMATORS.includes(n)).sort(),
+    [deals, ESTIMATORS])
+  const PEOPLE = useMemo(() => [...ESTIMATORS, ...SALESPEOPLE], [ESTIMATORS, SALESPEOPLE])
+
+  // Whatever the URL asked for, else the first person we actually have. The
+  // default used to be the literal string 'Roman'.
+  useEffect(() => {
+    if (!PEOPLE.length) return
+    if (!person || !PEOPLE.includes(person)) setPerson(PEOPLE[0])
+  }, [PEOPLE])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -426,7 +451,9 @@ export default function Scorecard() {
 
   const personDeals = isEstimator
     ? deals.filter(d => d.estimator === person)
-    : deals.filter(d => getSalesPerson(d) === 'Edita Durikova')
+    // Was hardcoded to 'Edita Durikova', so selecting any other salesperson
+    // showed Edita's numbers under their name - worse than showing none.
+    : deals.filter(d => getSalesPerson(d) === person)
 
   // Which mailbox belongs to the person this scorecard is for. Matched on first name
   // against the local part of the address, because the scorecard identifies people by
@@ -1034,7 +1061,7 @@ export default function Scorecard() {
 
 
         <div style={{ borderBottom: '0.5px solid #e1e0d9', background: '#fff', padding: '0 24px', display: 'flex' }}>
-          {['Roman', 'Niall', 'James', 'Edita'].map(p => (
+          {PEOPLE.map(p => (
             <button key={p} onClick={() => navigateTo(p)} style={{ padding: '12px 20px', border: 'none', borderBottom: person === p ? '2px solid #1a1a19' : '2px solid transparent', background: 'transparent', fontSize: 13, fontWeight: person === p ? 500 : 400, color: person === p ? '#1a1a19' : '#888', cursor: 'pointer', fontFamily: 'inherit' }}>{p}</button>
           ))}
           <div style={{ flex: 1 }} />

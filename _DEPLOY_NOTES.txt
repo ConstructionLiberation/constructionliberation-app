@@ -1,87 +1,82 @@
-PACKAGE 987 - deals researched, and real lost reasons
+PACKAGE 988 - the scorecard stops being Rock's
 ================================================================================
 
-One file. Complete replacement. INCLUDES 974, 985 AND 986.
+Two files. Complete replacements.
 
-  lib/demoSeed.js
+  pages/scorecard-crm.js
+  lib/demoSeed.js          <- INCLUDES 974, 985, 986 AND 987
 
-One wipe and re-seed after this lands everything.
+One wipe and re-seed after this lands everything from those four as well.
 
 
-DEALS RESEARCHED
+FOUR HARDCODED IDENTITIES, NOT ONE
 ================================================================================
-scorecard-crm.js counts it as:
+You spotted the names. There were four, and any one of them on its own would
+have left the page looking empty:
 
-    deals.filter(d => d.everIn1stContact && d.firstContactDate && ...)
+  line  315   useState('Roman')                       the default person
+  line  337   ESTIMATORS = ['Roman','Niall','James']  who counts as an estimator
+  line ~423   getSalesPerson(d) === 'Edita Durikova'  the sales branch
+  line 1037   ['Roman','Niall','James','Edita']       the tab strip
 
-Two TOP-LEVEL fields, not fields.*, and nothing set either - so the metric
-was zero in every month on both the scorecard and the Sales Dashboard, which
-deliberately share the source so they cannot disagree.
-
-Now true for any deal that got past Project In, dated the day it moved, using
-the same timestamp the history records for that step. So "deals researched"
-and the deal's own history agree about when it happened.
+isEstimator was false for every demo estimator, so the estimator metric set
+never rendered. And the sales branch was pinned to one name, so selecting a
+different salesperson would have shown EDITA'S numbers under their name -
+which is worse than showing none.
 
 
-LOST REASONS
+THE FIX NEEDS NO CONFIGURATION AND NO NEW DATA
 ================================================================================
-Nothing was set, so every lost deal fell through to "No Reason Given" and the
-chart had one bar.
+The discriminator is already in the deals. A person is an estimator if they
+appear as the estimator on a deal, and a salesperson if they appear as the
+sales person. Both lists are derived, deduped and sorted; the tabs render
+from them; the default is the first person who actually exists.
 
-The list is taken STRAIGHT FROM the lost_reason options in
-lib/crmFieldSchema.js - checked programmatically, all eleven distinct values
-are real options, so the dropdown on a deal offers exactly what the chart
-shows. Inventing a reason here would have produced a value the select could
-not round-trip.
+It cannot drift from the metrics, because the metrics filter on exactly the
+fields the lists are built from.
 
-Weighted the way a roofing pipeline really loses work:
+Ran it against both shapes:
 
-    4/17  Price
-    3/17  Roofing package already let
-    2/17  Unable to make contact
-    1/17 each  Package Contractor, Project Shelved, Alternative spec,
-               Gone with preferred approved supply chain,
-               Main Contractor didn't secure, No Time to Price,
-               Lead Time, No Feedback Given
+  DEMO  estimators Callum Reid, Dev Patel, Sofia Marchetti | sales Marama Tait
+  ROCK  estimators James McVeigh, Niall Quinn, Roman Jarosz | sales Edita Durikova
+  EMPTY no people, no tabs, no crash
 
-Only a LOST deal gets one. An open deal carrying a lost reason is the kind of
-detail a prospect notices.
+ROCK WILL LOOK DIFFERENT, ON PURPOSE. The tabs will read full names rather
+than "Roman" and "Edita", because that is what estimator_responsible actually
+holds - the resolved portal user name. The comment at line 536 says so. A
+bookmarked ?person=Roman link will fall back to the first person rather than
+matching; nothing breaks, but tell anyone who has one.
+
+Worth a look once it is live: if Rock's deals carry ex-staff in
+estimator_responsible, they will each get a tab. If that list is longer than
+you expect, that is the fix to make next - restrict to people with deals in
+the period - and it is a two-line change.
 
 
-THE SCORECARD - YOUR THIRD POINT, AND YOU ARE RIGHT
+THE SEEDER NEEDED A SALESPERSON
 ================================================================================
-It is not missing data. pages/scorecard-crm.js line 337:
+sales_person on a deal was set to the ESTIMATOR, so both derived lists would
+have held the same three names and the sales tab would have duplicated an
+estimator. STAFF now has a Sales role - Marama Tait - and deals point at it.
 
-    const ESTIMATORS = ['Roman', 'Niall', 'James']
 
-and line 423:
+WHAT THIS DOES NOT FIX
+================================================================================
+pages/operations/scorecards.js still has Will, Mike and Dori as fixed
+COLUMNS. Same fault, different page, and a column layout rather than a tab
+strip, so it is its own change.
 
-    const isEstimator = ESTIMATORS.includes(person)
-
-The page identifies people by FIRST NAME and that list is hardcoded to Rock's
-team. Demo's estimators are Sione Tuhware, Damien Oyelaran and so on, so
-isEstimator is false for every one of them and the estimator metric set never
-renders. No amount of seeding fixes it.
-
-operations/scorecards.js has the same shape with Will, Mike and Dori as fixed
-columns.
-
-That is the add-a-person build you already flagged. The good news is it need
-not start with an editor: every seeded staff member already carries
-jobRole ('Estimator', 'Sales', 'Contracts Manager'), and the tenant's own
-people are the correct source for that list. Deriving it from the staff
-records gets the scorecards working for any tenant and leaves the UI for
-adding and renaming as a second step.
-
-Say which and I will build it next.
+And this derives the list rather than letting you edit it. Adding a person
+who has no deals yet, renaming one, or marking someone inactive still needs
+the editor. Deriving gets the page working for every tenant today; the editor
+is the smaller second step now that nothing is hardcoded.
 
 
 SMOKE TEST
 ================================================================================
-After wipe and re-seed:
-1. Sales Dashboard - Deals Researched has figures by month.
-2. Sales Dashboard - Lost Reasons shows a spread, Price the largest.
-3. Open a lost deal: Lost Reason is filled and the dropdown offers the same
-   list.
-4. Open an OPEN deal: Lost Reason blank.
-5. Scorecards will still be empty. That is the names, not the data.
+1. Demo scorecard: four tabs - three estimators and Marama Tait. Pick an
+   estimator and the estimator metrics populate against the targets.
+2. Pick Marama Tait: the metric set changes to the sales one.
+3. ROCK scorecard: tabs read full names. Pick each and confirm the numbers
+   match what that person's tab showed before - the names changed, the
+   filtering did not.
