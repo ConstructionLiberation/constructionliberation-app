@@ -74,6 +74,24 @@ async function handler(req, res) {
               wipMarginOverride: (s.wipMarginOverride != null && s.wipMarginOverride !== '') ? s.wipMarginOverride : null,
               dateOverrides: s.dateOverrides || p.dateOverrides || {},
               wipAdjustments: adj,
+              // VARIATIONS AND APPLICATIONS, LIVE FROM THE PROJECT RECORD.
+              //
+              // The Variations tracker and the Applications screen READ from
+              // this cache but WRITE to project:<xeroId>. Editing a variation
+              // saved correctly and then showed the old value, because the
+              // cache still held the version from the last rebuild - which on
+              // a tenant without Xero is the version from the last seed, and
+              // pkg996 quite deliberately stopped anything deleting it.
+              //
+              // So the overlay is the answer rather than the invalidation: the
+              // block already refreshes the WIP margin, the date overrides and
+              // the Contracts Manager for exactly this reason, and the comment
+              // above it says so. These two belong in the same list.
+              //
+              // Only when the record actually has them - a project whose
+              // settings carry none must not blank what the cache holds.
+              ...(Array.isArray(s.variations) ? { variations: s.variations } : {}),
+              ...(Array.isArray(s.applications) ? { applications: s.applications } : {}),
             }
           }))
           return res.json({ projects: withLive })

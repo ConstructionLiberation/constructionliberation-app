@@ -1,62 +1,62 @@
-PACKAGE 999 - "Refused: undefined has been instructed"
+PACKAGE 1000 - a saved variation that never appeared
 ================================================================================
 
-One file. Complete replacement. Mind the folder and the brackets.
+One file. Complete replacement. Includes 997. No re-seed.
 
-  pages/api/project/[id]/settings.js
-
-NO RE-SEED. Code only - your contracted rates, applications and retention
-ticks are untouched.
+  pages/api/dashboard.js
 
 
-WHAT WAS HAPPENING
+THIS ONE IS MINE
 ================================================================================
-Saving ANY project detail - a customer contact, an address, a valuation day -
-runs a lock that protects instructed variations from being altered. Correct,
-and it is the control rather than the screen, as the comment there says.
+996 stopped anything deleting dashboard:cache on a tenant with no accounting
+connection, because nothing could rebuild it and the commercial screens went
+blank. That was right and it is why your data survived tonight.
 
-It matched variations on varNumber alone:
+It also had a consequence I did not think through. The Variations tracker and
+the Applications screen READ from that cache but WRITE to project:<xeroId>.
+Before 996, saving a variation deleted the cache, and... on demo, nothing
+rebuilt it, so the screen emptied. After 996, the save succeeds and the
+screen keeps showing the version from the last seed.
 
-    incoming.variations.find(v => String(v.varNumber || '') === String(was.varNumber || ''))
-
-A variation with no varNumber gives an EMPTY string, so every numberless
-variation matched the FIRST one in the list. Its signature then differed from
-all the others, and the save was refused - naming "undefined" because there
-was no number to name.
-
-The seeded variations carry `id` and `ref` (V01, V02) but no varNumber, which
-is why it showed up on demo. It is not a demo-only shape: anything written
-without a number behaves identically on any tenant, and matching the WRONG
-variation is a good deal worse than refusing the save.
+Saved correctly both times. Visible neither time.
 
 
-THE FIX
+THE FIX, AND WHY IT IS THE RIGHT SHAPE
 ================================================================================
-Matching now uses the same composite key the drop-check two lines above
-already uses - varNumber plus description. Demonstrated rather than reasoned
-about: with the old rule V02 resolved to V01; with the new one it resolves to
-V02.
+The cache path ALREADY overlays live values from the project record - the WIP
+margin override, the date overrides, the Contracts Manager - with a comment
+explaining that an Ops change would otherwise not reach Project Financials
+until the cache expired. Variations and applications belong in exactly that
+list and were simply never added, because before multi-tenancy the
+invalidation always ran and covered for it.
 
-And the refusal now names something. varNumber, else ref, else the
-description. "Refused: undefined has been instructed" told you nothing and
-told me nothing either - it took reading the source to find out which check
-had fired.
+    ...(Array.isArray(s.variations) ? { variations: s.variations } : {}),
+    ...(Array.isArray(s.applications) ? { applications: s.applications } : {}),
+
+Only when the record actually has them, so a project whose settings carry
+none does not have the cache blanked underneath it. Checked all three cases:
+an edited record overlays, a missing one leaves the cache alone, and a
+deliberately empty one is respected.
+
+Better than invalidation even on Rock: an edit shows immediately instead of
+triggering a full rebuild from Xero.
 
 
-WHAT IT DOES NOT CHANGE
+THE SEQUENCE THAT GOT US HERE, WORTH RECORDING
 ================================================================================
-The lock itself. An instructed variation still cannot be altered or removed,
-and Rock's variations carry varNumber so they match exactly as before - the
-composite key adds the description, which is identical on both sides for an
-unchanged variation.
+996  stopped the cache being destroyed        - right
+1000 stopped the cache being stale instead    - the other half
+
+I should have looked for the readers when I changed the invalidation. "What
+reads this?" is the question I skipped, and it is the same question that has
+been behind most of tonight.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo: open a project, Edit Project Details, add a customer contact, save.
-   It saves.
-2. Demo: change the valuation day or the address. Saves.
-3. ROCK, the one that matters: find a project with an INSTRUCTED variation,
-   try to edit that variation's value in Edit Project Details, and confirm it
-   is still refused - and that the message now names the variation. Then
-   change something unrelated on the same project and confirm it saves.
+1. Demo Variations tracker: edit a variation that is NOT instructed, save.
+   The new value shows without a reload.
+2. Demo: the project's Applications screen still lists its applications.
+3. Demo Budget Tracker: data still there. 996 is still doing its job.
+4. ROCK: edit a variation. It shows, and the commercial figures still refresh
+   as they always have.
