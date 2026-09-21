@@ -1,0 +1,828 @@
+import { useState, useEffect } from 'react'
+import { isInstructed } from '../lib/applications'
+import { useFormat } from '../components/TenantProvider'
+import SearchableSelect from '../components/SearchableSelect'
+import Head from 'next/head'
+import Link from 'next/link'
+import CommercialNav from '../components/CommercialNav'
+import VariationBuilder from '../components/VariationBuilder'
+import { projectVariations, varNumberOf, projectLabel } from '../lib/variationInstruct'
+import { useRouter } from 'next/router'
+
+// Pence-accurate throughout. Variations are individually small and have to add up to
+// the totals shown, so rounding each to whole pounds made the parts disagree with
+// the sum.
+const fmtN = (n) => n == null || n === '' ? 0 : parseFloat(n) || 0
+
+// Display-only: remove a redundant leading job-number from a project name so the
+// "Project Name" column doesn't repeat the number already shown in "Project No".
+// Tolerant of separators ("J203 - Name", "J203: Name", "J203 Name") and of names
+// that don't include the number (returns them unchanged). Data is never modified.
+function stripJobNo(name, jobNo) {
+  if (!name) return name || '—'
+  const jn = String(jobNo || '').trim()
+  if (!jn || jn === '—') return name
+  const esc = jn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const stripped = String(name).replace(new RegExp(`^\\s*${esc}\\s*[-–—:.]?\\s*`, 'i'), '')
+  return stripped.trim() || name
+}
+
+function nextVarNumber(variations) {
+  const nums = (variations || [])
+    .map(v => varNumberOf(v))
+    .filter(Boolean)
+    .map(n => parseInt(n.replace(/[^0-9]/g, '')))
+    .filter(n => !isNaN(n))
+  const max = nums.length ? Math.max(...nums) : 0
+  return `V${String(max + 1).padStart(2, '0')}`
+}
+
+
+// What the customer received, with the workings behind a toggle.
+//
+// The toggle is the point: the top half is exactly what went out, so it can be read back
+// during a phone call, and the workings are there when somebody asks how the rate was
+// arrived at - without putting them in front of the customer.
+function ViewVariationModal({ row, onClose }) {
+  // Its own `money` below, never the page's fmt - so the hook is aliased.
+  const { money: tenantMoney } = useFormat()
+  const [showWorkings, setShowWorkings] = useState(false)
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const b = row.builder || {}
+  const items = b.items || []
+  const nn = (v) => { const x = parseFloat(v); return isNaN(x) ? 0 : x }
+  const money = (v) => tenantMoney(nn(v))
+  const total = items.reduce((s, it) => s + nn(it.total), 0)
+  const th = { padding: '7px 9px', fontSize: 10.5, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', textAlign: 'left' }
+  const td = { padding: '9px 9px', fontSize: 12.5, borderTop: '1px solid #eee', verticalAlign: 'top' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 900, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4vh 16px', overflowY: 'auto' }}>
+      <div style={{ background: '#fff', borderRadius: 14, width: 900, maxWidth: '100%', padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <h3 style={{ margin: '0 0 2px', fontSize: 18 }}>{row.varNumber} &mdash; {row.projectName}</h3>
+            <div style={{ fontSize: 12.5, color: '#888' }}>
+              {b.sentAt ? `Sent ${new Date(b.sentAt).toLocaleDateString('en-GB')}${b.sentTo?.length ? ` to ${b.sentTo.join(', ')}` : ''}` : 'Not yet sent'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <a href={`/api/variation-send?projectId=${row.projectId}&varNumber=${encodeURIComponent(row.varNumber)}&download=1`}
+              style={{ fontSize: 12.5, color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Download PDF</a>
+            <button onClick={onClose} style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 8, width: 34, height: 34, fontSize: 22, lineHeight: 1, color: '#6b7280', cursor: 'pointer' }}>&times;</button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, margin: '16px 0', padding: '12px 14px', background: '#f8f9fa', borderRadius: 8 }}>
+          {[['Contract', row.projectName], ['Sub-Contract Ref', b.subContractRef || row.subContractRef], ['Date', b.date ? new Date(b.date).toLocaleDateString('en-GB') : ''],
+            ['Requested by', b.requestedBy], ['Description', row.description]].map(([l, v]) => (
+            <div key={l}><div style={{ fontSize: 10.5, color: '#888' }}>{l}</div><div style={{ fontSize: 12.5, fontWeight: 600, color: '#1a1a2e' }}>{v || '—'}</div></div>
+          ))}
+        </div>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr style={{ background: '#f8f9fa' }}>
+            <th style={{ ...th, width: 44 }}>Item</th><th style={th}>Description</th>
+            <th style={{ ...th, width: 80 }}>Quantity</th><th style={{ ...th, width: 60 }}>Unit</th>
+            <th style={{ ...th, width: 90, textAlign: 'right' }}>Rate</th>
+            <th style={{ ...th, width: 110, textAlign: 'right' }}>Total</th>
+          </tr></thead>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={i}>
+                <td style={td}>{i + 1}</td>
+                <td style={td}>{it.description}</td>
+                <td style={td}>{nn(it.qty)}</td>
+                <td style={td}>{it.unit}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{money(it.rate)}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{money(it.total)}</td>
+              </tr>
+            ))}
+            <tr style={{ background: '#f8f9fa' }}>
+              <td style={{ ...td, fontWeight: 800 }} colSpan={5}>Total</td>
+              <td style={{ ...td, textAlign: 'right', fontWeight: 800, fontSize: 14 }}>{money(total)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {(b.clarifications || []).filter(Boolean).length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Clarifications</div>
+            {b.clarifications.filter(Boolean).map((c, i) => (
+              <div key={i} style={{ fontSize: 12, color: '#444', marginBottom: 3 }}>
+                <strong>{String.fromCharCode(97 + i)}</strong>&nbsp;&nbsp;{c}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* THE DIGITAL INSTRUCTION - or plainly that there is not one yet. Both matter:
+            "no instruction" is the answer to "can we start", and it is the thing somebody
+            opens this window to check. */}
+        <div style={{ marginTop: 18, padding: '12px 14px', borderRadius: 8, border: `1px solid ${b.instruction ? '#a7f3d0' : '#fde68a'}`, background: b.instruction ? '#f0fdf4' : '#fffbeb' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: b.instruction ? '#15803d' : '#92400e', letterSpacing: 0.3 }}>
+            {b.instruction ? 'INSTRUCTED' : 'NOT YET INSTRUCTED'}
+          </div>
+          {b.instruction ? (
+            <div style={{ fontSize: 12.5, color: '#1a1a2e', marginTop: 5, lineHeight: 1.7 }}>
+              <div><strong>{[b.instruction.byName, b.instruction.byRole, b.instruction.byCompany].filter(Boolean).join(', ')}</strong></div>
+              <div style={{ color: '#555' }}>
+                {new Date(b.instruction.at).toLocaleString('en-GB')}
+                {b.instruction.byEmail ? ` · via the link sent to ${b.instruction.byEmail}` : ''}
+              </div>
+              {b.instruction.ip && <div style={{ color: '#888', fontSize: 11.5 }}>Recorded from {b.instruction.ip}</div>}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: '#92400e', marginTop: 4 }}>
+              {b.firstSentAt
+                ? `Sent ${new Date(b.firstSentAt).toLocaleDateString('en-GB')}${b.reminderSentAt ? `, chased ${new Date(b.reminderSentAt).toLocaleDateString('en-GB')}` : ''} — no instruction received.`
+                : 'Not yet sent to the customer.'}
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: '#666', marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            Raised {b.raisedAt ? new Date(b.raisedAt).toLocaleString('en-GB') : (b.date ? new Date(b.date).toLocaleDateString('en-GB') : '—')}
+            {b.raisedBy?.name ? ` by ${b.raisedBy.name}` : ''}
+            {b.raisedBy?.email ? ` · ${b.raisedBy.email}` : ''}
+            {b.raisedBy?.phone ? ` · ${b.raisedBy.phone}` : ''}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18, borderTop: '1px solid #eee', paddingTop: 12 }}>
+          <button onClick={() => setShowWorkings(v => !v)}
+            style={{ background: showWorkings ? '#1a1a2e' : '#fff', color: showWorkings ? '#fff' : '#1a1a2e', border: '1px solid #1a1a2e', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+            {showWorkings ? 'Hide workings' : 'Show workings'}
+          </button>
+          <span style={{ fontSize: 11.5, color: '#888', marginLeft: 10 }}>Our build-up. Not on the customer&rsquo;s copy.</span>
+
+          {showWorkings && items.map((it, i) => (
+            <div key={i} style={{ marginTop: 14, padding: '12px 14px', border: '1px solid #eee', borderRadius: 8 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{i + 1}. {it.description} &mdash; {nn(it.qty)} {it.unit} @ {money(it.rate)}</div>
+              {[['Materials', it.materials, true], ['Labour', it.labour, false]].map(([label, rows, waste]) => (
+                (rows || []).length === 0 ? null : (
+                  <div key={label} style={{ marginTop: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{label}</div>
+                    {rows.map((r, ri) => (
+                      <div key={ri} style={{ fontSize: 12, color: '#444', display: 'flex', justifyContent: 'space-between', gap: 10, padding: '2px 0' }}>
+                        <span>{r.description || '—'} · {nn(r.qty)} {r.unit || ''} @ {money(r.rate)}{waste && nn(r.wastePct) ? ` + ${nn(r.wastePct)}% waste` : ''}</span>
+                        <span style={{ fontWeight: 600 }}>{money(nn(r.qty) * nn(r.rate) * (waste ? 1 + nn(r.wastePct) / 100 : 1))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ))}
+              <div style={{ display: 'flex', gap: 18, marginTop: 8, fontSize: 12, color: '#444', flexWrap: 'wrap' }}>
+                <span>Materials <strong>{money(it.materialsTotal)}</strong></span>
+                <span>Labour <strong>{money(it.labourTotal)}</strong></span>
+                <span>Mark-up {nn(it.markupPct)}% <strong>{money(it.profit)}</strong></span>
+                <span>Total <strong>{money(it.total)}</strong></span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function VariationTracker() {
+  // Was a module-scope const hardcoded to en-GB/GBP. money() comes from
+  // useFormat(), which is a hook, so it lives here instead. Same shape as
+  // before, so every call site below is unchanged.
+  const { money } = useFormat()
+  const fmt = (n) => (n == null || n === '' || isNaN(n) ? '\u2014' : money(parseFloat(n)))
+  const router = useRouter()
+  const isEmbed = router.query.embed === 'true'
+  const [projects, setProjects] = useState([])
+  const [subTab, setSubTab] = useState('tracker')
+  const [viewVar, setViewVar] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  // Filters
+  const [filterProject, setFilterProject] = useState('All')
+  const [filterCustomer, setFilterCustomer] = useState('All')
+  const [filterCM, setFilterCM] = useState('All')
+  const [filterEstimator, setFilterEstimator] = useState('All')
+  const [filterInstructed, setFilterInstructed] = useState('All')
+
+  // Sort
+  const [sortCol, setSortCol] = useState('varNumber')
+  const [sortDir, setSortDir] = useState('asc')
+
+  function toggleSort(col) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  // Add variation modal
+  const [showAdd, setShowAdd] = useState(false)
+  const [addProjectId, setAddProjectId] = useState('')
+  // A MANUALLY ADDED VARIATION IS NOT INSTRUCTED.
+//
+// The default was 'yes', so anything typed straight into the tracker counted as
+// authorised by the customer the moment it was saved - it went into the AFA, the
+// applications and the margin without anyone having agreed it.
+//
+// And an instructed variation cannot be deleted or edited afterwards
+// (pages/api/project/[id]/settings.js refuses), so the mistake was not easily
+// undone either.
+//
+// Not instructed is the honest starting point: it was raised, nobody has agreed
+// it yet. Tick it when they have.
+const NEW_VARIATION = { varNumber: '', description: '', instructed: 'no', materials: '', labour: '', profit: '' }
+
+const [addForm, setAddForm] = useState({ ...NEW_VARIATION })
+
+  // Edit variation modal
+  const [editModal, setEditModal] = useState(null) // { projectId, varIndex, form }
+  const [editSaving, setEditSaving] = useState(false)
+
+  useEffect(() => { loadProjects() }, [])
+
+  function openEdit(r) {
+    // Find the project and variation index
+    const project = projects.find(p => p.xeroId === r.projectId)
+    if (!project) return
+    const vars = projectVariations(project)
+    // Find by varNumber + description match
+    const varIndex = vars.findIndex(v =>
+      (v.varNumber === r.varNumber || (!v.varNumber && r.varNumber === '—')) &&
+      v.description === r.description
+    )
+    if (varIndex === -1) return
+    const v = vars[varIndex]
+    setEditModal({
+      projectId: r.projectId,
+      varIndex,
+      project,
+      form: {
+        varNumber: v.varNumber || '',
+        description: v.description || '',
+        instructed: v.instructed ? 'yes' : 'no',
+        materials: v.materials || '',
+        labour: v.labour || '',
+        profit: v.profit || '',
+      }
+    })
+  }
+
+  async function saveEdit() {
+    if (!editModal) return
+    setEditSaving(true)
+    try {
+      const { projectId, varIndex, form } = editModal
+      const res = await fetch(`/api/project/${projectId}`)
+      const data = await res.json()
+      const settings = data.settings || {}
+      const vars = [...(settings.variations || [])]
+      vars[varIndex] = {
+        ...vars[varIndex],
+        varNumber: form.varNumber,
+        description: form.description,
+        instructed: form.instructed === 'yes',
+        materials: form.materials || '0',
+        labour: form.labour || '0',
+        profit: form.profit || '0',
+      }
+      await fetch(`/api/project/${projectId}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...settings, variations: vars }),
+      })
+      await loadProjects()
+      setEditModal(null)
+    } catch (e) { console.error(e) }
+    setEditSaving(false)
+  }
+
+  // Set Instructed/Not Instructed inline from the row's dropdown, saving immediately.
+  async function setInstructed(r, value) {
+    // optimistic local update so the change is instant and obvious
+    setProjects(prev => prev.map(p => {
+      if (p.xeroId !== r.projectId) return p
+      const vars = projectVariations(p).map(v =>
+        ((v.varNumber === r.varNumber || (!v.varNumber && r.varNumber === '—')) && v.description === r.description)
+          ? { ...v, instructed: value } : v)
+      const settings = { ...(p.settings || {}), variations: vars }
+      return { ...p, settings, variations: vars }
+    }))
+    try {
+      const res = await fetch(`/api/project/${r.projectId}`)
+      const data = await res.json()
+      const settings = data.settings || {}
+      const vars = [...(settings.variations || [])]
+      const idx = vars.findIndex(v => (v.varNumber === r.varNumber || (!v.varNumber && r.varNumber === '—')) && v.description === r.description)
+      if (idx < 0) return
+      vars[idx] = { ...vars[idx], instructed: value }
+      const save = await fetch(`/api/project/${r.projectId}/settings`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...settings, variations: vars }),
+      })
+      if (!save.ok) {
+        let msg = `Could not save (${save.status}).`
+        try { const d = await save.json(); if (d && d.error) msg = d.error } catch {}
+        alert(msg)
+        loadProjects()
+      }
+    } catch (e) { console.error(e); loadProjects() }
+  }
+
+  async function deleteVariation(r) {
+    if (!confirm(`Delete variation ${r.varNumber} — ${r.description}?`)) return
+    try {
+      const project = projects.find(p => p.xeroId === r.projectId)
+      if (!project) return
+      const res = await fetch(`/api/project/${r.projectId}`)
+      const data = await res.json()
+      const settings = data.settings || {}
+      const vars = (settings.variations || []).filter((v, i) => {
+        const matchNum = v.varNumber === r.varNumber || (!v.varNumber && r.varNumber === '—')
+        const matchDesc = v.description === r.description
+        return !(matchNum && matchDesc)
+      })
+      const save = await fetch(`/api/project/${r.projectId}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...settings, variations: vars }),
+      })
+      // SHOW THE REFUSAL.
+      //
+      // The server refuses to remove a variation the customer has already
+      // instructed, and says exactly why. This threw the reply away, so the
+      // row simply stayed on screen with no explanation and nothing to do about
+      // it. The guard was working; only the reporting was missing.
+      if (!save.ok) {
+        let msg = `Could not delete (${save.status}).`
+        try { const d = await save.json(); if (d && d.error) msg = d.error } catch {}
+        alert(msg)
+        await loadProjects()
+        return
+      }
+      await loadProjects()
+    } catch (e) { console.error(e); alert('Could not delete: ' + (e?.message || 'request failed')) }
+  }
+
+  async function loadProjects() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/dashboard?sync=true')
+      const data = await res.json()
+      // Only live/in-progress projects
+      setProjects((data.projects || []).filter(p => p.status === 'INPROGRESS'))
+    } catch (e) { console.error(e) }
+    setLoading(false)
+  }
+
+  async function saveVariation() {
+    if (!addProjectId || !addForm.description) return
+    setSaving(true)
+    try {
+      // Get current settings for the project
+      const res = await fetch(`/api/project/${addProjectId}`)
+      const data = await res.json()
+      const currentSettings = data.settings || {}
+      const currentVariations = currentSettings.variations || []
+
+      const newVar = {
+        varNumber: addForm.varNumber || nextVarNumber(currentVariations),
+        description: addForm.description,
+        instructed: addForm.instructed === 'yes',
+        materials: addForm.materials || '0',
+        labour: addForm.labour || '0',
+        profit: addForm.profit || '0',
+      }
+
+      const updatedSettings = {
+        ...currentSettings,
+        variations: [...currentVariations, newVar],
+      }
+
+      await fetch(`/api/project/${addProjectId}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSettings),
+      })
+
+      await loadProjects()
+      setShowAdd(false)
+      setAddForm({ ...NEW_VARIATION })
+      setAddProjectId('')
+    } catch (e) { console.error(e) }
+    setSaving(false)
+  }
+
+  // Build flat list of all variations across all live projects
+  const allRows = []
+  for (const p of projects) {
+    const variations = projectVariations(p)
+    for (const v of variations) {
+      allRows.push({
+        projectId: p.xeroId,
+        jobNo: p.jobNo || '—',
+        projectName: p.name || '—',
+        customer: p.customer || p.customerName || '—',
+        estimator: p.estimator || '—',
+        cm: p.contractsManager || '—',
+        varNumber: varNumberOf(v) || '—',
+        description: v.description || '—',
+        // Normalised ONCE here, so every use downstream - the filter, the row
+        // dropdown, the totals - is a plain boolean and cannot disagree.
+        instructed: isInstructed(v),
+        materials: fmtN(v.materials),
+        labour: fmtN(v.labour),
+        profit: fmtN(v.profit),
+        total: fmtN(v.materials) + fmtN(v.labour) + fmtN(v.profit),
+        // The builder detail, so View has something to show.
+        builder: v.builder || null,
+        subContractRef: p.orderRef || '',
+      })
+    }
+  }
+
+  // Filter options
+  const uniq = (arr, key) => ['All', ...new Set(arr.map(r => r[key]).filter(Boolean))].sort((a, b) => a === 'All' ? -1 : b === 'All' ? 1 : a.localeCompare(b))
+
+  // For project filter: show "J228 — J228-Farmstead Drive" style options
+  const projectOptions = ['All', ...new Set(allRows.map(r => `${r.jobNo} — ${r.projectName}`).filter(Boolean))].sort((a, b) => a === 'All' ? -1 : b === 'All' ? 1 : a.localeCompare(b))
+
+  const filtered = allRows.filter(r => {
+    if (filterProject !== 'All' && `${r.jobNo} — ${r.projectName}` !== filterProject) return false
+    if (filterCustomer !== 'All' && r.customer !== filterCustomer) return false
+    if (filterCM !== 'All' && r.cm !== filterCM) return false
+    if (filterEstimator !== 'All' && r.estimator !== filterEstimator) return false
+    if (filterInstructed !== 'All') {
+      if (filterInstructed === 'Instructed' && !r.instructed) return false
+      if (filterInstructed === 'Not Instructed' && r.instructed) return false
+    }
+    return true
+  })
+
+  const sorted = [...filtered].sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol]
+    if (typeof av === 'string') av = av.toLowerCase()
+    if (typeof bv === 'string') bv = bv.toLowerCase()
+    if (av == null) return 1
+    if (bv == null) return -1
+    if (av < bv) return sortDir === 'asc' ? -1 : 1
+    if (av > bv) return sortDir === 'asc' ? 1 : -1
+    return 0
+  })
+
+  const totalMaterials = filtered.reduce((s, r) => s + r.materials, 0)
+  const totalLabour = filtered.reduce((s, r) => s + r.labour, 0)
+  const totalProfit = filtered.reduce((s, r) => s + r.profit, 0)
+  const totalTotal = filtered.reduce((s, r) => s + r.total, 0)
+
+  const thS = { padding: '8px 10px', fontWeight: 600, color: '#555', textAlign: 'left', fontSize: 12, borderBottom: '2px solid #e5e5e5', whiteSpace: 'nowrap', background: '#f8f9fa' }
+  const tdS = { padding: '8px 10px', fontSize: 12, borderBottom: '1px solid #f0f0f0', verticalAlign: 'middle' }
+  const selS = { fontSize: 12, padding: '5px 8px', border: '1px solid #e5e5e5', borderRadius: 6, background: '#fff', fontFamily: 'inherit', cursor: 'pointer' }
+  const inputS = { width: '100%', padding: '7px 10px', border: '1px solid #e5e5e5', borderRadius: 6, fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' }
+
+  // For add modal: get selected project's existing variations to compute next var number
+  const selectedProject = projects.find(p => p.xeroId === addProjectId)
+  const nextNum = selectedProject ? nextVarNumber(projectVariations(selectedProject)) : 'V01'
+
+  return (
+    <>
+      <Head><title>Rock Roofing — Variation Tracker</title></Head>
+      <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', minHeight: '100vh', background: '#f0f2f5' }}>
+
+        {/* Nav */}
+        {/* No Add Variation in the nav any more - it lives in the filter box, where the
+            eye already is when you are working on this page. One button, one place. */}
+        {!isEmbed && <CommercialNav active="/variations" />}
+
+        <div style={{ padding: 24 }}>
+          {/* Two sub-tabs. The tracker is the register of every variation however it was
+              raised; the builder is one way of raising one. Variations added straight to
+              the tracker, or from a project, are unaffected. */}
+          {!isEmbed && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+              {[['tracker', 'Variation Tracker'], ['builder', 'Variation Builder']].map(([id, label]) => (
+                <button key={id} onClick={() => setSubTab(id)}
+                  style={{
+                    background: subTab === id ? '#1a1a2e' : '#fff', color: subTab === id ? '#fff' : '#555',
+                    border: `1px solid ${subTab === id ? '#1a1a2e' : '#ddd'}`, borderRadius: 8,
+                    padding: '8px 18px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                  }}>{label}</button>
+              ))}
+            </div>
+          )}
+
+          {subTab === 'builder' && !isEmbed ? (
+            <VariationBuilder projects={projects} onSaved={loadProjects} />
+          ) : (<>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1a1a2e' }}>Variation Tracker</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, color: '#888' }}>Live & in-progress projects only · {filtered.length} variation{filtered.length !== 1 ? 's' : ''}</span>
+              {/* The embed used to carry its own copy here, because the nav it would
+                  otherwise use is not rendered. The filter box is, so one button now
+                  serves both. */}
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            {/* Project is the long one - a few hundred entries - so it is searchable.
+                Customer, CM and Estimator are short lists and a plain select is
+                quicker for those. */}
+            <div style={{ minWidth: 300 }}>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 3 }}>Project</div>
+              <SearchableSelect
+                value={filterProject}
+                placeholder="All"
+                emptyLabel="No project matches that"
+                options={projectOptions.map(o => ({ value: o, label: o }))}
+                onChange={(v) => setFilterProject(v)} />
+            </div>
+            {[
+              { label: 'Customer', value: filterCustomer, set: setFilterCustomer, opts: uniq(allRows, 'customer') },
+              { label: 'CM', value: filterCM, set: setFilterCM, opts: uniq(allRows, 'cm') },
+              { label: 'Estimator', value: filterEstimator, set: setFilterEstimator, opts: uniq(allRows, 'estimator') },
+            ].map(f => (
+              <div key={f.label}>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 3 }}>{f.label}</div>
+                <select value={f.value} onChange={e => f.set(e.target.value)} style={selS}>
+                  {f.opts.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+            ))}
+            <div>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 3 }}>Instructed?</div>
+              <select value={filterInstructed} onChange={e => setFilterInstructed(e.target.value)} style={selS}>
+                {['All', 'Instructed', 'Not Instructed'].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <button onClick={() => { setFilterProject('All'); setFilterCustomer('All'); setFilterCM('All'); setFilterEstimator('All'); setFilterInstructed('All') }}
+              style={{ fontSize: 12, padding: '5px 12px', border: '1px solid #e5e5e5', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit', color: '#555' }}>
+              Reset
+            </button>
+            {/* Pushes Add Variation to the right-hand end of the box. marginLeft:auto
+                rather than a spacer div, so it still lands right when the filters wrap
+                onto two lines on a narrow screen. */}
+            <button onClick={() => { setShowAdd(true); setAddForm({ ...NEW_VARIATION }); setAddProjectId('') }}
+              style={{ marginLeft: 'auto', background: '#e63946', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 22px', cursor: 'pointer', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: '0 1px 3px rgba(230,57,70,0.35)' }}>
+              + Add Variation
+            </button>
+          </div>
+
+          {/* Summary totals */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+            {[
+              { label: 'Total Materials', value: fmt(totalMaterials) },
+              { label: 'Total Labour', value: fmt(totalLabour) },
+              { label: 'Total Profit', value: fmt(totalProfit), color: totalProfit >= 0 ? '#16a34a' : '#e63946' },
+              { label: 'Total Value', value: fmt(totalTotal), color: '#1a1a2e' },
+            ].map(c => (
+              <div key={c.label} style={{ background: '#fff', borderRadius: 10, padding: '14px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>{c.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: c.color || '#1a1a2e' }}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            {loading ? (
+              <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Loading...</div>
+            ) : filtered.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>No variations found.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {[
+                        { label: 'Variation Number', col: 'varNumber' },
+                        { label: 'Project No', col: 'jobNo' },
+                        { label: 'Project Name', col: 'projectName' },
+                        { label: 'Customer', col: 'customer' },
+                        { label: 'Estimator', col: 'estimator' },
+                        { label: 'CM', col: 'cm' },
+                        { label: 'Description', col: 'description' },
+                        { label: 'Instructed?', col: 'instructed' },
+                        { label: 'Materials £', col: 'materials' },
+                        { label: 'Labour £', col: 'labour' },
+                        { label: 'Profit £', col: 'profit' },
+                        { label: 'Total £', col: 'total' },
+                        { label: '', col: 'actions' },
+                      ].map(({ label, col }) => (
+                        <th key={col} onClick={() => toggleSort(col)}
+                          style={{ ...thS, textAlign: ['materials', 'labour', 'profit', 'total'].includes(col) ? 'right' : 'left', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                          {label} {sortCol === col ? (sortDir === 'asc' ? '↑' : '↓') : <span style={{ color: '#ccc' }}>↕</span>}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* The persistent inline add-row that used to sit here has gone.
+                        It was the first row of the table, with a project dropdown and an
+                        empty Description box, and people read it as a search bar rather
+                        than a form - which is a reasonable thing to read a row of empty
+                        inputs above a table as. Adding a variation is now the button in
+                        the filter box, which opens the modal. */}
+                    {sorted.map((r, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                        <td style={{ ...tdS, fontWeight: 600, color: '#1a1a2e', whiteSpace: 'nowrap' }}>{r.varNumber || '—'}</td>
+                        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>
+                          <Link href={`/project/${r.projectId}`} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>{r.jobNo}</Link>
+                        </td>
+                        <td style={{ ...tdS, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stripJobNo(r.projectName, r.jobNo)}</td>
+                        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{r.customer}</td>
+                        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{r.estimator}</td>
+                        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{r.cm}</td>
+                        <td style={{ ...tdS, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.description}</td>
+                        <td style={{ ...tdS, textAlign: 'center' }}>
+                          <select value={r.instructed ? 'yes' : 'no'} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); setInstructed(r, e.target.value === 'yes') }}
+                            style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 8, cursor: 'pointer', border: '1px solid ' + (r.instructed ? '#bbf7d0' : '#fecaca'), background: r.instructed ? '#dcfce7' : '#fee2e2', color: r.instructed ? '#16a34a' : '#e63946' }}>
+                            <option value="yes">Instructed</option>
+                            <option value="no">Not Instructed</option>
+                          </select>
+                        </td>
+                        <td style={{ ...tdS, textAlign: 'right' }}>{fmt(r.materials)}</td>
+                        <td style={{ ...tdS, textAlign: 'right' }}>{fmt(r.labour)}</td>
+                        <td style={{ ...tdS, textAlign: 'right', color: r.profit >= 0 ? '#16a34a' : '#e63946' }}>{fmt(r.profit)}</td>
+                        <td style={{ ...tdS, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total)}</td>
+                        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>
+                          {/* View shows what the CUSTOMER got, with the workings behind a
+                              toggle. Only offered where there are workings to show - a
+                              variation typed straight onto the tracker has none. */}
+                          {r.builder && (
+                            <button onClick={e => { e.stopPropagation(); setViewVar(r) }}
+                              style={{ fontSize: 11, padding: '3px 8px', border: '1px solid #c7d2fe', borderRadius: 4, background: '#eef2ff', cursor: 'pointer', marginRight: 4, color: '#4338ca', fontWeight: 600 }}>View</button>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); openEdit(r) }}
+                            style={{ fontSize: 11, padding: '3px 8px', border: '1px solid #e5e5e5', borderRadius: 4, background: '#f8f9fa', cursor: 'pointer', marginRight: 4, color: '#555' }}>Edit</button>
+                          <button onClick={e => { e.stopPropagation(); deleteVariation(r) }}
+                            style={{ fontSize: 11, padding: '3px 8px', border: '1px solid #fecaca', borderRadius: 4, background: '#fef2f2', cursor: 'pointer', color: '#e63946' }}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Totals row */}
+                    <tr style={{ background: '#f8f9fa', borderTop: '2px solid #e5e5e5' }}>
+                      <td colSpan={8} style={{ ...tdS, fontWeight: 700, color: '#1a1a2e' }}>TOTALS ({filtered.length})</td>
+                      <td style={{ ...tdS, textAlign: 'right', fontWeight: 700 }}>{fmt(totalMaterials)}</td>
+                      <td style={{ ...tdS, textAlign: 'right', fontWeight: 700 }}>{fmt(totalLabour)}</td>
+                      <td style={{ ...tdS, textAlign: 'right', fontWeight: 700, color: totalProfit >= 0 ? '#16a34a' : '#e63946' }}>{fmt(totalProfit)}</td>
+                      <td style={{ ...tdS, textAlign: 'right', fontWeight: 700 }}>{fmt(totalTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          </>)}
+        </div>
+
+        {viewVar && <ViewVariationModal row={viewVar} onClose={() => setViewVar(null)} />}
+
+        {/* Edit Variation Modal */}
+        {editModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => setEditModal(null)}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 620, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                <h3 style={{ margin: 0, fontSize: 16, color: '#1a1a2e' }}>Edit Variation — {editModal.project?.jobNo}</h3>
+                <button onClick={() => setEditModal(null)} style={{ fontSize: 20, border: 'none', background: 'none', cursor: 'pointer', color: '#888' }}>×</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Variation Number</label>
+                  <input value={editModal.form.varNumber} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, varNumber: e.target.value } }))}
+                    style={inputS} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Description</label>
+                  <input value={editModal.form.description} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, description: e.target.value } }))}
+                    style={inputS} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Instructed?</label>
+                <select value={editModal.form.instructed} onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, instructed: e.target.value } }))} style={inputS}>
+                  <option value="yes">Instructed</option>
+                  <option value="no">Not Instructed</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
+                {[['materials', 'Materials (£)'], ['labour', 'Labour / Lodge (£)'], ['profit', 'Profit (£)']].map(([key, label]) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>{label}</label>
+                    <input type="number" step="0.01" inputMode="decimal" value={editModal.form[key]}
+                      onChange={e => setEditModal(m => ({ ...m, form: { ...m.form, [key]: e.target.value } }))}
+                      placeholder="0.00" style={inputS} />
+                  </div>
+                ))}
+              </div>
+
+              {(editModal.form.materials || editModal.form.labour || editModal.form.profit) ? (
+                <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 13 }}>
+                  Total: <strong style={{ color: '#16a34a' }}>{fmt(fmtN(editModal.form.materials) + fmtN(editModal.form.labour) + fmtN(editModal.form.profit))}</strong>
+                </div>
+              ) : null}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={saveEdit} disabled={editSaving}
+                  style={{ flex: 1, background: editSaving ? '#ccc' : '#1a1a2e', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', cursor: editSaving ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500 }}>
+                  {editSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button onClick={() => setEditModal(null)}
+                  style={{ padding: '10px 20px', border: '1px solid #e5e5e5', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 14, color: '#555' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Variation Modal */}
+        {showAdd && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => setShowAdd(false)}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 600, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                <h3 style={{ margin: 0, fontSize: 16, color: '#1a1a2e' }}>Add Variation</h3>
+                <button onClick={() => setShowAdd(false)} style={{ fontSize: 20, border: 'none', background: 'none', cursor: 'pointer', color: '#888' }}>×</button>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Project *</label>
+                <SearchableSelect
+                  value={addProjectId}
+                  placeholder="Select project, or type to search..."
+                  emptyLabel="No project matches that"
+                  options={projects.map(p => ({ value: p.xeroId, label: `${p.jobNo} - ${p.name}` }))}
+                  onChange={(v) => {
+                    setAddProjectId(v)
+                    const proj = projects.find(p => p.xeroId === v)
+                    const vars = projectVariations(proj)
+                    setAddForm(f => ({ ...f, varNumber: nextVarNumber(vars) }))
+                  }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Var Number</label>
+                  <input value={addForm.varNumber} onChange={e => setAddForm(f => ({ ...f, varNumber: e.target.value }))}
+                    placeholder={addProjectId ? nextNum : 'V01'}
+                    style={inputS} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Description *</label>
+                  <input value={addForm.description} onChange={e => setAddForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Variation description" style={inputS} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Instructed?</label>
+                <select value={addForm.instructed} onChange={e => setAddForm(f => ({ ...f, instructed: e.target.value }))} style={inputS}>
+                  <option value="yes">Instructed</option>
+                  <option value="no">Not Instructed</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
+                {[['materials', 'Materials (£)'], ['labour', 'Labour / Lodge (£)'], ['profit', 'Profit (£)']].map(([key, label]) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>{label}</label>
+                    <input type="number" step="0.01" inputMode="decimal" value={addForm[key]} onChange={e => setAddForm(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder="0.00" style={inputS} />
+                  </div>
+                ))}
+              </div>
+
+              {addForm.materials || addForm.labour || addForm.profit ? (
+                <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 13 }}>
+                  Total: <strong style={{ color: '#16a34a' }}>{fmt(fmtN(addForm.materials) + fmtN(addForm.labour) + fmtN(addForm.profit))}</strong>
+                </div>
+              ) : null}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={saveVariation} disabled={saving || !addProjectId || !addForm.description}
+                  style={{ flex: 1, background: saving || !addProjectId || !addForm.description ? '#ccc' : '#1a1a2e', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', cursor: saving || !addProjectId || !addForm.description ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500 }}>
+                  {saving ? 'Saving...' : 'Save Variation'}
+                </button>
+                <button onClick={() => setShowAdd(false)}
+                  style={{ padding: '10px 20px', border: '1px solid #e5e5e5', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 14, color: '#555' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
