@@ -44,6 +44,11 @@ const EMPTY_ENTRY = {
 // only goes through the page's existing saveEntry path, so a Xero-derived row still
 // becomes a manual override in the normal way rather than taking a second code path.
 function InlineNumberCell({ value, onCommit, disabled, note, title }) {
+  // InlineNumberCell is its own component and renders a formatted value in
+  // two places. pkg960 moved fmt off module scope into RetentionPage and
+  // left this one reaching for a const that no longer existed.
+  const { money } = useFormat()
+  const fmt = (n) => (n == null || n === '' ? '\u2014' : money(n))
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [hover, setHover] = useState(false)

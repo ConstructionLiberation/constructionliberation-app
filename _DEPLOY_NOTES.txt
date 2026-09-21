@@ -1,96 +1,64 @@
-PACKAGE 981 - the Site App installs under the customer's name
+PACKAGE 982 - Rock's retention page is broken. Deploy this first.
 ================================================================================
 
-Three files. ONE IS NEW.
+ONE file. Complete replacement. AHEAD OF 979, 980 AND 981.
 
-  pages/api/site-webmanifest.js   <- NEW
-  pages/_document.js
-  middleware.js                   <- repo root
+  pages/retention.js      <- includes 960, 961, 970 and 971
 
-No overlap with 979 or 980; all three can go together.
+This is a LIVE page on Rock throwing on load, and it has been since 960
+deployed this morning.
 
 
-WHAT WAS WRONG
+WHAT BROKE
 ================================================================================
-public/site.webmanifest is ONE static file served to every tenant, and it
-says:
+960 moved `fmt` off module scope into RetentionPage, because money() comes
+from a hook. pages/retention.js has a SECOND component - InlineNumberCell -
+which renders a formatted value in two places and was left reaching for a
+const that no longer exists:
 
-    "name": "Rock Roofing", "short_name": "Rock Roofing"
+    ReferenceError: fmt is not defined
 
-That is what appears under the icon when an operative adds the Site App to
-their phone. Every customer's phone would install it as Rock Roofing, and
-demo's already would.
-
-No component can fix it. The phone's OS fetches the manifest directly, so
-this is the one piece of branding React never sees.
+Same fault as Shell (965), UpcomingTable (975) and NAV (979): a value
+declared in one component and used in another.
 
 
-THE FIX
+WHY MY CHECK MISSED IT, WHICH IS THE PART THAT MATTERS
 ================================================================================
-A route that builds the manifest per tenant, and _document.js points at it.
-Unauthenticated for the same reason /api/tenant-brand is - the browser asks
-for the manifest on first paint, including on the login page, possibly
-without cookies. It therefore returns only a name and an icon, written out
-field by field so nothing added to the tenant record later can leak.
+IT DIDN'T. The ownership scan flagged it when I built 960 - it printed
+"2 fmt calls in InlineNumberCell". I then ran a second check to confirm:
+
+    awk 'NR>46 && NR<330 && /\bfmt[A-Z]?\(/' pages/retention.js
+
+It printed nothing, so I recorded InlineNumberCell as a false positive and
+moved on.
+
+awk does not support \b as a word boundary. In POSIX ERE, \b is a BACKSPACE
+character. The pattern could never match anything. My verification tool was
+broken, and I trusted it over the scan that was right.
+
+The lesson this codebase already had written down - a diagnostic must be
+able to state what it did not look at - and I built one that silently
+matched nothing and read that as proof.
 
 
-MIDDLEWARE - AND THIS IS THE PART THAT WOULD HAVE BROKEN IT SILENTLY
+WHAT I DID AFTER FIXING IT
 ================================================================================
-Both passthrough lists match static files BY EXTENSION:
+Re-ran the scan across EVERY file touched today that uses useFormat, in
+Python, with three corrections to the scan itself:
 
-    /\.(webmanifest|ico|png|jpg|...)$/i.test(pathname)
+  - module-scope declarations count as in scope for components below them
+    (the previous version flagged 27 files that were fine)
+  - imported names count as declared
+  - only CALLS count as uses, not the bare word appearing in a string
 
-An API route has no extension. So without the middleware change, on the Site
-App host the manifest request is rewritten to the /forms PAGE, and on the
-portal it is redirected to /login - which is EXACTLY the bug the comment at
-that line already describes happening to the static file once before:
-"the browser asked for JSON and got an HTML page".
-
-Added to both lists explicitly.
-
-
-ICONS DELIBERATELY DO NOT COME FROM logoUrl
-================================================================================
-I checked what Rock actually installs: favicon-512.png, a square green ROCK
-mark. Its logoUrl is a 565px JPEG - a different image for a different job. A
-home-screen icon is square, masked to a circle or squircle by the phone, and
-wants 192 and 512.
-
-So the icon comes from an OPTIONAL `iconUrl` on the tenant record and falls
-back to the existing static files. A tenant that sets nothing keeps exactly
-what it has today, which for Rock means nothing changes at all.
-
-To give demo the CL badge, add to tenant:demo:
-
-    "iconUrl": "/cl-logo.png"
-
-Optionally also "shortName" if you want something shorter than the company
-name under the icon - there is room for about twelve characters. "Demo" fits
-already, so demo needs nothing.
-
-
-RENDERED FOR ALL THREE CASES RATHER THAN EYEBALLED
-================================================================================
-  Rock, no iconUrl   name "Rock Roofing", icons favicon-192 and favicon-512
-  demo with iconUrl  name "Demo", icon /cl-logo.png
-  no tenant          name "Portal", static icons
-
-
-public/site.webmanifest IS LEFT IN PLACE
-================================================================================
-Nothing references it now, but a phone that has already installed the app
-may still ask for the old URL. Deleting it buys nothing and could 404 an
-existing install.
+Result: clean, with InlineNumberCell the only real fault. That scan is now
+worth something; the awk one never was.
 
 
 SMOKE TEST
 ================================================================================
-1. Open /api/site-webmanifest on Rock - JSON, name "Rock Roofing", the two
-   favicon entries.
-2. Same on demo.constructionliberation.com - "Demo".
-3. Same on siteapp.demo.constructionliberation.com. THIS IS THE ONE THE
-   MIDDLEWARE CHANGE IS FOR - if it returns HTML, the middleware file did not
-   go up.
-4. On a phone, add the demo Site App to the home screen. It should say Demo.
-5. Rock: no manifest error in the console on any page, and an existing
-   installed app unchanged.
+1. app.rockroofing.co.uk/retention loads.
+2. Click into a cell that takes a typed figure - Applied for, Certified,
+   Invoiced Net. InlineNumberCell IS that cell, and the formatted value it
+   shows when not editing is the line that was throwing.
+3. Demo retention: same, in dollars, with GST headings.
