@@ -1,65 +1,80 @@
-PACKAGE 984 - make the browser actually fetch the new favicon
+PACKAGE 985 - the CRM activities that were not really there
 ================================================================================
 
-One file. Complete replacement. Supersedes 983's copy.
+One file. Complete replacement. INCLUDES 974.
 
-  pages/_document.js
+  lib/demoSeed.js
+
+Like 974, this changes what a SEED writes. The demo data already in the
+database was written by the old version, so it needs the wipe and re-seed at
+the bottom.
 
 
-NOTHING WAS BROKEN
+WHAT YOU FOUND
 ================================================================================
-View source on the Site App confirmed the link is there:
+Every traffic light grey, and an activity with no due date and nobody
+assigned. Not missing data - a field-name mismatch.
 
-    <link rel="icon" href="/api/favicon"/>
+  the seeder wrote     dueDate     subject     assignedTo
+  pages/crm.js reads   due (x13)   text (x12)  assignee (x12)
 
-and /api/favicon on that host redirects to the CL badge. Route, middleware,
-record and deployment are all correct.
+So all 190 deals had an activity object the CRM could not read a single
+useful field from. The dot defaults to "due in future" when there is no
+date, which is why they were all grey rather than all red.
 
-The empty Network tab WAS the answer, not a failed test. Chrome keys its
-favicon store on the ICON URL and keeps one for days. The URL did not
-change, so Chrome never asked - which is also why incognito did not help:
-the favicon database is shared, unlike the page cache.
+Ran crm.js's own traffic-light rule against both shapes: the new one gives
+overdue / today / future correctly, the old one returns "future" for an
+activity dated twelve days ago.
+
+The shape is now copied from addActivity() in pages/crm.js - what the app
+itself writes when a user adds an activity - rather than invented from the
+concept:
+
+  { id, text, due, done: false, assignee, author }
+
+Inventing plausible field names is what produced dueDate/subject/assignedTo
+in the first place. It is the same fault as accountCode/amount and
+stageId/fields in the original seeder, and the rule is the same one: read
+the consumer.
+
+Also corrected the open-activities index added in 974, which preferred the
+wrong spelling first. It read a.subject || a.text; now a.text || a.subject.
+It would have worked either way, but it was written believing the wrong
+names were canonical.
 
 
-THE FIX
+WHAT THIS GIVES YOU AFTER A RE-SEED
 ================================================================================
-    <link rel="icon" type="image/png" href="/api/favicon?v=2" />
-
-The query string changes the cache key, so every browser fetches it once.
-Bump v whenever the icon has to change for everyone at once.
-
-`type` added because the route 302s to a PNG, and a browser should not have
-to guess what it is about to receive from a redirect.
-
-Middleware still matches: it tests `pathname`, which excludes the query
-string, so /api/favicon?v=2 hits the same rule. Checked rather than assumed.
+5% of deals overdue (red), 5% due today (green), the rest future (grey), and
+an activity with a real description, a real date and an estimator's name on
+it. The seeder was always generating that spread - none of it could reach
+the screen.
 
 
-WHY THE PORTAL WORKED AND THE SITE APP DID NOT
+THE RE-SEED, WHICH NOW CARRIES THREE FIXES
 ================================================================================
-Different origins. You had been on demo.constructionliberation.com since
-before any of this, so its favicon entry was refreshed at some point;
-siteapp.demo.constructionliberation.com is a separate origin whose entry was
-set on your very first visit - when the tenant record was still broken - and
-never revisited.
+    wipe:  { action:'wipe', id:'demo', confirm:'demo' }
+    seed:  { action:'seed', id:'demo', projects:30 }
 
+posted to /api/admin/seed-demo from the browser console on a host you have an
+admin session on. That one run lands:
 
-ONE THING TO CHECK WHILE YOU ARE THERE
-================================================================================
-The prerendered HTML shows the Site App heading as "Site App" and the logo
-as an empty placeholder span. That is CORRECT for the static HTML - the
-brand feed has not run yet at build time, so BrandLogo renders its
-reserved-space box and the heading falls back.
+  - the open-activities index (974), so the daily email stops claiming 142
+    projects have no activity
+  - readable activities with dates and owners (this package)
 
-On the live page it should fill in to "Demo Site App" with the badge a
-moment after load. If it stays as plain "Site App" after hydration, that is
-a different problem from the favicon and worth telling me.
+Still NOT in it, and both need writing if you want them:
+  - PINs on the seeded Site App operatives, so the Site App can be logged
+    into at all
+  - projectAccess, which is [] on every operative
+
+Say the word and those go in before you re-seed, so it is one run not two.
 
 
 SMOKE TEST
 ================================================================================
-1. Site App tab on demo: the CL badge. Normal window is fine now - the URL
-   changed, so the old cache entry cannot win.
-2. Rock: unchanged. It has no iconUrl, so /api/favicon still redirects to
-   /favicon.ico and the tab keeps the green ROCK tile.
-3. Portal tab on demo: still the badge.
+1. CRM pipeline after re-seeding: a scatter of red and green dots, not all
+   grey.
+2. Open a red one: the activity has a description, a date in the past and an
+   estimator's name.
+3. The Activities tab - it reads the same fields and was equally empty.
