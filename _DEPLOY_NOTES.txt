@@ -1,51 +1,78 @@
-PACKAGE 958 - the PDF 957 missed
+PACKAGE 959 - "No chase emails sent yet" on every invoice
 ================================================================================
 
-One file. Complete replacement.
+Two files. Complete replacements. No overlap with 958 - deploy both together.
 
-  lib/outstandingInvoicesPdf.js
+  lib/chaseEmailTemplates.js
+  lib/outstandingInvoicesReport.js
 
 
-WHAT I MISSED
+WHAT IT WAS
 ================================================================================
-957 said "the server side of the same screen". It did the weekly report EMAIL
-BODY and not the PDF ATTACHED TO IT, which has its own module-scope formatter
-at line 13, hardcoded en-GB/GBP, with a literal '£0.00' as its NaN case.
+Every invoice in the weekly PDF says
 
-So on demo the mail would have said $ and the attachment £, on the same send.
-Same mistake shape as the one before it: I checked the file I was editing
-rather than every output path off that screen.
+    Emails sent
+    No chase emails sent yet.
 
-Now reads money() from lib/locale.js, like the report body. The NaN case still
-returns a formatted zero rather than an empty cell, which is what the old one
-did.
+including ones whose Comments list four sent chases. INV-1743 has four. It has
+been wrong since the chase system was built.
+
+The row builder in lib/outstandingInvoicesReport.js reads
+
+    emails: m.emails || [],
+
+and m.emails DOES NOT EXIST. Chases are stored under m.chases, keyed by
+stage, written by the record-chase action in pages/api/outstanding-invoices.js.
+So the field was always an empty array and the PDF always printed the empty
+state.
+
+This is the second fault class from the lessons, server to server instead of
+client to server: a reader taking a field off a structure that never carries
+it. Nothing in the build, the compile or the bundlecheck looks at that. The
+PDF's own line even says "placeholder until chase emails are built" - the
+chase system was built and this was never wired back up.
+
+The email that carries the PDF makes it worse by promising the opposite:
+"The full list, with comments and emails to date for each invoice, is attached
+as a PDF."
+
+NOT CAUSED BY 957 OR 958. Predates both.
+
+
+WHAT IT IS NOW
+================================================================================
+chaseList() reshapes m.chases into what the PDF renders - { at, type, to } -
+sorted oldest first. `to` is stored as an array in some records and a bare
+string in others, so both are handled and joined with a comma.
+
+The stage LABEL comes from a new CHASE_STAGE_LABELS export, DERIVED from the
+CHASE_TEMPLATES array rather than typed out again. There were already three
+hand-written copies of that map and two had drifted - chaseEmailTemplates.js
+calls the last stage "Withdrawal from Contractual Obligations", the API calls
+it "Withdrawal notice".
 
 
 CHECKED
 ================================================================================
-- Standard PDF fonts use WinAnsi, and this file already strips anything
-  outside it. Ran the four locales: en-GB gives U+00A3, en-NZ, en-AU and en-US
-  all give a plain dollar sign at U+0024. Everything inside WinAnsi, so no
-  currency symbol can come out as a blank in a PDF.
-- Compiles clean.
+- Ran chaseList against realistic records: three stages out of order, one with
+  `to` as a string, one with `to` as a two-address array, one with no subject.
+  Comes back chronological with the right labels. Undefined and {} both give
+  [], which is the empty state the PDF already handles.
+- Both files compile clean.
 
 
-THE HONEST COUNT, CORRECTED
+DELIBERATELY NOT FIXED HERE
 ================================================================================
-I told you thirty money formatters across twenty-one files. That grep covered
-pages/ and components/ only. Including lib/ and pages/api/ it is THIRTY-FIVE,
-and the three extra that matter are all PDF generators:
-
-  lib/outstandingInvoicesPdf.js   <- this package
-  lib/projectReportPdf.js
-  lib/applicationPdf.js
-
-Those two remaining are the same one-line change and are worth doing with
-whichever package touches their screens.
+pages/api/outstanding-invoices.js line 107 still has its own inline stage
+label map, and it is the one that has drifted. Pointing it at
+CHASE_STAGE_LABELS is a one-line change, but it would alter the text written
+into future comment records, which is stored data rather than a rendering.
+Worth doing on purpose, not as a side effect of this.
 
 
 SMOKE TEST
 ================================================================================
-Download the weekly report PDF from outstanding invoices on demo. Dollars,
-two decimals, and the columns still line up - the symbol is one character
-either way so nothing should shift.
+Download the outstanding invoices PDF on Rock again. INV-1743 (Gas Lane - App
+15) should list four emails under "Emails sent" - Upcoming invoice, Overdue 1,
+Overdue 2, Overdue 3 - with dates and recipients. INV-1729 (Hollis Croft) has
+none and should still say "No chase emails sent yet".
