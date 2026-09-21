@@ -50,6 +50,7 @@ async function handler(req, res) {
       logoUrl: '',
       localeKey: 'UK',
       localeCode: 'en-GB',
+      timezone: 'Europe/London',
       currency: 'GBP',
       currencySymbol: '\u00A3',
       terms: {},
@@ -79,6 +80,10 @@ async function handler(req, res) {
     logoUrl: logoUrl() || '',
     localeKey: payload.localeKey,
     localeCode: payload.localeCode,
+    // A timezone is not sensitive - it is on their contact page. It is here
+    // because every consumer of lib/businessDate.js is a CLIENT page, so this
+    // feed is the only route the value has to the browser.
+    timezone: payload.timezone,
     currency: payload.currency,
     currencySymbol: payload.currencySymbol,
     terms: payload.terms,

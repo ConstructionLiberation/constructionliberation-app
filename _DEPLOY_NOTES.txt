@@ -1,163 +1,117 @@
-PACKAGE 955 - the customer's logo and name, from the tenant record
+PACKAGE 956 - the customer's timezone reaches the browser
 ================================================================================
 
-Eight files. Seven complete replacements, ONE NEW FILE.
+Three files. Complete replacements. NOTHING ON SCREEN CHANGES.
 
-  components/BrandLogo.js          <-- NEW, create this one
-  components/BookkeepingNav.js
-  components/CommercialNav.js
-  components/OperationsNav.js
-  components/PreContractNav.js
-  components/OperationsShell.js
-  components/AdminShell.js
-  pages/index.js
+  lib/locale.js
+  pages/api/tenant-brand.js
+  components/TenantProvider.js
+
+This is plumbing. It is worth deploying on its own because it changes no
+behaviour for anybody, and nothing else on the date work can be built until
+the value is on the feed.
 
 
-DO STEP 1 BEFORE YOU DEPLOY
+READ THIS FIRST - MY ESTIMATE WAS WRONG
 ================================================================================
-Set logoUrl on Rock's tenant record FIRST. It does nothing while the current
-code is live, and if you deploy without it Rock's nav bar loses its logo and
-shows the letters RR instead until you do.
+I told you the timezone fix was "a resolver plus the hardcoded sites, not a
+rewrite". That was wrong, and wrong in the direction that matters.
 
-In the Upstash console for the CONTROL database (control-registry), open the
-key
+EVERY consumer of lib/businessDate.js is a CLIENT page. Not one API route
+calls it. So the timezone cannot come from currentTenant() - it has to travel
+over the brand feed, which is what this package does.
 
-    tenant:rock
+And on the client the value is not simply read, it is FROZEN:
 
-and add one field to the JSON object:
+  pages/project-cashflow.js          4 call sites, one inside useState
+  pages/operations/.../planning.js  12 call sites, two inside useState, 1,800 lines
+  pages/business-financials/cashflow.js  7 sites behind a MODULE-SCOPE helper
+                                         `const todayISO = () => businessToday()`
+  pages/operations/forms-missing.js  2 sites
+  pages/forms/cm/missing-forms.js    1 site
 
-    "logoUrl": "/rock-logo.jpg"
+A value read into useState, or into a useMemo whose deps do not include the
+feed, keeps the first answer it ever got - which is London - for the life of
+the page. That is the same fault as module-scope evaluation, one layer up.
 
-That is a real value, not a placeholder - type it exactly as written. The file
-is in public/ and is served from every host, so the relative path is correct.
-
-The registry is cached for 60 seconds and /api/tenant-brand sets a 60-second
-browser cache, so allow about two minutes before it shows.
-
-Do the same for tenant:demo if you have a demo logo. If you leave it unset,
-demo renders its initials on a white square instead, which is a deliberate
-fallback and looks fine - just never Rock's logo.
+So the remaining work is a page-by-page job on two of the largest files in the
+repo, not a sweep. See the note at the bottom.
 
 
-WHAT IT WAS
+WHAT THIS PACKAGE DOES
 ================================================================================
-This exact line existed NINETEEN times across the codebase:
+lib/locale.js gains businessTimezone(). An explicit `timezone` on the tenant
+record wins, exactly as `currency` does. An INVALID one does not - it falls
+through to the locale default rather than throwing inside Intl on every date
+on the page. Defaults: UK Europe/London, US America/New_York, AU
+Australia/Sydney, NZ Pacific/Auckland.
 
-    <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, ... }} />
+/api/tenant-brand now carries `timezone`. It is not sensitive - it is on the
+customer's contact page - and it is the only route the value has to a browser.
 
-Four of those nineteen are in the nav components, and those four navs are
-imported by forty-four pages between them. So on demo - on a
-constructionliberation.com hostname - Rock Roofing's actual logo was rendering
-in the nav bar of most of the portal.
-
-Same shape as the login page found on 19 September, just further in. And the
-same fault class as everything else this fortnight: logoUrl() has been
-tenant-aware since pkg937 and had ZERO CONSUMERS. The guard existed, was
-correct, and was never called.
-
-Two shared shells were doing the same with the title tag:
-
-    <Head><title>Rock Roofing - {title}</title></Head>
-
-OperationsShell covers 25 pages, AdminShell 11. Both now read the tenant name.
+TenantProvider exposes businessToday(), businessNow() and businessDay() bound
+to the customer's timezone, so a page calls them with no argument and gets the
+right answer. It IMPORTS lib/businessDate rather than reimplementing it:
+that file imports nothing and is pure Intl, so it is the same code both sides.
+Checked that it drags no async_hooks into the browser bundle.
 
 
-WHAT IT IS NOW
+TWO RECORD EDITS, BOTH IN THE CONTROL DATABASE
 ================================================================================
-components/BrandLogo.js is the single consumer of logoUrl(). It renders, in
-order:
+On tenant:demo:
 
-  1. feed not back yet    -> a transparent box of the right size
-  2. tenant has a logo    -> the image
-  3. no logo, has a name  -> initials on a white square (RR, CL, WPC)
-  4. neither              -> the transparent box
+    "timezone": "Pacific/Auckland"
 
-The transparent box matters. Every page in the portal mounts one of these, and
-a 32px element appearing a moment after paint shifts the whole nav row
-sideways.
+It currently says Europe/London on a tenant whose locale is NZ. Note the
+explicit value WINS over the locale default, so this has to be corrected by
+hand - the code will not quietly override it, on purpose.
 
-There is NO fallback to /rock-logo.jpg anywhere in it. A default that renders
-somebody else's brand is the bug this file exists to remove.
+Also on tenant:demo, add to `modules`:
 
-Props: size (default 32), radius (default 4), style (merged, used for the
-marginRight the Operations and Pre-Contract navs already had).
+    "business-financials"
+
+Rock has it and demo does not. That switches the area on; the data is a
+separate job (see below).
+
+Nothing to change on tenant:rock. Rock is Europe/London either way, which is
+the safety property of this whole piece of work: for Rock, every one of these
+functions returns exactly what it returned before.
 
 
-ONE THING TO LOOK AT AND DECIDE
+WHY IT MATTERS, WITH THE ACTUAL NUMBERS
 ================================================================================
-The portal home header currently reads "Rock Roofing". After this it reads
-whatever `name` is on the tenant record, which lib/tenants.js documents as
-"Rock Roofing Ltd". So the header and the footer will both gain the "Ltd".
+New Zealand is UTC+12 until 27 September, then UTC+13. So the London date and
+the Auckland date differ whenever it is between 12:00 and midnight in London.
 
-Do not fix that by editing the header. `name` is also what goes into email
-bodies and document headers, where "Ltd" is right. This is the legalName
-question already on the outstanding list - a display name and a name on a
-contractual document are two fields, not one. Tell me which way you want it
-and it goes in 956.
-
-
-TWO THINGS FOUND ON A SECOND PASS, BOTH FIXED IN THIS ZIP
-================================================================================
-1. The placeholder box was a <span>, and an inline span IGNORES width and
-   height. All five consumers today are flex containers, which blockifies
-   their children and hid it completely. It now sets display: inline-block, so
-   the sixth consumer does not get a box of nothing.
-
-2. The portal home name line was {brand}, which is an empty string until the
-   feed lands - an empty div is zero pixels tall, so "Company Portal" jumped up
-   and back down on every load. It now renders a hard space while it waits.
-
-Neither would have shown up in a compile, and the first would not have shown
-up on any screen in the portal as it stands today.
-
-
-CHECKED, NOT ASSUMED
-================================================================================
-- /api/tenant-brand does send both `name` and `logoUrl`. Read the feed, not
-  the field name - that is the "client reads a field the feed never sends"
-  fault.
-- useFormat() is useContext(). In AdminShell it is placed ABOVE
-  `if (!ok) return null`, not below it.
-- TenantProvider wraps every page in _app.js, so there is no page where
-  BrandLogo can mount without the context.
-- esbuild compiles all eight clean, no warnings, and bundling each one for the
-  browser pulls in nothing server-only.
-- initialsOf() was RUN, not eyeballed: Rock Roofing Ltd -> RR, Construction
-  Liberation Ltd -> CL, WPC Ltd -> WPC, Demo -> DE, empty -> empty. It briefly
-  turned "Construction Liberation" into "LI" because the skip list had
-  "construction" in it. Running it found that; reading it did not.
-- public/rock-logo.jpg exists and is 565x565, i.e. square - so the objectFit:
-  contain added to the img changes nothing for Rock. A WIDE wordmark logo
-  would letterbox down to almost nothing inside a 32px square; that is a
-  question for the logo upload screen, not for this package.
-- No page passes a Rock-branded `title` into either shell, so fixing the two
-  shells actually fixes all 36 pages.
-- BizNav was in the plan and is NOT in this package. It carries no logo and no
-  company name, so there was nothing to change.
+A demo at 9am Friday in Auckland is 9pm Thursday in London. Every "today",
+every week anchor and every overdue flag on the screen would say Thursday.
 
 
 SMOKE TEST
 ================================================================================
-1. app.rockroofing.co.uk - the logo is unchanged in the nav on Commercial,
-   Bookkeeping, Operations and Pre-Contract, and on the portal home. If it
-   shows RR instead, step 1 did not take: check tenant:rock and wait two
-   minutes.
-2. Browser tab on any Operations page and any Admin page: reads the company
-   name, not "Rock Roofing", and still names the page.
-3. demo.constructionliberation.com - the nav bar shows the demo initials or
-   the demo logo. Rock's logo appears NOWHERE. This is the one that matters.
-4. Narrow the window until the nav wraps: the logo stays square and does not
-   squash.
+1. Open /api/tenant-brand on app.rockroofing.co.uk. It should return
+   "timezone":"Europe/London".
+2. Open it on demo.constructionliberation.com AFTER making the record edit. It
+   should return "timezone":"Pacific/Auckland". Allow two minutes for the
+   caches.
+3. Rock's cash flow and planning pages: unchanged. They are still calling the
+   unbound functions, and Rock is London, so there is nothing to see. That is
+   the point of shipping this separately.
+4. Demo: Business Financials appears in the nav after the modules edit, and
+   the pages load empty rather than 404.
 
 
-STILL CARRYING ROCK'S LOGO AFTER THIS
+WHAT IS NOT IN THIS AND NEEDS A DECISION
 ================================================================================
-Fifteen of the nineteen are in pages that build their own header rather than
-using a nav: crm, crm-scores, forms/index, design/index, staff, upload,
-upload-transactions, bookkeeping, bookkeeping/admin, operations/forms,
-operations/projects, rams-approve, reset-password, instruct/[token],
-business-financials/export. Plus the PDF and email generators in pages/api,
-which need the shared header helper, not this component.
-
-Those are 956 - along with the money sweep, which is the bigger win for
-Friday.
+- The five client pages above. project-cashflow is clean and small.
+  business-financials/cashflow needs its module-scope todayISO() threaded
+  through seven sites. planning.js is 1,800 lines with twelve.
+- Server-side date stamps that hardcode Europe/London: stampPdf,
+  crmDailyActivityEmail, outstandingInvoicesReport, designRfiNotify,
+  hsRenewalNotify, and four design approval `atText` stamps.
+- Cron FIRING times. Thirteen crons run at a fixed UTC hour, so an NZ customer
+  gets their 7am email at 7pm. The two that already run hourly with an
+  internal hour gate (hs-renewals, crm-daily-activities) show the right
+  pattern, but converting the rest is its own piece of work.
+- The ICS invite in concern-invite.js is hardcoded TZID:Europe/London, and
+  ProjectConcerns.js tells the user so in as many words.

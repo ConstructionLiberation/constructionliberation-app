@@ -1,4 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+// Imported, NOT reimplemented. lib/locale.js cannot come into the bundle
+// because currentTenant() reads AsyncLocalStorage; lib/businessDate.js imports
+// nothing at all and is pure Intl, so it is the same code on both sides. The
+// third fault class in this codebase is the client keeping its own copy of a
+// server rule - this avoids adding a fourth.
+import { businessToday, businessNow, businessDay } from '../lib/businessDate'
 
 // THE SAME FOUR FUNCTIONS AS lib/locale.js, ON THE CLIENT.
 //
@@ -31,6 +37,7 @@ const FALLBACK = {
   logoUrl: '',
   localeKey: 'UK',
   localeCode: 'en-GB',
+  timezone: 'Europe/London',
   currency: 'GBP',
   currencySymbol: '\u00A3',
   terms: {},
@@ -126,6 +133,18 @@ export function useFormat() {
     num,
     formatDate,
     term,
+    // Bound to the customer's timezone, so a page calls businessToday() with
+    // no argument and gets the right answer instead of London's.
+    //
+    // WATCH THE FIRST RENDER. Until the feed lands these return the fallback
+    // (London). A value read straight into useState or frozen in a useMemo
+    // whose deps do not include `loaded` will KEEP that first answer for the
+    // life of the page. Either include `loaded` in the deps or re-derive in an
+    // effect when it flips.
+    businessToday: () => businessToday(t.timezone),
+    businessNow: () => businessNow(t.timezone),
+    businessDay: (d) => businessDay(d, t.timezone),
+    timezone: t.timezone,
     currencySymbol: t.currencySymbol,
     companyName: t.name,
     logoUrl: t.logoUrl,
