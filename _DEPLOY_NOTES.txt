@@ -1,4 +1,4 @@
-PACKAGE 946 - one timeline, and the retention merge key
+PACKAGE 947 - WIP page, margin leak, credit notes
 ================================================================================
 
 One file. Complete replacement. Wipe and re-seed.
@@ -6,76 +6,86 @@ One file. Complete replacement. Wipe and re-seed.
   lib/demoSeed.js
 
 
-WHY THE LAST THREE PACKAGES DID NOT FIX THIS
-=============================================
-I was correcting field names while the underlying model was wrong. Costs were
-generated scattered at random across each project's life; invoices were
-generated from the applications. TWO UNRELATED TIMELINES.
+1. WHY THE WIP PAGE WAS EMPTY WHILE PROJECT FINANCIALS SHOWED A WIP FIGURE
+===========================================================================
+They read different keys. pages/api/wip.js pulls
 
-At any given valuation date the two did not correspond. A project whose first
-application fell after the valuation date had all of its costs counted and
-none of its revenue - hence Invoiced 0.00 against six figures of spend, and a
-portfolio margin of -16.9% on a dataset built to average 25%.
+    costs:lines:<xeroId>
+    invoiced:lines:<xeroId>
+    wip:adjustments:<xeroId>
 
-No amount of renaming fields was going to fix that, and I should have seen it
-two packages ago rather than treating each symptom as a separate bug.
+directly. The dashboard cache's _costLines and _invoiceLines feed the
+Commercial table and the WIP page never looks at them. The same data, needed
+in two places under two names - which is why one screen had it and the other
+did not.
 
-THE FIX: costs and invoices are now generated in the SAME LOOP, period by
-period. Each month the project earns revenue and spends (1 - margin) of it. So
-at any valuation date, costs-to-date over invoiced-to-date gives the margin BY
-CONSTRUCTION rather than by coincidence.
+All three keys are now written per project, and added to the wipe list.
 
-Measured by simulating the page's own calculation at the August valuation
-date:
-    portfolio margin        25.1%
-    per-project range       6% to 38%
-    projects with zero      2 (brand-new jobs, and their costs are zero too,
-      invoiced                so no negative margin)
+16 of 30 projects have post-valuation costs in the August window, about 97k of
+cost, which grosses up to roughly 129k of WIP.
 
 
-RETENTION: THE MERGE KEY IS xeroId
-===================================
-The tracker merges saved entries onto project rows with
-`if (e.xeroId && xeroByXid.has(e.xeroId))`. My entries had no xeroId, so they
-could never attach - they appeared as separate tracker-only rows, giving 60
-rows for 30 projects and leaving the project rows with no release dates.
+2. THE MARGIN LEAK
+===================
+19.1% against a target of 25%. The cause was my own post-valuation spike: I
+was adding uninvoiced cost in the 29th-31st window of EVERY month. For any
+month before August those dates fall before the current valuation date, so
+they counted as costs-to-date with no matching revenue.
 
-I had matched on projectName in pkg945, which was a guess. It is xeroId.
-Now set on every entry.
+Now only the last two periods carry it.
 
-
-OVERDUE INVOICES: A QUARTER OF THE LIST
-========================================
-"Most are overdue" was correct and my measurement was answering the wrong
-question - I measured overdue as a share of ALL invoices, most of which are
-paid and never appear. The Outstanding Invoices page lists only UNPAID ones,
-so that is the denominator that matters.
-
-Now: anything not yet due is outstanding (normal), and only about one in six
-older invoices is still unpaid. Measured: 41 invoices on the list, 11 overdue
-= 27% of the list.
+Measured: 23.4%. The remaining gap is CORRECT rather than a compromise - WIP
+is by definition cost incurred and not yet invoiced, so
+(invoiced - costs) / invoiced always reads a little under the true margin
+while work is in progress. The underlying margin is 25%; the reported figure
+sits just below it because there is genuine WIP on the books, which is what a
+real contractor's number does.
 
 
-WIP
-===
-Costs now include a deliberate post-valuation spend in the 29th-31st window of
-each month, sized at 5-22% of that period's cost. 13 of 30 projects have WIP
-in the August window.
+3. CREDIT NOTES
+================
+About one project in five now has one - a contra charge, a measurement
+correction, a rejected item. They are invoice lines with a negative value and
+creditNote: true, carrying appliedToInvoice and a contact, which is the shape
+pages/api/wip.js looks for when it lists credit notes against a project.
+Six across 30 projects in the current dataset.
+
+
+YOUR OTHER QUESTIONS
+====================
+
+CERTIFIED NOT EDITABLE INLINE. That is the app working correctly, not a
+seeding gap. The cell shows "app true" - meaning the figure came from a SENT
+application, and the code deliberately stops a typed value overriding one.
+The comment in pages/api/dashboard.js explains it: "A typed value is now only
+used where no sent application exists", added because an override entered once
+sat on top of every later application. On Rock you are editing projects that
+have no sent application against them. If you want it editable in the demo,
+the answer is to seed some projects with no applications - say the word.
+
+ONE PROJECT WITH INVOICED 0.00 (J104). A genuinely new job whose first
+application falls after the valuation date. Its costs are zero too, so it does
+NOT drag the margin - it contributes nothing to either side. Realistic, and I
+would leave it, but it can be removed by forcing every project to be at least
+two months old.
+
+RECEIPTS. Not addressed here - "receipts" in this app means uploaded supplier
+documents against cost lines, which is Blob storage plus submission records.
+That belongs with the forms-and-photos package.
 
 
 SMOKE TEST
 ==========
 1. Wipe, re-seed: { action:'seed', id:'demo', projects:30 }
-2. Project Financials, EOM Report - Profit % near 25% on the totals row, and
-   no project showing Invoiced 0.00 with large costs.
-3. Retention - THIRTY rows, not sixty, and the "no release date" banner gone.
-4. WIP for August 2026 - non-zero with projects listed.
-5. Outstanding Invoices - around 41 listed, about 11 flagged overdue.
+2. WIP page, August 2026 - non-zero total with about 16 projects listed.
+3. Project Financials EOM - Profit % around 23-24%.
+4. A project page with a credit note on it - six projects have one.
+5. Retention - still 30 rows.
 
 
 CHECKS RUN BEFORE PACKAGING
 ============================
 - esbuild compile: clean
-- the page's own calculation simulated against the generated data at the
-  August valuation date, rather than checking the raw numbers and hoping the
-  page agreed. That is the check that should have been run three packages ago.
+- key names read from pages/api/wip.js, not guessed
+- margin, WIP coverage and credit note counts all measured against the
+  generated data at the August valuation date
