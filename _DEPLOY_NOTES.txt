@@ -1,59 +1,52 @@
-PACKAGE 1009 - procurement: the save that wasn't, and the pound signs
+PACKAGE 1010 - the pound signs in the procurement modal
 ================================================================================
 
-Three files. Complete replacements. No re-seed.
+One file. Complete replacement. SUPERSEDES 1009's copy of it - the other two
+files in 1009 are unchanged and still needed.
 
   pages/operations/project-management/procurement.js
-  pages/operations/project-management/procurement-savings.js
-  components/ProcurementSavings.js
 
 
-THE SAVE
+WHAT I MISSED, AND WHY
 ================================================================================
-    await fetch('/api/procurement', { method: 'POST', ... })
-    setEdit(null); load()
+Four pound characters, none of which my search could see:
 
-The response was never looked at. The API answers
+    placeholder="£"           on the two inline money inputs, twice
+    <Lbl>Budget Total (£)</Lbl>
+    <Lbl>Buying Total (£)</Lbl>
 
-    400 { error: 'Activity/Package or Supplier required' }
+I searched for '£' and `£ and currency: 'GBP' - quoted forms and formatter
+declarations. A pound inside a JSX ATTRIBUTE or between JSX TAGS is neither.
 
-for a new row with neither of those filled - so the dialog closed, the list
-reloaded without the row, and nothing said why. That is indistinguishable
-from "it doesn't save".
-
-It now reads the response and shows the API's own message above the table.
-Any other failure names its status and says nothing has been changed.
-
-THIRD SWALLOWED RESPONSE TONIGHT. The variations tracker cost four packages
-because a 409 never reached the screen; the retention tracker rendered a 403
-as an empty dataset and had your bookkeeper's figures quietly disagreeing
-with yours. All three are the same habit: a fetch whose result is assumed.
-
-That is now worth a sweep of its own - every fetch that does `|| []` or
-`catch {}` on a response it never checked. Not tonight, but it belongs near
-the top of the list, because these have cost more time than the faults
-underneath them.
+The file now contains zero pound characters, checked by counting the
+character itself rather than any pattern around it. All four use
+currencySymbol from useFormat(), and both components declare it.
 
 
-THE POUND SIGNS
+THE SAME MISTAKE THREE TIMES TODAY
 ================================================================================
-Three module-scope formatters, one per file, all hardcoded to en-GB/GBP:
+  awk with \b, which is a backspace in POSIX - missed InlineNumberCell and
+    took Rock's retention page down for a day
+  single-quote-only regex for redis.del - missed three sites and let the demo
+    cache be destroyed again tonight
+  and now a quoted-only search for the pound sign
 
-    procurement.js           fmtMoney   used by Procurement and ProcModal
-    ProcurementSavings.js    gbp        used by MoneyInput
-    procurement-savings.js   gbp        used 6 times
+Each time the search was narrower than the thing it was meant to find, and
+each time an empty result read as "clean". The habit that actually works is
+the one used here at the end: count the RAW character, then look at what
+comes back.
 
-Each now lives inside the component that uses it and takes money() from
-useFormat(), keeping its own shape - the em dash for a blank on the savings
-pages, the leading minus on procurement. Same pattern as pkg957 onwards.
-These are three of the thirty inline formatters that survived the currency
-sweep because they carry no literal pound character in a form my greps saw.
+I ran that broader search across pages/ and components/: 28 files still
+contain a pound character somewhere. Most will be legitimate - Rock-specific
+labels, comments, import parsers reading Xero exports - but that list is the
+real remaining currency work, and it is bigger than the thirty inline
+formatters I had recorded. It is on the list now with the right number
+against it.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Procurement: add an item with a package and a supplier - it saves.
-2. Add one with NEITHER - a red message appears saying which fields are
-   needed, and the dialog stays open with your typing in it.
-3. Figures on Procurement and Procurement Savings read in dollars.
-4. ROCK: add and edit a procurement item. Unchanged, and still in pounds.
+1. Demo Procurement: open Add Item. The Budget Total and Buying Total labels
+   read (NZ$) - or whatever the tenant's symbol is - not (£).
+2. The inline money boxes in the table show the same as their placeholder.
+3. ROCK: both read (£), exactly as before.

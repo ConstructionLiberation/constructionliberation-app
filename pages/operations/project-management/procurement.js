@@ -20,7 +20,7 @@ function savingsComplete(r) {
 }
 
 export default function Procurement() {
-  const { money } = useFormat()
+  const { money, currencySymbol } = useFormat()
   // Was a module-scope const hardcoded to en-GB/GBP.
   const fmtMoney = (n) => (n < 0 ? '-' : '') + money(Math.abs(n))
   const [saveError, setSaveError] = useState('')
@@ -237,13 +237,13 @@ export default function Procurement() {
                       </td>
                       {/* Budget Total */}
                       <td style={{ ...td, whiteSpace: 'nowrap', ...rowGreen }}>
-                        <input value={r.budgetTotal ?? ''} onChange={e => patchItem(r.id, { budgetTotal: e.target.value })} inputMode="decimal" placeholder="£" style={moneyInp} />
+                        <input value={r.budgetTotal ?? ''} onChange={e => patchItem(r.id, { budgetTotal: e.target.value })} inputMode="decimal" placeholder={currencySymbol} style={moneyInp} />
                       </td>
                       {/* Budget Comments */}
                       <td style={{ ...td, ...rowGreen }}><ExpandableText value={r.budgetComments} onSave={v => patchItem(r.id, { budgetComments: v })} label="Budget comments" width={180} /></td>
                       {/* Buying Total */}
                       <td style={{ ...td, whiteSpace: 'nowrap', ...rowGreen }}>
-                        <input value={r.buyingTotal ?? ''} onChange={e => patchItem(r.id, { buyingTotal: e.target.value })} inputMode="decimal" placeholder="£" style={moneyInp} />
+                        <input value={r.buyingTotal ?? ''} onChange={e => patchItem(r.id, { buyingTotal: e.target.value })} inputMode="decimal" placeholder={currencySymbol} style={moneyInp} />
                       </td>
                       {/* Buying Comments */}
                       <td style={{ ...td, ...rowGreen }}><ExpandableText value={r.buyingComments} onSave={v => patchItem(r.id, { buyingComments: v })} label="Buying comments" width={180} /></td>
@@ -299,7 +299,7 @@ export default function Procurement() {
 }
 
 function ProcModal({ item, team, projectOptions, onClose, onSave }) {
-  const { money } = useFormat()
+  const { money, currencySymbol } = useFormat()
   const fmtMoney = (n) => (n < 0 ? '-' : '') + money(Math.abs(n))
   const [f, setF] = useState({ ...item })
   const setProj = (val) => { const [no, name] = val.split('|'); setF({ ...f, projectNo: no, projectName: name }) }
@@ -332,8 +332,8 @@ function ProcModal({ item, team, projectOptions, onClose, onSave }) {
       {/* Procurement savings */}
       <div style={{ borderTop: '1px solid #eee', margin: '14px 0 4px', paddingTop: 10, fontSize: 12, fontWeight: 700, color: '#555' }}>Procurement Savings</div>
       <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ flex: 1 }}><Lbl>Budget Total (£)</Lbl><input value={f.budgetTotal ?? ''} onChange={e => setF({ ...f, budgetTotal: e.target.value })} inputMode="decimal" style={inp2} /></div>
-        <div style={{ flex: 1 }}><Lbl>Buying Total (£)</Lbl><input value={f.buyingTotal ?? ''} onChange={e => setF({ ...f, buyingTotal: e.target.value })} inputMode="decimal" style={inp2} /></div>
+        <div style={{ flex: 1 }}><Lbl>Budget Total ({currencySymbol})</Lbl><input value={f.budgetTotal ?? ''} onChange={e => setF({ ...f, budgetTotal: e.target.value })} inputMode="decimal" style={inp2} /></div>
+        <div style={{ flex: 1 }}><Lbl>Buying Total ({currencySymbol})</Lbl><input value={f.buyingTotal ?? ''} onChange={e => setF({ ...f, buyingTotal: e.target.value })} inputMode="decimal" style={inp2} /></div>
         <div style={{ flex: 1 }}><Lbl>Total Savings</Lbl><div style={{ ...inp2, background: '#faf9f7', display: 'flex', alignItems: 'center', fontWeight: 600, color: totalSavings(f) < 0 ? '#dc2626' : '#166534' }}>{(phas(f.budgetTotal) || phas(f.buyingTotal)) ? fmtMoney(totalSavings(f)) : '—'}</div></div>
       </div>
       <Lbl>Budget Comments</Lbl><textarea value={f.budgetComments || ''} onChange={e => setF({ ...f, budgetComments: e.target.value })} style={{ ...inp2, minHeight: 44 }} />
