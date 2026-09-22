@@ -4,7 +4,20 @@ import { getProject, saveProject, getClient } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract','management','admin'])) return;
+  // READING AND WRITING ARE DIFFERENT PERMISSIONS.
+  //
+  // One guard covered both, and it left out `accounts` - so the bookkeeper
+  // could open the Retention tab in Bookkeeping (an iframe of this page, in
+  // VIEW_ONLY_TABS, clearly meant for them) and be refused the manual entries
+  // behind it. The page turned that 403 into an empty array and rendered the
+  // Xero-derived rows alone, so their figures quietly disagreed with everyone
+  // else's and nothing said why.
+  //
+  // Accounts read. They do not write: the entries are the post-contract
+  // team's record, and the tab is view-only by design.
+  const READ_ROLES = ['post-contract', 'accounts', 'management', 'admin']
+  const WRITE_ROLES = ['post-contract', 'management', 'admin']
+  if (!requireRole(req, res, req.method === 'GET' ? READ_ROLES : WRITE_ROLES)) return;
   const redis = await getClient()
   const KEY = 'retention:entries'
 

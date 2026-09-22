@@ -337,6 +337,10 @@ export default function RetentionPage() {
   const fmt = (n) => (n == null || n === '' ? '\u2014' : money(n))
   const fmtC = (n) => money(n || 0)
   const [entries, setEntries] = useState([])
+  // Set when the manual entries could not be read. Shown at the top of the
+  // page INCLUDING in embed mode, because the embed is where a bookkeeper
+  // sees this and the whole problem was that nothing told them.
+  const [loadError, setLoadError] = useState('')
   // Read-only embed mode (?embed=1): renders the page content only (cards, table,
   // filters) with NO navigation and no edit controls — for the Bookkeeping Portal.
   const [embed, setEmbed] = useState(false)
@@ -524,9 +528,24 @@ export default function RetentionPage() {
         setQsOptions((dt.members || []).filter(m => m.active !== false && allowed.includes(m.accessRole) && m.name).map(m => m.name).sort((a, b) => a.localeCompare(b)))
       } catch {}
       // Load manual entries
+      // A REFUSAL IS NOT AN EMPTY LIST.
+      //
+      // This read d1.entries || [], so a 403 rendered as "no manual entries"
+      // - a complete-looking tracker missing every hand-added row. That is
+      // how a bookkeeper's figures came to differ from everyone else's with
+      // nothing on screen to explain it. The lessons file already records
+      // this exact shape: "a bookkeeper said a page did not load - a 403
+      // swallowed by catch {}".
       const r1 = await fetch('/api/retention')
-      const d1 = await r1.json()
-      setEntries(d1.entries || [])
+      if (!r1.ok) {
+        setLoadError(r1.status === 403
+          ? 'You do not have permission to see the manually added retention entries, so the figures below are incomplete. Ask an admin for post-contract access.'
+          : `Could not load the retention entries (${r1.status}). The figures below are incomplete.`)
+        setEntries([])
+      } else {
+        const d1 = await r1.json()
+        setEntries(Array.isArray(d1.entries) ? d1.entries : [])
+      }
 
       // Load Xero projects with retention
       const r2 = await fetch('/api/dashboard')
@@ -993,6 +1012,13 @@ export default function RetentionPage() {
         // the host page do the scrolling.
         ? { minHeight: '100vh', background: '#f0f2f5' }
         : { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f0f2f5' }}>
+        {loadError ? (
+          <div style={{
+            background: '#fff8e1', border: '1px solid #f0d089', borderRadius: 8,
+            padding: '10px 14px', margin: '10px 12px', fontSize: 13, color: '#7a5b12',
+          }}>{loadError}</div>
+        ) : null}
+
         {appliedForFor && (() => {
           const d = appliedForFor.appliedForDetail || null
           const th3 = { padding: '6px 8px', textAlign: 'left', fontSize: 10.5, color: '#888', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #e5e7eb' }

@@ -1,80 +1,82 @@
-PACKAGE 1006 - the Site App Schedule of Works
+PACKAGE 1007 - why your bookkeeper's retention figures differ from yours
 ================================================================================
 
-Two files. demoSeed INCLUDES 1001 and everything from 974 on.
+Two files. Complete replacements. ROCK-SIDE - this is a live fault, not a
+demo one. No re-seed.
 
-  pages/api/dashboard.js      <- supersedes 997 and 1000. CODE ONLY.
-  lib/demoSeed.js             <- NEEDS A WIPE AND RE-SEED.
-
-Deploy both. The dashboard change works immediately; the seeder change needs
-the re-seed, and that re-seed now also lands 1001.
+  pages/api/retention.js
+  pages/retention.js        <- includes 970, 971 and 982
 
 
-THREE THINGS WERE STOPPING IT, NOT ONE
+WHAT WAS HAPPENING
 ================================================================================
-The Schedule of Works filters twice, and both filters rejected everything.
+The Retention tab in Bookkeeping is an iframe of /retention?embed=1 - the
+same page you look at. So the two cannot disagree unless something in it
+varies by USER, and it did.
 
-1. hasContractedRates WAS FALSE ON EVERY PROJECT, EVEN THE ONE YOU UPLOADED
-   RATES TO.
+/api/retention was guarded:
 
-   dashboard.js computes that flag during a full Xero rebuild. That rebuild
-   never runs on a tenant with no accounting connection, so the cached row
-   still said false while the rates sat happily on the project record.
+    requireRole(req, res, ['post-contract','management','admin'])
 
-   The page is careful about this - if NO row reports the flag it shows
-   everything and checks on open - but the seeded rows all carry
-   `hasContractedRates: false`, so the flag counted as "known" and every
-   project failed.
+`accounts` is not on that list. Your bookkeeper's call was refused with a
+403. The page then did:
 
-   Now overlaid from the live project record, using the same expression the
-   rebuild uses. Third field to join that overlay after variations and
-   applications in pkg1000, and the reason is identical each time: the cache
-   is written by Xero, the screens are written by the app.
+    const d1 = await r1.json()
+    setEntries(d1.entries || [])
 
-2. projectAccess WAS [] ON EVERY OPERATIVE.
+No status check. A 403 has no `entries`, so `|| []` turned the refusal into
+AN EMPTY LIST OF MANUAL ENTRIES - and the page carried on and rendered the
+Xero-derived rows from /api/dashboard, which they CAN read.
 
-   lib/cmSiteApp.js:
+So they were not seeing wrong figures. They were seeing the retention tracker
+with every hand-added entry missing, and nothing on screen to say so. Any
+project that exists only as a manual entry, and any manual correction to a
+Xero row, was absent for them and present for you.
 
-       if (pa == null || pa === 'all') return projects
-
-   An empty ARRAY is neither. It builds an empty Set and matches nothing, so
-   every seeded operative had access to NO projects. `[]` reads like "no
-   restrictions" and means the exact opposite. Now 'all'.
-
-3. AND NOBODY COULD LOG IN ANYWAY.
-
-   No seeded operative had a `pin`, and ops-users.js compares
-   String(user.pin) === String(body.pin). String(undefined) matches nothing.
-   Every operative now has 1234 - the same four digits deliberately, because
-   this is a demo tenant meant to be handed to someone and fifteen different
-   PINs help nobody. A real tenant sets its own on invite.
+The lessons file already has this exact shape written down: "a bookkeeper
+said a page did not load - a 403 swallowed by catch {}". Same role, same
+swallow, different page.
 
 
-WHAT YOU WILL SEE AFTERWARDS
+THE FIX, IN TWO PARTS
 ================================================================================
-ONE project in the Schedule of Works - the one you uploaded contracted rates
-to. That is correct: the screen exists to show rates, and no other project
-has any. If you want more, upload rates to another project and it appears
-without a re-seed, which is the overlay doing its job.
+1. READING AND WRITING ARE NOW DIFFERENT PERMISSIONS.
+
+       READ   post-contract, accounts, management, admin
+       WRITE  post-contract, management, admin
+
+   Accounts read; they do not write. The entries are the post-contract team's
+   record and the Bookkeeping tab is in VIEW_ONLY_TABS - view-only was always
+   the intent, the guard just did not express it.
+
+   pre-contract and designer still cannot read it. Unchanged.
+
+2. A REFUSAL IS NO LONGER RENDERED AS DATA.
+
+   The page now checks the response and shows a banner - in embed mode too,
+   because the embed is exactly where this was seen and where nothing
+   explained it. A 403 says permission and what to ask for; anything else
+   names the status. Either way it says the figures below are incomplete
+   rather than quietly implying they are not.
 
 
-THE RE-SEED COST, UNCHANGED
+WHY THIS MATTERS BEYOND ONE PAGE
 ================================================================================
-It takes your contracted rates with it - they live on project:demo-* - along
-with applications you have sent and retention ticks. So:
+Second time tonight a swallowed response cost real time - the variations
+tracker was the other, where "it doesn't save" took four packages because the
+409 never reached the screen. Both are `catch {}` or `|| []` turning a refusal
+into a plausible answer.
 
-  deploy -> wipe -> seed -> RE-UPLOAD THE RATES -> then all other prep.
-
-And that re-seed also delivers 1001: distinct addresses so the CC list stops
-selecting everyone, and customer contacts so the greeting and Requested by
-work.
+Worth a sweep of its own: every fetch that does `|| []` on a response it never
+checked. Not tonight.
 
 
 SMOKE TEST
 ================================================================================
-1. Site App on demo: log in with a supervisor's mobile and PIN 1234.
-2. Schedule of Works: the project you uploaded rates to is listed.
-3. Open it - item numbers, descriptions and quantities.
-4. Variation send: tick one person in CC, only that person ticks.
-5. ROCK Site App: operatives log in as before, their own project access
-   unchanged, and the Schedule still lists exactly the projects it does now.
+1. Have your bookkeeper open Bookkeeping > Retention. The figures should now
+   match yours exactly.
+2. Confirm they cannot EDIT anything there - it is view-only, and the API now
+   refuses their writes explicitly rather than by omission.
+3. Your own Retention tracker and Bookkeeping mirror: unchanged.
+4. If you have a pre-contract user, check they still cannot read it and now
+   see the banner rather than a silently thinner tracker.
