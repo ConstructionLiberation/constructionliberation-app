@@ -92,6 +92,20 @@ async function handler(req, res) {
               // settings carry none must not blank what the cache holds.
               ...(Array.isArray(s.variations) ? { variations: s.variations } : {}),
               ...(Array.isArray(s.applications) ? { applications: s.applications } : {}),
+              // AND WHETHER IT HAS CONTRACTED RATES.
+              //
+              // Same reasoning, found the same way. The Site App's Schedule of
+              // Works filters on p.hasContractedRates, and that flag is only
+              // computed during a full Xero rebuild (line ~1021) - which never
+              // runs on a tenant without an accounting connection. So rates
+              // uploaded through the app were stored on the project and the
+              // cached row still said false, and the Schedule showed nothing.
+              //
+              // Computed here from the same source the rebuild uses, so the
+              // two cannot disagree.
+              hasContractedRates: !!(s.contractedRates
+                && Array.isArray(s.contractedRates.items)
+                && s.contractedRates.items.length > 0),
             }
           }))
           return res.json({ projects: withLive })
