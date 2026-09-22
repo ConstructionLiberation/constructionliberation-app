@@ -1,4 +1,5 @@
 import withTenant from '../../../../lib/withTenant'
+import { invalidateDashboardCache } from '../../../../lib/dashboardCache'
 import { getClient } from '../../../../lib/db'
 
 async function handler(req, res) {
@@ -34,7 +35,7 @@ async function handler(req, res) {
     }
     adjustments.push(newAdj)
     await redis.set(key, adjustments)
-    try { await redis.del("dashboard:cache") } catch {}
+    try { await invalidateDashboardCache(redis) } catch {}
     return res.json({ adjustment: newAdj, adjustments })
   }
 
@@ -49,7 +50,7 @@ async function handler(req, res) {
       ? { ...a, margin: (margin === null || margin === undefined || margin === '') ? null : parseFloat(margin) }
       : a)
     await redis.set(key, adjustments)
-    try { await redis.del("dashboard:cache") } catch {}
+    try { await invalidateDashboardCache(redis) } catch {}
     return res.json({ adjustments })
   }
 
@@ -62,7 +63,7 @@ async function handler(req, res) {
     } catch {}
     adjustments = adjustments.filter(a => a.id !== adjId)
     await redis.set(key, adjustments)
-    try { await redis.del("dashboard:cache") } catch {}
+    try { await invalidateDashboardCache(redis) } catch {}
     return res.json({ adjustments })
   }
 

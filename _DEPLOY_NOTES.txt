@@ -1,82 +1,65 @@
-PACKAGE 1007 - why your bookkeeper's retention figures differ from yours
+PACKAGE 1008 - the three deletes 996 missed
 ================================================================================
 
-Two files. Complete replacements. ROCK-SIDE - this is a live fault, not a
-demo one. No re-seed.
+One file. Complete replacement. Mind the folder and the brackets.
 
-  pages/api/retention.js
-  pages/retention.js        <- includes 970, 971 and 982
+  pages/api/project/[id]/wip-adjustments.js
+
+DEPLOY, THEN WIPE AND RE-SEED - the cache is already gone and nothing can
+rebuild it on demo.
 
 
-WHAT WAS HAPPENING
+MY MISS
 ================================================================================
-The Retention tab in Bookkeeping is an iframe of /retention?embed=1 - the
-same page you look at. So the two cannot disagree unless something in it
-varies by USER, and it did.
+996 routed every deletion of dashboard:cache through a guard that refuses to
+delete a cache nothing can rebuild. I found the call sites with:
 
-/api/retention was guarded:
+    redis\.del\('dashboard:cache'\)
 
-    requireRole(req, res, ['post-contract','management','admin'])
+Single quotes. This file uses DOUBLE quotes:
 
-`accounts` is not on that list. Your bookkeeper's call was refused with a
-403. The page then did:
+    try { await redis.del("dashboard:cache") } catch {}
 
-    const d1 = await r1.json()
-    setEntries(d1.entries || [])
+Three times - saving, editing and deleting a WIP adjustment. So 996 protected
+twenty-eight sites and left three, and a WIP adjustment is exactly the sort of
+thing you would touch while sweeping. That is why it worked earlier and was
+empty later.
 
-No status check. A 403 has no `entries`, so `|| []` turned the refusal into
-AN EMPTY LIST OF MANUAL ENTRIES - and the page carried on and rendered the
-Xero-derived rows from /api/dashboard, which they CAN read.
+Re-run with a pattern that accepts any quoting, single, double or backtick.
+Three sites, one file, nothing else in the repo.
 
-So they were not seeing wrong figures. They were seeing the retention tracker
-with every hand-added entry missing, and nothing on screen to say so. Any
-project that exists only as a manual entry, and any manual correction to a
-Xero row, was absent for them and present for you.
-
-The lessons file already has this exact shape written down: "a bookkeeper
-said a page did not load - a 403 swallowed by catch {}". Same role, same
-swallow, different page.
+The lesson is the obvious one and I have written a version of it three times
+today: a search that cannot tell you what it did not look at will find only
+what you expected. A regex anchored on one quote style is exactly that.
 
 
-THE FIX, IN TWO PARTS
+WHY THE ERROR LOOKED LIKE SOMETHING ELSE
 ================================================================================
-1. READING AND WRITING ARE NOW DIFFERENT PERMISSIONS.
-
-       READ   post-contract, accounts, management, admin
-       WRITE  post-contract, management, admin
-
-   Accounts read; they do not write. The entries are the post-contract team's
-   record and the Bookkeeping tab is in VIEW_ONLY_TABS - view-only was always
-   the intent, the guard just did not express it.
-
-   pre-contract and designer still cannot read it. Unchanged.
-
-2. A REFUSAL IS NO LONGER RENDERED AS DATA.
-
-   The page now checks the response and shows a banner - in embed mode too,
-   because the embed is exactly where this was seen and where nothing
-   explained it. A 403 says permission and what to ask for; anything else
-   names the status. Either way it says the figures below are incomplete
-   rather than quietly implying they are not.
+/api/dashboard answering {"error":"Not connected to Xero"} reads like a Xero
+problem. It is not. With no cache to serve, the route falls through to the
+Xero path, and demo has no tokens - so the LAST step reports, and the real
+event (a cache deleted three hours earlier) leaves no trace at all.
 
 
-WHY THIS MATTERS BEYOND ONE PAGE
+AFTER DEPLOYING
 ================================================================================
-Second time tonight a swallowed response cost real time - the variations
-tracker was the other, where "it doesn't save" took four packages because the
-409 never reached the screen. Both are `catch {}` or `|| []` turning a refusal
-into a plausible answer.
+    wipe:  { action:'wipe', id:'demo', confirm:'demo' }
+    seed:  { action:'seed', id:'demo', projects:30 }
 
-Worth a sweep of its own: every fetch that does `|| []` on a response it never
-checked. Not tonight.
+Use 1006's lib/demoSeed.js if it is not already deployed - it carries the Site
+App PINs, project access and 1001's contacts and addresses, so one re-seed
+covers everything outstanding.
+
+Then re-upload the contracted rates.
 
 
 SMOKE TEST
 ================================================================================
-1. Have your bookkeeper open Bookkeeping > Retention. The figures should now
-   match yours exactly.
-2. Confirm they cannot EDIT anything there - it is view-only, and the API now
-   refuses their writes explicitly rather than by omission.
-3. Your own Retention tracker and Bookkeeping mirror: unchanged.
-4. If you have a pre-contract user, check they still cannot read it and now
-   see the banner rather than a silently thinner tracker.
+1. After re-seeding: /api/dashboard on demo returns a projects array, not the
+   Xero error.
+2. Cash Flow lists the projects.
+3. THE ONE THAT MATTERS: open a project, add a WIP adjustment, save it. Then
+   check Budget Tracker still has data. That is the exact action that emptied
+   it, and it is the only way to know this is finished.
+4. ROCK: add a WIP adjustment. The commercial figures must still refresh -
+   Rock has Xero, so the guard deletes as it always did.
