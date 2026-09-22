@@ -359,7 +359,7 @@ async function handler(req, res) {
       const msg = isApprover
         ? `Rock Roofing have uploaded drawings for project <strong>${pname || no}</strong> for your <strong>review and approval</strong>. Please review, comment and approve them.`
         : `Rock Roofing have uploaded drawings for project <strong>${pname || no}</strong> for your information and review.`
-      const r = await sendRfiCommentNotice({ to: p.email, recipientName: p.name, projectNo: no, projectName: pname, rfiNumber: 'Rock Drawings', authorName: acc.user.name || 'Rock Roofing', commentHtml: msg, rfiLink: link, mentioned: false, cta: 'Review Drawings' })
+      const r = await sendRfiCommentNotice({ to: p.email, recipientName: p.name, projectNo: no, projectName: pname, rfiNumber: 'Drawings', authorName: acc.user.name || 'Rock Roofing', commentHtml: msg, rfiLink: link, mentioned: false, cta: 'Review Drawings' })
       if (r.sent) sent++
     }
     // Assign chosen approvers to all current (non-superseded) drawings that don't have one.

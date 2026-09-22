@@ -98,7 +98,7 @@ async function gatherSections(no) {
     ...techSubSections,
     { title: 'Rock Roofing Construction Issue Drawings', files: dwgFiles },
     { title: 'Calculations', files: calcFiles },
-    { title: 'Leak Test Certificates', files: leakFiles },
+    { title: 'Certificates', files: leakFiles },
     { title: 'Warranties', files: warrFiles },
   ]
 
@@ -241,7 +241,7 @@ async function handler(req, res) {
 
   if (body.action === 'build') {
     const { sections } = await gatherSections(no)
-    if (!sections.length) return res.status(400).json({ error: 'Nothing to include yet - add Tech Subs, Construction Issue drawings, Calculations, Leak Test Certs or Warranties first.' })
+    if (!sections.length) return res.status(400).json({ error: 'Nothing to include yet - add Tech Subs, Construction Issue drawings, Calculations, Certs or Warranties first.' })
     const store = await readStore(no)
     const nextRev = (store.revisions.reduce((m, r) => Math.max(m, r.revision || 0), 0) || 0) + 1
     const meta = await projectMeta(no)

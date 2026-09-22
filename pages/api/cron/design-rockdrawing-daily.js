@@ -18,7 +18,7 @@ async function handler(req, res) {
       const projectName = await projectDisplayName(no)
       for (const r of recipients) {
         const html = rockDrawingDigestHtml({ name: r.name, projectName, projectNo: no, comments: pend.comments, docs: pend.docs || 0 })
-        const out = await sendMail(r.email, `New updates on Rock Drawings for ${projectName || no}`, html)
+        const out = await sendMail(r.email, `New updates on Drawings for ${projectName || no}`, html)
         if (out.sent) emailsSent++
       }
       projectsEmailed++

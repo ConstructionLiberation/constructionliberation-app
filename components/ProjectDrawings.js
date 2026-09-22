@@ -35,7 +35,7 @@ export default function ProjectDrawings({ projectNo }) {
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: INK }}>Project drawings</div>
         <div style={{ fontSize: 13, color: '#999', marginTop: 2 }}>
-          Pulled live from the Design Portal (Rock Drawings). Upload and revise them there - this page is view and download only.
+          Pulled live from the Design Portal (Drawings). Upload and revise them there - this page is view and download only.
           Only drawings marked <strong>Construction Issue</strong> reach operatives in the Site App.
         </div>
       </div>
@@ -50,7 +50,7 @@ export default function ProjectDrawings({ projectNo }) {
       )}
 
       {loading ? <Loading /> : !drawings.length ? (
-        <EmptyCard title="No drawings yet" body="Nothing has been uploaded to Rock Drawings in the Design Portal for this project." />
+        <EmptyCard title="No drawings yet" body="Nothing has been uploaded to Drawings in the Design Portal for this project." />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14 }}>
           {drawings.map(d => (

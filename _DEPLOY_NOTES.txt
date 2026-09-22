@@ -1,71 +1,72 @@
-PACKAGE 1002 - Operations Scorecards stop being Will, Mike and Dori
+PACKAGE 1003 - "Rock Drawings" becomes "Drawings", "Leak Test Certs" becomes
+               "Certs"
 ================================================================================
 
-Three files. Complete replacements. OperationsShell includes 966's change.
-No re-seed - this reads the tenant's own people.
+Eleven files. Complete replacements. Mind the folders and the brackets.
+No re-seed. Affects BOTH tenants, including Rock.
 
-  pages/api/ops-scorecards.js
-  pages/operations/scorecards.js
-  components/OperationsShell.js
+  lib/designShell.js
+  lib/designRfiNotify.js
+  components/ProjectDrawings.js
+  pages/design/leak-test-certs.js
+  pages/design/[project]/rock-drawings.js
+  pages/design/[project]/leak-test-certs.js
+  pages/design/[project]/oms.js
+  pages/api/design-rock-drawings.js
+  pages/api/design-leak-test-certs.js
+  pages/api/design-oms.js
+  pages/api/cron/design-rockdrawing-daily.js
 
 
-WHAT WAS THERE
+LABELS ONLY. NOT KEYS, ROUTES OR STORED CATEGORIES.
 ================================================================================
-    const SUB_TABS = [
-      { key: 'will', label: 'Will', kind: 'cm', name: 'Will' },
-      { key: 'mike', label: 'Mike', kind: 'cm', name: 'Mike' },
-      { key: 'dori', label: 'Dori', kind: 'ops', name: 'Dori' },
-    ]
+The nav entry is:
 
-and a heading reading "Contracts Managers (Will & Mike) and Operations Manager
-(Dori)." Three tabs for people who do not exist on any other tenant, each
-matching no projects.
+    { key: 'rock-drawings', label: 'Drawings', slug: 'rock-drawings' }
+
+key and slug are untouched on purpose. They are the URL
+(/design/<project>/rock-drawings), the API route, the stored document
+category and the design-rockdrawing-daily cron. Renaming those would break
+every bookmarked link and orphan every document already filed under that
+category - which is the trap the SWMS rename avoided in pkg976 and the same
+reason the lost-reason values were left alone.
 
 
-THE NAMES WERE ALREADY THERE
+WHERE THE WORDS ACTUALLY APPEARED
 ================================================================================
-/api/ops-scorecards has ALWAYS returned `cmNames`, built from the Contracts
-Manager actually set on each project. The page ignored it and used the
-hardcoded list instead. That is the whole fix for the CM side - no new data,
-no configuration.
+More places than the two pages, which is why this is eleven files:
 
-The ops series had no name because there was only ever one Operations Manager
-and everybody knew who. The route now also returns `opsNames`, taken from
-portal users whose job role is Operations Manager - the tenant's own people.
-More than one is fine; they share the one ops series, which is what that
-series measures anyway.
+  the Design nav                        both labels
+  each page's heading and browser tab   both
+  the upload button and empty state     Certs
+  the Ops > Projects read-only view     "Pulled live from the Design
+                                        Portal (Drawings)"
+  the DAILY DIGEST EMAIL                "New updates on Drawings for
+                                        <project>" and the "Open Drawings"
+                                        button - these go to CUSTOMERS
+  the comment-notice email              was labelled 'Rock Drawings'
+  the O&M MANUAL                        a section headed "Certificates", and
+                                        the list of what goes into it
+  the fallback document name            a file uploaded without one was
+                                        called "Leak Test Cert"
 
-Same approach as pkg988 on the pre-contract scorecard: derive from the data
-rather than configure, so the list cannot drift from what the metrics filter
-on.
+The two that matter most are the ones that leave the building: the daily
+digest and the O&M manual both reach a customer's customer.
 
 
-THE ROLE UNDER THE NAME
+WHAT I LEFT
 ================================================================================
-As you asked, and matching the pre-contract tabs. SubTabs gained an OPTIONAL
-second line: pages/operations/projects.js passes no `sub`, so its tabs render
-exactly as before - checked, it is the only other caller.
-
-
-THE STATE NOBODY HAD TO THINK ABOUT BEFORE
-================================================================================
-`current` can now be NULL - a customer on day one with no Contracts Manager
-set on any project and no Operations Manager in their people. Previously
-impossible, because the list was hardcoded and always had three.
-
-Guarded at every use rather than assumed, and there is an empty state that
-says where the two lists come from, so somebody can go and fix it rather than
-wonder why the page is blank.
+Comments in the source still say Rock Drawings where they explain which
+route or category is meant. Those are for whoever reads the code next and
+changing them would make the keys harder to follow, not easier.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo: tabs read Tom Bradshaw and Hine Ngata (Contracts Manager) and Ruth
-   Ellery (Operations Manager), each with the role underneath.
-2. Pick a CM - their metrics load. Pick Ruth - the metric set changes to the
-   operations one.
-3. ROCK, the one that matters: the tabs should show Will, Mike and Dori by
-   their REAL names as stored on projects and users - which may be fuller than
-   the first names that were hardcoded. Every figure must be unchanged; only
-   the labels move.
-4. Operations > Projects: its sub-tabs are unchanged, no role line.
+1. Design portal nav: "Drawings" and "Certs".
+2. Open each - heading, browser tab, upload button and empty state.
+3. Ops > Projects > Drawings: the note under the heading.
+4. Build an O&M on a project with certs in it: the section reads
+   "Certificates".
+5. ROCK: the same, and every existing link still works - /design/<project>/
+   rock-drawings is unchanged, so nobody's bookmark breaks.

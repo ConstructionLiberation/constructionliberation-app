@@ -192,14 +192,14 @@ export default function RockDrawingsPage() {
 
   return (
     <>
-      <Head><title>Rock Drawings - Design</title></Head>
+      <Head><title>Drawings - Design</title></Head>
       <DesignNav active="rock-drawings" projectNo={projectNo} projectName={auth.project && auth.project.name} isInternal={auth.isInternal} />
       <input ref={addRef} type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} onChange={e => addNew(e.target.files)} />
       <input ref={revRef} type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={e => addRevision(e.target.files)} />
       <div style={{ width: '100%', margin: 0, padding: '22px 24px 60px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <h1 style={{ margin: '0 0 2px', color: INK, fontSize: 24 }}>Rock Drawings</h1>
+            <h1 style={{ margin: '0 0 2px', color: INK, fontSize: 24 }}>Drawings</h1>
             <p style={{ color: '#8a857c', fontSize: 14, margin: 0 }}>Our own drawings. {canEdit ? 'Upload, revise, mark up and comment.' : 'View, mark up and comment.'}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
