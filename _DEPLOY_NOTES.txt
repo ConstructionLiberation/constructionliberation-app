@@ -1,65 +1,59 @@
-PACKAGE 1008 - the three deletes 996 missed
+PACKAGE 1009 - procurement: the save that wasn't, and the pound signs
 ================================================================================
 
-One file. Complete replacement. Mind the folder and the brackets.
+Three files. Complete replacements. No re-seed.
 
-  pages/api/project/[id]/wip-adjustments.js
+  pages/operations/project-management/procurement.js
+  pages/operations/project-management/procurement-savings.js
+  components/ProcurementSavings.js
 
-DEPLOY, THEN WIPE AND RE-SEED - the cache is already gone and nothing can
-rebuild it on demo.
 
-
-MY MISS
+THE SAVE
 ================================================================================
-996 routed every deletion of dashboard:cache through a guard that refuses to
-delete a cache nothing can rebuild. I found the call sites with:
+    await fetch('/api/procurement', { method: 'POST', ... })
+    setEdit(null); load()
 
-    redis\.del\('dashboard:cache'\)
+The response was never looked at. The API answers
 
-Single quotes. This file uses DOUBLE quotes:
+    400 { error: 'Activity/Package or Supplier required' }
 
-    try { await redis.del("dashboard:cache") } catch {}
+for a new row with neither of those filled - so the dialog closed, the list
+reloaded without the row, and nothing said why. That is indistinguishable
+from "it doesn't save".
 
-Three times - saving, editing and deleting a WIP adjustment. So 996 protected
-twenty-eight sites and left three, and a WIP adjustment is exactly the sort of
-thing you would touch while sweeping. That is why it worked earlier and was
-empty later.
+It now reads the response and shows the API's own message above the table.
+Any other failure names its status and says nothing has been changed.
 
-Re-run with a pattern that accepts any quoting, single, double or backtick.
-Three sites, one file, nothing else in the repo.
+THIRD SWALLOWED RESPONSE TONIGHT. The variations tracker cost four packages
+because a 409 never reached the screen; the retention tracker rendered a 403
+as an empty dataset and had your bookkeeper's figures quietly disagreeing
+with yours. All three are the same habit: a fetch whose result is assumed.
 
-The lesson is the obvious one and I have written a version of it three times
-today: a search that cannot tell you what it did not look at will find only
-what you expected. A regex anchored on one quote style is exactly that.
+That is now worth a sweep of its own - every fetch that does `|| []` or
+`catch {}` on a response it never checked. Not tonight, but it belongs near
+the top of the list, because these have cost more time than the faults
+underneath them.
 
 
-WHY THE ERROR LOOKED LIKE SOMETHING ELSE
+THE POUND SIGNS
 ================================================================================
-/api/dashboard answering {"error":"Not connected to Xero"} reads like a Xero
-problem. It is not. With no cache to serve, the route falls through to the
-Xero path, and demo has no tokens - so the LAST step reports, and the real
-event (a cache deleted three hours earlier) leaves no trace at all.
+Three module-scope formatters, one per file, all hardcoded to en-GB/GBP:
 
+    procurement.js           fmtMoney   used by Procurement and ProcModal
+    ProcurementSavings.js    gbp        used by MoneyInput
+    procurement-savings.js   gbp        used 6 times
 
-AFTER DEPLOYING
-================================================================================
-    wipe:  { action:'wipe', id:'demo', confirm:'demo' }
-    seed:  { action:'seed', id:'demo', projects:30 }
-
-Use 1006's lib/demoSeed.js if it is not already deployed - it carries the Site
-App PINs, project access and 1001's contacts and addresses, so one re-seed
-covers everything outstanding.
-
-Then re-upload the contracted rates.
+Each now lives inside the component that uses it and takes money() from
+useFormat(), keeping its own shape - the em dash for a blank on the savings
+pages, the leading minus on procurement. Same pattern as pkg957 onwards.
+These are three of the thirty inline formatters that survived the currency
+sweep because they carry no literal pound character in a form my greps saw.
 
 
 SMOKE TEST
 ================================================================================
-1. After re-seeding: /api/dashboard on demo returns a projects array, not the
-   Xero error.
-2. Cash Flow lists the projects.
-3. THE ONE THAT MATTERS: open a project, add a WIP adjustment, save it. Then
-   check Budget Tracker still has data. That is the exact action that emptied
-   it, and it is the only way to know this is finished.
-4. ROCK: add a WIP adjustment. The commercial figures must still refresh -
-   Rock has Xero, so the guard deletes as it always did.
+1. Demo Procurement: add an item with a package and a supplier - it saves.
+2. Add one with NEITHER - a red message appears saying which fields are
+   needed, and the dialog stays open with your typing in it.
+3. Figures on Procurement and Procurement Savings read in dollars.
+4. ROCK: add and edit a procurement item. Unchanged, and still in pounds.

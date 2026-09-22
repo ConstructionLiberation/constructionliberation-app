@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../components/TenantProvider'
 import { INK, th, td, Loading, primaryBtn, ghostBtn, linkBtn } from './opsUI'
 import RowAttachments from './RowAttachments'
 import ExpandableText from './ExpandableText'
@@ -10,7 +11,6 @@ import ContactPicker from './ContactPicker'
 //   Tendered Total = Qty x Tendered Rate
 //   Buying Total   = Qty x Buying Rate
 //   Total Savings  = Tendered Total - Buying Total
-const gbp = (n) => (n == null || n === '' || isNaN(n)) ? '' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(n))
 const gbpOrDash = (n) => gbp(n) || '—'
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
 const hasVal = (v) => v !== '' && v != null
@@ -19,6 +19,9 @@ const blankRow = () => ({ packageName: '', supplier: '', dateProvided: '', qty: 
 
 // Currency input: shows formatted £ when not focused, raw number when editing.
 function MoneyInput({ value, onChange }) {
+  const { money } = useFormat()
+  // Was a module-scope const hardcoded to en-GB/GBP.
+  const gbp = (n) => (n == null || n === '' || isNaN(n)) ? '' : money(Number(n))
   const [focused, setFocused] = useState(false)
   return (
     <input

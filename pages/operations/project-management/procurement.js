@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../../../components/TenantProvider'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, th, td, Loading, EmptyCard, Modal, Lbl, inp2, primaryBtn, ghostBtn, linkBtn, fmtDate } from '../../../components/opsUI'
 import RowAttachments from '../../../components/RowAttachments'
@@ -13,13 +14,16 @@ const pnum = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); 
 const phas = (v) => v !== '' && v != null
 // Total Savings = Budget Total - Buying Total, so buying under budget is a POSITIVE saving.
 const totalSavings = (r) => pnum(r.budgetTotal) - pnum(r.buyingTotal)
-const fmtMoney = (n) => (n < 0 ? '-' : '') + '£' + Math.abs(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 // Order can only be placed once the savings fields are filled in.
 function savingsComplete(r) {
   return phas(r.budgetTotal) && phas(r.buyingTotal) && (r.budgetComments || '').trim() !== '' && (r.buyingComments || '').trim() !== ''
 }
 
 export default function Procurement() {
+  const { money } = useFormat()
+  // Was a module-scope const hardcoded to en-GB/GBP.
+  const fmtMoney = (n) => (n < 0 ? '-' : '') + money(Math.abs(n))
+  const [saveError, setSaveError] = useState('')
   const [items, setItems] = useState([])
   const [team, setTeam] = useState([])
   const [projects, setProjects] = useState([])
@@ -90,8 +94,21 @@ export default function Procurement() {
   function toggleSort(key) { setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }); setPage(0) }
 
   async function saveItem(item) {
-    await fetch('/api/procurement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item }) })
-    setEdit(null); load()
+    // A REFUSAL IS NOT A SAVE.
+    //
+    // This ignored the response and closed the dialog either way. The API
+    // answers 400 "Activity/Package or Supplier required" for a new row with
+    // neither filled - so the row vanished, nothing was stored, and nothing
+    // said why. Third swallowed response tonight; they have cost more time
+    // than the faults behind them.
+    const r = await fetch('/api/procurement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item }) })
+    if (!r.ok) {
+      let msg = ''
+      try { msg = (await r.json()).error || '' } catch {}
+      setSaveError(msg || `Could not save (${r.status}). Nothing has been changed.`)
+      return
+    }
+    setSaveError(''); setEdit(null); load()
   }
   async function patchItem(id, patch) {
     const r = items.find(x => x.id === id); if (!r) return
@@ -118,6 +135,14 @@ export default function Procurement() {
     <OperationsShell active="pm:procurement" section="pm" title="Procurement" wide>
       <PageHeading title="Procurement Schedule" sub="Open procurement across all projects. Placed orders are hidden by default."
         action={<button onClick={() => setEdit({ ...emptyItem })} style={primaryBtn}>+ Add item</button>} />
+
+      {/* The save refusal, where the person who caused it is looking. */}
+      {saveError ? (
+        <div style={{
+          background: '#fdecec', border: '1px solid #f0b4b4', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#8a2020',
+        }}>{saveError}</div>
+      ) : null}
 
       <div style={{ background: '#fff', border: '1px solid #ececec', borderRadius: 12, padding: 14, marginBottom: 16, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <F label="Project"><select value={fProject} onChange={e => { setFProject(e.target.value); setPage(0) }} style={sel}><option value="">All projects</option>{projectOptions.map(p => <option key={`${p.no}|${p.name}`} value={`${p.no}|${p.name}`}>{[p.no, p.name].filter(Boolean).join(' — ')}</option>)}</select></F>
@@ -274,6 +299,8 @@ export default function Procurement() {
 }
 
 function ProcModal({ item, team, projectOptions, onClose, onSave }) {
+  const { money } = useFormat()
+  const fmtMoney = (n) => (n < 0 ? '-' : '') + money(Math.abs(n))
   const [f, setF] = useState({ ...item })
   const setProj = (val) => { const [no, name] = val.split('|'); setF({ ...f, projectNo: no, projectName: name }) }
   const late = !f.orderPlaced && procurementLate(f.requiredOnSite, f.leadInWeeks)

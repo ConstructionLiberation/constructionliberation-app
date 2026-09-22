@@ -1,15 +1,18 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useFormat } from '../../../components/TenantProvider'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, th, td, Loading, EmptyCard, primaryBtn, ghostBtn, linkBtn } from '../../../components/opsUI'
 
 // Procurement Savings — per-project. Tendered vs buying rates -> savings.
 // Tendered Total = Qty x Tendered Rate; Buying Total = Qty x Buying Rate;
 // Total Savings = Tendered Total - Buying Total.
-const gbp = (n) => (n == null || n === '' || isNaN(n)) ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(n))
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
 const blankRow = () => ({ supplier: '', qty: '', unit: '', tenderedRate: '', dateProvided: '', buyingRate: '', jmComments: '', buyerComments: '', supplierContact: '' })
 
 export default function ProcurementSavings() {
+  const { money } = useFormat()
+  // Was a module-scope const hardcoded to en-GB/GBP.
+  const gbp = (n) => (n == null || n === '' || isNaN(n)) ? '\u2014' : money(Number(n))
   const [projects, setProjects] = useState([])
   const [projectNo, setProjectNo] = useState('')
   const [projectName, setProjectName] = useState('')
