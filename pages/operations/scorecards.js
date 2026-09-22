@@ -30,16 +30,41 @@ function rag(actual, target, mode = 'normal') {
   return ratio >= 1 ? '#16a34a' : (ratio >= 0.8 ? '#f59e0b' : '#e63946')
 }
 
-const SUB_TABS = [
-  { key: 'will', label: 'Will', kind: 'cm', name: 'Will' },
-  { key: 'mike', label: 'Mike', kind: 'cm', name: 'Mike' },
-  { key: 'dori', label: 'Dori', kind: 'ops', name: 'Dori' },
+// WHO THE TABS ARE, TAKEN FROM THE DATA.
+//
+// This was Will, Mike and Dori - Rock's team, hardcoded. On any other tenant
+// the page showed three tabs for people who do not exist and matched no
+// projects to any of them.
+//
+// /api/ops-scorecards has ALWAYS returned cmNames, built from the Contracts
+// Manager actually on each project, and this page ignored it. opsNames is new
+// and comes from the tenant's own people by job role.
+//
+// Same approach as the pre-contract scorecard in pkg988: derive the list from
+// the data rather than configure it, so it cannot drift from what the metrics
+// filter on.
+const buildTabs = (cmNames, opsNames) => [
+  ...(cmNames || []).map(n => ({ key: `cm:${n}`, label: n, kind: 'cm', name: n, role: 'Contracts Manager' })),
+  ...(opsNames || []).map(n => ({ key: `ops:${n}`, label: n, kind: 'ops', name: n, role: 'Operations Manager' })),
 ]
 
 const CARD_H = 150
 
+// Nobody to show. A new customer with no Contracts Manager set on any project
+// and no Operations Manager in their people hits this, and it should say so
+// rather than render an empty grid.
+function EmptyState() {
+  return (
+    <div style={{ padding: 28, color: '#666', fontSize: 13.5, background: '#fff', border: '0.5px solid #e1e0d9', borderRadius: 10 }}>
+      No Contracts Managers or Operations Managers found yet. Contracts Managers come
+      from the Contracts Manager set on your projects; Operations Managers from the job
+      role on your portal users.
+    </div>
+  )
+}
+
 export default function OpsScorecardsPage() {
-  const [sub, setSub] = useState('will')
+  const [sub, setSub] = useState('')
   const [data, setData] = useState(null)
   const [targets, setTargets] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -51,7 +76,12 @@ export default function OpsScorecardsPage() {
   const [dateFrom, setDateFrom] = useState(_yearAgo.toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState(_now.toISOString().split('T')[0])
 
-  const current = SUB_TABS.find(t => t.key === sub)
+  const SUB_TABS = buildTabs(data?.cmNames, data?.opsNames)
+  // Whichever tab is selected, else the first that exists. NULL when the
+  // tenant has neither a Contracts Manager on any project nor an Operations
+  // Manager in its people - guarded everywhere below rather than assumed,
+  // because an empty team is a real state for a new customer on day one.
+  const current = SUB_TABS.find(t => t.key === sub) || SUB_TABS[0] || null
 
   async function load() {
     setLoading(true)
@@ -80,6 +110,7 @@ export default function OpsScorecardsPage() {
 
   const cmEntry = () => {
     if (!data?.cms) return null
+    if (!current) return null
     const want = current.name.toLowerCase()
     const key = Object.keys(data.cms).find(k => k.toLowerCase().includes(want))
     return key ? data.cms[key] : null
@@ -103,10 +134,10 @@ export default function OpsScorecardsPage() {
     { key: 'risksPct', label: 'Risk log completed on time', sub: 'On-time vs total resolved', format: pct, targetType: 'operationsManager', targetKey: 'risksPct', mode: 'normal' },
   ]
 
-  const entry = current.kind === 'cm' ? cmEntry() : (data?.ops || null)
+  const entry = !current ? null : (current.kind === 'cm' ? cmEntry() : (data?.ops || null))
   const series = entry?.series || []
   const latest = entry?.latest || {}
-  const metrics = current.kind === 'cm' ? CM_METRICS : OPS_METRICS
+  const metrics = current && current.kind === 'ops' ? OPS_METRICS : CM_METRICS
   const latestMonth = data?.months?.[data.months.length - 1]
 
   function renderCard(m) {
@@ -177,10 +208,14 @@ export default function OpsScorecardsPage() {
 
   return (
     <OperationsShell active="scorecards" title="Scorecards">
-      <PageHeading title="Operations Scorecards" sub="Contracts Managers (Will & Mike) and Operations Manager (Dori)." />
+      <PageHeading title="Operations Scorecards" sub="Contracts Managers and Operations Managers, taken from your own team." />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
-        <SubTabs tabs={SUB_TABS} active={sub} onChange={setSub} />
+        <SubTabs
+          tabs={SUB_TABS.map(t => ({ ...t, sub: t.role }))}
+          active={current ? current.key : ''}
+          onChange={setSub}
+        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: '#888' }}>From</span>
@@ -199,6 +234,8 @@ export default function OpsScorecardsPage() {
 
       {loading ? (
         <div style={{ textAlign: 'center', color: '#aaa', padding: 40 }}>Loading…</div>
+      ) : !current ? (
+        <EmptyState />
       ) : current.kind === 'cm' && !entry ? (
         <div style={{ background: '#fff', border: '1px dashed #ddd', borderRadius: 12, padding: 30, textAlign: 'center', color: '#999' }}>
           No projects found for {current.label}. Check the Contracts Manager name on their projects matches "{current.name}".
@@ -207,7 +244,7 @@ export default function OpsScorecardsPage() {
         <>
           {/* Full-width graph cards (no current-month column) */}
           <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>
-            {current.label}{latestMonth && <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Latest: {monthLabel(latestMonth)}</span>}
+            {current ? current.label : ''}{latestMonth && <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Latest: {monthLabel(latestMonth)}</span>}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
             {metrics.map(renderCard)}

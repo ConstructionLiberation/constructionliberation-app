@@ -55,12 +55,20 @@ export function SubTabs({ tabs, active, onChange }) {
     <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
       {tabs.map(t => (
         <button key={t.key} onClick={() => onChange(t.key)} style={{
-          padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
+          padding: '7px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', textAlign: 'center', lineHeight: 1.25, fontFamily: 'inherit',
           border: `1px solid ${active === t.key ? '#ca8a04' : '#e0e0e0'}`,
           background: active === t.key ? '#fffbeb' : '#fff',
           color: active === t.key ? '#92400e' : '#666',
           fontWeight: active === t.key ? 600 : 400,
-        }}>{t.label}</button>
+        }}>
+          <div>{t.label}</div>
+          {/* Optional second line - a role under a person's name on the
+              Operations Scorecards. Every other caller passes no `sub`, so
+              nothing renders and those tabs are unchanged. */}
+          {t.sub ? (
+            <div style={{ fontSize: 10.5, fontWeight: 400, color: active === t.key ? '#b45309' : '#aaa', marginTop: 1 }}>{t.sub}</div>
+          ) : null}
+        </button>
       ))}
     </div>
   )

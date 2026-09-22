@@ -1,5 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
-import { get, set, getSubmissionIndex, getSubmission, getOpsProjects, getLiveTasks } from '../../lib/db'
+import { get, set, getSubmissionIndex, getSubmission, getOpsProjects, getLiveTasks, getPortalUsers } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
 // GET /api/ops-scorecards?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -175,7 +175,25 @@ async function handler(req, res) {
       })
     }
 
-    return res.status(200).json({ months, cms, ops: { series: opsSeries, latest: opsSeries[opsSeries.length - 1] || {} }, cmNames })
+    // WHO THE OPERATIONS MANAGER IS.
+    //
+    // cmNames has always been returned and the page ignored it, using a
+    // hardcoded ['Will','Mike','Dori'] instead. The ops series had no name at
+    // all because there was only ever one and everybody knew it was Dori.
+    //
+    // Taken from the tenant's own people, by job role, so the tab is right on
+    // every customer without anybody configuring it. More than one is fine -
+    // the page lists them all and they share the one ops series, which is
+    // what the series measures anyway.
+    let opsNames = []
+    try {
+      opsNames = (await getPortalUsers())
+        .filter(u => u.active !== false && String(u.jobRole || '') === 'Operations Manager')
+        .map(u => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.name || '')
+        .filter(Boolean)
+    } catch {}
+
+    return res.status(200).json({ months, cms, ops: { series: opsSeries, latest: opsSeries[opsSeries.length - 1] || {} }, cmNames, opsNames })
   } catch (e) {
     console.error('ops-scorecards error:', e)
     return res.status(500).json({ error: e.message || 'Failed to compute scorecards' })

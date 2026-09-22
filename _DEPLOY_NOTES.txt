@@ -1,85 +1,71 @@
-PACKAGE 1001 - nine people sharing one identity
+PACKAGE 1002 - Operations Scorecards stop being Will, Mike and Dori
 ================================================================================
 
-One file. Complete replacement. Includes every seeder change from 974 on.
+Three files. Complete replacements. OperationsShell includes 966's change.
+No re-seed - this reads the tenant's own people.
 
-  lib/demoSeed.js
+  pages/api/ops-scorecards.js
+  pages/operations/scorecards.js
+  components/OperationsShell.js
 
-*** THIS ONE NEEDS A WIPE AND RE-SEED, AND THAT COSTS YOU WORK. READ THE
-    BOTTOM SECTION BEFORE DEPLOYING. ***
 
-
-BOTH FAULTS ARE THE SEEDED DATA. NEITHER IS A BUG.
+WHAT WAS THERE
 ================================================================================
-1. TICKING ONE CC TICKS EVERYONE.
+    const SUB_TABS = [
+      { key: 'will', label: 'Will', kind: 'cm', name: 'Will' },
+      { key: 'mike', label: 'Mike', kind: 'cm', name: 'Mike' },
+      { key: 'dori', label: 'Dori', kind: 'ops', name: 'Dori' },
+    ]
 
-   components/VariationBuilder.js:421
-
-       checked={cc.includes(c.email)}
-
-   Correct code. Every seeded person carried the SAME address, so nine people
-   were one identity as far as anything keyed on email was concerned. It is
-   also what sent four copies of the daily email in pkg973 - where I deduped
-   the sending and never followed the cause back to here.
-
-   Fixed with plus-addressing, so each person has a genuinely distinct address
-   that still lands in your one inbox:
-
-       james+callum.reid@constructionliberation.com
-
-   Staff, portal users, Site App operatives, CRM contacts and organisations
-   all get their own. Checked they come out distinct.
-
-2. NO CUSTOMER CONTACT ON THE VARIATION.
-
-   customerContacts was seeded as an EMPTY ARRAY. VariationBuilder reads
-   project.customerContacts for the recipient list AND for the greeting name,
-   so there was nobody to send to and the greeting fell back to the company -
-   "Hi Harbourline" rather than "Hi Jenna". That is also your Payment Claim
-   finding, same cause.
-
-   Two contacts per project now: the person who signs things off, and someone
-   in accounts. Two so the CC list has a real choice in it and picking one is
-   visibly different from picking both.
+and a heading reading "Contracts Managers (Will & Mike) and Operations Manager
+(Dori)." Three tabs for people who do not exist on any other tenant, each
+matching no projects.
 
 
-WHY NEITHER COULD EVER HAPPEN AT ROCK
+THE NAMES WERE ALREADY THERE
 ================================================================================
-Rock's people have their own addresses and its projects have real contacts.
-Both faults need data that only a generator would produce. That is the
-seeder's job - to exercise the states - and on these two it was producing a
-shape the app cannot meaningfully handle.
+/api/ops-scorecards has ALWAYS returned `cmNames`, built from the Contracts
+Manager actually set on each project. The page ignored it and used the
+hardcoded list instead. That is the whole fix for the CM side - no new data,
+no configuration.
+
+The ops series had no name because there was only ever one Operations Manager
+and everybody knew who. The route now also returns `opsNames`, taken from
+portal users whose job role is Operations Manager - the tenant's own people.
+More than one is fine; they share the one ops series, which is what that
+series measures anyway.
+
+Same approach as pkg988 on the pre-contract scorecard: derive from the data
+rather than configure, so the list cannot drift from what the metrics filter
+on.
 
 
-THE COST, AND IT IS YOURS TO WEIGH
+THE ROLE UNDER THE NAME
 ================================================================================
-A re-seed wipes project:demo-* and retention:entries, which means you lose:
+As you asked, and matching the pre-contract tabs. SubTabs gained an OPTIONAL
+second line: pages/operations/projects.js passes no `sub`, so its tabs render
+exactly as before - checked, it is the only other caller.
 
-  - the contracted rates you re-uploaded
-  - any applications you have created or sent, and their sent/locked state
-  - the retention releases you ticked
-  - any project detail edits
 
-Everything else from tonight - 996 through 1000 - is code and survives.
+THE STATE NOBODY HAD TO THINK ABOUT BEFORE
+================================================================================
+`current` can now be NULL - a customer on day one with no Contracts Manager
+set on any project and no Operations Manager in their people. Previously
+impossible, because the list was hardcoded and always had three.
 
-IF YOU DEPLOY THIS, DO IT NOW AND DO YOUR DEMO PREPARATION AFTERWARDS. Do not
-re-seed again before Friday.
-
-IF YOU WOULD RATHER NOT, the demo still works: avoid the CC list, and expect
-the greeting to use the company name. Both are noticeable but neither stops
-you showing the feature.
-
-My view: worth it, because the variation send is a flagship screen and "Hi
-Harbourline" in front of the customer whose name that is would be the thing
-they remember. But it is your call and the prep cost is real.
+Guarded at every use rather than assumed, and there is an empty state that
+says where the two lists come from, so somebody can go and fix it rather than
+wonder why the page is blank.
 
 
 SMOKE TEST
 ================================================================================
-After wipe and re-seed:
-1. Variation send: the CC list shows nine people with nine different
-   addresses, and ticking one ticks one.
-2. The TO field offers the project's customer contacts, and the greeting
-   names the person.
-3. Send one. It arrives in your inbox - the plus addresses all route there.
-4. Payment Claim send: same greeting fix.
+1. Demo: tabs read Tom Bradshaw and Hine Ngata (Contracts Manager) and Ruth
+   Ellery (Operations Manager), each with the role underneath.
+2. Pick a CM - their metrics load. Pick Ruth - the metric set changes to the
+   operations one.
+3. ROCK, the one that matters: the tabs should show Will, Mike and Dori by
+   their REAL names as stored on projects and users - which may be fuller than
+   the first names that were hardcoded. Every figure must be unchanged; only
+   the labels move.
+4. Operations > Projects: its sub-tabs are unchanged, no role line.
