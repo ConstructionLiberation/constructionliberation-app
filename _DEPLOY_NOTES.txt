@@ -1,62 +1,85 @@
-PACKAGE 1000 - a saved variation that never appeared
+PACKAGE 1001 - nine people sharing one identity
 ================================================================================
 
-One file. Complete replacement. Includes 997. No re-seed.
+One file. Complete replacement. Includes every seeder change from 974 on.
 
-  pages/api/dashboard.js
+  lib/demoSeed.js
+
+*** THIS ONE NEEDS A WIPE AND RE-SEED, AND THAT COSTS YOU WORK. READ THE
+    BOTTOM SECTION BEFORE DEPLOYING. ***
 
 
-THIS ONE IS MINE
+BOTH FAULTS ARE THE SEEDED DATA. NEITHER IS A BUG.
 ================================================================================
-996 stopped anything deleting dashboard:cache on a tenant with no accounting
-connection, because nothing could rebuild it and the commercial screens went
-blank. That was right and it is why your data survived tonight.
+1. TICKING ONE CC TICKS EVERYONE.
 
-It also had a consequence I did not think through. The Variations tracker and
-the Applications screen READ from that cache but WRITE to project:<xeroId>.
-Before 996, saving a variation deleted the cache, and... on demo, nothing
-rebuilt it, so the screen emptied. After 996, the save succeeds and the
-screen keeps showing the version from the last seed.
+   components/VariationBuilder.js:421
 
-Saved correctly both times. Visible neither time.
+       checked={cc.includes(c.email)}
+
+   Correct code. Every seeded person carried the SAME address, so nine people
+   were one identity as far as anything keyed on email was concerned. It is
+   also what sent four copies of the daily email in pkg973 - where I deduped
+   the sending and never followed the cause back to here.
+
+   Fixed with plus-addressing, so each person has a genuinely distinct address
+   that still lands in your one inbox:
+
+       james+callum.reid@constructionliberation.com
+
+   Staff, portal users, Site App operatives, CRM contacts and organisations
+   all get their own. Checked they come out distinct.
+
+2. NO CUSTOMER CONTACT ON THE VARIATION.
+
+   customerContacts was seeded as an EMPTY ARRAY. VariationBuilder reads
+   project.customerContacts for the recipient list AND for the greeting name,
+   so there was nobody to send to and the greeting fell back to the company -
+   "Hi Harbourline" rather than "Hi Jenna". That is also your Payment Claim
+   finding, same cause.
+
+   Two contacts per project now: the person who signs things off, and someone
+   in accounts. Two so the CC list has a real choice in it and picking one is
+   visibly different from picking both.
 
 
-THE FIX, AND WHY IT IS THE RIGHT SHAPE
+WHY NEITHER COULD EVER HAPPEN AT ROCK
 ================================================================================
-The cache path ALREADY overlays live values from the project record - the WIP
-margin override, the date overrides, the Contracts Manager - with a comment
-explaining that an Ops change would otherwise not reach Project Financials
-until the cache expired. Variations and applications belong in exactly that
-list and were simply never added, because before multi-tenancy the
-invalidation always ran and covered for it.
-
-    ...(Array.isArray(s.variations) ? { variations: s.variations } : {}),
-    ...(Array.isArray(s.applications) ? { applications: s.applications } : {}),
-
-Only when the record actually has them, so a project whose settings carry
-none does not have the cache blanked underneath it. Checked all three cases:
-an edited record overlays, a missing one leaves the cache alone, and a
-deliberately empty one is respected.
-
-Better than invalidation even on Rock: an edit shows immediately instead of
-triggering a full rebuild from Xero.
+Rock's people have their own addresses and its projects have real contacts.
+Both faults need data that only a generator would produce. That is the
+seeder's job - to exercise the states - and on these two it was producing a
+shape the app cannot meaningfully handle.
 
 
-THE SEQUENCE THAT GOT US HERE, WORTH RECORDING
+THE COST, AND IT IS YOURS TO WEIGH
 ================================================================================
-996  stopped the cache being destroyed        - right
-1000 stopped the cache being stale instead    - the other half
+A re-seed wipes project:demo-* and retention:entries, which means you lose:
 
-I should have looked for the readers when I changed the invalidation. "What
-reads this?" is the question I skipped, and it is the same question that has
-been behind most of tonight.
+  - the contracted rates you re-uploaded
+  - any applications you have created or sent, and their sent/locked state
+  - the retention releases you ticked
+  - any project detail edits
+
+Everything else from tonight - 996 through 1000 - is code and survives.
+
+IF YOU DEPLOY THIS, DO IT NOW AND DO YOUR DEMO PREPARATION AFTERWARDS. Do not
+re-seed again before Friday.
+
+IF YOU WOULD RATHER NOT, the demo still works: avoid the CC list, and expect
+the greeting to use the company name. Both are noticeable but neither stops
+you showing the feature.
+
+My view: worth it, because the variation send is a flagship screen and "Hi
+Harbourline" in front of the customer whose name that is would be the thing
+they remember. But it is your call and the prep cost is real.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Variations tracker: edit a variation that is NOT instructed, save.
-   The new value shows without a reload.
-2. Demo: the project's Applications screen still lists its applications.
-3. Demo Budget Tracker: data still there. 996 is still doing its job.
-4. ROCK: edit a variation. It shows, and the commercial figures still refresh
-   as they always have.
+After wipe and re-seed:
+1. Variation send: the CC list shows nine people with nine different
+   addresses, and ticking one ticks one.
+2. The TO field offers the project's customer contacts, and the greeting
+   names the person.
+3. Send one. It arrives in your inbox - the plus addresses all route there.
+4. Payment Claim send: same greeting fix.
