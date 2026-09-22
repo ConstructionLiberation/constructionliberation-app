@@ -1,4 +1,5 @@
 import { fromEmail, ramsApproveOrigin } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import {
   getRamsApprovals, saveRamsApprovals,
   getRamsSignatures, saveRamsSignatures,
@@ -352,7 +353,7 @@ async function sendSiteManagerApprovedCopy({ req, projectNo, fileId }) {
       try { const p = await getOpsProject(projectNo); projectName = p?.data?.projectName || p?.projectName || '' } catch {}
       const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0]
       const host = req.headers['x-forwarded-host'] || req.headers.host
-      const logoUrl = host ? `${proto}://${host}/rock-logo.jpg` : null
+      const logoUrl = host ? pdfLogoUrl(req) : null
       const pdfBytes = await buildSignedRamsPDF({
         ramsBytes, fileName: f?.name || 'RAMS.pdf',
         project: { projectNo, projectName },

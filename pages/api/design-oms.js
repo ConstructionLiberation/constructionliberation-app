@@ -1,4 +1,5 @@
 import { baseUrl } from '../../lib/tenantSettings'
+import { pdfLogoUrl, pdfCompanyBlock } from '../../lib/pdfBrand'
 import { get, set, getOpsProjects, getPortalUsers } from '../../lib/db'
 import { put } from '@vercel/blob'
 import { verifySessionToken, SESSION_COOKIE } from '../../lib/portalAuth'
@@ -31,15 +32,12 @@ const OKEY = (no) => `design:oms-manual:${no}`
 // Functions, so they are evaluated per request with the customer resolved.
 // lib/ramsNotify.js already did it this way - that was the shape to copy.
 const APP_URL = () => baseUrl('APP_URL')
-const LOGO_URL = () => `${APP_URL()}/rock-logo.jpg`
+// No module-scope helper here: pdfLogoUrl needs the REQUEST, and a module
+// constant has none. Called inline at the build site instead.
 
-const ROCK = {
-  name: 'Rock Roofing Ltd',
-  address: '483 Green Lanes, London, N13 4BS',
-  phone: '0330 165 8924',
-  email: 'info@rockroofing.co.uk',
-  web: 'www.rockroofing.co.uk',
-}
+// ROCK was a literal block - name, address, phone, email and website -
+// printed as the ROOFING CONTRACTOR on the cover of every customer's O&M
+// manual, a document that goes to THEIR customer. See pdfCompanyBlock().
 
 function readCookie(req, name) {
   const raw = req.headers.cookie || ''
@@ -98,7 +96,7 @@ async function gatherSections(no) {
     ...techSubSections,
     { title: 'Rock Roofing Construction Issue Drawings', files: dwgFiles },
     { title: 'Calculations', files: calcFiles },
-    { title: 'Certificates', files: leakFiles },
+    { title: 'Testing', files: leakFiles },
     { title: 'Warranties', files: warrFiles },
   ]
 
@@ -241,7 +239,7 @@ async function handler(req, res) {
 
   if (body.action === 'build') {
     const { sections } = await gatherSections(no)
-    if (!sections.length) return res.status(400).json({ error: 'Nothing to include yet - add Tech Subs, Construction Issue drawings, Calculations, Certs or Warranties first.' })
+    if (!sections.length) return res.status(400).json({ error: 'Nothing to include yet - add Tech Subs, Construction Issue drawings, Calculations, Testing or Warranties first.' })
     const store = await readStore(no)
     const nextRev = (store.revisions.reduce((m, r) => Math.max(m, r.revision || 0), 0) || 0) + 1
     const meta = await projectMeta(no)
@@ -249,7 +247,7 @@ async function handler(req, res) {
     try {
       bytes = await buildOMManual({
         project: { projectName: meta.projectName, projectNo: meta.projectNo, projectAddress: meta.projectAddress },
-        sections, logoUrl: LOGO_URL(), rockRoofing: ROCK, mainContractor: meta.mainContractor, revision: nextRev,
+        sections, logoUrl: pdfLogoUrl(req), rockRoofing: pdfCompanyBlock(), mainContractor: meta.mainContractor, revision: nextRev,
       })
     } catch (e) {
       return res.status(500).json({ error: 'Could not build the manual: ' + (e.message || 'error') })

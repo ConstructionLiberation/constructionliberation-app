@@ -1,4 +1,5 @@
 import { getSubmission } from '../../lib/db'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { buildSubmissionsPDF } from '../../lib/submissionsPdf'
 import withTenant from '../../lib/withTenant'
 
@@ -15,7 +16,7 @@ async function handler(req, res) {
 
     const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0]
     const host = req.headers.host
-    const logoUrl = host ? `${proto}://${host}/rock-logo.jpg` : null
+    const logoUrl = host ? pdfLogoUrl(req) : null
 
     const bytes = await buildSubmissionsPDF({ subs, labels: labels || {}, logoUrl })
 

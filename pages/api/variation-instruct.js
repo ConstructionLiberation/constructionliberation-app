@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { currentTenantId } from '../../lib/tenantContext'
 import { getProject, saveProject, get, getClient } from '../../lib/db'
@@ -75,7 +76,7 @@ async function handler(req, res) {
 
     if (pdf) {
       const proto = req.headers['x-forwarded-proto'] || 'https'
-      const bytes = await buildVariationPDF({ variation, project, logoUrl: `${proto}://${req.headers.host}/rock-logo.jpg` })
+      const bytes = await buildVariationPDF({ variation, project, logoUrl: pdfLogoUrl(req) })
       res.setHeader('Content-Type', 'application/pdf')
       res.setHeader('Content-Disposition', `inline; filename="Variation ${variation.varNumber}.pdf"`)
       return res.send(Buffer.from(bytes))
@@ -206,7 +207,7 @@ async function handler(req, res) {
     if (RESEND_KEY && audience.length) {
       const proto = req.headers['x-forwarded-proto'] || 'https'
       const withInstruction = { ...variation, instructed: 'yes', builder: { ...b, instruction } }
-      const bytes = await buildVariationPDF({ variation: withInstruction, project, logoUrl: `${proto}://${req.headers.host}/rock-logo.jpg` })
+      const bytes = await buildVariationPDF({ variation: withInstruction, project, logoUrl: pdfLogoUrl(req) })
       const label = projectLabel(project.jobNo, project.name)
       const who = [instruction.byName, instruction.byRole, instruction.byCompany].filter(Boolean).join(', ')
       // Customer's sender. The environment used to win here; see lib/designEmail.js.

@@ -1,4 +1,5 @@
 import { currentTenantId } from '../../lib/tenantContext'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { checkEmailLinks } from '../../lib/linkGuard'
 import { fromEmail } from '../../lib/tenantSettings'
 import { requireRole } from '../../lib/portalAuth'
@@ -16,10 +17,9 @@ import withTenant from '../../lib/withTenant'
 // gives you. Two files would drift.
 // The logo is served from the site itself, the same way the application PDF does it -
 // LOGO_URL was never set, which is why the variation came out without one.
-const logoFor = (req) => {
-  const proto = req.headers['x-forwarded-proto'] || 'https'
-  return `${proto}://${req.headers.host}/rock-logo.jpg`
-}
+// Was building `${proto}://${host}/rock-logo.jpg` by hand. pdfLogoUrl works
+// out the scheme and host itself, and uses the TENANT's logo.
+const logoFor = (req) => pdfLogoUrl(req)
 
 async function loadVariation(projectId, varNumber) {
   const project = (await getProject(projectId)) || {}

@@ -54,7 +54,7 @@ async function handler(req, res) {
       const f = body.file || {}
       if (!f.url) return res.status(400).json({ error: 'No file' })
       data.files = data.files || []
-      data.files.push({ id: rid('doc'), name: f.name || 'Cert', url: f.url, contentType: f.contentType || '', size: f.size || 0, uploadedBy: acc.user.name || 'User', uploadedAt: Date.now() })
+      data.files.push({ id: rid('doc'), name: f.name || 'Test', url: f.url, contentType: f.contentType || '', size: f.size || 0, uploadedBy: acc.user.name || 'User', uploadedAt: Date.now() })
       await set(WKEY(no), data)
       return res.json({ ok: true, files: data.files })
     }

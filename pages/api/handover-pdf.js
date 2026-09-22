@@ -1,4 +1,5 @@
 import { getOpsProjects, getTemplate } from '../../lib/db'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { requireRole } from '../../lib/portalAuth'
 import { IHM_SECTIONS } from '../../lib/ihmSchema'
 import { buildHandoverPDF } from '../../lib/handoverPdf'
@@ -9,10 +10,9 @@ import withTenant from '../../lib/withTenant'
 // Built server-side from the stored project data and the SAME sections the form
 // renders, so the document cannot drift from the screen. Pre-Contract raise it,
 // Operations read it, and both download the identical file.
-const logoFor = (req) => {
-  const proto = req.headers['x-forwarded-proto'] || 'https'
-  return `${proto}://${req.headers.host}/rock-logo.jpg`
-}
+// Was building `${proto}://${host}/rock-logo.jpg` by hand. pdfLogoUrl works
+// out the scheme and host itself, and uses the TENANT's logo.
+const logoFor = (req) => pdfLogoUrl(req)
 
 async function handler(req, res) {
   // Pre-contract raise the handover, post-contract and management live off it.

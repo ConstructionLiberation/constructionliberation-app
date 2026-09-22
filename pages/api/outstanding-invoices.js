@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { requireRole } from '../../lib/portalAuth'
 import { gatherOutstandingInvoices, getWeeklyRecipients, setWeeklyRecipients, sendWeeklyOverdueReport, getWeeklySchedule, setWeeklySchedule, maybeSendScheduledReport } from '../../lib/outstandingInvoicesReport'
 import { buildOutstandingInvoicesPDF } from '../../lib/outstandingInvoicesPdf'
@@ -39,7 +40,7 @@ async function handler(req, res) {
         const baseUrl = host ? `${proto}://${host}` : null
         const invoices = await gatherOutstandingInvoices({ baseUrl })
         const includeComments = req.query.comments === '1'
-        const pdfBytes = await buildOutstandingInvoicesPDF({ invoices, includeComments, logoUrl: baseUrl ? `${baseUrl}/rock-logo.jpg` : null })
+        const pdfBytes = await buildOutstandingInvoicesPDF({ invoices, includeComments, logoUrl: pdfLogoUrl(req) })
         res.setHeader('Content-Type', 'application/pdf')
         res.setHeader('Content-Disposition', `attachment; filename="Outstanding-Invoices-${new Date().toISOString().slice(0, 10)}.pdf"`)
         res.setHeader('Cache-Control', 'no-store')

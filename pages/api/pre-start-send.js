@@ -1,4 +1,5 @@
 import { fromEmail, replyTo } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { getPreStart, savePreStart, getOpsProject, getTemplate } from '../../lib/db'
 import { buildPreStartPDF } from '../../lib/preStartPdf'
 import withTenant from '../../lib/withTenant'
@@ -46,7 +47,7 @@ async function handler(req, res) {
     }
     const sentData = { ...data, stage: 'sent', sentAt }
     const tpl = await getTemplate('prestart')
-    const bytes = await buildPreStartPDF({ project: project?.data || {}, data: sentData, logoUrl: `${origin}/rock-logo.jpg`, proof, sections: tpl?.sections })
+    const bytes = await buildPreStartPDF({ project: project?.data || {}, data: sentData, logoUrl: pdfLogoUrl(req), proof, sections: tpl?.sections })
     const base64 = Buffer.from(bytes).toString('base64')
     const projName = project?.data?.projectName || projectNo
     const filename = `Pre-Start Minutes - ${projName}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')

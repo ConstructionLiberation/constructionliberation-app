@@ -1,4 +1,5 @@
 import { fromEmail, replyTo } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { getSubmission, getOpsProject, getForms } from '../../lib/db'
 import { SEED_FORMS } from '../../lib/formDefs'
 import { buildPsnPDF } from '../../lib/preStartNotifyPdf'
@@ -36,7 +37,7 @@ async function handler(req, res) {
     try { project = await getOpsProject(pno) } catch {}
     const origin = `https://${req.headers.host}`
 
-    const bytes = await buildPsnPDF({ submission: sub, form, project: project?.data || {}, logoUrl: `${origin}/rock-logo.jpg` })
+    const bytes = await buildPsnPDF({ submission: sub, form, project: project?.data || {}, logoUrl: pdfLogoUrl(req) })
     const base64 = Buffer.from(bytes).toString('base64')
     const projName = project?.data?.projectName || sub.projectName || pno || ''
     const filename = `Pre-Start Notification - ${projName}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')

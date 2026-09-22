@@ -1,4 +1,5 @@
 import { getProjectFiles, getRamsApprovals, getRamsSignatures, getOpsProject } from '../../lib/db'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { buildSignedRamsPDF } from '../../lib/signedRamsPdf'
 import withTenant from '../../lib/withTenant'
 
@@ -41,7 +42,7 @@ async function handler(req, res) {
 
     const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0]
     const host = req.headers['x-forwarded-host'] || req.headers.host
-    const logoUrl = host ? `${proto}://${host}/rock-logo.jpg` : null
+    const logoUrl = host ? pdfLogoUrl(req) : null
 
     const pdfBytes = await buildSignedRamsPDF({
       ramsBytes,

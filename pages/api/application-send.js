@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { checkEmailLinks } from '../../lib/linkGuard'
 import { requireRole } from '../../lib/portalAuth'
@@ -53,7 +54,7 @@ async function handler(req, res) {
       app, prevGross, prevReleases: prev || null,
       trackerVariations: project.variations || [],
       project: { jobNo, name, customerName: project.customerName || '' },
-      logoUrl: `${origin}/rock-logo.jpg`,
+      logoUrl: pdfLogoUrl(req),
     })
     const b64 = Buffer.from(bytes).toString('base64')
     // Matches the download - the attachment the customer receives should be named the

@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { get, getOpsProject, getPortalUsers } from '../../lib/db'
 import { buildIssuePDF } from '../../lib/issuePdf'
 import withTenant from '../../lib/withTenant'
@@ -89,7 +90,7 @@ async function handler(req, res) {
     let pdfAttachment = null
     try {
       const origin2 = `https://${req.headers.host}`
-      const bytes = await buildIssuePDF({ issue, project: pdata || {}, logoUrl: `${origin2}/rock-logo.jpg` })
+      const bytes = await buildIssuePDF({ issue, project: pdata || {}, logoUrl: pdfLogoUrl(req) })
       const fname = `Issue ${issue.issueId || ''} - ${(issue.issueName || 'issue')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
       pdfAttachment = { filename: fname, content: Buffer.from(bytes).toString('base64') }
     } catch (e) { /* if PDF fails, still send the email without attachment */ }

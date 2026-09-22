@@ -1,4 +1,5 @@
 import { fromEmail, baseUrl } from '../../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../../lib/pdfBrand'
 import { currentTenantId } from '../../../lib/tenantContext'
 import forEachTenant from '../../../lib/forEachTenant'
 import { getAllProjectSettings, saveProject, getProject, get } from '../../../lib/db'
@@ -104,7 +105,7 @@ async function handler(req, res) {
         if (dry || !RESEND_KEY) continue
 
         try {
-          const bytes = await buildVariationPDF({ variation: v, project, logoUrl: `${origin}/rock-logo.jpg` })
+          const bytes = await buildVariationPDF({ variation: v, project, logoUrl: pdfLogoUrl(req) })
           const b64 = Buffer.from(bytes).toString('base64')
           const fname = `Variation ${v.varNumber} - ${label}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
           const esc = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

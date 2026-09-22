@@ -76,19 +76,19 @@ export default function LeakTestCertsPage() {
 
   return (
     <>
-      <Head><title>Certs - Design</title></Head>
+      <Head><title>Testing - Design</title></Head>
       <DesignNav active="leak-test-certs" projectNo={projectNo} projectName={auth.project && auth.project.name} isInternal={auth.isInternal} />
       <input ref={inputRef} type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} onChange={e => uploadFiles(e.target.files)} />
       <div style={{ width: '100%', margin: 0, padding: '22px 24px 60px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <h1 style={{ margin: '0 0 2px', color: INK, fontSize: 24 }}>Certs</h1>
+            <h1 style={{ margin: '0 0 2px', color: INK, fontSize: 24 }}>Testing</h1>
             <p style={{ color: '#8a857c', fontSize: 14, margin: 0 }}>Leak test certificates. {canEdit ? 'Upload certificates for the customer.' : 'View and download.'}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => downloadZip(files.map(f => f.url), `${projectNo}-leak-test-certs`)} disabled={!files.length} style={{ ...btnGhost, opacity: files.length ? 1 : 0.5 }}>Download all</button>
             <button onClick={() => downloadZip(selectedUrls, `${projectNo}-leak-test-certs-selected`)} disabled={!selectedUrls.length} style={{ ...btnGhost, opacity: selectedUrls.length ? 1 : 0.5 }}>Download selected ({selectedUrls.length})</button>
-            {canEdit && <button onClick={() => inputRef.current && inputRef.current.click()} disabled={uploading} style={{ ...btnPrimary, opacity: uploading ? 0.6 : 1 }}>{uploading ? 'Uploading...' : '+ Upload Certs'}</button>}
+            {canEdit && <button onClick={() => inputRef.current && inputRef.current.click()} disabled={uploading} style={{ ...btnPrimary, opacity: uploading ? 0.6 : 1 }}>{uploading ? 'Uploading...' : '+ Upload Testing'}</button>}
           </div>
         </div>
         {err && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{err}</div>}
@@ -96,7 +96,7 @@ export default function LeakTestCertsPage() {
         {loading ? <div style={{ color: '#999', padding: 20 }}>Loading...</div>
           : files.length === 0 ? (
             <div style={{ background: '#fff', border: '1px solid #ececec', borderRadius: 12, padding: 40, textAlign: 'center', color: '#aaa' }}>
-              No Certs Yet. {canEdit ? 'Use "+ Upload Certs" to add documents.' : 'Nothing has been added yet.'}
+              No Testing Yet. {canEdit ? 'Use "+ Upload Testing" to add documents.' : 'Nothing has been added yet.'}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>

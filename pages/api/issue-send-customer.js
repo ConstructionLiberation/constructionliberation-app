@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { get, set, getOpsProject } from '../../lib/db'
 import { buildIssuePDF } from '../../lib/issuePdf'
 import withTenant from '../../lib/withTenant'
@@ -24,7 +25,7 @@ async function handler(req, res) {
 
     const project = await getOpsProject(issue.projectNo)
     const origin = `https://${req.headers.host}`
-    const bytes = await buildIssuePDF({ issue, project: project?.data || {}, logoUrl: `${origin}/rock-logo.jpg` })
+    const bytes = await buildIssuePDF({ issue, project: project?.data || {}, logoUrl: pdfLogoUrl(req) })
     const base64 = Buffer.from(bytes).toString('base64')
     const fname = `Issue ${issue.issueId || ''} - ${(issue.issueName || 'issue')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
 

@@ -1,4 +1,5 @@
 import { buildAccountsLabourPDF } from '../../lib/weeklyLabourPdf'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { assembleWeek } from './planning-week'
 import { requireRole } from '../../lib/portalAuth'
 import { get } from '../../lib/db'
@@ -46,7 +47,7 @@ async function handler(req, res) {
     }
 
     const origin = `https://${req.headers.host}`
-    const bytes = await buildAccountsLabourPDF({ weeks, logoUrl: `${origin}/rock-logo.jpg` })
+    const bytes = await buildAccountsLabourPDF({ weeks, logoUrl: pdfLogoUrl(req) })
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="Accounts Weekly Labour ${weeks[0].weekStart}${n > 1 ? ` +${n - 1}wk` : ''}.pdf"`)
     return res.send(Buffer.from(bytes))

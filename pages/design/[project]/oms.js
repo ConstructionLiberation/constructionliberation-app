@@ -109,7 +109,7 @@ export default function OMsPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
           <div>
             <h1 style={{ margin: '0 0 2px', color: INK, fontSize: 24 }}>O&amp;M Manual <span style={{ fontSize: 12, color: '#bbb', fontWeight: 400 }}>v2</span></h1>
-            <p style={{ color: '#8a857c', fontSize: 14, margin: 0 }}>A single Operation &amp; Maintenance Manual combining the Technical Submittal, Construction Issue drawings, Calculations, Certs and Warranties.</p>
+            <p style={{ color: '#8a857c', fontSize: 14, margin: 0 }}>A single Operation &amp; Maintenance Manual combining the Technical Submittal, Construction Issue drawings, Calculations, Testing and Warranties.</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {viewingRev && <a href={`/api/download?url=${encodeURIComponent(viewingRev.url)}&name=${encodeURIComponent(dlName)}`} onClick={recordDownload} style={{ ...btnGhost, color: BRAND, borderColor: '#bbead6', textDecoration: 'none' }}>Download{viewingRev.revision ? ` Rev ${viewingRev.revision}` : ''}</a>}
@@ -180,7 +180,7 @@ export default function OMsPage() {
                 <div style={{ background: '#fff', border: '1px solid #ececec', borderRadius: 12, padding: 16 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 10 }}>What will be included</div>
                   {available.length === 0
-                    ? <div style={{ fontSize: 13, color: '#aaa' }}>Nothing yet. Add Tech Subs, Construction Issue drawings, Calculations, Certs or Warranties, then build.</div>
+                    ? <div style={{ fontSize: 13, color: '#aaa' }}>Nothing yet. Add Tech Subs, Construction Issue drawings, Calculations, Testing or Warranties, then build.</div>
                     : available.map((s, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #f4f4f4', fontSize: 13 }}>
                         <span style={{ color: '#333' }}>{i + 1}. {s.title}</span>

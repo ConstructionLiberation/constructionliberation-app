@@ -1,4 +1,5 @@
 import { buildWeeklyLabourPDF } from '../../lib/weeklyLabourPdf'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { assembleWeek } from './planning-week'
 import withTenant from '../../lib/withTenant'
 
@@ -15,7 +16,7 @@ async function handler(req, res) {
     const mondays = Array.from({ length: n }, (_, i) => iso(new Date(base.getTime() + i * 7 * DAY)))
     const weeks = await Promise.all(mondays.map(m => assembleWeek(m)))
     const origin = `https://${req.headers.host}`
-    const bytes = await buildWeeklyLabourPDF({ weeks, logoUrl: `${origin}/rock-logo.jpg` })
+    const bytes = await buildWeeklyLabourPDF({ weeks, logoUrl: pdfLogoUrl(req) })
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="Weekly Labour ${weeks[0].weekStart}${n > 1 ? ` +${n - 1}wk` : ''}.pdf"`)
     return res.send(Buffer.from(bytes))

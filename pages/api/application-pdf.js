@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { getProject, get } from '../../lib/db'
 import { buildApplicationPDF } from '../../lib/applicationPdf'
 import withTenant from '../../lib/withTenant'
@@ -40,7 +41,7 @@ async function handler(req, res) {
       app, prevGross, prevReleases: prev || null,
       trackerVariations: project.variations || [],
       project: { jobNo, name, customerName: project.customerName || '' },
-      logoUrl: `${origin}/rock-logo.jpg`,
+      logoUrl: pdfLogoUrl(req),
     })
     // The filename says it too - this is the copy that ends up in somebody's Downloads
     // folder next to eleven others called "Application n".

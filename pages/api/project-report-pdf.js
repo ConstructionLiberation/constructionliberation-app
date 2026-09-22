@@ -1,4 +1,5 @@
 import { get } from '../../lib/db'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { buildProjectReportPDF } from '../../lib/projectReportPdf'
 import withTenant from '../../lib/withTenant'
 
@@ -20,7 +21,7 @@ async function handler(req, res) {
       openIssues = ids.map(id => allIssues.find(i => i.id === id)).filter(Boolean)
         .filter(i => i.sendToCustomer !== 'nosend' && (i.sentToCustomer === true || i.sentManually === true))
     } catch {}
-    const bytes = await buildProjectReportPDF({ report, logoUrl: `${origin}/rock-logo.jpg`, openIssues })
+    const bytes = await buildProjectReportPDF({ report, logoUrl: pdfLogoUrl(req), openIssues })
     const fname = `Project Report ${report.reportId || ''} - ${(report.projectName || report.projectNo || 'report')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="${fname}"`)

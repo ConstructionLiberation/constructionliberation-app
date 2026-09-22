@@ -1,4 +1,5 @@
 import { getPreStart, getOpsProject, getTemplate } from '../../lib/db'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { buildPreStartPDF } from '../../lib/preStartPdf'
 import withTenant from '../../lib/withTenant'
 
@@ -17,7 +18,7 @@ async function handler(req, res) {
       statuses: data.statuses || {},
     } : null
     const tpl = await getTemplate('prestart')
-    const bytes = await buildPreStartPDF({ project: project?.data || {}, data, logoUrl: `${origin}/rock-logo.jpg`, proof, sections: tpl?.sections })
+    const bytes = await buildPreStartPDF({ project: project?.data || {}, data, logoUrl: pdfLogoUrl(req), proof, sections: tpl?.sections })
     const fname = `Pre-Start Minutes - ${(project?.data?.projectName || no)}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="${fname}"`)
