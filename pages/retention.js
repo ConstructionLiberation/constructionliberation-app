@@ -621,9 +621,10 @@ export default function RetentionPage() {
           // Still HELD: retention on the invoiced value, less anything already claimed
           // back through an application's Retention section. Without the deduction the
           // register keeps chasing money that has been applied for.
-          // Derived by calcRetentionOwed from appliedFor x retentionPct once the row is
-          // assembled - see the note on that function. Kept here only as a fallback for
-          // rows that never get a percentage or an applied-for figure.
+          // Derived by calcRetentionOwed from invoiced x retentionPct once the row is
+          // assembled - see the note on that function, amended 22 Sep 2026. Kept here
+          // only as a fallback for rows that never get a percentage or an invoiced
+          // figure.
           retentionOwed: Math.max(0, (p.totalRetention || 0) - (p.retentionClaimed || 0)),
           retentionClaimed: p.retentionClaimed || 0,
           // From the retention section on the project's latest application - this is
@@ -1412,7 +1413,7 @@ export default function RetentionPage() {
                         ['Invoiced', 'right', `Total invoiced on the project: sum of the Sales (account code 200) lines from Xero. NET of ${term('vat')}, and INCLUDING retention (retention is posted to a separate account, so the Sales total already includes it). From Xero for synced projects, or the imported Xero CSV.`, 'invoiced'],
                         ['✓', 'center', 'Match check: green tick when Applied for equals Invoiced, red flag when they differ.', null],
                         ['Account Remaining', 'right', 'Final Account − Applied for. What is still to be CLAIMED against the final account. Falls back to invoiced only where a project has no application.', null],
-                        ['Retention Owed', 'right', 'Applied for \u00d7 Ret % - exactly the two columns to the left. Nothing else feeds it.', 'retentionOwed'],
+                        ['Retention Owed', 'right', 'Invoiced \u00d7 Ret %. Computed on INVOICED so it can be reconciled against the 612 account, which is deducted on invoices - see lib/retentionCalc.js. It therefore lags anything applied for but not yet invoiced.', 'retentionOwed'],
                         ['612 Deducted', 'right', 'Retention withheld on invoices under account code 612 - the GROSS figure, before any release. Sum of the negative 612 lines. NOTE: the old "612 Allocated" column was the NET (deducted less released), which is a different number.', 'r612ded'],
                         ['612 Released', 'right', 'Retention invoiced back out - the POSITIVE account 612 lines. WARNING: a release posted as a plain sales invoice with no 612 line does not appear here, which is common on older projects. A dash means no 612 movement was found at all, which is NOT the same as nothing released.', 'r612rel'],
                         ['\u2713', 'center', 'Reconciliation: retention is released in halves, so 612 Released should be NOTHING, HALF of 612 Deducted, or ALL of it. Green on any of those three, with which one shown underneath. Red flag on anything else, with how far out it is - usually a part-release, or a deduction still growing because the job is not fully invoiced. A dash means no 612 lines at all.', null],

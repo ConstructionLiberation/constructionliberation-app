@@ -1,52 +1,72 @@
-PACKAGE 1010 - the pound signs in the procurement modal
+PACKAGE 1011 - Retention Owed now computes on INVOICED
 ================================================================================
 
-One file. Complete replacement. SUPERSEDES 1009's copy of it - the other two
-files in 1009 are unchanged and still needed.
+Two files. Complete replacements. ROCK-LIVE FINANCIAL CHANGE.
+pages/retention.js includes 970, 971, 982 and 1007.
 
-  pages/operations/project-management/procurement.js
+  lib/retentionCalc.js
+  pages/retention.js
 
 
-WHAT I MISSED, AND WHY
+THE CHANGE
 ================================================================================
-Four pound characters, none of which my search could see:
+    RETENTION OWED = invoiced (net) x retention %
 
-    placeholder="£"           on the two inline money inputs, twice
-    <Lbl>Budget Total (£)</Lbl>
-    <Lbl>Buying Total (£)</Lbl>
+was applied for x retention %.
 
-I searched for '£' and `£ and currency: 'GBP' - quoted forms and formatter
-declarations. A pound inside a JSX ATTRIBUTE or between JSX TAGS is neither.
+invoicedNet where it exists, else invoiced - the same precedence the tracker's
+own Invoiced column uses, so the two cannot disagree for the same row.
 
-The file now contains zero pound characters, checked by counting the
-character itself rather than any pattern around it. All four use
-currencySymbol from useFormat(), and both components declare it.
+Recorded in lib/retentionCalc.js as a dated AMENDMENT rather than a
+correction. The original paragraph is left on the record: it explains the
+worked examples above it (J190 7,845.91 against 7,993, J197 6,914.35 against
+6,435) and why the tracker and Business Financials once disagreed. Rewriting
+it would make that history unreadable for whoever picks this up next.
+
+The reason is in the file: retention is deducted on INVOICES, so an owed
+total can only be reconciled against a 612 deducted total computed on the
+same base. Owed on applied for and deducted on invoiced can only agree by
+coincidence - which is exactly the coincidence that hid the original fault.
 
 
-THE SAME MISTAKE THREE TIMES TODAY
+WHAT WILL VISIBLY MOVE ON ROCK
 ================================================================================
-  awk with \b, which is a backspace in POSIX - missed InlineNumberCell and
-    took Rock's retention page down for a day
-  single-quote-only regex for redis.del - missed three sites and let the demo
-    cache be destroyed again tonight
-  and now a quoted-only search for the pound sign
+Every project where applied for and invoiced differ. Specifically:
 
-Each time the search was narrower than the thing it was meant to find, and
-each time an empty result read as "clean". The habit that actually works is
-the one used here at the end: count the RAW character, then look at what
-comes back.
+  - the Retention Owed column and its total
+  - Outstanding Retention on the summary card, which is owed less halves
+    released
+  - the 612 panel's "Retention Owed ... is the source of truth. Deducted
+    should match it." - which is the whole point of the change
+  - anything downstream reading the re-exported calcRetentionOwed, including
+    Business Financials
 
-I ran that broader search across pages/ and components/: 28 files still
-contain a pound character somewhere. Most will be legitimate - Rock-specific
-labels, comments, import parsers reading Xero exports - but that list is the
-real remaining currency work, and it is bigger than the thirty inline
-formatters I had recorded. It is on the list now with the right number
-against it.
+Where something is applied for and not yet invoiced, Retention Owed will now
+read LOWER and catch up when the invoice is raised. That is the intended
+behaviour - the column is measuring invoices now.
+
+Anyone comparing against last month's figures will see a step change. Worth
+saying so before somebody asks.
+
+
+WHAT I HAVE NOT CHANGED, AND YOU SHOULD DECIDE
+================================================================================
+calcReleaseHalf still computes from the FINAL ACCOUNT, not invoiced. The file
+is emphatic that retention held and a release half are different things -
+a half is contractual and fixed, and does not track what has been billed.
+
+So the two columns are now on different bases ON PURPOSE. I believe that is
+right, and it is the sort of divergence this file exists to prevent, so it is
+flagged rather than assumed. If releases should follow invoiced too, say so
+and it is one more line.
 
 
 SMOKE TEST
 ================================================================================
-1. Demo Procurement: open Add Item. The Budget Total and Buying Total labels
-   read (NZ$) - or whatever the tenant's symbol is - not (£).
-2. The inline money boxes in the table show the same as their placeholder.
-3. ROCK: both read (£), exactly as before.
+1. ROCK retention tracker: pick a project where Applied For and Invoiced
+   differ. Retention Owed should now equal Invoiced x Ret %, to the penny.
+2. The 612 panel on that project: Retention Owed against 612 Deducted. They
+   should now be comparable - that is the reason for the change.
+3. The totals row and the Outstanding Retention card will both have moved.
+4. A project with nothing invoiced yet reads 0, where it previously showed
+   retention on the application.
