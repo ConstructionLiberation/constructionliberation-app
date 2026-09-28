@@ -1531,12 +1531,34 @@ export default function CashFlow() {
     // zero whenever the box was empty, which is the normal case.
     rows.openBank = openBank
     rows.cardOpening = cardAccounts.reduce((m, c) => { m[c.name] = c.opening; return m }, {})
+    // NOT PLACED IS NOT ONE THING.
+    //
+    // Five reasons put an invoice outside every column, and only the first is
+    // something anybody can act on:
+    //   - its date has passed          -> set a new one and it comes back
+    //   - it falls after the 13 weeks  -> nothing wrong, just later
+    //   - no date at all
+    //   - pushed out by the payment-performance offset
+    //   - a date that matched no week  -> check the format
+    //
+    // One combined figure made an actionable number look far larger than it
+    // is, and buried the part that genuinely needs a date behind the part
+    // that is simply in the future.
+    const missedPast = missed.filter(m => /date has passed/.test(m.reason))
+    const missedAfter = missed.filter(m => /after the 13-week/.test(m.reason))
+    const missedOther = missed.filter(m => !/date has passed|after the 13-week/.test(m.reason))
+    const sumOf = (list) => list.reduce((t, m) => t + m.amount, 0)
+
     rows.recon = {
       placements,
       placedTotal: placements.filter(x => x.ok).reduce((t, x) => t + x.amount, 0),
       owedTotal, excludedTotal,
       missedTotal: missed.reduce((t, m) => t + m.amount, 0),
       missed,
+      // The split, so the banner can say which part wants a decision.
+      missedPastCount: missedPast.length, missedPastTotal: sumOf(missedPast),
+      missedAfterCount: missedAfter.length, missedAfterTotal: sumOf(missedAfter),
+      missedOtherCount: missedOther.length, missedOtherTotal: sumOf(missedOther),
       count: (data.receivables || []).length,
     }
 
@@ -1914,6 +1936,29 @@ export default function CashFlow() {
                         {' '}{forecast.recon.placements.filter(p => p.ok).length} placed ({gbp(forecast.recon.placedTotal)}),
                         {' '}{forecast.recon.missed.length} not placed ({gbp(forecast.recon.missedTotal)}),
                         {' '}total owed {gbp(forecast.recon.owedTotal)}. Click for every invoice and where it landed.
+                        {/* THE SPLIT. One figure could not distinguish an invoice that
+                            needs a date from one that is simply dated next quarter,
+                            and the two want completely different responses. */}
+                        {forecast.recon.missed.length ? (
+                          <div style={{ marginTop: 4, fontSize: 11.5, fontWeight: 400 }}>
+                            Of the {gbp(forecast.recon.missedTotal)} not placed:
+                            {forecast.recon.missedPastCount ? (
+                              <> <strong>{gbp(forecast.recon.missedPastTotal)}</strong> is past its date
+                                ({forecast.recon.missedPastCount} invoice{forecast.recon.missedPastCount === 1 ? '' : 's'})
+                                - give these a new expected date and they come back in.</>
+                            ) : null}
+                            {forecast.recon.missedAfterCount ? (
+                              <> <strong>{gbp(forecast.recon.missedAfterTotal)}</strong> falls after the 13-week window
+                                ({forecast.recon.missedAfterCount} invoice{forecast.recon.missedAfterCount === 1 ? '' : 's'})
+                                - nothing wrong with these, they arrive as the weeks roll forward.</>
+                            ) : null}
+                            {forecast.recon.missedOtherCount ? (
+                              <> <strong>{gbp(forecast.recon.missedOtherTotal)}</strong> for other reasons
+                                ({forecast.recon.missedOtherCount}) - no date, a payment-performance offset, or a date
+                                that matched no week. Open the list for the reason on each.</>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </summary>
                       <div style={{ border: '1px solid #e6e3dc', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#fff', padding: '10px 14px', height: 420, minHeight: 140, overflow: 'auto', resize: 'vertical' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
