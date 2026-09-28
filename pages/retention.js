@@ -139,9 +139,16 @@ function dashFields(p) {
     appliedForLatest: p.appliedForLatest || 0,
     certifiedGross: p.certifiedGross,
     certifiedSetOnApp: !!p.certifiedSetOnApp,
-    // The application only OWNS this cell when its box holds a real figure. A first
-    // application carries 0, which tells you nothing and must not lock the cell.
-    certifiedLocked: !!(p.certifiedSetOnApp && Number(p.certifiedGross)),
+    // NOTHING LOCKS THIS CELL ANY MORE (22 Sep 2026).
+    //
+    // It locked whenever the latest sent application carried a real figure,
+    // because a typed value would have been discarded on the next load and
+    // losing work silently is worse than not being allowed to type.
+    //
+    // The precedence in the merge is now the other way round - a typed value
+    // WINS - so there is nothing to protect anyone from and every row stays
+    // editable. certifiedTyped says whether a row is showing a typed figure.
+    certifiedLocked: false,
     certifiedFromApp: p.certifiedFromApp || '',
     appliedForDetail: p.appliedForDetail || null,
     afaGross: p.afaGross != null ? p.afaGross : null,
@@ -794,9 +801,23 @@ export default function RetentionPage() {
         // watched your number turn into 0. On any project whose latest sent application
         // is App 1, Certified was simply not editable, however editable it looked.
         //
-        // A real figure from the application still wins. A zero does not.
-        certified: (x.certifiedSetOnApp && Number(x.certifiedGross)) ? String(x.certifiedGross)
-          : ((e.certified != null && e.certified !== '') ? e.certified : (x.certifiedSetOnApp ? '0' : '')),
+        // AMENDED 22 SEP 2026: A TYPED VALUE NOW WINS OUTRIGHT.
+        //
+        // The paragraphs above are the history and are left as written. The
+        // rule they describe - application first, typed only as a fallback -
+        // existed so a stale override could not sit on a row for good while
+        // later applications were ignored.
+        //
+        // Reversed by request: every Certified cell is editable and what you
+        // type stays. The trade is exactly the problem the old rule avoided -
+        // a figure typed today will NOT be refreshed by a later application,
+        // so a row that has been typed over is yours to maintain. The cell's
+        // note says "typed" on those rows and "app N" on the rest, so which
+        // is which is visible at a glance.
+        certifiedTyped: !!(e.certified != null && e.certified !== ''),
+        certified: (e.certified != null && e.certified !== '') ? e.certified
+          : ((x.certifiedSetOnApp && Number(x.certifiedGross)) ? String(x.certifiedGross)
+            : (x.certifiedSetOnApp ? '0' : '')),
         comments: x.comments != null && x.comments !== '' ? x.comments : e.comments,
         // markedComplete is a manual saved flag on `e` — keep it.
       }
@@ -1625,11 +1646,12 @@ export default function RetentionPage() {
                             {/* Certified - inline editable, overwritten by the next sent application */}
                             <InlineNumberCell
                               value={entry.certified}
-                              note={entry.certifiedFromApp ? `app ${entry.certifiedFromApp}` : ''}
-                              disabled={!!entry.certifiedLocked}
-                              title={entry.certifiedLocked
-                                ? `From the "Previously certified (gross)" box on application ${entry.certifiedFromApp}. Change it there, not here - a value typed on this row would be discarded.`
-                                : undefined}
+                              note={entry.certifiedTyped ? 'typed' : (entry.certifiedFromApp ? `app ${entry.certifiedFromApp}` : '')}
+                              title={entry.certifiedTyped
+                                ? 'Typed on this row, so it wins. Later applications will NOT update it - clear the cell to go back to taking the figure from the application.'
+                                : (entry.certifiedFromApp
+                                  ? `From the "Previously certified (gross)" box on application ${entry.certifiedFromApp}. Type here to override it.`
+                                  : undefined)}
                               onCommit={(v) => { const { appliedForDetail, ...rest } = entry; saveEntry({ ...rest, certified: v }) }}
                             />
                             {/* Invoiced Net */}

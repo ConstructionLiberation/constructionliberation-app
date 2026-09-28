@@ -1,65 +1,76 @@
-PACKAGE 1012 - the placement check now says WHICH kind of not-placed
+PACKAGE 1013 - every Certified cell is editable, and what you type stays
 ================================================================================
 
-One file. Complete replacement. Rock-side, no re-seed.
+One file. Complete replacement. ROCK-LIVE BEHAVIOUR CHANGE.
+Includes 970, 971, 982, 1007 and 1011.
 
-  pages/business-financials/cashflow.js
+  pages/retention.js
 
 
-WHY THE NUMBER LOOKED WRONG
+UNLOCKING THE CELL WAS ONLY HALF OF IT
 ================================================================================
-"14 not placed (329,282)" put five different situations behind one figure, and
-only one of them is something anybody can act on:
+The lock was not decoration. The precedence underneath it was:
 
-  - its date has passed              set a new one and it comes back
-  - it falls after the 13 weeks      nothing wrong, just later
-  - no date at all
-  - pushed out by the payment-performance offset
-  - a date that matched no week      check the format
+    a real figure on the latest sent application WINS; typed is a fallback
 
-Your list has three invoices marked "Expected Date Past" worth roughly 28,800
-- and 329,282 not placed. The gap is almost entirely invoices dated beyond the
-window: 31/12/2026, 16/12/2026 and so on. From late September a 13-week
-horizon ends around Christmas, so they cannot land in a column. They are not
-overdue and nothing needs doing to them.
+so removing `disabled` on its own would have restored the exact fault the
+lock was built to hide - you type a figure, press Enter, and watch the
+application put its own number straight back. That is described in the file,
+from when it happened.
 
-The banner above it only ever described the OVERDUE case, which is why the
-placement figure read as though ten times more work was outstanding than
-actually is.
+So the precedence is reversed as well:
+
+    a typed value WINS; the application is used where nothing has been typed
+
+Checked across every combination:
+
+  typed 12500, app says 9000        -> 12500   [typed]
+  nothing typed, app says 9000      ->  9000   [from app]
+  typed 12500, app box empty        -> 12500   [typed]
+  nothing typed, app box empty      ->     0   [from app]
+  nothing typed, no sent application-> blank   [from app]
+  typed 0 deliberately              ->     0   [typed]
+
+That last one matters: a deliberate zero is now respected rather than read as
+"nothing typed".
 
 
-WHAT IT SAYS NOW
+THE TRADE, WHICH IS REAL
 ================================================================================
-    Of the 329,282 not placed:
-      28,845 is past its date (3 invoices) - give these a new expected date
-        and they come back in.
-      295,437 falls after the 13-week window (10 invoices) - nothing wrong
-        with these, they arrive as the weeks roll forward.
-      5,000 for other reasons (1) - no date, a payment-performance offset, or
-        a date that matched no week. Open the list for the reason on each.
+This reinstates the problem the old rule existed to prevent. A figure typed
+today will NOT be refreshed by a later application. A row typed over in
+September still shows September's number in December unless somebody updates
+it.
 
-The three buckets are exhaustive by construction - past, after-window, and
-everything else - so they always sum to the total. Checked.
+That is the cost of editability and there is no version of this that avoids
+it - either the application owns the cell or you do.
 
-The per-invoice reason in the drill-down is unchanged; this only groups what
-was already being computed.
+What the page does instead is make it VISIBLE. The small note beside each
+figure now reads:
+
+    typed    - this row is yours to maintain, nothing will update it
+    app 7    - taken from application 7, and it will keep up to date
+
+Hovering says the same in full, including how to hand a row back: clear the
+cell and it returns to taking the figure from the application.
 
 
-ONE THING WORTH DOING WITH IT
+AMENDMENT, NOT CORRECTION
 ================================================================================
-Once it is live, the "past its date" figure is your actual worklist. On the
-list you sent that is three invoices, not fourteen.
-
-And if anything in there is PAID or no longer due - as you said several are -
-it wants clearing in Xero or unticking on the page, because total owed of
-623,831 is still counting it.
+The original paragraphs are left in the file as written - they explain why
+the rule was the other way round and what went wrong before it. A dated note
+records the reversal and the reason. Same treatment as the retention basis
+change in 1011, and for the same reason: whoever reads this in six months
+needs the history, not just the current answer.
 
 
 SMOKE TEST
 ================================================================================
-1. Cash flow forecast: the placement check now carries a second line breaking
-   the not-placed total into three.
-2. The three figures sum to the not-placed total.
-3. Set an expected date on one of the past-dated invoices; it moves out of
-   that bucket and into a week.
-4. Where nothing is unplaced, the line does not render at all.
+1. A row that was greyed out - Certified with an "app N" note - is now
+   editable. Type a figure; it sticks through a reload and the note reads
+   "typed".
+2. Clear that cell. The application's figure returns and the note goes back
+   to "app N".
+3. A row showing 0.00 with no sent application: type a figure, it stays.
+4. The totals row, Retention Owed and the 612 panel all move with the typed
+   figure - Certified feeds them, so a manual override now flows through.
