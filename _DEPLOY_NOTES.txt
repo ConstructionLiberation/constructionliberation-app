@@ -1,76 +1,70 @@
-PACKAGE 1013 - every Certified cell is editable, and what you type stays
+PACKAGE 1014 - a variation can be un-instructed
 ================================================================================
 
-One file. Complete replacement. ROCK-LIVE BEHAVIOUR CHANGE.
-Includes 970, 971, 982, 1007 and 1011.
+One file. Complete replacement. Includes 999. Mind the folder and brackets.
+Rock-live behaviour change, no re-seed.
 
-  pages/retention.js
+  pages/api/project/[id]/settings.js
 
 
-UNLOCKING THE CELL WAS ONLY HALF OF IT
+THE PROBLEM WITH THE OLD LOCK
 ================================================================================
-The lock was not decoration. The precedence underneath it was:
+An instructed variation could not be changed - including being corrected. Mark
+one instructed by mistake and the lock refused every subsequent save, the one
+that would have fixed it included. The only way back was editing the stored
+record directly.
 
-    a real figure on the latest sent application WINS; typed is a fallback
-
-so removing `disabled` on its own would have restored the exact fault the
-lock was built to hide - you type a figure, press Enter, and watch the
-application put its own number straight back. That is described in the file,
-from when it happened.
-
-So the precedence is reversed as well:
-
-    a typed value WINS; the application is used where nothing has been typed
-
-Checked across every combination:
-
-  typed 12500, app says 9000        -> 12500   [typed]
-  nothing typed, app says 9000      ->  9000   [from app]
-  typed 12500, app box empty        -> 12500   [typed]
-  nothing typed, app box empty      ->     0   [from app]
-  nothing typed, no sent application-> blank   [from app]
-  typed 0 deliberately              ->     0   [typed]
-
-That last one matters: a deliberate zero is now respected rather than read as
-"nothing typed".
+A control nobody can undo is a trap rather than a control.
 
 
-THE TRADE, WHICH IS REAL
+WHAT IS ALLOWED NOW
 ================================================================================
-This reinstates the problem the old rule existed to prevent. A figure typed
-today will NOT be refreshed by a later application. A row typed over in
-September still shows September's number in December unless somebody updates
-it.
+The single transition instructed -> not instructed, PROVIDED nothing else
+moves in the same save:
 
-That is the cost of editability and there is no version of this that avoids
-it - either the application owns the cell or you do.
+  un-instruct, nothing else changed        allowed
+  un-instruct AND reprice in one save      REFUSED
+  reprice while still instructed           REFUSED
+  no change at all                         allowed
 
-What the page does instead is make it VISIBLE. The small note beside each
-figure now reads:
+So you cannot quietly un-instruct and re-price in one step. Clear the flag,
+then edit - two deliberate actions, both visible. The lock on an instructed
+variation's figures is untouched.
 
-    typed    - this row is yours to maintain, nothing will update it
-    app 7    - taken from application 7, and it will keep up to date
-
-Hovering says the same in full, including how to hand a row back: clear the
-cell and it returns to taking the figure from the application.
+The refusal now tells you the way out: "...cannot be changed while it stays
+instructed. Un-instruct it first if the instruction was logged in error, or
+raise a new variation."
 
 
-AMENDMENT, NOT CORRECTION
+ONE THING THAT WOULD HAVE BITTEN
 ================================================================================
-The original paragraphs are left in the file as written - they explain why
-the rule was the other way round and what went wrong before it. A dated note
-records the reversal and the reason. Same treatment as the retention basis
-change in 1011, and for the same reason: whoever reads this in six months
-needs the history, not just the current answer.
+The comparison normalises to trimmed strings rather than using
+JSON.stringify. The edit modal writes varNumber: form.varNumber, so a
+variation stored WITHOUT that field comes back as '' - identical to a person,
+different to JSON.stringify, and it would have refused an un-instruct that
+changed nothing real. Exactly the shape of the "undefined has been instructed"
+fault in 999.
+
+Checked both save paths: the inline Instructed dropdown on the tracker, and
+the edit modal. Both now go through.
+
+
+NOT CHANGED
+================================================================================
+Deleting an instructed variation is still refused. That is a different act
+from correcting a flag and should stay deliberate.
+
+And the tracker's inline dropdown already checked its response and alerted on
+failure, so refusals from this guard have always been visible on that path -
+unlike the edit modal, which 1009's sibling problem still applies to.
 
 
 SMOKE TEST
 ================================================================================
-1. A row that was greyed out - Certified with an "app N" note - is now
-   editable. Type a figure; it sticks through a reload and the note reads
-   "typed".
-2. Clear that cell. The application's figure returns and the note goes back
-   to "app N".
-3. A row showing 0.00 with no sent application: type a figure, it stays.
-4. The totals row, Retention Owed and the 612 panel all move with the typed
-   figure - Certified feeds them, so a manual override now flows through.
+1. ROCK: find an instructed variation. Set the row's dropdown to Not
+   Instructed. It saves.
+2. Now edit its value. That works too, because it is no longer instructed.
+3. Mark it instructed again, then try to change the value - refused, with the
+   new message naming the variation.
+4. Open the edit modal on an instructed variation, set Instructed to No and
+   save without touching anything else. It saves.

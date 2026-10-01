@@ -104,9 +104,31 @@ async function handler(req, res) {
       if (!now) {
         return res.status(409).json({ error: `Refused: ${label(was)} has been instructed and cannot be removed.` })
       }
-      if (sig(now) !== sig(was)) {
+      // UN-INSTRUCTING IS ALLOWED. CHANGING AN INSTRUCTED ONE IS NOT.
+      //
+      // Marking a variation instructed by mistake used to be permanent -
+      // the lock refused every subsequent save, including the one that would
+      // have corrected it, so the only way back was editing the stored record
+      // directly. A control nobody can undo is a trap, not a control.
+      //
+      // So the single transition instructed -> not instructed is permitted,
+      // PROVIDED nothing else moves in the same save. Everything else about
+      // the variation - number, description, materials, labour, profit - must
+      // still match, which means you cannot quietly un-instruct and re-price
+      // in one step. Clear the flag, then edit: two deliberate actions, both
+      // visible.
+      // Compared as NORMALISED STRINGS, not raw values. The edit modal writes
+      // varNumber: form.varNumber, so a variation stored with the field absent
+      // comes back as '' - identical to a person, different to JSON.stringify,
+      // and it would have refused an un-instruct that changed nothing real.
+      const same = (a, b) => ['varNumber', 'description', 'materials', 'labour', 'profit']
+        .every(k => String(a[k] == null ? '' : a[k]).trim() === String(b[k] == null ? '' : b[k]).trim())
+      const unInstructingOnly = !isInstructed(now) && same(now, was)
+
+      if (!unInstructingOnly && sig(now) !== sig(was)) {
         return res.status(409).json({
-          error: `Refused: ${label(was)} has been instructed and cannot be changed. Raise a new variation instead.`,
+          error: `Refused: ${label(was)} has been instructed and cannot be changed while it stays instructed. `
+            + `Un-instruct it first if the instruction was logged in error, or raise a new variation.`,
         })
       }
     }
