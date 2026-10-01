@@ -1,83 +1,76 @@
-PACKAGE 1015 - applications going out without their variations
+PACKAGE 1016 - the variations missing from the Application PDF
 ================================================================================
 
-*** DEPLOY THIS BEFORE SENDING ANY MORE APPLICATIONS ***
+One file. Complete replacement. Rock-live, no re-seed.
 
-Three files. One is NEW. Rock-live, no re-seed.
+  lib/applicationPdf.js
 
-  lib/projectRecord.js         <- NEW
-  pages/api/application-pdf.js
-  pages/api/application-send.js   <- includes 975 and 1004
+This is the real fault. 1015 was not it - see the note at the bottom.
 
 
-WHAT YOU FOUND
+THE CAUSE, FROM YOUR OWN FEED
 ================================================================================
-Two requests, same project, different ids:
+Two lines, in the wrong order:
 
-    applications?projectId=0f7f23f3-...   1.3 kB   empty skeleton
-    applications?projectId=daa57815-...   8.5 kB   the real record
+    const sum = computeApplicationSummary(app, prevGross, prevReleases)   // first
+    const vars = ... buildLiveVars(app, trackerVariations)                // second
 
-A project answers to more than one id. The dashboard cache row carries both
-`xeroId` and `trackingOptionId` and they are NOT always the same value.
-getProject() answers for exactly the key it is given and returns an EMPTY
-OBJECT - not an error - for the other one.
+A DRAFT stores `variations: []` - that array is only filled in when the
+application is SENT. Your feed shows exactly that: app seq 3 (Application 5),
+status draft, "variations": [].
 
-The screen had resolved to the id with the record behind it. The Download PDF
-link still carried the one that did not. So every figure that comes off the
-APPLICATION was correct, and everything that comes off the PROJECT - the
-variations, the customer name - was silently absent.
+So the summary was computed from an application with no variations, and the
+variation table underneath was built afterwards and rendered them correctly.
+Every figure wrong, every line present. That is why it looked like the
+variations were "not pulling through" rather than like a calculation fault.
 
-On J240 that is 3,692.95 of variations missing from a document that goes to
-the customer, with nothing on the page or the PDF to suggest anything was
-wrong. You said others are affected; any project whose two ids differ behaves
-the same way.
+pages/applications.js has always done it the other way round:
+
+    const workApp = { ...app, contractWorks: rows, variations: vars, materials: mats }
+    const sum = computeApplicationSummary(workApp, ...)
+
+which is why the screen was right. One rule, two implementations, opposite
+order - the dominant fault class of this whole project, in a document that
+goes to the customer.
+
+Checked against your data:
+
+    V07   5,350.37 @ 21.6424%  ->  1,157.95
+    V09   1,755.00 @ 100%      ->  1,755.00
+    V11     780.00 @ 100%      ->    780.00
+                                  ----------
+                                   3,692.95   exactly what the screen shows
 
 
-THE FIX
+WHAT ELSE THIS FIXES
 ================================================================================
-lib/projectRecord.js resolves a project record from ANY id it answers to:
-tries the key given, then finds the project in the dashboard cache by either
-id, then tries the others including job number, then falls back to searching
-the settings map by job number.
+pages/api/application-send.js uses the SAME generator, so the PDF emailed to
+the customer had the same gap. That is now correct too, with no change to that
+file.
 
-Checked against the exact shape you are seeing:
+Only DRAFTS were affected. A sent application has its variations frozen onto
+it, so `app.variations` was populated and the summary was right.
 
-    given the id WITH a record     -> that record, 3 variations
-    given the id WITHOUT one       -> the same record, 3 variations
-    given an id nobody knows       -> empty, as before
-
-pages/api/project/[id].js has resolved across both ids when reading the CACHE
-for a while. Nothing did it for the SETTINGS record. One rule, two places,
-only one of them implemented - the same shape as most of this fortnight.
+That is worth knowing for the work already sent: those documents were correct.
+The exposure was drafts - anything downloaded and sent by hand, outside the
+Send to customer button.
 
 
-THE WRITE MATTERED MORE THAN THE READ
+ABOUT 1015
 ================================================================================
-application-send.js re-reads and saves the project when an application is
-marked sent. That used the caller's id for both. Left alone, this fix would
-have made it read the GOOD record and write to the EMPTY one - creating a
-second record and storing the sent application where nothing reads it.
-
-It now reads and writes the SAME resolved key. If you deploy only part of this
-package, deploy that file.
-
-
-WHAT TO CHECK ON WORK ALREADY SENT
-================================================================================
-Any application SENT on an affected project will have frozen its variations
-from the empty record, so the stored record of what was claimed is also short.
-Worth opening a few sent applications on projects other than J240 and
-comparing the variations on the certificate against the tracker.
-
-I have not written anything to correct historical records - that needs your
-decision, and it should be deliberate rather than a side effect of a fix.
+1015 was the wrong diagnosis, built on an empty API response I never confirmed
+the id for. It is harmless - resolveProjectRecord returns immediately when the
+given key works, which it does on every project here - and the write change in
+application-send.js is a genuine improvement. But it fixed nothing, and I
+should have asked for the response body before writing it rather than after.
 
 
 SMOKE TEST
 ================================================================================
-1. J240, Application 5: Download PDF. Variations should read 3,692.95 and the
-   Projected Final Account 89,639.25, matching the screen exactly.
-2. The customer name should appear on the PDF where it was blank.
-3. A project whose ids match - most of them - must be unchanged. Download one
-   and compare against a PDF from before.
-4. Only then, send one and check the attachment matches the screen.
+1. J240 Application 5, Download PDF. Variations 3,692.95, Projected Final
+   Account 89,639.25, Variations & materials 68,905.97 - all matching the
+   screen to the penny.
+2. Total due on the PDF should match the screen's 114,209.20 / 26,081.02.
+3. Open a SENT application on any project and download it. Unchanged - those
+   were always right.
+4. Then send Application 5 and check the attachment matches the screen.
