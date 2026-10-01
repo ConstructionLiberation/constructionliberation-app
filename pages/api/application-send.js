@@ -1,4 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
+import { resolveProjectRecord } from '../../lib/projectRecord'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { checkEmailLinks } from '../../lib/linkGuard'
@@ -26,7 +27,10 @@ async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'Email is not configured (RESEND_API_KEY missing).' })
 
   try {
-    const project = (await getProject(projectId)) || {}
+    // Same resolution as the PDF route. This one matters more: the document
+    // built here is EMAILED TO THE CUSTOMER, and marking the application sent
+    // freezes these variations onto the record permanently.
+    const { project, resolvedId } = await resolveProjectRecord(projectId)
     const apps = Array.isArray(project.applications) ? project.applications : []
     const idx = apps.findIndex(a => a.id === appId)
     if (idx === -1) return res.status(404).json({ error: 'Application not found' })
@@ -134,14 +138,19 @@ async function handler(req, res) {
     // variation-send.js has done it this way for a while, and says why. The same
     // fault was never fixed here. So: re-read, apply only what this handler
     // changed, write that.
-    const fresh = (await getProject(projectId)) || {}
+    // resolvedId, NOT projectId. This is the WRITE, and writing to the id the
+    // caller happened to hold would create a second, near-empty record for a
+    // project that already has one - and the sent application would be stored
+    // on the copy nothing reads. Re-read from the SAME key it will be written
+    // back to.
+    const fresh = (await getProject(resolvedId)) || {}
     fresh.applications = apps
     if (project.afaOverride !== undefined) {
       fresh.afaOverride = project.afaOverride
       fresh.afaOverrideAt = project.afaOverrideAt
       fresh.afaOverrideAppSeq = project.afaOverrideAppSeq
     }
-    await saveProject(projectId, fresh)
+    await saveProject(resolvedId, fresh)
     // Same audit trail as applications.js, so a missing application is
     // traceable instead of a mystery. Never allowed to fail the send.
     try {

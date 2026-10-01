@@ -1,70 +1,83 @@
-PACKAGE 1014 - a variation can be un-instructed
+PACKAGE 1015 - applications going out without their variations
 ================================================================================
 
-One file. Complete replacement. Includes 999. Mind the folder and brackets.
-Rock-live behaviour change, no re-seed.
+*** DEPLOY THIS BEFORE SENDING ANY MORE APPLICATIONS ***
 
-  pages/api/project/[id]/settings.js
+Three files. One is NEW. Rock-live, no re-seed.
+
+  lib/projectRecord.js         <- NEW
+  pages/api/application-pdf.js
+  pages/api/application-send.js   <- includes 975 and 1004
 
 
-THE PROBLEM WITH THE OLD LOCK
+WHAT YOU FOUND
 ================================================================================
-An instructed variation could not be changed - including being corrected. Mark
-one instructed by mistake and the lock refused every subsequent save, the one
-that would have fixed it included. The only way back was editing the stored
-record directly.
+Two requests, same project, different ids:
 
-A control nobody can undo is a trap rather than a control.
+    applications?projectId=0f7f23f3-...   1.3 kB   empty skeleton
+    applications?projectId=daa57815-...   8.5 kB   the real record
+
+A project answers to more than one id. The dashboard cache row carries both
+`xeroId` and `trackingOptionId` and they are NOT always the same value.
+getProject() answers for exactly the key it is given and returns an EMPTY
+OBJECT - not an error - for the other one.
+
+The screen had resolved to the id with the record behind it. The Download PDF
+link still carried the one that did not. So every figure that comes off the
+APPLICATION was correct, and everything that comes off the PROJECT - the
+variations, the customer name - was silently absent.
+
+On J240 that is 3,692.95 of variations missing from a document that goes to
+the customer, with nothing on the page or the PDF to suggest anything was
+wrong. You said others are affected; any project whose two ids differ behaves
+the same way.
 
 
-WHAT IS ALLOWED NOW
+THE FIX
 ================================================================================
-The single transition instructed -> not instructed, PROVIDED nothing else
-moves in the same save:
+lib/projectRecord.js resolves a project record from ANY id it answers to:
+tries the key given, then finds the project in the dashboard cache by either
+id, then tries the others including job number, then falls back to searching
+the settings map by job number.
 
-  un-instruct, nothing else changed        allowed
-  un-instruct AND reprice in one save      REFUSED
-  reprice while still instructed           REFUSED
-  no change at all                         allowed
+Checked against the exact shape you are seeing:
 
-So you cannot quietly un-instruct and re-price in one step. Clear the flag,
-then edit - two deliberate actions, both visible. The lock on an instructed
-variation's figures is untouched.
+    given the id WITH a record     -> that record, 3 variations
+    given the id WITHOUT one       -> the same record, 3 variations
+    given an id nobody knows       -> empty, as before
 
-The refusal now tells you the way out: "...cannot be changed while it stays
-instructed. Un-instruct it first if the instruction was logged in error, or
-raise a new variation."
+pages/api/project/[id].js has resolved across both ids when reading the CACHE
+for a while. Nothing did it for the SETTINGS record. One rule, two places,
+only one of them implemented - the same shape as most of this fortnight.
 
 
-ONE THING THAT WOULD HAVE BITTEN
+THE WRITE MATTERED MORE THAN THE READ
 ================================================================================
-The comparison normalises to trimmed strings rather than using
-JSON.stringify. The edit modal writes varNumber: form.varNumber, so a
-variation stored WITHOUT that field comes back as '' - identical to a person,
-different to JSON.stringify, and it would have refused an un-instruct that
-changed nothing real. Exactly the shape of the "undefined has been instructed"
-fault in 999.
+application-send.js re-reads and saves the project when an application is
+marked sent. That used the caller's id for both. Left alone, this fix would
+have made it read the GOOD record and write to the EMPTY one - creating a
+second record and storing the sent application where nothing reads it.
 
-Checked both save paths: the inline Instructed dropdown on the tracker, and
-the edit modal. Both now go through.
+It now reads and writes the SAME resolved key. If you deploy only part of this
+package, deploy that file.
 
 
-NOT CHANGED
+WHAT TO CHECK ON WORK ALREADY SENT
 ================================================================================
-Deleting an instructed variation is still refused. That is a different act
-from correcting a flag and should stay deliberate.
+Any application SENT on an affected project will have frozen its variations
+from the empty record, so the stored record of what was claimed is also short.
+Worth opening a few sent applications on projects other than J240 and
+comparing the variations on the certificate against the tracker.
 
-And the tracker's inline dropdown already checked its response and alerted on
-failure, so refusals from this guard have always been visible on that path -
-unlike the edit modal, which 1009's sibling problem still applies to.
+I have not written anything to correct historical records - that needs your
+decision, and it should be deliberate rather than a side effect of a fix.
 
 
 SMOKE TEST
 ================================================================================
-1. ROCK: find an instructed variation. Set the row's dropdown to Not
-   Instructed. It saves.
-2. Now edit its value. That works too, because it is no longer instructed.
-3. Mark it instructed again, then try to change the value - refused, with the
-   new message naming the variation.
-4. Open the edit modal on an instructed variation, set Instructed to No and
-   save without touching anything else. It saves.
+1. J240, Application 5: Download PDF. Variations should read 3,692.95 and the
+   Projected Final Account 89,639.25, matching the screen exactly.
+2. The customer name should appear on the PDF where it was blank.
+3. A project whose ids match - most of them - must be unchanged. Download one
+   and compare against a PDF from before.
+4. Only then, send one and check the attachment matches the screen.

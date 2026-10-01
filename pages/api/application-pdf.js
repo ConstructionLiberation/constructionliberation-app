@@ -1,4 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
+import { resolveProjectRecord } from '../../lib/projectRecord'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { getProject, get } from '../../lib/db'
 import { buildApplicationPDF } from '../../lib/applicationPdf'
@@ -10,7 +11,10 @@ async function handler(req, res) {
   const { projectId, appId } = req.query
   if (!projectId || !appId) return res.status(400).json({ error: 'projectId and appId are required' })
   try {
-    const project = (await getProject(projectId)) || {}
+    // Resolved across every id this project answers to - see lib/projectRecord.js.
+    // getProject(projectId) alone returned {} when the caller held the other id,
+    // and the PDF came out with no variations and no customer name.
+    const { project } = await resolveProjectRecord(projectId)
     const apps = Array.isArray(project.applications) ? project.applications : []
     const app = apps.find(a => a.id === appId)
     if (!app) return res.status(404).json({ error: 'Application not found' })
