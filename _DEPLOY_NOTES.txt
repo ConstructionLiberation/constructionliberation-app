@@ -1,92 +1,121 @@
-PACKAGE 1018 - the template editor shows the whole report
+PACKAGE 1019 - SRAT archived, Project Reports added to the Site App
 ================================================================================
 
-Four files. Complete replacements. SUPERSEDES 1017 ENTIRELY - if 1017 is not
-yet deployed, deploy this instead of it. Two files are NEW relative to the
-live app.
+*** SUPERSEDES 1017 AND 1018 ENTIRELY. Deploy this instead of either. ***
 
-  lib/projectReportTemplate.js         <- NEW
-  pages/api/project-report-template.js <- NEW
-  lib/projectReportPdf.js
-  pages/operations/project-management/report.js
-
-No re-seed. Everything 1017 does is in here as well.
+12 files. THREE ARE NEW, THREE ARE MOVES, THREE ARE DELETIONS.
+No re-seed.
 
 
-WHAT CHANGED FROM 1017
+FILES TO ADD OR REPLACE
 ================================================================================
-The editor listed only the sections you had added, which made it a list of
-boxes rather than a form. It now shows the WHOLE report in order:
+  lib/projectReportTemplate.js          NEW
+  lib/projectReportAutofill.js          NEW
+  pages/api/project-report-template.js  NEW
+  pages/forms/cm/reports.js             NEW  (the Site App screen)
 
-    Date                                   built in
-    Project                                built in
-    Customer company                       built in
-    Your name                              built in
-    Project address                        built in
-    Variations          (pulled)           built in
-    Issues              (pulled)           built in
-    Site communications                    built in
-    Works completed                        built in
-      |
-      +--  your sections, editable, in a gold-edged block
-      |
-    Photos              (auto-collected)   built in
-    Additional photos   (added manually)   built in
-    Approval                               built in
+  lib/projectReportPdf.js               replace
+  pages/operations/project-management/report.js   replace
+  pages/forms/index.js                  replace
+  components/OperationsNav.js           replace
+  middleware.js                         replace  (repo root)
 
-The built-in rows are greyed, marked "Built in", and show a note where the
-content comes from somewhere else - Variations and Issues are pulled from the
-project, Photos are auto-collected. They cannot be edited or moved: they are
-the report.
-
-Your own sections sit in position under Works completed, inside an indented
-block, with add / reorder / remove acting only on them. Seeing them beneath
-"Works completed" rather than in isolation is the whole point - it is the
-difference between editing a form and editing a list.
-
-
-WHERE THE FIXED LIST LIVES
+FILES TO DELETE FROM pages/ - this is the part a paste cannot do for you
 ================================================================================
-lib/projectReportTemplate.js, as BUILT_IN_SECTIONS, with CUSTOM_AFTER naming
-where the editable block sits. It exists ONLY so the editor can draw the form;
-nothing renders a report from it and nothing stores it.
+  pages/operations/project-management/srat.js
+  pages/operations/srats.js
+  pages/forms/cm/srats.js
 
-Worth knowing it is therefore a SECOND description of the report's structure -
-the first being the form itself. If a built-in section is ever added, renamed
-or moved, this list needs the same change or the editor will show a form that
-no longer exists. There is a comment saying so at the top of it.
+Their archived copies are in the /archive folder in this zip. Put that folder
+at the repo root. Next.js only routes files under /pages, so nothing in
+/archive is reachable and nothing there is built.
 
-I considered deriving the list from the form instead, which would remove the
-duplication. It is not worth it: the form is JSX with conditional blocks and
-inline labels, and parsing it would be far more fragile than keeping twelve
-lines in step.
+IF YOU DO NOT DELETE THEM the old pages stay live and reachable by URL, even
+though both navs have stopped linking to them.
+
+pages/api/srats.js IS KEPT ON PURPOSE. Every SRAT ever written is still in
+ops:srats and still readable through that route. Deleting it would have made
+the stored data unreachable, which is not what archiving means. Bringing SRATs
+back is three file moves and two nav entries - the README in /archive says how.
 
 
-EVERYTHING ELSE IS AS 1017
+WHAT CHANGED IN THE PORTAL
 ================================================================================
-- "Edit template" next to "+ Add new"
-- Free text / List / Photos section types, with an optional Required flag
-- A report keeps the template it was written with, so editing this does not
-  alter any report already issued
-- Manual photos stored separately from the auto-collected set, so changing
-  the project does not wipe them
-- One drawPhoto() in the PDF, used by the Photos block and every custom photo
-  section
-- Reading the template: anyone who writes reports. Changing it: management
-  and admin.
+The SRAT tab is gone from Project Management. That section's own href pointed
+at the SRAT page, so it now opens on Report - the next tab along.
+
+
+THE SITE APP
+================================================================================
+The SRATs tile is replaced by Project Reports, and the new screen works
+exactly as the SRAT one did:
+
+  select a project  ->  + New project report  ->  the list for that project
+
+Reports are editable, deletable and submittable. Everything written there is
+the SAME RECORD the portal shows, in the same store, so a report started on
+site can be finished at a desk and the other way round. A draft stays a draft
+until Submit, and the card carries a Draft or Submitted pill.
+
+One deliberate difference from the SRAT page: it does NOT cut the list off at
+four weeks. A project report is a monthly document and last month's is the one
+you most want to look at before writing this month's.
+
+
+ONE AUTOFILL, NOT TWO
+================================================================================
+Pulling the variations, open issues and photos is fiddly - an open issue
+reappears on every report until it closes and then shows once more; photos
+come from submissions since the last report; an issue photo only counts if the
+issue went to the customer.
+
+That was 73 lines inside the portal page. It is now lib/projectReportAutofill.js
+and both screens call it. Two copies of rules like those would have diverged
+inside a month, and the divergence would have shown up as a report that
+disagrees with itself depending on which device wrote it.
+
+It also resolves the CUSTOMER and ADDRESS, because the portal's project list
+and the Site App's name those fields differently (customer/address against
+customer/location). Resolving it in one place means neither screen has to
+know. The portal only takes them when the pull actually found them, so a
+project the dashboard has no row for keeps what the list already supplied.
+
+
+ALSO IN HERE - 1017 AND 1018
+================================================================================
+Editable report template: "Edit template" beside "+ Add new", showing the
+WHOLE form with built-in rows greyed and your own sections in a gold-edged
+block under Works completed. Free text / List / Photos, optional Required.
+
+Manual photos alongside the auto-collected set, on both screens, stored in a
+separate field so changing the project does not wipe them.
+
+A report keeps the template it was written with, so editing the template never
+alters a report already issued.
+
+
+MIDDLEWARE
+================================================================================
+/api/project-reports and /api/project-report-template added to the SITE APP
+passthrough. Without them the fetch is rewritten to the /forms page and the
+screen gets HTML back where it expected JSON - the same fault the manifest hit
+in pkg981. Everything else the new screen needs - dashboard, issues,
+submissions, upload-photo - was already allowed.
 
 
 SMOKE TEST
 ================================================================================
-1. Report tab, Edit template: the full form is listed, built-in rows greyed,
-   with a gold-edged block under Works completed.
-2. Add a free-text section and a photos section. They appear inside that
-   block, in order, and nowhere else.
-3. The arrows move your sections within the block only; the first cannot move
-   up and the last cannot move down.
-4. Save, then create a report: the sections appear under Works completed, in
-   the same order the editor showed.
-5. Download the PDF - same order, list sections as bullets, custom photos
-   under their own heading.
-6. Rename a section, reopen a report saved earlier: it must still show the
-   OLD heading.
+1. Portal: Project Management opens on Report, no SRAT tab.
+2. Type /operations/project-management/srat directly - 404. If it loads, the
+   file was not deleted.
+3. Site App home: Project Reports where SRATs was.
+4. Site App: pick a project, + New project report. It should pull photos and
+   issues, then let you write it.
+5. Save as draft. It appears in the list with a Draft pill, AND in the portal
+   report list.
+6. Edit it from the portal, submit it there, then look at the Site App list -
+   same record, now Submitted.
+7. Delete one from the Site App; confirm it is gone from the portal too.
+8. Add a template section, then write a report on the Site App - the section
+   appears there as well.
+9. ROCK: an existing report opens and prints exactly as before.

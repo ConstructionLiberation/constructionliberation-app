@@ -18,9 +18,10 @@ export const navFor = (term) => {
   { key: 'projects', label: 'Projects', href: '/operations/projects' },
   { key: 'process', label: 'Project Process', href: '/operations/project-process' },
   {
-    key: 'pm', label: 'Project Management', href: '/operations/project-management/srat',
+    key: 'pm', label: 'Project Management', href: '/operations/project-management/report',
     children: [
-      { key: 'pm:srat', label: 'SRAT', href: '/operations/project-management/srat' },
+      // SRAT archived - see /archive. The section now opens on Report, which
+      // was the next tab along. The API and the stored SRATs are untouched.
       { key: 'pm:report', label: 'Project Report', href: '/operations/project-management/report' },
       { key: 'pm:planning', label: 'Planning', href: '/operations/project-management/planning' },
       { key: 'pm:tasks', label: 'Live Tasks', href: '/operations/project-management/tasks' },

@@ -329,7 +329,7 @@ function FormsHomeMenu({ user }) {
               ['✅', 'Forms Completed', 'Submitted forms by project', '/forms/cm/forms-completed', 0, null],
               ['📋', 'Missing Forms', 'Outstanding forms on your projects', '/forms/cm/missing-forms', 0, null],
               ['⚠️', 'Issues Log', 'Assess & action site issues', '/forms/issues-log', issueActionCount, '#f59e0b'],
-              ['📝', 'SRATs', 'View & create SRATs', '/forms/cm/srats', 0, null],
+              ['📝', 'Project Reports', 'View & create project reports', '/forms/cm/reports', 0, null],
               ['🗂️', 'Live Tasks', 'Manage project tasks', '/forms/cm/tasks', overdueTaskCount, '#dc2626'],
               ['💷', 'Variations', 'View project variations', '/forms/cm/variations', 0, null],
               ['📈', 'Project Finance', 'Margin, labour & materials budgets', '/forms/cm/project-finance', 0, null],

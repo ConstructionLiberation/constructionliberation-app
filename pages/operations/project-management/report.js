@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, th, td, Loading, EmptyCard, primaryBtn, ghostBtn, linkBtn } from '../../../components/opsUI'
 import { sectionsFor, newSectionKey, SECTION_TYPES, BUILT_IN_SECTIONS, CUSTOM_AFTER } from '../../../lib/projectReportTemplate'
+import { autofillReport } from '../../../lib/projectReportAutofill'
 
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const parseLocal = (d) => { if (!d) return null; const [y, m, day] = String(d).split('-').map(Number); return new Date(y, (m || 1) - 1, day || 1) }
 const fmtDMY = (d) => { const dt = parseLocal(d); return dt ? dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' }
 const money = (n) => { const v = parseFloat(n); return isNaN(v) ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(v) }
-const fmtN = (n) => n == null || n === '' ? 0 : parseFloat(n) || 0
 const PAGE_SIZE = 50
 
 export default function ReportPage() {
@@ -200,77 +200,34 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
   useEffect(() => { if (!id && meName && !f.completedBy) set({ completedBy: meName }) }, [meName])
 
   // When a project is chosen, auto-fill customer/address and pull variations, open issues & photos
+  // When a project is chosen, fill in the customer and address and pull the
+  // variations, issues and photos. The pulling itself lives in
+  // lib/projectReportAutofill.js - the Site App does exactly the same thing,
+  // and two copies of those rules would diverge.
   async function pickProject(no) {
     const p = projects.find(x => x.no === no)
     set({ projectNo: no, projectName: p?.name || '', customerName: p?.customer || '', projectAddress: p?.address || '' })
     if (!no) return
     setAutoLoading(true)
     try {
-      // last report date for this project (for photo window)
-      const prior = (allReports || []).filter(r => r.projectNo === no && r.id !== id && r.date).sort((a, b) => (parseLocal(b.date) - parseLocal(a.date)))[0]
-      const lastReportDate = prior?.date || ''
-
-      const [dashR, issR, subR] = await Promise.all([
-        fetch('/api/dashboard').then(r => r.json()).catch(() => ({})),
-        fetch('/api/issues').then(r => r.json()).catch(() => ({})),
-        fetch('/api/submissions').then(r => r.json()).catch(() => ({})),
-      ])
-
-      // All variations for this project (instructed and not)
-      const proj = (dashR.projects || []).find(x => x.jobNo === no || x.projectNo === no || (p?.name && (x.name === p.name || x.projectName === p.name)))
-      const vars = (proj?.settings?.variations || proj?.variations || [])
-        .map(v => ({ varNumber: v.varNumber || '—', description: v.description || '', instructed: (v.instructed === 'yes' || v.instructed === true), total: fmtN(v.materials) + fmtN(v.labour) + fmtN(v.profit) }))
-
-      // ── Issues ────────────────────────────────────────────────────────────
-      // Show issues for THIS project that have been sent to the customer.
-      // Rule: an OPEN issue keeps appearing on every report until it closes.
-      // When it CLOSES it appears once more (this report), then never again.
-      // So: exclude any issue that has ALREADY appeared on a prior report while
-      // it was in CLOSED status.
-      const sentToCustomer = (i) => i.sendToCustomer !== 'nosend' && (i.sentToCustomer === true || i.sentManually === true)
-      // ids of issues that previously appeared on a report WHILE CLOSED (for this project)
-      const closedInPriorReport = new Set()
-      for (const rep of (allReports || [])) {
-        if (rep.projectNo !== no || rep.id === id) continue
-        for (const s of (rep.issueHistory || [])) {
-          if (s.id && (s.status === 'Closed')) closedInPriorReport.add(s.id)
-        }
-      }
-      const eligibleIssues = (issR.issues || []).filter(i =>
-        i.projectNo === no &&
-        sentToCustomer(i) &&
-        !closedInPriorReport.has(i.id)
-      )
-      const openIssues = eligibleIssues.map(i => ({
-        id: i.id,
-        dateCreated: i.createdAt ? new Date(i.createdAt).toISOString().slice(0, 10) : '',
-        issueName: i.issueName,
-        issueTypes: [...(i.issueTypes || []), ...(i.issueOther ? ['Other'] : [])],
-        requiredDate: i.requiredDate || '',
-        status: i.resolvedDate ? 'Closed' : 'Open',
-      }))
-
-      // ── Photos ────────────────────────────────────────────────────────────
-      // From all project submissions since the last report. For ISSUE photos
-      // (companion submissions tagged isIssue), only include if the linked issue
-      // was sent to the customer. Non-issue form photos are always included.
-      // Build a set of submissionIds belonging to sent issues, and of not-sent issues.
-      const sentIssueSubIds = new Set((issR.issues || []).filter(i => i.projectNo === no && sentToCustomer(i)).map(i => i.submissionId).filter(Boolean))
-      const subsIndex = (subR.submissions || []).filter(s => (s.projectId === no || s.projectName === p?.name))
-      const cutoff = lastReportDate ? parseLocal(lastReportDate).getTime() : 0
-      const inWindow = subsIndex.filter(s => (s.submittedAt || 0) >= cutoff)
-      const fulls = await Promise.all(inWindow.map(s => fetch(`/api/submissions?id=${s.id}`).then(r => r.json()).then(d => d.submission).catch(() => null)))
-      const photos = []
-      for (const sub of fulls.filter(Boolean)) {
-        // Skip issue-photo submissions unless the linked issue was sent to the customer.
-        if (sub.isIssue && !sentIssueSubIds.has(sub.id)) continue
-        for (const v of Object.values(sub.answers || {})) {
-          if (Array.isArray(v)) for (const u of v) if (typeof u === 'string' && /^https?:|^data:/.test(u)) photos.push(u)
-        }
-      }
-      // `photos` only. manualPhotos and extra are untouched on purpose - this
-      // runs again every time the project changes.
-      set({ variationsSnapshot: vars, issuesSnapshot: openIssues, photos, lastReportDate })
+      const pulled = await autofillReport({
+        projectNo: no, projectName: p?.name || '', allReports, excludeId: id,
+      })
+      // manualPhotos and extra are untouched on purpose - this runs again
+      // every time the project changes.
+      //
+      // customerName and projectAddress are only taken from the pull when it
+      // actually found them. The line above already set them from the project
+      // list, and a project the dashboard has no row for would otherwise have
+      // them blanked by an empty answer.
+      set({
+        variationsSnapshot: pulled.variationsSnapshot,
+        issuesSnapshot: pulled.issuesSnapshot,
+        photos: pulled.photos,
+        lastReportDate: pulled.lastReportDate,
+        ...(pulled.customerName ? { customerName: pulled.customerName } : {}),
+        ...(pulled.projectAddress ? { projectAddress: pulled.projectAddress } : {}),
+      })
     } catch (e) { console.error(e) }
     setAutoLoading(false)
   }

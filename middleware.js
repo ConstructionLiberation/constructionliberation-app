@@ -101,6 +101,10 @@ export async function middleware(req) {
       pathname.startsWith('/api/operatives') ||
       pathname.startsWith('/api/planning') ||
       pathname.startsWith('/api/srats') ||
+      // Project Reports moved to the Site App. Without these the fetch is
+      // rewritten to the /forms PAGE and the screen gets HTML back.
+      pathname.startsWith('/api/project-reports') ||
+      pathname.startsWith('/api/project-report-template') ||
       pathname.startsWith('/api/tasks') ||
       pathname.startsWith('/api/forms-missing') ||
       pathname.startsWith('/api/variations') ||
