@@ -237,6 +237,7 @@ function ReportView({ report, onClose, onEdit }) {
       {allPhotos.length > 0 && <><Lbl>Photos ({allPhotos.length})</Lbl><Thumbs urls={allPhotos} /></>}
 
       <Field label="Approved by" value={r.approvalName} />
+      <Field label="Approval date" value={r.approvalDate ? fmtDate(new Date(r.approvalDate).getTime()) : ''} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
         <button onClick={onEdit} style={bigBtn(false)}>Edit this report</button>
@@ -389,8 +390,32 @@ function ReportForm({ project, report, template, allReports, meName, onCancel, o
       </div>
       <PhotoAdder photos={f.manualPhotos || []} onChange={list => set({ manualPhotos: list })} />
 
-      <Lbl>Your name</Lbl>
-      <input value={f.approvalName || ''} onChange={e => set({ approvalName: e.target.value })} style={inp} />
+      {/* THE SAME APPROVAL BLOCK AS THE PORTAL, wording included.
+          It is a declaration, so it has to read identically wherever the
+          report is written - the person signing it is signing the same words.
+          The DATE is editable for the same reason it is in the portal: a
+          Friday walk round typed up on Monday was dated Monday, and the
+          Commercial Scorecard counts reports by this date, so it landed in
+          the wrong week. */}
+      <div style={{ marginTop: 22, padding: '14px 16px', background: '#faf9f7', borderRadius: 12, border: '1px solid #e3e0d9' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND, letterSpacing: 0.3, marginBottom: 8 }}>APPROVAL</div>
+        <div style={{ fontSize: 13, color: '#555', marginBottom: 14, lineHeight: 1.45 }}>
+          I can confirm that the information I have provided is true and that I
+          have completed all sections accurately and diligently.
+        </div>
+
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, marginBottom: 5 }}>Name *</div>
+        <input value={f.approvalName || ''} onChange={e => set({ approvalName: e.target.value })} style={inp} />
+
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, margin: '14px 0 5px' }}>Date</div>
+        <input type="date" value={f.approvalDate || todayISO()}
+          onChange={e => set({ approvalDate: e.target.value })} style={inp} />
+        <div style={{ fontSize: 11.5, color: '#999', marginTop: 6, lineHeight: 1.45 }}>
+          Defaults to today. Change it if the report is being written up for an
+          earlier visit &mdash; this is the date it counts against on the
+          Commercial Scorecard.
+        </div>
+      </div>
 
       {err && <div style={{ fontSize: 13, color: '#b91c1c', margin: '10px 0' }}>{err}</div>}
 

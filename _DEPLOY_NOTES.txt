@@ -1,78 +1,59 @@
-PACKAGE 1020 - the three Site App report faults
+PACKAGE 1021 - the approval block on the Site App report
 ================================================================================
 
-Two files. Complete replacements. Both supersede their copies in 1019.
-No re-seed, no file deletions.
+One file. Complete replacement. Supersedes its copy in 1019 and 1020.
+No re-seed.
 
-  pages/api/project-report-template.js
   pages/forms/cm/reports.js
 
 
-1. TEMPLATE SECTIONS MISSING ON A NEW SITE APP REPORT
+WHAT WAS MISSING
 ================================================================================
-The template route required a portal role:
+The Site App form had a bare "Your name" box. The portal has a proper
+approval block: the heading, the declaration, the name and the date.
 
-    const READ = ['pre-contract','post-contract','accounts','management','admin']
+It now has the same one, WORD FOR WORD:
 
-A Site App operative has no portal session, so requireRole answered 401 - and
-the page did:
+    APPROVAL
+    I can confirm that the information I have provided is true and that I
+    have completed all sections accurately and diligently.
 
-    .catch(() => {})
+    Name *   [                    ]
+    Date     [ 2026-10-06         ]
+    Defaults to today. Change it if the report is being written up for an
+    earlier visit - this is the date it counts against on the Commercial
+    Scorecard.
 
-so the sections simply never appeared. A report written on a phone was
-missing every box the customer had added, and nothing anywhere said why.
-
-That is my own swallowed response, in a file whose comments make a point
-about checking them. Twice over: the guard was wrong AND the failure was
-hidden.
-
-Reading the template now needs no session at all - the same as /api/srats,
-and for the same reason. What it returns is a list of HEADINGS: no project
-data, no figures, nothing about a customer. Writing it still needs management
-or admin.
-
-The page now checks the response and says so if it ever fails again.
+The wording is identical on purpose. It is a declaration: the person signing
+it on a phone is signing the same words as the person signing it at a desk,
+and two versions of that sentence drifting apart is not a cosmetic problem.
 
 
-2. EDITING A COMPLETED PORTAL REPORT OPENED BLANK
+THE DATE IS THE PART THAT MATTERS
 ================================================================================
-GET /api/project-reports without an id returns a LIGHT INDEX - id, reportId,
-project, status, date - deliberately dropping worksCompleted, siteComms, the
-extra sections, the snapshots and the photos. The comment in that route says
-"drop heavy fields".
+It was not on the Site App form at all, so every report written on site was
+stamped with the day it was typed.
 
-1019 handed a row of that index straight to the form. Every field the index
-drops was therefore empty, which looks exactly like a blank report.
+The portal's comment explains why that is wrong, and it applies more on a
+phone than anywhere: a Friday walk round written up on Monday was dated
+Monday, and the Commercial Scorecard counts reports by this date - so it
+landed in the wrong week.
 
-The portal has always fetched the full record by id before opening it. The
-Site App now does the same, and reports a failure instead of opening an empty
-form.
+Behaviour checked: a date typed in is kept; left empty it defaults to today.
+Same rule as the portal, which also only defaults when the field is genuinely
+blank.
 
-Worth noting what would have happened next: saving that blank form would have
-written the empty fields back over a completed report. The fault was one tap
-away from destroying a submitted document.
-
-
-3. COMPLETED REPORTS CAN NOW BE VIEWED
-================================================================================
-Each card has View, Edit and Delete. View is read-only and shows the whole
-thing - site communications, works completed, the customer's own sections,
-variations, issues, every photo and who approved it - with Edit one tap away.
-
-Reading the last report before writing the next is the common thing to want
-on site, and it should not require opening an editor over a document somebody
-has already signed off.
+The read-only view now shows the approval date as well, since it is now
+something somebody chose rather than a timestamp.
 
 
 SMOKE TEST
 ================================================================================
-1. Add a section to the template in the portal.
-2. Site App, new project report: the section appears. It did not before.
-3. Site App: View a report completed in the portal - everything shows,
-   including its own sections and photos.
-4. Site App: Edit that same report - the fields are POPULATED, not blank.
-5. Change one word, submit, and check the portal shows the change and has not
-   lost anything else.
-6. Turn the template route off at the server for a moment if you like - the
-   page should say it could not load the template rather than quietly drop
-   the sections.
+1. Site App, new report: the approval block appears at the bottom with the
+   declaration, name and date.
+2. The date shows today by default.
+3. Change it to last Friday and submit. Open the report in the PORTAL - the
+   approval date is last Friday, not today.
+4. View it in the Site App - the approval date shows.
+5. Commercial Scorecard: the report counts against the week of the date you
+   set, not the week you typed it.
