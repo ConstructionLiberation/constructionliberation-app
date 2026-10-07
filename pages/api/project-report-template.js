@@ -8,12 +8,20 @@ const KEY = 'ops:project-report-template'
 async function handler(req, res) {
   // READING AND WRITING ARE DIFFERENT PERMISSIONS.
   //
-  // Anyone who can write a report needs to READ the template - it defines the
-  // boxes they fill in. Changing it alters every report written from here on,
-  // so that stays with management.
-  const READ = ['pre-contract', 'post-contract', 'accounts', 'management', 'admin']
-  const WRITE = ['management', 'admin']
-  if (!requireRole(req, res, req.method === 'GET' ? READ : WRITE)) return
+  // READING NEEDS NO PORTAL SESSION AT ALL. A Site App operative writes
+  // project reports and has no portal login - requireRole answered 401, the
+  // page got no sections, and a report written on a phone silently lacked
+  // every box the customer had added. The same shape as /api/srats, which is
+  // ungated for exactly this reason.
+  //
+  // What is returned is a list of HEADINGS. It carries no project data, no
+  // figures and nothing about a customer - there is nothing here to protect.
+  //
+  // Changing the template alters every report written from here on, so that
+  // stays with management.
+  if (req.method !== 'GET') {
+    if (!requireRole(req, res, ['management', 'admin'])) return
+  }
 
   if (req.method === 'GET') {
     const stored = await get(KEY)

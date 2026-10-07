@@ -1,121 +1,78 @@
-PACKAGE 1019 - SRAT archived, Project Reports added to the Site App
+PACKAGE 1020 - the three Site App report faults
 ================================================================================
 
-*** SUPERSEDES 1017 AND 1018 ENTIRELY. Deploy this instead of either. ***
+Two files. Complete replacements. Both supersede their copies in 1019.
+No re-seed, no file deletions.
 
-12 files. THREE ARE NEW, THREE ARE MOVES, THREE ARE DELETIONS.
-No re-seed.
+  pages/api/project-report-template.js
+  pages/forms/cm/reports.js
 
 
-FILES TO ADD OR REPLACE
+1. TEMPLATE SECTIONS MISSING ON A NEW SITE APP REPORT
 ================================================================================
-  lib/projectReportTemplate.js          NEW
-  lib/projectReportAutofill.js          NEW
-  pages/api/project-report-template.js  NEW
-  pages/forms/cm/reports.js             NEW  (the Site App screen)
+The template route required a portal role:
 
-  lib/projectReportPdf.js               replace
-  pages/operations/project-management/report.js   replace
-  pages/forms/index.js                  replace
-  components/OperationsNav.js           replace
-  middleware.js                         replace  (repo root)
+    const READ = ['pre-contract','post-contract','accounts','management','admin']
 
-FILES TO DELETE FROM pages/ - this is the part a paste cannot do for you
+A Site App operative has no portal session, so requireRole answered 401 - and
+the page did:
+
+    .catch(() => {})
+
+so the sections simply never appeared. A report written on a phone was
+missing every box the customer had added, and nothing anywhere said why.
+
+That is my own swallowed response, in a file whose comments make a point
+about checking them. Twice over: the guard was wrong AND the failure was
+hidden.
+
+Reading the template now needs no session at all - the same as /api/srats,
+and for the same reason. What it returns is a list of HEADINGS: no project
+data, no figures, nothing about a customer. Writing it still needs management
+or admin.
+
+The page now checks the response and says so if it ever fails again.
+
+
+2. EDITING A COMPLETED PORTAL REPORT OPENED BLANK
 ================================================================================
-  pages/operations/project-management/srat.js
-  pages/operations/srats.js
-  pages/forms/cm/srats.js
+GET /api/project-reports without an id returns a LIGHT INDEX - id, reportId,
+project, status, date - deliberately dropping worksCompleted, siteComms, the
+extra sections, the snapshots and the photos. The comment in that route says
+"drop heavy fields".
 
-Their archived copies are in the /archive folder in this zip. Put that folder
-at the repo root. Next.js only routes files under /pages, so nothing in
-/archive is reachable and nothing there is built.
+1019 handed a row of that index straight to the form. Every field the index
+drops was therefore empty, which looks exactly like a blank report.
 
-IF YOU DO NOT DELETE THEM the old pages stay live and reachable by URL, even
-though both navs have stopped linking to them.
+The portal has always fetched the full record by id before opening it. The
+Site App now does the same, and reports a failure instead of opening an empty
+form.
 
-pages/api/srats.js IS KEPT ON PURPOSE. Every SRAT ever written is still in
-ops:srats and still readable through that route. Deleting it would have made
-the stored data unreachable, which is not what archiving means. Bringing SRATs
-back is three file moves and two nav entries - the README in /archive says how.
+Worth noting what would have happened next: saving that blank form would have
+written the empty fields back over a completed report. The fault was one tap
+away from destroying a submitted document.
 
 
-WHAT CHANGED IN THE PORTAL
+3. COMPLETED REPORTS CAN NOW BE VIEWED
 ================================================================================
-The SRAT tab is gone from Project Management. That section's own href pointed
-at the SRAT page, so it now opens on Report - the next tab along.
+Each card has View, Edit and Delete. View is read-only and shows the whole
+thing - site communications, works completed, the customer's own sections,
+variations, issues, every photo and who approved it - with Edit one tap away.
 
-
-THE SITE APP
-================================================================================
-The SRATs tile is replaced by Project Reports, and the new screen works
-exactly as the SRAT one did:
-
-  select a project  ->  + New project report  ->  the list for that project
-
-Reports are editable, deletable and submittable. Everything written there is
-the SAME RECORD the portal shows, in the same store, so a report started on
-site can be finished at a desk and the other way round. A draft stays a draft
-until Submit, and the card carries a Draft or Submitted pill.
-
-One deliberate difference from the SRAT page: it does NOT cut the list off at
-four weeks. A project report is a monthly document and last month's is the one
-you most want to look at before writing this month's.
-
-
-ONE AUTOFILL, NOT TWO
-================================================================================
-Pulling the variations, open issues and photos is fiddly - an open issue
-reappears on every report until it closes and then shows once more; photos
-come from submissions since the last report; an issue photo only counts if the
-issue went to the customer.
-
-That was 73 lines inside the portal page. It is now lib/projectReportAutofill.js
-and both screens call it. Two copies of rules like those would have diverged
-inside a month, and the divergence would have shown up as a report that
-disagrees with itself depending on which device wrote it.
-
-It also resolves the CUSTOMER and ADDRESS, because the portal's project list
-and the Site App's name those fields differently (customer/address against
-customer/location). Resolving it in one place means neither screen has to
-know. The portal only takes them when the pull actually found them, so a
-project the dashboard has no row for keeps what the list already supplied.
-
-
-ALSO IN HERE - 1017 AND 1018
-================================================================================
-Editable report template: "Edit template" beside "+ Add new", showing the
-WHOLE form with built-in rows greyed and your own sections in a gold-edged
-block under Works completed. Free text / List / Photos, optional Required.
-
-Manual photos alongside the auto-collected set, on both screens, stored in a
-separate field so changing the project does not wipe them.
-
-A report keeps the template it was written with, so editing the template never
-alters a report already issued.
-
-
-MIDDLEWARE
-================================================================================
-/api/project-reports and /api/project-report-template added to the SITE APP
-passthrough. Without them the fetch is rewritten to the /forms page and the
-screen gets HTML back where it expected JSON - the same fault the manifest hit
-in pkg981. Everything else the new screen needs - dashboard, issues,
-submissions, upload-photo - was already allowed.
+Reading the last report before writing the next is the common thing to want
+on site, and it should not require opening an editor over a document somebody
+has already signed off.
 
 
 SMOKE TEST
 ================================================================================
-1. Portal: Project Management opens on Report, no SRAT tab.
-2. Type /operations/project-management/srat directly - 404. If it loads, the
-   file was not deleted.
-3. Site App home: Project Reports where SRATs was.
-4. Site App: pick a project, + New project report. It should pull photos and
-   issues, then let you write it.
-5. Save as draft. It appears in the list with a Draft pill, AND in the portal
-   report list.
-6. Edit it from the portal, submit it there, then look at the Site App list -
-   same record, now Submitted.
-7. Delete one from the Site App; confirm it is gone from the portal too.
-8. Add a template section, then write a report on the Site App - the section
-   appears there as well.
-9. ROCK: an existing report opens and prints exactly as before.
+1. Add a section to the template in the portal.
+2. Site App, new project report: the section appears. It did not before.
+3. Site App: View a report completed in the portal - everything shows,
+   including its own sections and photos.
+4. Site App: Edit that same report - the fields are POPULATED, not blank.
+5. Change one word, submit, and check the portal shows the change and has not
+   lost anything else.
+6. Turn the template route off at the server for a moment if you like - the
+   page should say it could not load the template rather than quietly drop
+   the sections.

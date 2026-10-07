@@ -29,6 +29,9 @@ export default function CmReports() {
   const [template, setTemplate] = useState({ sections: [] })
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [viewing, setViewing] = useState(null)
+  const [tplErr, setTplErr] = useState('')
+  const [opening, setOpening] = useState('')
 
   useEffect(() => {
     const s = sessionStorage.getItem('ops_operative')
@@ -37,9 +40,18 @@ export default function CmReports() {
     setReady(true)
   }, [])
 
+  // CHECKED. This used .catch(() => {}) and the route used to answer 401 to a
+  // Site App operative, so the extra sections silently never appeared and a
+  // report written on a phone was missing boxes the customer had added.
   useEffect(() => {
-    fetch('/api/project-report-template').then(r => r.json())
-      .then(d => setTemplate(d.template || { sections: [] })).catch(() => {})
+    (async () => {
+      try {
+        const r = await fetch('/api/project-report-template')
+        if (!r.ok) { setTplErr(`Could not load the report template (${r.status}). Extra sections will be missing.`); return }
+        const d = await r.json()
+        setTemplate(d.template || { sections: [] })
+      } catch (e) { setTplErr('Could not load the report template. Extra sections will be missing.') }
+    })()
   }, [])
 
   const { myProjects, loading: projLoading } = useMyProjects(user)
@@ -62,6 +74,28 @@ export default function CmReports() {
         .filter(r => r.projectNo === p.projectNo)
         .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)))
     } catch {}
+  }
+
+  // THE LIST IS A LIGHT INDEX, not the reports themselves - it carries no
+  // worksCompleted, no siteComms, no extra sections and no photos. Handing a
+  // row of it straight to the form is why an existing report opened blank.
+  // The portal has always fetched the full record by id; this now does too.
+  async function open(r, mode) {
+    setOpening(r.id)
+    try {
+      const res = await fetch(`/api/project-reports?id=${encodeURIComponent(r.id)}`)
+      if (!res.ok) {
+        let msg = ''
+        try { msg = (await res.json()).error || '' } catch {}
+        alert(msg || `Could not open that report (${res.status}).`)
+        setOpening(''); return
+      }
+      const d = await res.json()
+      if (!d.report) { alert('That report could not be found.'); setOpening(''); return }
+      if (mode === 'view') setViewing(d.report)
+      else setEditing(d.report)
+    } catch (e) { alert(e.message || 'Could not open that report.') }
+    setOpening('')
   }
 
   async function del(r) {
@@ -91,6 +125,9 @@ export default function CmReports() {
 
         {!proj ? (
           projLoading ? <Loading /> : <ProjectPicker projects={myProjects} onPick={pick} subtitle="Select one of your projects." />
+        ) : viewing ? (
+          <ReportView report={viewing} onClose={() => setViewing(null)}
+            onEdit={() => { setEditing(viewing); setViewing(null) }} />
         ) : editing ? (
           <ReportForm
             project={proj}
@@ -104,6 +141,7 @@ export default function CmReports() {
         ) : (
           <>
             <ProjectHeader project={proj} onBack={() => setProj(null)} />
+            {tplErr && <div style={{ fontSize: 12.5, color: '#b91c1c', marginBottom: 10 }}>{tplErr}</div>}
             <button onClick={() => setEditing({})} style={{ ...bigBtn(false), marginBottom: 16 }}>+ New project report</button>
             {loading ? <Loading /> : !reports.length ? <Empty>No project reports for this project yet.</Empty> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -121,8 +159,11 @@ export default function CmReports() {
                         {(r.photos || []).length + (r.manualPhotos || []).length} photo(s)
                       </div>
                     )}
-                    <div style={{ display: 'flex', gap: 10, marginTop: 10, borderTop: '1px solid #f2f2f2', paddingTop: 10 }}>
-                      <button onClick={() => setEditing(r)} style={linkish}>Edit</button>
+                    <div style={{ display: 'flex', gap: 14, marginTop: 10, borderTop: '1px solid #f2f2f2', paddingTop: 10 }}>
+                      <button onClick={() => open(r, 'view')} disabled={opening === r.id} style={linkish}>
+                        {opening === r.id ? 'Opening\u2026' : 'View'}
+                      </button>
+                      <button onClick={() => open(r, 'edit')} disabled={opening === r.id} style={linkish}>Edit</button>
                       <button onClick={() => del(r)} style={{ ...linkish, color: '#b91c1c' }}>Delete</button>
                     </div>
                   </div>
@@ -133,6 +174,87 @@ export default function CmReports() {
         )}
       </div>
     </Shell>
+  )
+}
+
+// Read-only. A submitted report is a document somebody has signed off, and
+// the common thing to want on site is to READ the last one before writing the
+// next. Edit is still there, one tap away, because the portal allows editing a
+// completed report and revisioning it.
+function ReportView({ report, onClose, onEdit }) {
+  const r = report
+  const secs = Array.isArray(r.sections) ? r.sections : []
+  const allPhotos = [...(r.photos || []), ...(r.manualPhotos || [])]
+  return (
+    <div>
+      <button onClick={onClose} style={backLink}>&lsaquo; Back</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 4px' }}>
+        <h3 style={{ fontSize: 16, color: INK, margin: 0 }}>{r.reportId || 'Project report'}</h3>
+        <StatusPill status={r.status} />
+      </div>
+      <div style={{ fontSize: 12.5, color: '#888', marginBottom: 14 }}>
+        {r.projectNo} &middot; {r.projectName}{r.date ? ` \u00b7 ${fmtDate(new Date(r.date).getTime())}` : ''}
+      </div>
+
+      <Field label="Completed by" value={r.completedBy} />
+      <Field label="Customer" value={r.customerName} />
+      <Field label="Site communications" value={r.siteComms} />
+      <Field label="Works completed" value={r.worksCompleted} />
+
+      {secs.map(sec => {
+        const v = (r.extra || {})[sec.key]
+        if (sec.type === 'photos') {
+          const urls = Array.isArray(v) ? v : []
+          if (!urls.length) return null
+          return <div key={sec.key}><Lbl>{sec.label}</Lbl><Thumbs urls={urls} /></div>
+        }
+        return <Field key={sec.key} label={sec.label} value={v} />
+      })}
+
+      {(r.variationsSnapshot || []).length > 0 && (
+        <>
+          <Lbl>Variations</Lbl>
+          {r.variationsSnapshot.map((v, i) => (
+            <div key={i} style={{ fontSize: 13.5, color: INK, padding: '3px 0' }}>
+              <strong>{v.varNumber}</strong> {v.description}
+              {!v.instructed && <span style={{ fontSize: 11.5, color: '#999' }}> (not instructed)</span>}
+            </div>
+          ))}
+        </>
+      )}
+
+      {(r.issuesSnapshot || []).length > 0 && (
+        <>
+          <Lbl>Issues</Lbl>
+          {r.issuesSnapshot.map((i, idx) => (
+            <div key={idx} style={{ fontSize: 13.5, color: INK, padding: '3px 0' }}>
+              {i.issueName} <span style={{ fontSize: 11.5, color: i.status === 'Closed' ? '#16a34a' : '#c2410c' }}>{i.status}</span>
+            </div>
+          ))}
+        </>
+      )}
+
+      {allPhotos.length > 0 && <><Lbl>Photos ({allPhotos.length})</Lbl><Thumbs urls={allPhotos} /></>}
+
+      <Field label="Approved by" value={r.approvalName} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
+        <button onClick={onEdit} style={bigBtn(false)}>Edit this report</button>
+        <button onClick={onClose} style={{ ...linkish, alignSelf: 'center', padding: 8 }}>Back to list</button>
+      </div>
+    </div>
+  )
+}
+
+function Thumbs({ urls }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+      {urls.map((p, i) => (
+        <a key={i} href={p} target="_blank" rel="noreferrer">
+          <img src={p} alt="" style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 10, border: '1px solid #e3e0d9' }} />
+        </a>
+      ))}
+    </div>
   )
 }
 
