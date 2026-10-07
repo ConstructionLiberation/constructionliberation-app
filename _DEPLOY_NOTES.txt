@@ -1,102 +1,92 @@
-PACKAGE 1017 - editable Project Report template, and manual photos
+PACKAGE 1018 - the template editor shows the whole report
 ================================================================================
 
-Four files. TWO ARE NEW. No re-seed.
+Four files. Complete replacements. SUPERSEDES 1017 ENTIRELY - if 1017 is not
+yet deployed, deploy this instead of it. Two files are NEW relative to the
+live app.
 
-  lib/projectReportTemplate.js        <- NEW
+  lib/projectReportTemplate.js         <- NEW
   pages/api/project-report-template.js <- NEW
   lib/projectReportPdf.js
   pages/operations/project-management/report.js
 
+No re-seed. Everything 1017 does is in here as well.
 
-WHAT IT DOES
+
+WHAT CHANGED FROM 1017
 ================================================================================
-"Edit template" sits next to "+ Add new" on the Report tab. It defines extra
-sections that appear on every report UNDERNEATH Works completed. Each has a
-heading, a type and an optional required flag:
+The editor listed only the sections you had added, which made it a list of
+boxes rather than a form. It now shows the WHOLE report in order:
 
-    Free text   a paragraph
-    List        one per line, rendered as bullets in the PDF
-    Photos      its own photo area with its own heading
+    Date                                   built in
+    Project                                built in
+    Customer company                       built in
+    Your name                              built in
+    Project address                        built in
+    Variations          (pulled)           built in
+    Issues              (pulled)           built in
+    Site communications                    built in
+    Works completed                        built in
+      |
+      +--  your sections, editable, in a gold-edged block
+      |
+    Photos              (auto-collected)   built in
+    Additional photos   (added manually)   built in
+    Approval                               built in
 
-Reorder and remove in the same dialog. Removing a section does not touch any
-report already written - see below.
+The built-in rows are greyed, marked "Built in", and show a note where the
+content comes from somewhere else - Variations and Issues are pulled from the
+project, Photos are auto-collected. They cannot be edited or moved: they are
+the report.
 
-Photos: the auto-collected set is unchanged and still pulls from submissions
-since the last report. There is now an "Additional photos" area for anything
-added by hand, uploaded through the same route the Site App uses, and the two
-run together under one Photos heading in the PDF because a customer does not
-care how a photo arrived.
+Your own sections sit in position under Works completed, inside an indented
+block, with add / reorder / remove acting only on them. Seeing them beneath
+"Works completed" rather than in isolation is the whole point - it is the
+difference between editing a form and editing a list.
 
 
-THE DECISION THAT SHAPES EVERYTHING ELSE
+WHERE THE FIXED LIST LIVES
 ================================================================================
-A REPORT KEEPS THE TEMPLATE IT WAS WRITTEN WITH.
+lib/projectReportTemplate.js, as BUILT_IN_SECTIONS, with CUSTOM_AFTER naming
+where the editable block sits. It exists ONLY so the editor can draw the form;
+nothing renders a report from it and nothing stores it.
 
-Saving a report stores `sections` on the report - a copy of the template at
-that moment - and the view and the PDF render from that copy, never from the
-live template.
+Worth knowing it is therefore a SECOND description of the report's structure -
+the first being the form itself. If a built-in section is ever added, renamed
+or moved, this list needs the same change or the editor will show a form that
+no longer exists. There is a comment saying so at the top of it.
 
-Without it, editing the template rewrites history. Rename a heading and last
-March's report, already issued to a customer and possibly argued over,
-silently says something different from the PDF they are holding. Same
-reasoning as an application freezing its variations when it is sent.
-
-The cost is that a renamed heading does not reach old reports. That is the
-right trade for a document that leaves the building.
-
-Checked:
-    existing report keeps its own:  "Delays (old wording)"
-    new report uses the template:   "Site photos", "Delays"
+I considered deriving the list from the form instead, which would remove the
+duplication. It is not worth it: the form is JSX with conditional blocks and
+inline labels, and parsing it would be far more fragile than keeping twelve
+lines in step.
 
 
-MANUAL PHOTOS ARE A SEPARATE FIELD
+EVERYTHING ELSE IS AS 1017
 ================================================================================
-`manualPhotos`, not appended to `photos`. Choosing a project re-pulls the
-auto-collected set from submissions, and anything a person added by hand has
-to survive that. One array would lose them on the next project change, which
-is the kind of fault that only shows up after somebody has done the work
-twice.
-
-
-DEFAULTS ARE EMPTY, ON PURPOSE
-================================================================================
-No sections out of the box. A customer who never opens the editor sees
-exactly the report they see today - no empty headings appearing on a document
-they already rely on.
-
-
-PERMISSIONS
-================================================================================
-Reading the template: anyone who can write a report, because it defines the
-boxes they fill in. Writing it: management and admin only - a change affects
-every report written from here on.
-
-
-TWO THINGS CAUGHT WHILE BUILDING
-================================================================================
-`input` was declared INSIDE ReportModal and the two new components needed it.
-That compiles and throws when the component renders - the same fault as four
-other packages this fortnight. Hoisted to module scope and the whole file
-re-scanned for others.
-
-The PDF had the photo-embedding code inline in one loop. Rather than copy it
-for the custom photo sections, it is now one `drawPhoto` function used by
-both. Two copies would have drifted the first time one learned a new format.
+- "Edit template" next to "+ Add new"
+- Free text / List / Photos section types, with an optional Required flag
+- A report keeps the template it was written with, so editing this does not
+  alter any report already issued
+- Manual photos stored separately from the auto-collected set, so changing
+  the project does not wipe them
+- One drawPhoto() in the PDF, used by the Photos block and every custom photo
+  section
+- Reading the template: anyone who writes reports. Changing it: management
+  and admin.
 
 
 SMOKE TEST
 ================================================================================
-1. Report tab: "Edit template" next to "+ Add new". Add a free-text section
-   and a photos section, save.
-2. New report: both appear under Works completed, in order.
-3. Fill them in, add a manual photo, save, reopen - everything still there.
-4. Download the PDF: custom sections under Works completed, the list one as
-   bullets, custom photos under their own heading, manual photos with the
-   auto ones.
-5. THE ONE THAT MATTERS: rename a section in the template, then reopen the
-   report you already saved. It must still show the OLD heading. A new report
-   shows the new one.
-6. Change the project on a draft after adding a manual photo - the photo
-   stays, the auto-collected set refreshes.
-7. A report written before this package: unchanged, no new headings.
+1. Report tab, Edit template: the full form is listed, built-in rows greyed,
+   with a gold-edged block under Works completed.
+2. Add a free-text section and a photos section. They appear inside that
+   block, in order, and nowhere else.
+3. The arrows move your sections within the block only; the first cannot move
+   up and the last cannot move down.
+4. Save, then create a report: the sections appear under Works completed, in
+   the same order the editor showed.
+5. Download the PDF - same order, list sections as bullets, custom photos
+   under their own heading.
+6. Rename a section, reopen a report saved earlier: it must still show the
+   OLD heading.

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, th, td, Loading, EmptyCard, primaryBtn, ghostBtn, linkBtn } from '../../../components/opsUI'
-import { sectionsFor, newSectionKey, SECTION_TYPES } from '../../../lib/projectReportTemplate'
+import { sectionsFor, newSectionKey, SECTION_TYPES, BUILT_IN_SECTIONS, CUSTOM_AFTER } from '../../../lib/projectReportTemplate'
 
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const parseLocal = (d) => { if (!d) return null; const [y, m, day] = String(d).split('-').map(Number); return new Date(y, (m || 1) - 1, day || 1) }
@@ -586,43 +586,67 @@ function TemplateModal({ template, onClose, onSaved }) {
 
   return (
     <Modal title="Edit report template" onClose={onClose} wide>
-      <div style={{ fontSize: 12.5, color: '#666', marginBottom: 14 }}>
-        These sections appear on every report underneath Works completed.
+      <div style={{ fontSize: 12.5, color: '#666', marginBottom: 16 }}>
+        The whole report, in order. The greyed rows are built in and cannot be
+        changed; your own sections sit under Works completed and are editable.
         Reports already written keep the sections they were written with, so
         changing this does not alter anything already issued.
       </div>
 
-      {rows.length === 0 && (
-        <div style={{ fontSize: 12.5, color: '#999', marginBottom: 12 }}>
-          No extra sections. The report is exactly as it is today.
-        </div>
-      )}
-
-      {rows.map((r, i) => (
-        <div key={r.key} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px auto', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-          <input value={r.label} onChange={e => patch(i, { label: e.target.value })}
-            placeholder="Heading" style={{ ...input, margin: 0 }} />
-          <select value={r.type} onChange={e => patch(i, { type: e.target.value })} style={{ ...input, margin: 0 }}>
-            <option value="text">Free text</option>
-            <option value="list">List</option>
-            <option value="photos">Photos</option>
-          </select>
-          <label style={{ fontSize: 12.5, color: '#555', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <input type="checkbox" checked={!!r.required} onChange={e => patch(i, { required: e.target.checked })} />
-            Required
-          </label>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => move(i, -1)} style={miniBtn} title="Move up">&uarr;</button>
-            <button onClick={() => move(i, 1)} style={miniBtn} title="Move down">&darr;</button>
-            <button onClick={() => setRows(rs => rs.filter((_, j) => j !== i))} style={miniBtn} title="Remove">&times;</button>
+      {BUILT_IN_SECTIONS.map(b => (
+        <div key={b.key}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr auto', gap: 10,
+            alignItems: 'center', padding: '9px 11px', marginBottom: 8,
+            background: '#f7f7f6', border: '1px solid #ededeb', borderRadius: 8,
+            color: '#8a8a85', fontSize: 13,
+          }}>
+            <div>
+              {b.label}
+              {b.required && <span style={{ color: '#c9a9a9', marginLeft: 4 }}>*</span>}
+              {b.note && <span style={{ fontSize: 11.5, marginLeft: 8, fontStyle: 'italic' }}>{b.note}</span>}
+            </div>
+            <div style={{ fontSize: 11, letterSpacing: 0.3, textTransform: 'uppercase' }}>Built in</div>
           </div>
+
+          {/* The customer's own sections, in position. */}
+          {b.key === CUSTOM_AFTER && (
+            <div style={{ borderLeft: `2px solid ${GOLD}`, paddingLeft: 12, marginLeft: 4, marginBottom: 8 }}>
+              {rows.length === 0 && (
+                <div style={{ fontSize: 12.5, color: '#999', padding: '4px 0 10px' }}>
+                  No sections of your own yet. The report is exactly as it is today.
+                </div>
+              )}
+
+              {rows.map((r, i) => (
+                <div key={r.key} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 100px auto', gap: 10, alignItems: 'center', marginBottom: 8 }}>
+                  <input value={r.label} onChange={e => patch(i, { label: e.target.value })}
+                    placeholder="Heading" style={{ ...input, margin: 0 }} />
+                  <select value={r.type} onChange={e => patch(i, { type: e.target.value })} style={{ ...input, margin: 0 }}>
+                    <option value="text">Free text</option>
+                    <option value="list">List</option>
+                    <option value="photos">Photos</option>
+                  </select>
+                  <label style={{ fontSize: 12.5, color: '#555', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="checkbox" checked={!!r.required} onChange={e => patch(i, { required: e.target.checked })} />
+                    Required
+                  </label>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={() => move(i, -1)} disabled={i === 0} style={miniBtn} title="Move up">&uarr;</button>
+                    <button onClick={() => move(i, 1)} disabled={i === rows.length - 1} style={miniBtn} title="Move down">&darr;</button>
+                    <button onClick={() => setRows(rs => rs.filter((_, j) => j !== i))} style={miniBtn} title="Remove">&times;</button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                onClick={() => setRows(rs => [...rs, { key: newSectionKey(), label: '', type: 'text', required: false, order: rs.length + 1 }])}
+                style={{ ...ghostBtn, marginTop: 2 }}
+              >+ Add section</button>
+            </div>
+          )}
         </div>
       ))}
-
-      <button
-        onClick={() => setRows(rs => [...rs, { key: newSectionKey(), label: '', type: 'text', required: false, order: rs.length + 1 }])}
-        style={{ ...ghostBtn, marginTop: 6 }}
-      >+ Add section</button>
 
       {err && <div style={{ fontSize: 12.5, color: '#b91c1c', marginTop: 10 }}>{err}</div>}
 
