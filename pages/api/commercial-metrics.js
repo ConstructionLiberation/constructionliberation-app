@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { getCachedProjects } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { computeProjectWip } from '../../lib/wipCalc'
@@ -26,7 +26,7 @@ function monthKey(date) {
 }
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract','management','admin'])) return;
+  if (!requireArea(req, res, 'commercial')) return;
   const redis = await getClient()
 
   // Save a manual per-month payless (credit-note) count adjustment.

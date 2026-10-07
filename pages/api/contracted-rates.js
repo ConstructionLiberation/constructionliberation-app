@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getProject, saveProject, getClient } from '../../lib/db'
 
@@ -56,7 +56,7 @@ export const config = { api: { bodyParser: { sizeLimit: '6mb' } } }
 // so they travel with the project and are available to the Application later.
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
 
   if (req.method === 'GET') {
     const { projectId } = req.query

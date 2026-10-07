@@ -1,5 +1,5 @@
 import { get, set } from '../../lib/db'
-import { requireRole } from '../../lib/portalAuth'
+import { requireRole, requireArea } from '../../lib/portalAuth'
 import withTenant from '../../lib/withTenant'
 import { COM_WEEKLY, COM_MONTHLY, BK_WEEKLY, BK_MONTHLY } from '../../lib/taskDefaults'
 
@@ -43,7 +43,12 @@ async function handler(req, res) {
   if (!DEFAULTS[scope]) return res.status(400).json({ error: "scope must be 'commercial' or 'bookkeeping'" })
 
   if (req.method === 'GET') {
-    if (!requireRole(req, res, ['commercial', 'bookkeeping', 'management', 'admin', 'post-contract'])) return
+    // By the AREA the checklist belongs to. This used to list 'commercial' and
+    // 'bookkeeping' as though they were roles. They are areas - no user has
+    // either as a role - so Accounts was refused its OWN Bookkeeping checklist
+    // and the page quietly fell back to the built-in default list instead of
+    // the customised one. Fixed in 1023 alongside the Commercial access.
+    if (!requireArea(req, res, scope)) return
     const stored = (await get(KEY(scope))) || null
     return res.json({
       weekly: clean(stored?.weekly) .length ? clean(stored.weekly)  : DEFAULTS[scope].weekly,

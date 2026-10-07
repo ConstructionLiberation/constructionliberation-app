@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getProject, saveProject, getClient } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
@@ -13,11 +13,13 @@ async function handler(req, res) {
   // Xero-derived rows alone, so their figures quietly disagreed with everyone
   // else's and nothing said why.
   //
-  // Accounts read. They do not write: the entries are the post-contract
-  // team's record, and the tab is view-only by design.
-  const READ_ROLES = ['post-contract', 'accounts', 'management', 'admin']
-  const WRITE_ROLES = ['post-contract', 'management', 'admin']
-  if (!requireRole(req, res, req.method === 'GET' ? READ_ROLES : WRITE_ROLES)) return;
+  // Read: anyone in Commercial or Bookkeeping. Write: anyone in Commercial.
+  //
+  // 1023: Accounts now has the Commercial portal in full, so it writes here
+  // too. Previously Accounts read only - the Bookkeeping tab is still
+  // view-only, but that is now a property of the tab, not of the person.
+  // Both checks come from AREA_ACCESS, so they follow it if it changes again.
+  if (!requireArea(req, res, req.method === 'GET' ? ['commercial', 'bookkeeping'] : 'commercial')) return;
   const redis = await getClient()
   const KEY = 'retention:entries'
 

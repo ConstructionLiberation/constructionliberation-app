@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { get, set } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
@@ -47,7 +47,10 @@ const DEFAULT_TARGETS = {
 }
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['pre-contract','post-contract','management','admin'])) return;
+  // Targets feed the pre-contract, commercial and operations scorecards, so
+  // anyone who can open one of those may read and set them. By area, so
+  // Accounts gets the Commercial Scorecard's targets with the portal (1023).
+  if (!requireArea(req, res, ['pre-contract', 'commercial', 'operations'])) return;
   if (req.method === 'GET') {
     // HIDDEN METRICS ride with the targets rather than getting their own
     // route: the scorecard already fetches this, it is the same kind of

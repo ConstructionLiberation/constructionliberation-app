@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { getProject } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { buildContractWorksFromRates, computeApplicationSummary, buildAppVariations, varKey } from '../../lib/applications'
@@ -176,7 +176,7 @@ function variationSeed(project) {
 }
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
   const redis = await getClient()
 
   if (req.method === 'GET') {

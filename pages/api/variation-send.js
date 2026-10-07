@@ -2,7 +2,7 @@ import { currentTenantId } from '../../lib/tenantContext'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { checkEmailLinks } from '../../lib/linkGuard'
 import { fromEmail } from '../../lib/tenantSettings'
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { getProject, get } from '../../lib/db'
 import { buildVariationPDF } from '../../lib/variationPdf'
 import { createInstructToken, projectLabel } from '../../lib/variationInstruct'
@@ -40,7 +40,7 @@ async function loadVariation(projectId, varNumber) {
 }
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
 
   if (req.method === 'GET') {
     const { projectId, varNumber } = req.query

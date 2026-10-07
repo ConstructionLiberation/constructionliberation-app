@@ -3,7 +3,7 @@ import { resolveProjectRecord } from '../../lib/projectRecord'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { checkEmailLinks } from '../../lib/linkGuard'
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { getProject, get, saveProject, getClient } from '../../lib/db'
 import { buildApplicationPDF } from '../../lib/applicationPdf'
 import { describeApplication, computeApplicationSummary, backfillAppNumbers } from '../../lib/applications'
@@ -15,7 +15,7 @@ import withTenant from '../../lib/withTenant'
 // Builds the customer-copy Application PDF, attaches it, and emails via Resend.
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
 
   const { projectId, appId, to, cc, replyTo, subject, text, markSent } = req.body || {}
   if (!projectId || !appId) return res.status(400).json({ error: 'projectId and appId are required' })

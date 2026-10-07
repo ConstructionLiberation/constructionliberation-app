@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { getTokens, saveTokens } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { refreshXeroToken, fetchProfitAndLoss, fetchAccountCodeMap } from '../../lib/xero'
@@ -42,7 +42,7 @@ function categoryOf(code, config) {
 }
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
 
   try {
     const redis = await getClient()

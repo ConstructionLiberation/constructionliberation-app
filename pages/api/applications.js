@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getProject, saveProject, get, getAllProjectSettings, getOpsProjects, getPortalUsers, getClient } from '../../lib/db'
 import { resolveProjectPeople } from '../../lib/projectPeople'
@@ -120,7 +120,7 @@ async function commit(projectId, why, apply) {
 }
 
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
 
   if (req.method === 'GET') {
     // Cross-project "upcoming applications" summary for the landing table.

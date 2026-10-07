@@ -1,5 +1,5 @@
 import { fromEmail } from '../../lib/tenantSettings'
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { getPortalUsers, getClient } from '../../lib/db'
 import { canAccessArea } from '../../lib/roles'
 import withTenant from '../../lib/withTenant'
@@ -11,7 +11,7 @@ import withTenant from '../../lib/withTenant'
 // correction found on the 3rd should not need an unlock ceremony - but unlocking is
 // explicit, so nobody can quietly change a signed-off month without it showing.
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
   if (req.method !== 'POST') return res.status(405).end()
 
   const redis = await getClient()

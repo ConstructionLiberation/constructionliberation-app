@@ -1,66 +1,103 @@
-PACKAGE 1022 - four metrics off the Contracts Manager scorecard
+PACKAGE 1023 - Accounts gets the Commercial portal, in full
 ================================================================================
 
-Three files. Complete replacements. No re-seed. No env changes.
+Sixteen files. Complete replacements. No re-seed. No env changes.
 
-  pages/operations/scorecards.js
-  pages/api/ops-scorecards.js
+DEPLOY 1022 FIRST. pages/api/targets.js here is the 1022 version with one
+further change; deploying 1023 over 1021 would bring back the four target
+defaults 1022 removed.
+
+  lib/roles.js
+  lib/portalAuth.js
+  pages/wip.js
+  pages/api/retention.js
   pages/api/targets.js
+  pages/api/task-definitions.js
+  pages/api/application-pdf.js
+  pages/api/application-send.js
+  pages/api/applications.js
+  pages/api/commercial-metrics.js
+  pages/api/contracted-rates.js
+  pages/api/project-cashflow.js
+  pages/api/retention-invoiced.js
+  pages/api/variation-send.js
+  pages/api/wip-lock.js
+  pages/api/xero-gross-margin.js
 
 
-WHAT CHANGED
+THE DECISION
 ================================================================================
-Removed from the Contracts Manager scorecard, by decision:
+Accounts (the bookkeeper's role) has the Commercial portal on the same terms
+as post-contract: view, edit, send applications and variations, adjust WIP,
+sign the month off, edit retention entries and set scorecard targets.
 
-  - H&S incidences
-  - Water Ingress - Rock at fault
-  - Procurement savings complete
-  - Issues resolved on time
-
-Left as they were:
-
-  - Gross margin - their projects
-  - Pre-Start Notifications
-
-The Operations Manager scorecard is untouched.
-
-The cards and the trend table both come from one list, so they go from both
-at once.
+This reverses a deliberate earlier rule. The full WIP page refused Accounts
+("no business editing adjustments or signing the month off") and the
+retention entries were read-only to them. Both now allow it. The WIP and
+Retention TABS inside Bookkeeping stay view-only - that is the tab, not the
+person; the same user can edit on the Commercial pages.
 
 
-THE ROUTE STOPS COMPUTING THEM TOO
+HOW
 ================================================================================
-Hiding the cards only would have left the server doing the work on every
-load. Those four were the only reason /api/ops-scorecards:
+lib/roles.js         'accounts' added to the commercial area. That alone puts
+                     the tile on the home page and the column in Admin's
+                     access table.
 
-  - read the whole submission index,
-  - then fetched every accident, water ingress and pre-start submission in
-    full, one read each,
-  - then read the procurement savings doc for every closed project, once per
-    Contracts Manager.
+lib/portalAuth.js    NEW requireArea(req, res, area). Asks AREA_ACCESS instead
+                     of carrying a role list. Same 401/403 as requireRole.
 
-All of that is gone. Pre-Start % never used those reads - it comes from the
-forms-missing rows - so it is unaffected.
+Ten routes           each carried its own ['post-contract','management',
+                     'admin'] and would have refused Accounts on every
+                     Commercial page. They now ask requireArea('commercial'),
+                     so the next change to who has Commercial is one line.
 
-Worth having while the Upstash bandwidth cause is still unknown: this page
-was making a read per submission of those types, every time it opened.
+retention            read: Commercial or Bookkeeping. write: Commercial.
+targets              anyone with pre-contract, commercial or operations.
+pages/wip.js         full page: Commercial. ?embed=1: Commercial or Bookkeeping.
+
+Nobody else's access changes. Checked role by role:
+
+  role           commercial  bookkeeping  targets
+  accounts       yes (new)   yes          yes (new)
+  post-contract  yes         no           yes
+  pre-contract   no          no           yes
+  designer       no          no           no
+  management     yes         yes          yes
+  admin          yes         yes          yes
 
 
-TARGETS
+A FAULT FIXED ON THE WAY
 ================================================================================
-The four targets are removed from the DEFAULTS in /api/targets, which only
-matters for a tenant that has never saved a target.
+/api/task-definitions listed 'commercial' and 'bookkeeping' as ROLES. They are
+areas; no user has either. So Accounts was refused its own Bookkeeping
+checklist, and the Bookkeeping Weekly/Monthly Tasks pages silently fell back
+to the built-in default list. If anyone customised the bookkeeping checklist,
+the bookkeeper has never seen it. They will now.
 
-Rock's saved targets still hold the four values. They are harmless - nothing
-reads them now - and are left in place rather than rewritten, so nothing is
-lost if a metric ever comes back.
+The read now goes by the checklist's area. Side effect: post-contract can no
+longer read the BOOKKEEPING checklist - they cannot open Bookkeeping, so
+nothing they use reads it. Editing a checklist is still management/admin.
 
 
-SMOKE TEST
+NOT CHANGED, STILL OPEN
 ================================================================================
-1. Operations > Scorecards, pick Will or Mike: two cards only - Gross margin
-   and Pre-Start Notifications.
-2. The trend table underneath has two rows, the same two.
-3. Pre-Start Notifications shows the same figures as before the deploy.
-4. Edit the Pre-Start target and reload - it sticks.
-5. Pick the Operations Manager tab: all six cards as before.
+The /api/project/[id] routes (the project page, WIP adjustments, settings,
+comments, report) have NO role check at all - any signed-in user. Accounts
+already worked there for that reason. Separate item.
+
+
+SMOKE TEST - signed in as the bookkeeper
+================================================================================
+1. Home page shows the Commercial tile.
+2. Every Commercial nav item opens with data: Project Financials, Outstanding
+   Invoices, Retention, Variations, Contracted Rates, Applications,
+   Application Calendar, WIP, Cash Flow, Weekly/Monthly Tasks, Commercial
+   Scorecard (targets visible).
+3. WIP full page opens (not bounced home). Add an adjustment, save, reload.
+4. Retention: edit a manual entry on the Commercial page, save, reload.
+5. Open an application, generate the PDF. (Do not send unless intended.)
+6. Bookkeeping > Weekly Tasks: shows the customised checklist if one exists.
+7. Bookkeeping > WIP and Retention tabs: still view-only.
+
+Then as a post-contract user: Commercial behaves exactly as before.

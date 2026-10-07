@@ -1,4 +1,4 @@
-import { requireRole } from '../../lib/portalAuth'
+import { requireArea } from '../../lib/portalAuth'
 import { resolveProjectRecord } from '../../lib/projectRecord'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { getProject, get } from '../../lib/db'
@@ -7,7 +7,7 @@ import withTenant from '../../lib/withTenant'
 
 // GET /api/application-pdf?projectId=..&appId=..  -> customer-copy Application PDF
 async function handler(req, res) {
-  if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
+  if (!requireArea(req, res, 'commercial')) return
   const { projectId, appId } = req.query
   if (!projectId || !appId) return res.status(400).json({ error: 'projectId and appId are required' })
   try {

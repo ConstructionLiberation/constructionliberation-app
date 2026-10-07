@@ -8,6 +8,7 @@ import ProjectDatesModal from '../components/ProjectDatesModal'
 const GOLD = '#ca8a04'
 const INK = '#1a1a19'
 import { useFormat } from '../components/TenantProvider'
+import { canAccessArea } from '../lib/roles'
 const fmtDate = (s) => { if (!s) return '—'; const d = new Date(s); return isNaN(d) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 const monthLabel = (mk) => { if (!mk) return ''; const [y, m] = mk.split('-'); return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) }
 
@@ -64,13 +65,15 @@ export default function WipPage() {
   useEffect(() => {
     fetch('/api/portal-auth?action=me').then(r => r.json()).then(d => {
       if (!d.user) { router.replace('/login'); return }
-      // Accounts can view the embed, but not the full page - they have no business
-      // editing adjustments or signing the month off.
+      // Full page: anyone with the Commercial area. The read-only embed is
+      // also shown inside Bookkeeping, so that area may view it too.
+      //
+      // 1023: Accounts has the Commercial portal in full, by decision, and so
+      // may now edit adjustments and sign the month off here. Until then the
+      // full page was deliberately refused to Accounts.
       const viewing = new URLSearchParams(window.location.search).get('embed') === '1'
-      const allowed = viewing
-        ? ['post-contract', 'management', 'admin', 'accounts']
-        : ['post-contract', 'management', 'admin']
-      if (!allowed.includes(d.user.role)) { router.replace('/'); return }
+      const allowed = canAccessArea(d.user.role, 'commercial') || (viewing && canAccessArea(d.user.role, 'bookkeeping'))
+      if (!allowed) { router.replace('/'); return }
       setMe(d.user)
       setOk(true)
     }).catch(() => router.replace('/login'))
