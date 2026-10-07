@@ -1,5 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
-import { get, set, getSubmissionIndex, getSubmission, getOpsProjects, getLiveTasks, getPortalUsers } from '../../lib/db'
+import { get, set, getOpsProjects, getLiveTasks, getPortalUsers } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
 // GET /api/ops-scorecards?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -28,10 +28,13 @@ function monthsBetween(fromStr, toStr) {
 }
 const weekToMonth = (weekMon) => (weekMon || '').substring(0, 7)
 
-const INCIDENCE_FORM_IDS = ['accident-book', 'hs-accident-incident-report']
-const INCIDENCE_TITLE_RX = /(accident book|accident and incident report|accident & incident report)/i
-const isWaterIngress = (s) => (s.formId === 'water-ingress-report') || /water ingress/i.test(s.formTitle || '')
-const isPSN = (s) => (s.formId === 'pre-start-notification') || /pre-?start notification/i.test(s.formTitle || '')
+// REMOVED IN 1022: H&S incidences, Water Ingress (Rock at fault), Procurement
+// savings complete and Issues resolved on time. Taken off the Contracts
+// Manager scorecard by decision, and no longer computed here either - they
+// were the only reason this route fetched every accident, water ingress and
+// pre-start submission in full on each load, plus one procurement read per
+// closed project per CM. Pre-Start % never needed those: it comes from the
+// forms-missing rows.
 
 async function handler(req, res) {
   if (!requireRole(req, res, ['post-contract', 'management', 'admin'])) return
@@ -49,14 +52,12 @@ async function handler(req, res) {
     const to = req.query.to || now.toISOString().slice(0, 10)
     const months = monthsBetween(from, to)
 
-    const [projects, index, liveTasks, risks, dashCache] = await Promise.all([
+    const [projects, liveTasks, risks, dashCache] = await Promise.all([
       getOpsProjects(),
-      getSubmissionIndex(),
       getLiveTasks(),
       get('ops:risks').then(r => r || []),
       get('dashboard:cache').then(c => c || []),
     ])
-    const issues = (await get('ops:issues')) || []
 
     // projectNo -> CM (from IHM/Ops project)
     const projCM = {}
@@ -72,25 +73,12 @@ async function handler(req, res) {
       missingRows = fm.rows || []
     } catch {}
 
-    // Full submissions we need for incidence / WI / PSN metrics.
-    const relevant = index.filter(s =>
-      INCIDENCE_FORM_IDS.includes(s.formId) || INCIDENCE_TITLE_RX.test(s.formTitle || '') ||
-      isWaterIngress(s) || isPSN(s))
-    const full = await Promise.all(relevant.map(s => getSubmission(s.id).catch(() => null)))
-    const subs = full.filter(Boolean)
-    const projNoForSub = (s) => { const m = (s.projectName || '').match(/([A-Za-z]?\d{2,})/); return m ? m[1] : (s.projectName || '') }
-    const cmForSub = (s) => projCM[projNoForSub(s)] || ''
-
-    // Pre-fetch procurement docs for closed projects (used per-month by completion date).
-    // We approximate the "completed in month" by the dashboard CLOSED stage; procurement
-    // completeness is point-in-time (latest), so we attribute it to the latest month.
     const pct = (completed, required) => required > 0 ? completed / required : null
 
     // ── Contracts Managers ──────────────────────────────────────────────────
     const cmNames = [...new Set(projects.map(p => p.data?.contractsManager).filter(Boolean))]
     const cms = {}
     for (const cm of cmNames) {
-      const mineSub = (s) => norm(cmForSub(s)) === norm(cm)
       const series = months.map(month => {
         // Pre-Start %: rows for this CM, Pre-Start form, in this month.
         const psnRows = missingRows.filter(r => r.formType === 'Pre-Start' && weekToMonth(r.week) === month && norm(r.responsible) === norm(cm))
@@ -98,21 +86,7 @@ async function handler(req, res) {
         const psnDone = psnRows.filter(r => r.done).length
         const psnPct = pct(psnDone, psnReq)
 
-        // H&S incidences (dedup per project per month).
-        const incidentProjects = new Set(subs.filter(s => mineSub(s) && inMonth(s.submittedAt, month) &&
-          (INCIDENCE_FORM_IDS.includes(s.formId) || INCIDENCE_TITLE_RX.test(s.formTitle || ''))).map(projNoForSub))
-        const hsIncidences = incidentProjects.size
-
-        // Water Ingress — Rock at fault, reports surveyed in this month, their projects.
-        const wiRockFault = subs.filter(s => mineSub(s) && isWaterIngress(s) && inMonth(s.submittedAt, month) && norm(s.answers?.f_13) === 'rock').length
-
-        // Issues resolved on-time %: of this CM's issues RESOLVED in the month,
-        // the share resolved on/before the required date.
-        const resolvedThisMonth = issues.filter(i => norm(projCM[i.projectNo]) === norm(cm) && i.resolvedDate && monthOf(i.resolvedDate) === month)
-        const onTime = resolvedThisMonth.filter(i => !i.requiredDate || new Date(i.resolvedDate) <= new Date(i.requiredDate)).length
-        const issuesOnTimePct = pct(onTime, resolvedThisMonth.length)
-
-        return { month, gpMargin: null, psnPct, hsIncidences, wiRockFault, issuesOnTimePct, procPct: null }
+        return { month, gpMargin: null, psnPct }
       })
 
       // Point-in-time metrics attributed to the latest month:
@@ -122,23 +96,8 @@ async function handler(req, res) {
       for (const p of myCommercial) { if (p.grossInvoiced != null && p.totalCosts != null) { gInv += p.grossInvoiced || 0; gCost += p.totalCosts || 0; gCount++ } }
       const gpMargin = gInv > 0 ? (gInv - gCost) / gInv : null
 
-      // Procurement savings %: of this CM's CLOSED projects, share with a fully
-      // complete savings doc. N/A if none closed in range.
-      const myClosed = dashCache.filter(p => norm(p.contractsManager) === norm(cm) && p.status === 'CLOSED')
-      let procTotal = 0, procComplete = 0
-      for (const p of myClosed) {
-        try {
-          const rows = (await get(`ops:procurement-savings:${p.jobNo}`)) || []
-          const meaningful = rows.filter(r => (r.tenderedRate || r.tenderedTotal))
-          procTotal++
-          if (meaningful.length && !meaningful.some(r => !(r.buyingRate || r.buyingTotal))) procComplete++
-        } catch {}
-      }
-      const procPct = procTotal > 0 ? procComplete / procTotal : null
-
       if (series.length) {
         series[series.length - 1].gpMargin = gpMargin
-        series[series.length - 1].procPct = procPct
         series[series.length - 1]._gpTotals = { totalProfit: gInv - gCost, totalGrossInvoiced: gInv, totalCosts: gCost, count: gCount }
       }
       cms[cm] = { series, latest: series[series.length - 1] || {} }

@@ -120,10 +120,6 @@ export default function OpsScorecardsPage() {
   const CM_METRICS = [
     { key: 'gpMargin', label: 'Gross margin — their projects', sub: 'Live & defects projects', format: pct, targetType: 'contractsManager', targetKey: 'gpMargin', mode: 'normal', latestOnly: true },
     { key: 'psnPct', label: 'Pre-Start Notifications', sub: 'Completed vs required', format: pct, targetType: 'contractsManager', targetKey: 'psnPct', mode: 'normal' },
-    { key: 'hsIncidences', label: 'H&S incidences', sub: 'Accident Book / Accident & Incident Report', format: num, targetType: 'contractsManager', targetKey: 'hsIncidences', mode: 'zero' },
-    { key: 'wiRockFault', label: 'Water Ingress — Rock at fault', sub: 'Reports where Rock responsible', format: num, targetType: 'contractsManager', targetKey: 'wiRockFault', mode: 'zero' },
-    { key: 'procPct', label: 'Procurement savings complete', sub: 'Completed projects with full savings doc', format: pct, targetType: 'contractsManager', targetKey: 'procPct', mode: 'normal', latestOnly: true },
-    { key: 'issuesOnTimePct', label: 'Issues resolved on time', sub: 'On-time vs total resolved', format: pct, targetType: 'contractsManager', targetKey: 'issuesOnTimePct', mode: 'normal' },
   ]
   const OPS_METRICS = [
     { key: 'sosPct', label: 'Start On Site Checklists', sub: 'Completed vs required', format: pct, targetType: 'operationsManager', targetKey: 'sosPct', mode: 'normal' },

@@ -1,59 +1,66 @@
-PACKAGE 1021 - the approval block on the Site App report
+PACKAGE 1022 - four metrics off the Contracts Manager scorecard
 ================================================================================
 
-One file. Complete replacement. Supersedes its copy in 1019 and 1020.
-No re-seed.
+Three files. Complete replacements. No re-seed. No env changes.
 
-  pages/forms/cm/reports.js
+  pages/operations/scorecards.js
+  pages/api/ops-scorecards.js
+  pages/api/targets.js
 
 
-WHAT WAS MISSING
+WHAT CHANGED
 ================================================================================
-The Site App form had a bare "Your name" box. The portal has a proper
-approval block: the heading, the declaration, the name and the date.
+Removed from the Contracts Manager scorecard, by decision:
 
-It now has the same one, WORD FOR WORD:
+  - H&S incidences
+  - Water Ingress - Rock at fault
+  - Procurement savings complete
+  - Issues resolved on time
 
-    APPROVAL
-    I can confirm that the information I have provided is true and that I
-    have completed all sections accurately and diligently.
+Left as they were:
 
-    Name *   [                    ]
-    Date     [ 2026-10-06         ]
-    Defaults to today. Change it if the report is being written up for an
-    earlier visit - this is the date it counts against on the Commercial
-    Scorecard.
+  - Gross margin - their projects
+  - Pre-Start Notifications
 
-The wording is identical on purpose. It is a declaration: the person signing
-it on a phone is signing the same words as the person signing it at a desk,
-and two versions of that sentence drifting apart is not a cosmetic problem.
+The Operations Manager scorecard is untouched.
+
+The cards and the trend table both come from one list, so they go from both
+at once.
 
 
-THE DATE IS THE PART THAT MATTERS
+THE ROUTE STOPS COMPUTING THEM TOO
 ================================================================================
-It was not on the Site App form at all, so every report written on site was
-stamped with the day it was typed.
+Hiding the cards only would have left the server doing the work on every
+load. Those four were the only reason /api/ops-scorecards:
 
-The portal's comment explains why that is wrong, and it applies more on a
-phone than anywhere: a Friday walk round written up on Monday was dated
-Monday, and the Commercial Scorecard counts reports by this date - so it
-landed in the wrong week.
+  - read the whole submission index,
+  - then fetched every accident, water ingress and pre-start submission in
+    full, one read each,
+  - then read the procurement savings doc for every closed project, once per
+    Contracts Manager.
 
-Behaviour checked: a date typed in is kept; left empty it defaults to today.
-Same rule as the portal, which also only defaults when the field is genuinely
-blank.
+All of that is gone. Pre-Start % never used those reads - it comes from the
+forms-missing rows - so it is unaffected.
 
-The read-only view now shows the approval date as well, since it is now
-something somebody chose rather than a timestamp.
+Worth having while the Upstash bandwidth cause is still unknown: this page
+was making a read per submission of those types, every time it opened.
+
+
+TARGETS
+================================================================================
+The four targets are removed from the DEFAULTS in /api/targets, which only
+matters for a tenant that has never saved a target.
+
+Rock's saved targets still hold the four values. They are harmless - nothing
+reads them now - and are left in place rather than rewritten, so nothing is
+lost if a metric ever comes back.
 
 
 SMOKE TEST
 ================================================================================
-1. Site App, new report: the approval block appears at the bottom with the
-   declaration, name and date.
-2. The date shows today by default.
-3. Change it to last Friday and submit. Open the report in the PORTAL - the
-   approval date is last Friday, not today.
-4. View it in the Site App - the approval date shows.
-5. Commercial Scorecard: the report counts against the week of the date you
-   set, not the week you typed it.
+1. Operations > Scorecards, pick Will or Mike: two cards only - Gross margin
+   and Pre-Start Notifications.
+2. The trend table underneath has two rows, the same two.
+3. Pre-Start Notifications shows the same figures as before the deploy.
+4. Edit the Pre-Start target and reload - it sticks.
+5. Pick the Operations Manager tab: all six cards as before.

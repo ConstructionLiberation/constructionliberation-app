@@ -35,10 +35,6 @@ const DEFAULT_TARGETS = {
   contractsManager: {
     gpMargin: 0.20,
     psnPct: 1,
-    hsIncidences: 0,
-    wiRockFault: 0,
-    procPct: 1,
-    issuesOnTimePct: 0.9,
   },
   operationsManager: {
     sosPct: 1,
