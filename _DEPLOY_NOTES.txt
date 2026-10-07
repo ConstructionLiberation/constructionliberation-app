@@ -1,76 +1,102 @@
-PACKAGE 1016 - the variations missing from the Application PDF
+PACKAGE 1017 - editable Project Report template, and manual photos
 ================================================================================
 
-One file. Complete replacement. Rock-live, no re-seed.
+Four files. TWO ARE NEW. No re-seed.
 
-  lib/applicationPdf.js
+  lib/projectReportTemplate.js        <- NEW
+  pages/api/project-report-template.js <- NEW
+  lib/projectReportPdf.js
+  pages/operations/project-management/report.js
 
-This is the real fault. 1015 was not it - see the note at the bottom.
 
-
-THE CAUSE, FROM YOUR OWN FEED
+WHAT IT DOES
 ================================================================================
-Two lines, in the wrong order:
+"Edit template" sits next to "+ Add new" on the Report tab. It defines extra
+sections that appear on every report UNDERNEATH Works completed. Each has a
+heading, a type and an optional required flag:
 
-    const sum = computeApplicationSummary(app, prevGross, prevReleases)   // first
-    const vars = ... buildLiveVars(app, trackerVariations)                // second
+    Free text   a paragraph
+    List        one per line, rendered as bullets in the PDF
+    Photos      its own photo area with its own heading
 
-A DRAFT stores `variations: []` - that array is only filled in when the
-application is SENT. Your feed shows exactly that: app seq 3 (Application 5),
-status draft, "variations": [].
+Reorder and remove in the same dialog. Removing a section does not touch any
+report already written - see below.
 
-So the summary was computed from an application with no variations, and the
-variation table underneath was built afterwards and rendered them correctly.
-Every figure wrong, every line present. That is why it looked like the
-variations were "not pulling through" rather than like a calculation fault.
-
-pages/applications.js has always done it the other way round:
-
-    const workApp = { ...app, contractWorks: rows, variations: vars, materials: mats }
-    const sum = computeApplicationSummary(workApp, ...)
-
-which is why the screen was right. One rule, two implementations, opposite
-order - the dominant fault class of this whole project, in a document that
-goes to the customer.
-
-Checked against your data:
-
-    V07   5,350.37 @ 21.6424%  ->  1,157.95
-    V09   1,755.00 @ 100%      ->  1,755.00
-    V11     780.00 @ 100%      ->    780.00
-                                  ----------
-                                   3,692.95   exactly what the screen shows
+Photos: the auto-collected set is unchanged and still pulls from submissions
+since the last report. There is now an "Additional photos" area for anything
+added by hand, uploaded through the same route the Site App uses, and the two
+run together under one Photos heading in the PDF because a customer does not
+care how a photo arrived.
 
 
-WHAT ELSE THIS FIXES
+THE DECISION THAT SHAPES EVERYTHING ELSE
 ================================================================================
-pages/api/application-send.js uses the SAME generator, so the PDF emailed to
-the customer had the same gap. That is now correct too, with no change to that
-file.
+A REPORT KEEPS THE TEMPLATE IT WAS WRITTEN WITH.
 
-Only DRAFTS were affected. A sent application has its variations frozen onto
-it, so `app.variations` was populated and the summary was right.
+Saving a report stores `sections` on the report - a copy of the template at
+that moment - and the view and the PDF render from that copy, never from the
+live template.
 
-That is worth knowing for the work already sent: those documents were correct.
-The exposure was drafts - anything downloaded and sent by hand, outside the
-Send to customer button.
+Without it, editing the template rewrites history. Rename a heading and last
+March's report, already issued to a customer and possibly argued over,
+silently says something different from the PDF they are holding. Same
+reasoning as an application freezing its variations when it is sent.
+
+The cost is that a renamed heading does not reach old reports. That is the
+right trade for a document that leaves the building.
+
+Checked:
+    existing report keeps its own:  "Delays (old wording)"
+    new report uses the template:   "Site photos", "Delays"
 
 
-ABOUT 1015
+MANUAL PHOTOS ARE A SEPARATE FIELD
 ================================================================================
-1015 was the wrong diagnosis, built on an empty API response I never confirmed
-the id for. It is harmless - resolveProjectRecord returns immediately when the
-given key works, which it does on every project here - and the write change in
-application-send.js is a genuine improvement. But it fixed nothing, and I
-should have asked for the response body before writing it rather than after.
+`manualPhotos`, not appended to `photos`. Choosing a project re-pulls the
+auto-collected set from submissions, and anything a person added by hand has
+to survive that. One array would lose them on the next project change, which
+is the kind of fault that only shows up after somebody has done the work
+twice.
+
+
+DEFAULTS ARE EMPTY, ON PURPOSE
+================================================================================
+No sections out of the box. A customer who never opens the editor sees
+exactly the report they see today - no empty headings appearing on a document
+they already rely on.
+
+
+PERMISSIONS
+================================================================================
+Reading the template: anyone who can write a report, because it defines the
+boxes they fill in. Writing it: management and admin only - a change affects
+every report written from here on.
+
+
+TWO THINGS CAUGHT WHILE BUILDING
+================================================================================
+`input` was declared INSIDE ReportModal and the two new components needed it.
+That compiles and throws when the component renders - the same fault as four
+other packages this fortnight. Hoisted to module scope and the whole file
+re-scanned for others.
+
+The PDF had the photo-embedding code inline in one loop. Rather than copy it
+for the custom photo sections, it is now one `drawPhoto` function used by
+both. Two copies would have drifted the first time one learned a new format.
 
 
 SMOKE TEST
 ================================================================================
-1. J240 Application 5, Download PDF. Variations 3,692.95, Projected Final
-   Account 89,639.25, Variations & materials 68,905.97 - all matching the
-   screen to the penny.
-2. Total due on the PDF should match the screen's 114,209.20 / 26,081.02.
-3. Open a SENT application on any project and download it. Unchanged - those
-   were always right.
-4. Then send Application 5 and check the attachment matches the screen.
+1. Report tab: "Edit template" next to "+ Add new". Add a free-text section
+   and a photos section, save.
+2. New report: both appear under Works completed, in order.
+3. Fill them in, add a manual photo, save, reopen - everything still there.
+4. Download the PDF: custom sections under Works completed, the list one as
+   bullets, custom photos under their own heading, manual photos with the
+   auto ones.
+5. THE ONE THAT MATTERS: rename a section in the template, then reopen the
+   report you already saved. It must still show the OLD heading. A new report
+   shows the new one.
+6. Change the project on a draft after adding a manual photo - the photo
+   stays, the auto-collected set refreshes.
+7. A report written before this package: unchanged, no new headings.

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, th, td, Loading, EmptyCard, primaryBtn, ghostBtn, linkBtn } from '../../../components/opsUI'
+import { sectionsFor, newSectionKey, SECTION_TYPES } from '../../../lib/projectReportTemplate'
 
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const parseLocal = (d) => { if (!d) return null; const [y, m, day] = String(d).split('-').map(Number); return new Date(y, (m || 1) - 1, day || 1) }
@@ -10,6 +11,11 @@ const fmtN = (n) => n == null || n === '' ? 0 : parseFloat(n) || 0
 const PAGE_SIZE = 50
 
 export default function ReportPage() {
+  // The extra sections this customer has added under Works completed. Loaded
+  // once here and handed to the report modal, so opening a report does not
+  // re-fetch it.
+  const [template, setTemplate] = useState({ sections: [] })
+  const [tplOpen, setTplOpen] = useState(false)
   const [reports, setReports] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -34,6 +40,10 @@ export default function ReportPage() {
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    fetch('/api/project-report-template').then(r => r.json())
+      .then(d => setTemplate(d.template || { sections: [] })).catch(() => {})
+  }, [])
   useEffect(() => { fetch('/api/portal-auth?action=me').then(r => r.json()).then(d => setMeName(d.user?.name || '')).catch(() => {}) }, [])
 
   function toggleSort(key) { setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }) }
@@ -76,7 +86,13 @@ export default function ReportPage() {
   return (
     <OperationsShell active="pm:report" section="pm" title="Project Report" wide>
       <PageHeading title="Project Reports" sub="Site reports — completed on desktop."
-        action={<button onClick={() => setEdit('new')} style={primaryBtn}>+ Add new</button>} />
+        action={<div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setTplOpen(true)} style={ghostBtn}>Edit template</button>
+          <button onClick={() => setEdit('new')} style={primaryBtn}>+ Add new</button>
+        </div>} />
+
+      {tplOpen && <TemplateModal template={template} onClose={() => setTplOpen(false)}
+        onSaved={(t) => { setTemplate(t); setTplOpen(false) }} />}
 
       {loading ? <Loading /> : reports.length === 0 ? (
         <EmptyCard title="No reports yet" body="Click “Add new” to create the first site report." />
@@ -134,7 +150,7 @@ export default function ReportPage() {
         </>
       )}
 
-      {edit && <ReportModal id={edit === 'new' ? null : edit} projects={projects} meName={meName} allReports={reports} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
+      {edit && <ReportModal template={template} id={edit === 'new' ? null : edit} projects={projects} meName={meName} allReports={reports} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
       {view && <ViewModal id={view} onClose={() => setView(null)} onEdit={() => { setEdit(view); setView(null) }} />}
     </OperationsShell>
   )
@@ -155,11 +171,20 @@ function FilterSel({ label, value, onChange, options, raw }) {
 }
 
 // ── Create / edit report ──
-function ReportModal({ id, projects, meName, allReports, onClose, onSaved }) {
+function ReportModal({ id, template, projects, meName, allReports, onClose, onSaved }) {
   const [f, setF] = useState({
     date: todayISO(), projectNo: '', projectName: '', projectAddress: '', customerName: '',
     completedBy: meName || '', siteComms: '', worksCompleted: '', status: 'draft',
     variationsSnapshot: [], issuesSnapshot: [], photos: [], approvalName: '', approvalDate: '',
+    // Answers to the customer's own sections, keyed by section key.
+    extra: {},
+    // Photos added BY HAND, kept apart from the auto-collected ones. Choosing
+    // a project re-pulls `photos` from submissions; anything a person added
+    // must survive that, which it cannot do if the two share one array.
+    manualPhotos: [],
+    // The template as it stood when this report was written - see
+    // lib/projectReportTemplate.js. Set on save for a new report.
+    sections: null,
   })
   const [loaded, setLoaded] = useState(id ? false : true)
   const [saving, setSaving] = useState(false)
@@ -243,10 +268,16 @@ function ReportModal({ id, projects, meName, allReports, onClose, onSaved }) {
           if (Array.isArray(v)) for (const u of v) if (typeof u === 'string' && /^https?:|^data:/.test(u)) photos.push(u)
         }
       }
+      // `photos` only. manualPhotos and extra are untouched on purpose - this
+      // runs again every time the project changes.
       set({ variationsSnapshot: vars, issuesSnapshot: openIssues, photos, lastReportDate })
     } catch (e) { console.error(e) }
     setAutoLoading(false)
   }
+
+  // The sections this report uses: its own snapshot once saved, otherwise the
+  // live template. An existing report never follows a later template change.
+  const secs = sectionsFor(f, template)
 
   async function save(asComplete) {
     setErr('')
@@ -255,13 +286,28 @@ function ReportModal({ id, projects, meName, allReports, onClose, onSaved }) {
       if (!f.siteComms.trim()) return setErr('Site communications is required.')
       if (!f.worksCompleted.trim()) return setErr('Works completed is required.')
       if (!f.approvalName.trim()) return setErr('Approval name is required.')
+      // Required sections the customer added themselves.
+      for (const sec of secs) {
+        if (!sec.required) continue
+        const v = (f.extra || {})[sec.key]
+        const empty = sec.type === 'photos' ? !(Array.isArray(v) && v.length) : !String(v || '').trim()
+        if (empty) return setErr(`${sec.label} is required.`)
+      }
     }
     setSaving(true)
     try {
       // Keep what was typed. This forced today's date on submit, which silently threw
       // away an edit made two lines above it - only defaulting to today when the field
       // was genuinely left empty.
-      const report = { ...f, status: asComplete ? 'complete' : 'draft', approvalDate: f.approvalDate || todayISO() }
+      const report = {
+        ...f,
+        status: asComplete ? 'complete' : 'draft',
+        approvalDate: f.approvalDate || todayISO(),
+        // Freeze the template onto the report the first time it is saved. A
+        // later change to the template must not rewrite a report that has
+        // already gone to a customer - see lib/projectReportTemplate.js.
+        sections: Array.isArray(f.sections) ? f.sections : secs,
+      }
       if (id) report.id = id
       const r = await fetch('/api/project-reports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ report }) })
       const d = await r.json()
@@ -273,7 +319,6 @@ function ReportModal({ id, projects, meName, allReports, onClose, onSaved }) {
 
   if (!loaded) return <Modal title="Loading…" onClose={onClose}><Loading /></Modal>
 
-  const input = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }
   const L = ({ children, req }) => <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, margin: '18px 0 6px' }}>{children}{req && <span style={{ color: '#dc2626' }}> *</span>}</div>
 
   return (
@@ -329,12 +374,37 @@ function ReportModal({ id, projects, meName, allReports, onClose, onSaved }) {
       <L req>Works completed</L>
       <textarea value={f.worksCompleted || ''} onChange={e => set({ worksCompleted: e.target.value })} style={{ ...input, minHeight: 90, resize: 'vertical' }} placeholder="Insert a description of works completed since our last project site report." />
 
+      {/* The customer's own sections, in template order, under Works completed. */}
+      {secs.map(sec => (
+        <div key={sec.key}>
+          <L req={sec.required}>{sec.label}</L>
+          {sec.type === 'photos' ? (
+            <PhotoAdder
+              photos={(f.extra || {})[sec.key] || []}
+              onChange={(list) => set({ extra: { ...(f.extra || {}), [sec.key]: list } })}
+            />
+          ) : (
+            <textarea
+              value={(f.extra || {})[sec.key] || ''}
+              onChange={e => set({ extra: { ...(f.extra || {}), [sec.key]: e.target.value } })}
+              style={{ ...input, minHeight: sec.type === 'list' ? 110 : 90, resize: 'vertical' }}
+              placeholder={sec.type === 'list' ? 'One per line.' : ''}
+            />
+          )}
+        </div>
+      ))}
+
       <L>Photos <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(auto-collected since last report)</span></L>
       {(f.photos || []).length === 0 ? <div style={{ fontSize: 12.5, color: '#999' }}>No photos found in the window.</div> : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {f.photos.map((p, i) => <img key={i} src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} />)}
         </div>
       )}
+
+      {/* ADDED BY HAND, kept separate from the auto-collected set above.
+          Changing the project re-pulls those and would otherwise wipe these. */}
+      <L>Additional photos <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(added manually)</span></L>
+      <PhotoAdder photos={f.manualPhotos || []} onChange={(list) => set({ manualPhotos: list })} />
 
       <div style={{ marginTop: 22, padding: '16px 18px', background: '#faf9f7', borderRadius: 10 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: GOLD, marginBottom: 8 }}>APPROVAL</div>
@@ -384,6 +454,27 @@ function ViewModal({ id, onClose, onEdit }) {
       <Row label="Completion date">{fmtDMY(r.date)} · by {r.completedBy || '—'}</Row>
       <Row label="Site communications">{r.siteComms || '—'}</Row>
       <Row label="Works completed">{r.worksCompleted || '—'}</Row>
+      {/* The customer's own sections, from the report's OWN snapshot. */}
+      {(Array.isArray(r.sections) ? r.sections : []).map(sec => {
+        const val = (r.extra || {})[sec.key]
+        if (sec.type === 'photos') {
+          const urls = Array.isArray(val) ? val : []
+          if (!urls.length) return null
+          return (
+            <Row key={sec.key} label={`${sec.label} (${urls.length})`}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {urls.map((p, i) => <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} /></a>)}
+              </div>
+            </Row>
+          )
+        }
+        const txt = String(val == null ? '' : val).trim()
+        if (!txt) return null
+        return <Row key={sec.key} label={sec.label}>{txt}</Row>
+      })}
+
+      {(r.manualPhotos || []).length > 0 && <Row label={`Additional photos (${r.manualPhotos.length})`}><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{r.manualPhotos.map((p, i) => <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} /></a>)}</div></Row>}
+
       {(r.photos || []).length > 0 && <Row label={`Photos (${r.photos.length})`}><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{r.photos.map((p, i) => <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} /></a>)}</div></Row>}
       <Row label="Approval">{r.approvalName || '—'} · {fmtDMY(r.approvalDate)}</Row>
       {r.revisions?.length > 0 && <Row label="Revision history">{r.revisions.map(v => `Rev ${v.rev} — ${new Date(v.at).toLocaleString('en-GB')} by ${v.by || '—'}`).join('\n')}</Row>}
@@ -394,6 +485,161 @@ function ViewModal({ id, onClose, onEdit }) {
     </Modal>
   )
 }
+
+// Pick photos from the device, upload each one, keep the returned URLs.
+// Used for manual report photos and for any custom section of type `photos`.
+function PhotoAdder({ photos, onChange }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function add(files) {
+    setErr(''); setBusy(true)
+    const out = [...(photos || [])]
+    for (const file of Array.from(files || [])) {
+      try {
+        const dataUrl = await new Promise((res, rej) => {
+          const fr = new FileReader()
+          fr.onload = () => res(fr.result)
+          fr.onerror = () => rej(new Error('Could not read the file'))
+          fr.readAsDataURL(file)
+        })
+        const r = await fetch('/api/upload-photo', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, dataUrl }),
+        })
+        // CHECKED, not assumed. An upload that fails silently leaves a report
+        // looking complete with a photo nobody can open.
+        if (!r.ok) {
+          let msg = ''
+          try { msg = (await r.json()).error || '' } catch {}
+          setErr(msg || `Could not upload ${file.name} (${r.status}).`)
+          continue
+        }
+        const d = await r.json()
+        if (d.url) out.push(d.url)
+        else setErr(`Upload of ${file.name} returned no address.`)
+      } catch (e) { setErr(e.message || `Could not add ${file.name}.`) }
+    }
+    onChange(out); setBusy(false)
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        {(photos || []).map((p, i) => (
+          <div key={i} style={{ position: 'relative' }}>
+            <a href={p} target="_blank" rel="noreferrer">
+              <img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} />
+            </a>
+            <button
+              onClick={() => onChange((photos || []).filter((_, j) => j !== i))}
+              title="Remove"
+              style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 12, lineHeight: '18px', padding: 0 }}
+            >&times;</button>
+          </div>
+        ))}
+      </div>
+      <label style={{ ...ghostBtn, display: 'inline-block', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+        {busy ? 'Uploading\u2026' : '+ Add photos'}
+        <input type="file" accept="image/*" multiple disabled={busy}
+          onChange={e => { add(e.target.files); e.target.value = '' }}
+          style={{ display: 'none' }} />
+      </label>
+      {err && <div style={{ fontSize: 12.5, color: '#b91c1c', marginTop: 6 }}>{err}</div>}
+    </div>
+  )
+}
+
+// Edit the extra sections every future report will carry.
+function TemplateModal({ template, onClose, onSaved }) {
+  const [rows, setRows] = useState(() => (template && template.sections ? template.sections : []).map(s => ({ ...s })))
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const patch = (i, p) => setRows(rs => rs.map((r, j) => (i === j ? { ...r, ...p } : r)))
+  const move = (i, d) => setRows(rs => {
+    const next = [...rs]; const j = i + d
+    if (j < 0 || j >= next.length) return rs
+    ;[next[i], next[j]] = [next[j], next[i]]
+    return next.map((r, k) => ({ ...r, order: k + 1 }))
+  })
+
+  async function save() {
+    setErr(''); setSaving(true)
+    const payload = { sections: rows.map((r, i) => ({ ...r, order: i + 1 })) }
+    try {
+      const r = await fetch('/api/project-report-template', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: payload }),
+      })
+      if (!r.ok) {
+        let msg = ''
+        try { msg = (await r.json()).error || '' } catch {}
+        setErr(msg || `Could not save (${r.status}). Nothing has been changed.`)
+        setSaving(false); return
+      }
+      const d = await r.json()
+      onSaved(d.template || payload)
+    } catch (e) { setErr(e.message || 'Could not save.') }
+    setSaving(false)
+  }
+
+  return (
+    <Modal title="Edit report template" onClose={onClose} wide>
+      <div style={{ fontSize: 12.5, color: '#666', marginBottom: 14 }}>
+        These sections appear on every report underneath Works completed.
+        Reports already written keep the sections they were written with, so
+        changing this does not alter anything already issued.
+      </div>
+
+      {rows.length === 0 && (
+        <div style={{ fontSize: 12.5, color: '#999', marginBottom: 12 }}>
+          No extra sections. The report is exactly as it is today.
+        </div>
+      )}
+
+      {rows.map((r, i) => (
+        <div key={r.key} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px auto', gap: 10, alignItems: 'center', marginBottom: 8 }}>
+          <input value={r.label} onChange={e => patch(i, { label: e.target.value })}
+            placeholder="Heading" style={{ ...input, margin: 0 }} />
+          <select value={r.type} onChange={e => patch(i, { type: e.target.value })} style={{ ...input, margin: 0 }}>
+            <option value="text">Free text</option>
+            <option value="list">List</option>
+            <option value="photos">Photos</option>
+          </select>
+          <label style={{ fontSize: 12.5, color: '#555', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={!!r.required} onChange={e => patch(i, { required: e.target.checked })} />
+            Required
+          </label>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button onClick={() => move(i, -1)} style={miniBtn} title="Move up">&uarr;</button>
+            <button onClick={() => move(i, 1)} style={miniBtn} title="Move down">&darr;</button>
+            <button onClick={() => setRows(rs => rs.filter((_, j) => j !== i))} style={miniBtn} title="Remove">&times;</button>
+          </div>
+        </div>
+      ))}
+
+      <button
+        onClick={() => setRows(rs => [...rs, { key: newSectionKey(), label: '', type: 'text', required: false, order: rs.length + 1 }])}
+        style={{ ...ghostBtn, marginTop: 6 }}
+      >+ Add section</button>
+
+      {err && <div style={{ fontSize: 12.5, color: '#b91c1c', marginTop: 10 }}>{err}</div>}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+        <button onClick={onClose} style={ghostBtn}>Cancel</button>
+        <button onClick={save} disabled={saving} style={primaryBtn}>{saving ? 'Saving\u2026' : 'Save template'}</button>
+      </div>
+    </Modal>
+  )
+}
+
+// Module scope: ReportModal, PhotoAdder and TemplateModal all use it, and a
+// const declared inside one component is not in scope in another - it
+// compiles and throws when the component renders.
+const input = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }
+
+const miniBtn = { width: 26, height: 26, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: '24px', padding: 0 }
 
 function Modal({ title, children, onClose, wide }) {
   return (
