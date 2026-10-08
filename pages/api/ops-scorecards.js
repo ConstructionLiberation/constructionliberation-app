@@ -1,5 +1,5 @@
 import { requireRole } from '../../lib/portalAuth'
-import { get, set, getOpsProjects, getLiveTasks, getPortalUsers } from '../../lib/db'
+import { get, set, del, getOpsProjects, getPortalUsers } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 
 // GET /api/ops-scorecards?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -10,7 +10,10 @@ import withTenant from '../../lib/withTenant'
 //       ops:   { series:[{month, ...metrics}], latest:{...} },
 //       cmNames:[...] }
 //
-// POST /api/ops-scorecards { month, toolbox:true|false }  -> save Toolbox Yes/No.
+// POST /api/ops-scorecards { month, toolbox:true|false|null }
+//   Save the Toolbox Talk for ANY month: true = held, false = not held,
+//   null = clear back to 'not set'. Any month in the range can be ticked, not
+//   just the latest (1024).
 
 const DAY = 86400000
 const pad = (n) => String(n).padStart(2, '0')
@@ -41,9 +44,15 @@ async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { month, toolbox } = req.body || {}
-    if (!month) return res.status(400).json({ error: 'Missing month' })
-    await set(`scorecard:toolbox:${month}`, toolbox === true || toolbox === 'yes')
-    return res.status(200).json({ ok: true })
+    if (!/^\d{4}-\d{2}$/.test(String(month || ''))) return res.status(400).json({ error: 'month must be YYYY-MM' })
+    if (toolbox !== true && toolbox !== false && toolbox !== null) {
+      return res.status(400).json({ error: 'toolbox must be true, false or null' })
+    }
+    // Clearing deletes the key rather than storing null, so 'not set' looks
+    // exactly as it did before anyone ticked the month.
+    if (toolbox === null) await del(`scorecard:toolbox:${month}`)
+    else await set(`scorecard:toolbox:${month}`, toolbox)
+    return res.status(200).json({ ok: true, month, toolbox })
   }
 
   try {
@@ -52,11 +61,12 @@ async function handler(req, res) {
     const to = req.query.to || now.toISOString().slice(0, 10)
     const months = monthsBetween(from, to)
 
-    const [projects, liveTasks, risks, dashCache] = await Promise.all([
+    const [projects, dashCache, toolboxByMonth] = await Promise.all([
       getOpsProjects(),
-      getLiveTasks(),
-      get('ops:risks').then(r => r || []),
       get('dashboard:cache').then(c => c || []),
+      // One read per month, in parallel. These were awaited one after another
+      // inside the month loop.
+      Promise.all(months.map(m => get(`scorecard:toolbox:${m}`))),
     ])
 
     // projectNo -> CM (from IHM/Ops project)
@@ -109,28 +119,16 @@ async function handler(req, res) {
       const rowsIn = (formType) => missingRows.filter(r => r.formType === formType && weekToMonth(r.week) === month)
       const pctOf = (formType) => { const rr = rowsIn(formType); return pct(rr.filter(r => r.done).length, rr.length) }
 
-      // Tasks completed on-time % — tasks with a target date whose (closed) items
-      // were closed on/before target. We don't store resolvedAt, so on-time =
-      // closed && not past-due; total = closed tasks with a target date, this month
-      // (by createdAt as a stable month bucket).
-      const monthTasks = liveTasks.filter(t => t.closeOutDate && t.createdAt && monthOf(t.createdAt) === month && t.closed)
-      const tasksOnTime = monthTasks.filter(t => { const due = new Date(t.closeOutDate); due.setHours(0,0,0,0); const today = new Date(); today.setHours(0,0,0,0); return due >= today }).length
-      const tasksPct = pct(tasksOnTime, monthTasks.length)
-
-      // Risk log completed on-time % — risks resolved this month, share resolved
-      // on/before the target resolution date.
-      const monthRisks = risks.filter(r => r.resolvedDate && monthOf(r.resolvedDate) === month)
-      const risksOnTime = monthRisks.filter(r => !r.closeOutDate || new Date(r.resolvedDate) <= new Date(r.closeOutDate)).length
-      const risksPct = pct(risksOnTime, monthRisks.length)
-
-      const toolbox = await get(`scorecard:toolbox:${month}`)
+      // REMOVED IN 1024: Tasks completed on time and Risk log completed on
+      // time, by decision. They were also the only readers of the live tasks
+      // and the risk log here, so both reads are gone.
+      const toolbox = toolboxByMonth[months.indexOf(month)]
       opsSeries.push({
         month,
         sosPct: pctOf('Start on Site Checklist'),
         diaryPct: pctOf('Daily Site Diary'),
         wahPct: pctOf('Works Area Handover'),
         toolbox: toolbox === true ? 1 : (toolbox === false ? 0 : null),
-        tasksPct, risksPct,
       })
     }
 

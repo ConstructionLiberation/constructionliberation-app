@@ -70,6 +70,8 @@ export default function OpsScorecardsPage() {
   const [loading, setLoading] = useState(true)
   const [editingTarget, setEditingTarget] = useState(null)
   const [editValue, setEditValue] = useState('')
+  const [toolboxMonth, setToolboxMonth] = useState('')
+  const [saveError, setSaveError] = useState('')
 
   const _now = new Date()
   const _yearAgo = new Date(_now.getFullYear() - 1, _now.getMonth(), 1)
@@ -96,17 +98,41 @@ export default function OpsScorecardsPage() {
   }
   useEffect(() => { load() }, [dateFrom, dateTo])
 
-  async function saveTarget(type, key, value) {
-    const v = parseFloat(value)
-    const next = { ...targets, [type]: { ...(targets?.[type] || {}), [key]: isNaN(v) ? value : v } }
-    setTargets(next); setEditingTarget(null)
-    try { await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets: next }) }) } catch {}
+  // PERCENTAGES ARE TYPED AS PERCENTAGES.
+  //
+  // Targets are stored as fractions (1 = 100%) because that is what the
+  // metrics are. The box used to save exactly what was typed, so 30 was stored
+  // as 30 and shown as 3000%. Now a % target is shown in the box as 30 and
+  // saved as 0.3. "30%" is accepted too. Anything that is not a number is
+  // refused and the box stays open, rather than storing the text.
+  const isPct = (m) => m.format === pct
+  const targetToInput = (m, t) => t == null ? '' : (isPct(m) ? String(Math.round(t * 1000) / 10) : String(t))
+
+  async function saveTarget(m, raw) {
+    const v = parseFloat(String(raw).replace('%', '').trim())
+    if (isNaN(v)) { setSaveError('Enter a number.'); return }
+    const value = isPct(m) ? v / 100 : v
+    const prev = targets
+    const next = { ...targets, [m.targetType]: { ...(targets?.[m.targetType] || {}), [m.targetKey]: value } }
+    setTargets(next); setEditingTarget(null); setSaveError('')
+    try {
+      const r = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets: next }) })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Save failed (${r.status})`)
+    } catch (e) { setTargets(prev); setSaveError(`Target not saved: ${e.message}`) }
   }
 
-  async function setToolbox(month, yes) {
-    try { await fetch('/api/ops-scorecards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, toolbox: yes }) }) } catch {}
-    load()
+  // Toolbox Talk for a given month: true, false, or null to clear. A refusal
+  // is shown, not swallowed - the page reloads only after a real save.
+  async function setToolbox(month, value) {
+    setSaveError('')
+    try {
+      const r = await fetch('/api/ops-scorecards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, toolbox: value }) })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Save failed (${r.status})`)
+      load()
+    } catch (e) { setSaveError(`Toolbox Talk not saved: ${e.message}`) }
   }
+  // Table cell click: not set -> Yes -> No -> not set.
+  const nextToolbox = (v) => v == null ? true : (v === 1 ? false : null)
 
   const cmEntry = () => {
     if (!data?.cms) return null
@@ -125,9 +151,7 @@ export default function OpsScorecardsPage() {
     { key: 'sosPct', label: 'Start On Site Checklists', sub: 'Completed vs required', format: pct, targetType: 'operationsManager', targetKey: 'sosPct', mode: 'normal' },
     { key: 'diaryPct', label: 'Daily Site Diaries', sub: 'Completed vs required', format: pct, targetType: 'operationsManager', targetKey: 'diaryPct', mode: 'normal' },
     { key: 'wahPct', label: 'Work Area Handovers', sub: 'Completed vs required', format: pct, targetType: 'operationsManager', targetKey: 'wahPct', mode: 'normal' },
-    { key: 'toolbox', label: 'Toolbox Talk', sub: '1 required per month', format: (v) => v == null ? 'Not set' : (v ? 'Yes' : 'No'), targetType: 'operationsManager', targetKey: 'toolbox', mode: 'binary', isToolbox: true },
-    { key: 'tasksPct', label: 'Tasks completed on time', sub: 'On-time vs total closed', format: pct, targetType: 'operationsManager', targetKey: 'tasksPct', mode: 'normal' },
-    { key: 'risksPct', label: 'Risk log completed on time', sub: 'On-time vs total resolved', format: pct, targetType: 'operationsManager', targetKey: 'risksPct', mode: 'normal' },
+    { key: 'toolbox', label: 'Toolbox Talk', sub: '1 required per month - pick a month to tick it off', format: (v) => v == null ? 'Not set' : (v ? 'Yes' : 'No'), targetType: 'operationsManager', targetKey: 'toolbox', mode: 'binary', isToolbox: true },
   ]
 
   const entry = !current ? null : (current.kind === 'cm' ? cmEntry() : (data?.ops || null))
@@ -135,6 +159,7 @@ export default function OpsScorecardsPage() {
   const latest = entry?.latest || {}
   const metrics = current && current.kind === 'ops' ? OPS_METRICS : CM_METRICS
   const latestMonth = data?.months?.[data.months.length - 1]
+  const months = data?.months || []
 
   function renderCard(m) {
     const actual = latest[m.key]
@@ -145,7 +170,7 @@ export default function OpsScorecardsPage() {
     const trendData = series.map(s => ({ month: monthLabel(s.month), value: s[m.key] }))
     const trend = computeTrendline(trendData)
     const chartData = trendData.map((d, i) => ({ ...d, trend: trend[i] }))
-    const showChart = !m.isToolbox && !m.latestOnly
+    const showChart = !m.latestOnly
 
     return (
       <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: '1px solid #e1e0d9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: showChart ? '220px 1fr' : '1fr', gap: 20, alignItems: 'center', minHeight: CARD_H, boxSizing: 'border-box' }}>
@@ -162,20 +187,30 @@ export default function OpsScorecardsPage() {
             <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>Profit {gbp(latest._gpTotals.totalProfit)} · {latest._gpTotals.count} project{latest._gpTotals.count !== 1 ? 's' : ''}</div>
           )}
           <div style={{ marginTop: 8 }}>
-            {m.isToolbox ? (
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                <button onClick={() => setToolbox(latestMonth, true)} style={{ ...toggleBtn, ...(actual === 1 ? toggleOn : {}) }}>Yes</button>
-                <button onClick={() => setToolbox(latestMonth, false)} style={{ ...toggleBtn, ...(actual === 0 ? toggleOff : {}) }}>No</button>
-              </div>
-            ) : isEditing ? (
+            {m.isToolbox ? (() => {
+              // Any month in the range, defaulting to the latest. Clicking the
+              // button that is already on clears the month back to 'not set'.
+              const tm = (toolboxMonth && months.includes(toolboxMonth)) ? toolboxMonth : latestMonth
+              const tv = (series.find(s => s.month === tm) || {}).toolbox
+              return (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select value={tm || ''} onChange={e => setToolboxMonth(e.target.value)} style={{ ...dateInp, padding: '6px 8px' }}>
+                    {[...months].reverse().map(mo => <option key={mo} value={mo}>{monthLabel(mo)}</option>)}
+                  </select>
+                  <button onClick={() => setToolbox(tm, tv === 1 ? null : true)} style={{ ...toggleBtn, ...(tv === 1 ? toggleOn : {}) }}>Yes</button>
+                  <button onClick={() => setToolbox(tm, tv === 0 ? null : false)} style={{ ...toggleBtn, ...(tv === 0 ? toggleOff : {}) }}>No</button>
+                </div>
+              )
+            })() : isEditing ? (
               <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: showChart ? 'flex-start' : 'center' }}>
                 <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') saveTarget(m.targetType, m.targetKey, editValue); if (e.key === 'Escape') setEditingTarget(null) }}
+                  onKeyDown={e => { if (e.key === 'Enter') saveTarget(m, editValue); if (e.key === 'Escape') setEditingTarget(null) }}
                   style={{ width: 80, fontSize: 15, padding: '3px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} />
-                <button onClick={() => saveTarget(m.targetType, m.targetKey, editValue)} style={{ fontSize: 13, padding: '3px 8px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer' }}>✓</button>
+                {isPct(m) && <span style={{ fontSize: 14, color: '#888' }}>%</span>}
+                <button onClick={() => saveTarget(m, editValue)} style={{ fontSize: 13, padding: '3px 8px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer' }}>✓</button>
               </div>
             ) : (
-              <div style={{ fontSize: 13.5, color: '#999', cursor: 'pointer' }} onClick={() => { setEditingTarget(m.key); setEditValue(String(target ?? '')) }}>
+              <div style={{ fontSize: 13.5, color: '#999', cursor: 'pointer' }} onClick={() => { setEditingTarget(m.key); setEditValue(targetToInput(m, target)) }}>
                 Target: {target == null ? '—' : (m.format === pct ? pct(target) : (m.format === gbp ? gbp(target) : target))} <span>✎</span>
               </div>
             )}
@@ -199,8 +234,6 @@ export default function OpsScorecardsPage() {
       </div>
     )
   }
-
-  const months = data?.months || []
 
   return (
     <OperationsShell active="scorecards" title="Scorecards">
@@ -228,6 +261,9 @@ export default function OpsScorecardsPage() {
         </div>
       </div>
 
+      {saveError && (
+        <div style={{ background: '#fdecec', border: '1px solid #f5c2c2', color: '#b42318', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>{saveError}</div>
+      )}
       {loading ? (
         <div style={{ textAlign: 'center', color: '#aaa', padding: 40 }}>Loading…</div>
       ) : !current ? (
@@ -268,13 +304,14 @@ export default function OpsScorecardsPage() {
                           <td style={{ ...tdS, color: '#888', position: 'sticky', left: 220, background: '#fff' }}>
                             {editingTarget === `table-${md.key}` ? (
                               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                                <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(md.targetType, md.targetKey, editValue); if (e.key === 'Escape') setEditingTarget(null) }} style={{ width: 64, fontSize: 12, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} />
-                                <button onClick={() => saveTarget(md.targetType, md.targetKey, editValue)} style={{ fontSize: 11, padding: '2px 6px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer' }}>✓</button>
+                                <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(md, editValue); if (e.key === 'Escape') setEditingTarget(null) }} style={{ width: 64, fontSize: 12, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} />
+                                {isPct(md) && <span style={{ fontSize: 11, color: '#888' }}>%</span>}
+                                <button onClick={() => saveTarget(md, editValue)} style={{ fontSize: 11, padding: '2px 6px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer' }}>✓</button>
                               </div>
                             ) : md.isToolbox ? (
                               <span style={{ color: '#bbb' }}>—</span>
                             ) : (
-                              <span style={{ cursor: 'pointer' }} onClick={() => { setEditingTarget(`table-${md.key}`); setEditValue(String(target ?? '')) }}>
+                              <span style={{ cursor: 'pointer' }} onClick={() => { setEditingTarget(`table-${md.key}`); setEditValue(targetToInput(md, target)) }}>
                                 {target == null ? '—' : (md.format === pct ? pct(target) : (md.format === gbp ? gbp(target) : target))} <span style={{ fontSize: 10 }}>✎</span>
                               </span>
                             )}
@@ -283,7 +320,10 @@ export default function OpsScorecardsPage() {
                             const val = s[md.key]
                             const color = rag(val, target, md.mode)
                             return (
-                              <td key={s.month} style={{ ...tdS, textAlign: 'right', color: val != null ? color : '#ddd', fontWeight: val != null ? 500 : 400 }}>
+                              <td key={s.month}
+                                onClick={md.isToolbox ? () => setToolbox(s.month, nextToolbox(val)) : undefined}
+                                title={md.isToolbox ? 'Click: not set → Yes → No' : undefined}
+                                style={{ ...tdS, textAlign: 'right', color: val != null ? color : '#ddd', fontWeight: val != null ? 500 : 400, cursor: md.isToolbox ? 'pointer' : 'default' }}>
                                 {val != null ? md.format(val) : '—'}
                               </td>
                             )

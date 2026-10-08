@@ -1,103 +1,77 @@
-PACKAGE 1023 - Accounts gets the Commercial portal, in full
+PACKAGE 1024 - Operations Scorecards: two metrics off, Toolbox Talk by month,
+               percentage targets
 ================================================================================
 
-Sixteen files. Complete replacements. No re-seed. No env changes.
+Three files. Complete replacements. No re-seed. No env changes.
 
-DEPLOY 1022 FIRST. pages/api/targets.js here is the 1022 version with one
-further change; deploying 1023 over 1021 would bring back the four target
-defaults 1022 removed.
+DEPLOY 1022 AND 1023 FIRST. All three files here are built on those versions.
 
-  lib/roles.js
-  lib/portalAuth.js
-  pages/wip.js
-  pages/api/retention.js
+  pages/operations/scorecards.js
+  pages/api/ops-scorecards.js
   pages/api/targets.js
-  pages/api/task-definitions.js
-  pages/api/application-pdf.js
-  pages/api/application-send.js
-  pages/api/applications.js
-  pages/api/commercial-metrics.js
-  pages/api/contracted-rates.js
-  pages/api/project-cashflow.js
-  pages/api/retention-invoiced.js
-  pages/api/variation-send.js
-  pages/api/wip-lock.js
-  pages/api/xero-gross-margin.js
 
 
-THE DECISION
+1. REMOVED FROM THE OPERATIONS MANAGER SCORECARD
 ================================================================================
-Accounts (the bookkeeper's role) has the Commercial portal on the same terms
-as post-contract: view, edit, send applications and variations, adjust WIP,
-sign the month off, edit retention entries and set scorecard targets.
+  - Tasks completed on time
+  - Risk log completed on time
 
-This reverses a deliberate earlier rule. The full WIP page refused Accounts
-("no business editing adjustments or signing the month off") and the
-retention entries were read-only to them. Both now allow it. The WIP and
-Retention TABS inside Bookkeeping stay view-only - that is the tab, not the
-person; the same user can edit on the Commercial pages.
+Cards and trend table both. The route no longer reads the live tasks or the
+risk log - those two metrics were the only reason it did. Defaults removed
+from /api/targets; Rock's saved values are left in place, unread.
 
 
-HOW
+2. TOOLBOX TALK - ANY MONTH, ON A GRAPH
 ================================================================================
-lib/roles.js         'accounts' added to the commercial area. That alone puts
-                     the tile on the home page and the column in Admin's
-                     access table.
+Before: Yes/No buttons that only ever set the LATEST month, and no graph.
 
-lib/portalAuth.js    NEW requireArea(req, res, area). Asks AREA_ACCESS instead
-                     of carrying a role list. Same 401/403 as requireRole.
+Now:
+  - The card has a month picker (latest first) beside Yes and No. Pick a
+    month, click Yes or No. Clicking the button that is already lit clears
+    that month back to "not set".
+  - The card draws the line graph like the others: Yes plots at the top, No
+    at the bottom, unset months are skipped. Same trend line.
+  - In the trend table, each Toolbox cell is clickable:
+    not set -> Yes -> No -> not set.
 
-Ten routes           each carried its own ['post-contract','management',
-                     'admin'] and would have refused Accounts on every
-                     Commercial page. They now ask requireArea('commercial'),
-                     so the next change to who has Commercial is one line.
-
-retention            read: Commercial or Bookkeeping. write: Commercial.
-targets              anyone with pre-contract, commercial or operations.
-pages/wip.js         full page: Commercial. ?embed=1: Commercial or Bookkeeping.
-
-Nobody else's access changes. Checked role by role:
-
-  role           commercial  bookkeeping  targets
-  accounts       yes (new)   yes          yes (new)
-  post-contract  yes         no           yes
-  pre-contract   no          no           yes
-  designer       no          no           no
-  management     yes         yes          yes
-  admin          yes         yes          yes
+Clearing deletes the stored value rather than writing null. The twelve month
+reads now run in parallel instead of one after another.
 
 
-A FAULT FIXED ON THE WAY
+3. PERCENTAGE TARGETS - 30 MEANS 30%
 ================================================================================
-/api/task-definitions listed 'commercial' and 'bookkeeping' as ROLES. They are
-areas; no user has either. So Accounts was refused its own Bookkeeping
-checklist, and the Bookkeeping Weekly/Monthly Tasks pages silently fell back
-to the built-in default list. If anyone customised the bookkeeping checklist,
-the bookkeeper has never seen it. They will now.
+Targets are stored as fractions (1 = 100%). The box saved exactly what was
+typed, so 30 became 30 and showed as 3000%.
 
-The read now goes by the checklist's area. Side effect: post-contract can no
-longer read the BOOKKEEPING checklist - they cannot open Bookkeeping, so
-nothing they use reads it. Editing a checklist is still management/admin.
+Now, on percentage metrics:
+  - the box opens showing the target as a percentage (100, not 1)
+  - a % sign sits beside it
+  - 30 or "30%" saves as 30%
+  - anything that is not a number is refused, with a message, instead of
+    being stored as text
+
+A failed save now shows the server's message and puts the old target back.
+Previously the screen showed the new value whether or not it saved.
+
+ANY TARGET ALREADY SHOWING 3000% (or similar) needs re-typing once. Nothing
+converts the old values automatically - a stored 30 could mean 3000% typed by
+mistake or a real count, and only you know which.
 
 
-NOT CHANGED, STILL OPEN
+NOT IN THIS PACKAGE
 ================================================================================
-The /api/project/[id] routes (the project page, WIP adjustments, settings,
-comments, report) have NO role check at all - any signed-in user. Accounts
-already worked there for that reason. Separate item.
+The pre-contract scorecard has its own, different version of the same
+problem: it stores what is typed and displays values of 1 or more as plain
+numbers. Not touched here.
 
 
-SMOKE TEST - signed in as the bookkeeper
+SMOKE TEST
 ================================================================================
-1. Home page shows the Commercial tile.
-2. Every Commercial nav item opens with data: Project Financials, Outstanding
-   Invoices, Retention, Variations, Contracted Rates, Applications,
-   Application Calendar, WIP, Cash Flow, Weekly/Monthly Tasks, Commercial
-   Scorecard (targets visible).
-3. WIP full page opens (not bounced home). Add an adjustment, save, reload.
-4. Retention: edit a manual entry on the Commercial page, save, reload.
-5. Open an application, generate the PDF. (Do not send unless intended.)
-6. Bookkeeping > Weekly Tasks: shows the customised checklist if one exists.
-7. Bookkeeping > WIP and Retention tabs: still view-only.
-
-Then as a post-contract user: Commercial behaves exactly as before.
+1. Operations Manager tab: four cards - Start On Site, Daily Site Diaries,
+   Work Area Handovers, Toolbox Talk. Trend table, same four rows.
+2. Toolbox: pick a month three months back, click Yes. The graph and the
+   table cell for that month update. Click Yes again - the month clears.
+3. Click a Toolbox cell in the table - it cycles Yes, No, blank.
+4. Edit any % target, type 30, save. It shows 30.0%. Reload - still 30.0%.
+5. Type "abc" as a target - refused with a message, nothing saved.
+6. Any CM tab: unchanged from 1022.

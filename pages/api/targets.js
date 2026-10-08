@@ -41,8 +41,6 @@ const DEFAULT_TARGETS = {
     diaryPct: 1,
     wahPct: 1,
     toolbox: 1,
-    tasksPct: 0.9,
-    risksPct: 0.9,
   }
 }
 
