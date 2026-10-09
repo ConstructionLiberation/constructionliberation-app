@@ -1,77 +1,111 @@
-PACKAGE 1024 - Operations Scorecards: two metrics off, Toolbox Talk by month,
-               percentage targets
+PACKAGE 1026 - the Management portal
 ================================================================================
 
-Three files. Complete replacements. No re-seed. No env changes.
+Eighteen files: one replacement page, one edited API, sixteen new.
+No re-seed. No env changes. NOTHING IS SEEDED - every page starts empty.
 
-DEPLOY 1022 AND 1023 FIRST. All three files here are built on those versions.
+DEPLOY 1022-1025 FIRST. pages/api/targets.js is built on 1025, and the
+management routes use requireArea() from 1023.
 
-  pages/operations/scorecards.js
-  pages/api/ops-scorecards.js
-  pages/api/targets.js
+  REPLACED  pages/management.js               (was "coming soon")
+  EDITED    pages/api/targets.js              ('management' area added)
+  NEW       lib/mgmtDocs.js
+            lib/businessScorecard.js
+            components/ManagementShell.js
+            components/MgmtRowsTable.js
+            components/GoalTracker.js
+            pages/api/management/[doc].js
+            pages/api/management/org-chart.js
+            pages/api/management/scorecard.js
+            pages/management/vmv.js
+            pages/management/swot.js
+            pages/management/scorecard.js
+            pages/management/quarterly-goals.js
+            pages/management/one-year-goals.js
+            pages/management/three-year-goals.js
+            pages/management/org-chart.js
+            pages/management/meeting-actions.js
 
 
-1. REMOVED FROM THE OPERATIONS MANAGER SCORECARD
+ACCESS
 ================================================================================
-  - Tasks completed on time
-  - Risk log completed on time
+The Management tile already existed on the home page, shown only to the
+management area (management and admin). Unchanged. Admin is included because
+admin is above management everywhere else in the portal.
 
-Cards and trend table both. The route no longer reads the live tasks or the
-risk log - those two metrics were the only reason it did. Defaults removed
-from /api/targets; Rock's saved values are left in place, unread.
+Every /api/management route checks the area on the server. Typing a URL as
+anyone else gets nothing.
+
+The tile also needs 'management' in the tenant's MODULES list, if the tenant
+record has one. A record with no modules list shows everything.
 
 
-2. TOOLBOX TALK - ANY MONTH, ON A GRAPH
+THE PAGES
 ================================================================================
-Before: Yes/No buttons that only ever set the LATEST month, and no graph.
+Vision, Mission & Values  three boxes, Save button. Values one per line.
+SWOT                      four quadrants, add/edit/remove points, Save.
+Business Scorecard        nine metrics, cards with trend lines + month table,
+                          12 months default, From moves back as far as wanted.
+                          Targets editable (% typed as %). NO METRIC IS
+                          CONNECTED YET - each card says "Not connected yet".
+                          Deliberate: they are agreed one at a time next.
+Quarterly Goals           workbook columns, three monthly comment columns.
+1-Year Goals              workbook columns, one comment column.
+3-Year Goals              same.
+Org Chart                 every ACTIVE portal login, in tiers by job role.
+                          Read live - leavers drop off on the next load.
+                          Outsourced services table underneath, by hand.
+Meeting Actions           workbook columns plus the meeting YEAR.
 
-Now:
-  - The card has a month picker (latest first) beside Yes and No. Pick a
-    month, click Yes or No. Clicking the button that is already lit clears
-    that month back to "not set".
-  - The card draws the line graph like the others: Yes plots at the top, No
-    at the bottom, unset months are skipped. Same trend line.
-  - In the trend table, each Toolbox cell is clickable:
-    not set -> Yes -> No -> not set.
-
-Clearing deletes the stored value rather than writing null. The twelve month
-reads now run in parallel instead of one after another.
+Goal trackers and Meeting Actions:
+  - cells save as you leave them; no Save button
+  - Progress and Completed are dropdowns from the workbook's own lists
+  - Leader / Team Member suggest active portal users plus "All"; typed names
+    are kept
+  - Complete goals, and Yes / N/A actions, sit behind "Show completed"
+  - open actions past their deadline are shaded red
+  - new rows start with this month and year filled in
 
 
-3. PERCENTAGE TARGETS - 30 MEANS 30%
+HOW IT SAVES - AND WHY
 ================================================================================
-Targets are stored as fractions (1 = 100%). The box saved exactly what was
-typed, so 30 became 30 and showed as 3000%.
+Lists (goals, actions, outsourced services) save ONE ROW at a time, merged on
+the server. Two directors editing different rows at once do not undo each
+other.
 
-Now, on percentage metrics:
-  - the box opens showing the target as a percentage (100, not 1)
-  - a % sign sits beside it
-  - 30 or "30%" saves as 30%
-  - anything that is not a number is refused, with a message, instead of
-    being stored as text
+Vision/Mission/Values and SWOT save whole. If someone else saved since you
+opened the page, your save is REFUSED with their name, and your text stays in
+the box. Nothing is overwritten silently.
 
-A failed save now shows the server's message and puts the old target back.
-Previously the screen showed the new value whether or not it saved.
+Every refusal shows the server's message. None is turned into an empty page.
 
-ANY TARGET ALREADY SHOWING 3000% (or similar) needs re-typing once. Nothing
-converts the old values automatically - a stored 30 could mean 3000% typed by
-mistake or a real count, and only you know which.
+The API only accepts the fields defined in lib/mgmtDocs.js - an unknown field
+is refused, not stored.
+
+Keys: mgmt:vmv, mgmt:swot, mgmt:goals:quarterly, mgmt:goals:1y,
+mgmt:goals:3y, mgmt:meeting-actions, mgmt:org:external. Business targets sit
+in scorecard:targets under 'business'.
 
 
-NOT IN THIS PACKAGE
+ORG CHART - A LIMIT TO KNOW
 ================================================================================
-The pre-contract scorecard has its own, different version of the same
-problem: it stores what is typed and displays values of 1 or more as plain
-numbers. Not touched here.
+The portal records each person's job role but not who they report to. So the
+chart is tiers (Directors / Managers / Commercial, Contracts & Estimating /
+Site / Other), not lines between people. Anyone without a job role, or with
+"Other", appears under Other - set it in Admin > Users and they move.
 
 
-SMOKE TEST
+SMOKE TEST - as management
 ================================================================================
-1. Operations Manager tab: four cards - Start On Site, Daily Site Diaries,
-   Work Area Handovers, Toolbox Talk. Trend table, same four rows.
-2. Toolbox: pick a month three months back, click Yes. The graph and the
-   table cell for that month update. Click Yes again - the month clears.
-3. Click a Toolbox cell in the table - it cycles Yes, No, blank.
-4. Edit any % target, type 30, save. It shows 30.0%. Reload - still 30.0%.
-5. Type "abc" as a target - refused with a message, nothing saved.
-6. Any CM tab: unchanged from 1022.
+1. Home: Management tile. Opens the landing page with eight links.
+2. VMV: type in all three, Save, reload - kept.
+3. SWOT: add two points per quadrant, remove one, Save, reload.
+4. Quarterly Goals: + Add row (this month filled in). Type a goal, tab out,
+   reload - kept. Set Progress to Complete - row hides; Show completed brings
+   it back.
+5. Meeting Actions: add a row with yesterday's deadline - shaded red.
+6. Org Chart: everyone active appears. Deactivate a test user in Admin,
+   reload - gone. Add an outsourced service.
+7. Business Scorecard: nine cards, all "Not connected yet". Set a % target
+   to 25 - shows 25.0%.
+8. Sign in as post-contract: no tile; /management/vmv bounces home.
