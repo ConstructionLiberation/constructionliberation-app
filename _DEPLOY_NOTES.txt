@@ -1,111 +1,31 @@
-PACKAGE 1026 - the Management portal
+PACKAGE 1022-1026 CUMULATIVE - one drop, final versions only
 ================================================================================
 
-Eighteen files: one replacement page, one edited API, sixteen new.
-No re-seed. No env changes. NOTHING IS SEEDED - every page starts empty.
+The build failed on:  ./pages/api/targets.js  cannot resolve ../../lib/scorecardPeople
 
-DEPLOY 1022-1025 FIRST. pages/api/targets.js is built on 1025, and the
-management routes use requireArea() from 1023.
+lib/scorecardPeople.js is NEW in 1025. 1026 targets.js imports it, so 1025
+was either not deployed or its new files were not copied.
 
-  REPLACED  pages/management.js               (was "coming soon")
-  EDITED    pages/api/targets.js              ('management' area added)
-  NEW       lib/mgmtDocs.js
-            lib/businessScorecard.js
-            components/ManagementShell.js
-            components/MgmtRowsTable.js
-            components/GoalTracker.js
-            pages/api/management/[doc].js
-            pages/api/management/org-chart.js
-            pages/api/management/scorecard.js
-            pages/management/vmv.js
-            pages/management/swot.js
-            pages/management/scorecard.js
-            pages/management/quarterly-goals.js
-            pages/management/one-year-goals.js
-            pages/management/three-year-goals.js
-            pages/management/org-chart.js
-            pages/management/meeting-actions.js
+This zip replaces deploying 1022, 1023, 1024, 1025 and 1026 one by one. Every
+file is the LAST version from those five packages. Copy ALL 38 files over the
+repo, keeping the folders. Ten of them are NEW files - check these exist in
+the repo after copying:
 
+  lib/scorecardPeople.js            (1025)
+  components/HiddenPeoplePicker.js  (1025)
+  lib/mgmtDocs.js                   (1026)
+  lib/businessScorecard.js          (1026)
+  components/ManagementShell.js     (1026)
+  components/MgmtRowsTable.js       (1026)
+  components/GoalTracker.js         (1026)
+  pages/api/management/            (1026, three files incl. [doc].js)
+  pages/management/                 (1026, eight pages)
 
-ACCESS
-================================================================================
-The Management tile already existed on the home page, shown only to the
-management area (management and admin). Unchanged. Admin is included because
-admin is above management everywhere else in the portal.
+Safe to copy over files from any of 1022-1026 already deployed: these are the
+same or later versions.
 
-Every /api/management route checks the area on the server. Typing a URL as
-anyone else gets nothing.
+Checked before zipping: all five packages applied to the 1021 repo, and every
+page and API in this zip bundled against it with no missing module or missing
+export.
 
-The tile also needs 'management' in the tenant's MODULES list, if the tenant
-record has one. A record with no modules list shows everything.
-
-
-THE PAGES
-================================================================================
-Vision, Mission & Values  three boxes, Save button. Values one per line.
-SWOT                      four quadrants, add/edit/remove points, Save.
-Business Scorecard        nine metrics, cards with trend lines + month table,
-                          12 months default, From moves back as far as wanted.
-                          Targets editable (% typed as %). NO METRIC IS
-                          CONNECTED YET - each card says "Not connected yet".
-                          Deliberate: they are agreed one at a time next.
-Quarterly Goals           workbook columns, three monthly comment columns.
-1-Year Goals              workbook columns, one comment column.
-3-Year Goals              same.
-Org Chart                 every ACTIVE portal login, in tiers by job role.
-                          Read live - leavers drop off on the next load.
-                          Outsourced services table underneath, by hand.
-Meeting Actions           workbook columns plus the meeting YEAR.
-
-Goal trackers and Meeting Actions:
-  - cells save as you leave them; no Save button
-  - Progress and Completed are dropdowns from the workbook's own lists
-  - Leader / Team Member suggest active portal users plus "All"; typed names
-    are kept
-  - Complete goals, and Yes / N/A actions, sit behind "Show completed"
-  - open actions past their deadline are shaded red
-  - new rows start with this month and year filled in
-
-
-HOW IT SAVES - AND WHY
-================================================================================
-Lists (goals, actions, outsourced services) save ONE ROW at a time, merged on
-the server. Two directors editing different rows at once do not undo each
-other.
-
-Vision/Mission/Values and SWOT save whole. If someone else saved since you
-opened the page, your save is REFUSED with their name, and your text stays in
-the box. Nothing is overwritten silently.
-
-Every refusal shows the server's message. None is turned into an empty page.
-
-The API only accepts the fields defined in lib/mgmtDocs.js - an unknown field
-is refused, not stored.
-
-Keys: mgmt:vmv, mgmt:swot, mgmt:goals:quarterly, mgmt:goals:1y,
-mgmt:goals:3y, mgmt:meeting-actions, mgmt:org:external. Business targets sit
-in scorecard:targets under 'business'.
-
-
-ORG CHART - A LIMIT TO KNOW
-================================================================================
-The portal records each person's job role but not who they report to. So the
-chart is tiers (Directors / Managers / Commercial, Contracts & Estimating /
-Site / Other), not lines between people. Anyone without a job role, or with
-"Other", appears under Other - set it in Admin > Users and they move.
-
-
-SMOKE TEST - as management
-================================================================================
-1. Home: Management tile. Opens the landing page with eight links.
-2. VMV: type in all three, Save, reload - kept.
-3. SWOT: add two points per quadrant, remove one, Save, reload.
-4. Quarterly Goals: + Add row (this month filled in). Type a goal, tab out,
-   reload - kept. Set Progress to Complete - row hides; Show completed brings
-   it back.
-5. Meeting Actions: add a row with yesterday's deadline - shaded red.
-6. Org Chart: everyone active appears. Deactivate a test user in Admin,
-   reload - gone. Add an outsourced service.
-7. Business Scorecard: nine cards, all "Not connected yet". Set a % target
-   to 25 - shows 25.0%.
-8. Sign in as post-contract: no tile; /management/vmv bounces home.
+The individual deploy notes and smoke tests for 1022-1026 still apply.

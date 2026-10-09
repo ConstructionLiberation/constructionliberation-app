@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import OperationsShell, { PageHeading, SubTabs } from '../../components/OperationsShell'
+import HiddenPeoplePicker from '../../components/HiddenPeoplePicker'
+import { personKey } from '../../lib/scorecardPeople'
 
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
 const num = (n) => n == null ? '—' : String(n)
@@ -72,13 +74,22 @@ export default function OpsScorecardsPage() {
   const [editValue, setEditValue] = useState('')
   const [toolboxMonth, setToolboxMonth] = useState('')
   const [saveError, setSaveError] = useState('')
+  // Hidden tabs (1025) - people who have left. Keys are personKey(tab.key),
+  // so 'cm:' and 'ops:' stay distinct for someone who was both.
+  const [hiddenPeople, setHiddenPeople] = useState([])
+  const [showHidden, setShowHidden] = useState(false)
+  const [myRole, setMyRole] = useState('')
+  useEffect(() => {
+    fetch('/api/portal-auth?action=me').then(r => r.ok ? r.json() : null).then(d => setMyRole(d?.user?.role || '')).catch(() => {})
+  }, [])
 
   const _now = new Date()
   const _yearAgo = new Date(_now.getFullYear() - 1, _now.getMonth(), 1)
   const [dateFrom, setDateFrom] = useState(_yearAgo.toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState(_now.toISOString().split('T')[0])
 
-  const SUB_TABS = buildTabs(data?.cmNames, data?.opsNames)
+  const ALL_TABS = buildTabs(data?.cmNames, data?.opsNames)
+  const SUB_TABS = showHidden ? ALL_TABS : ALL_TABS.filter(t => !hiddenPeople.includes(personKey(t.key)))
   // Whichever tab is selected, else the first that exists. NULL when the
   // tenant has neither a Contracts Manager on any project nor an Operations
   // Manager in its people - guarded everywhere below rather than assumed,
@@ -93,6 +104,7 @@ export default function OpsScorecardsPage() {
         fetch('/api/targets').then(r => r.json()),
       ])
       setData(d); setTargets(t.targets || {})
+      setHiddenPeople(t.hiddenPeople?.operations || [])
     } catch {}
     setLoading(false)
   }
@@ -131,6 +143,16 @@ export default function OpsScorecardsPage() {
       load()
     } catch (e) { setSaveError(`Toolbox Talk not saved: ${e.message}`) }
   }
+  async function togglePerson(key, hide) {
+    setSaveError('')
+    try {
+      const r = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidePerson: { scorecard: 'operations', key, hidden: hide } }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || `Save failed (${r.status})`)
+      setHiddenPeople(d.hiddenPeople?.operations || [])
+    } catch (e) { setSaveError(`Not saved: ${e.message}`) }
+  }
+
   // Table cell click: not set -> Yes -> No -> not set.
   const nextToolbox = (v) => v == null ? true : (v === 1 ? false : null)
 
@@ -240,11 +262,20 @@ export default function OpsScorecardsPage() {
       <PageHeading title="Operations Scorecards" sub="Contracts Managers and Operations Managers, taken from your own team." />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <SubTabs
           tabs={SUB_TABS.map(t => ({ ...t, sub: t.role }))}
           active={current ? current.key : ''}
           onChange={setSub}
         />
+        <HiddenPeoplePicker
+          people={ALL_TABS.map(t => ({ key: t.key, label: t.label, sub: t.role }))}
+          hidden={hiddenPeople}
+          canEdit={myRole === 'management' || myRole === 'admin'}
+          showHidden={showHidden} setShowHidden={setShowHidden}
+          onToggle={togglePerson}
+        />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: '#888' }}>From</span>
@@ -266,6 +297,10 @@ export default function OpsScorecardsPage() {
       )}
       {loading ? (
         <div style={{ textAlign: 'center', color: '#aaa', padding: 40 }}>Loading…</div>
+      ) : !current && ALL_TABS.length ? (
+        <div style={{ padding: 28, color: '#666', fontSize: 13.5, background: '#fff', border: '0.5px solid #e1e0d9', borderRadius: 10 }}>
+          Every scorecard is hidden. Use People to show one again.
+        </div>
       ) : !current ? (
         <EmptyState />
       ) : current.kind === 'cm' && !entry ? (

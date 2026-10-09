@@ -3,6 +3,8 @@ import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import PreContractNav from '../components/PreContractNav'
+import HiddenPeoplePicker from '../components/HiddenPeoplePicker'
+import { personKey } from '../lib/scorecardPeople'
 
 const fmt = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n)
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
@@ -330,6 +332,12 @@ export default function Scorecard() {
   // somebody hides one.
   const [hidden, setHidden] = useState([])
   const [showMetricPicker, setShowMetricPicker] = useState(false)
+  // Hidden PEOPLE (1025) - someone who has left. Their tab goes; their deals
+  // stay in every team total. See lib/scorecardPeople.js.
+  const [hiddenPeople, setHiddenPeople] = useState([])
+  const [showHiddenPeople, setShowHiddenPeople] = useState(false)
+  const [myRole, setMyRole] = useState('')
+  const [peopleError, setPeopleError] = useState('')
   const [editValue, setEditValue] = useState('')
   const [modal, setModal] = useState(null) // { title, projects }
   const [xeroProjects, setXeroProjects] = useState([])
@@ -361,13 +369,32 @@ export default function Scorecard() {
       .filter(n => !ESTIMATORS.includes(n)).sort(),
     [deals, ESTIMATORS])
   const PEOPLE = useMemo(() => [...ESTIMATORS, ...SALESPEOPLE], [ESTIMATORS, SALESPEOPLE])
+  // The TABS. PEOPLE stays the full list; only the tab strip and the default
+  // choice skip hidden people. Nothing that computes a metric reads this.
+  const TAB_PEOPLE = useMemo(
+    () => showHiddenPeople ? PEOPLE : PEOPLE.filter(p => !hiddenPeople.includes(personKey(p))),
+    [PEOPLE, hiddenPeople, showHiddenPeople])
 
   // Whatever the URL asked for, else the first person we actually have. The
   // default used to be the literal string 'Roman'.
   useEffect(() => {
-    if (!PEOPLE.length) return
-    if (!person || !PEOPLE.includes(person)) setPerson(PEOPLE[0])
-  }, [PEOPLE])
+    if (!TAB_PEOPLE.length) return
+    if (!person || !TAB_PEOPLE.includes(person)) setPerson(TAB_PEOPLE[0])
+  }, [TAB_PEOPLE])
+
+  useEffect(() => {
+    fetch('/api/portal-auth?action=me').then(r => r.ok ? r.json() : null).then(d => setMyRole(d?.user?.role || '')).catch(() => {})
+  }, [])
+
+  async function togglePerson(key, hide) {
+    setPeopleError('')
+    try {
+      const r = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidePerson: { scorecard: 'pre-contract', key, hidden: hide } }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || `Save failed (${r.status})`)
+      setHiddenPeople(d.hiddenPeople?.['pre-contract'] || [])
+    } catch (e) { setPeopleError(`Not saved: ${e.message}`) }
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -401,6 +428,7 @@ export default function Scorecard() {
       const td = await tr.json()
       setTargets(td.targets || DEFAULT_TARGETS)
       setHidden(Array.isArray(td.hidden) ? td.hidden : [])
+      setHiddenPeople(td.hiddenPeople?.['pre-contract'] || [])
       // Load Xero project data for GP margin cards
       // The EOM report hides these; the scorecard was counting them.
       try { setHiddenProjects((await fetch('/api/hidden-projects').then(r => r.json())).hidden || []) } catch { setHiddenProjects([]) }
@@ -1083,7 +1111,7 @@ export default function Scorecard() {
 
 
         <div style={{ borderBottom: '0.5px solid #e1e0d9', background: '#fff', padding: '0 24px', display: 'flex' }}>
-          {PEOPLE.map(p => (
+          {TAB_PEOPLE.map(p => (
             <button key={p} onClick={() => navigateTo(p)} style={{ padding: '10px 20px', border: 'none', borderBottom: person === p ? '2px solid #1a1a19' : '2px solid transparent', background: 'transparent', fontSize: 13, fontWeight: person === p ? 500 : 400, color: person === p ? '#1a1a19' : '#888', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', lineHeight: 1.25 }}>
               <div>{p}</div>
               {/* The role, under the name. Derived from which field the person
@@ -1095,7 +1123,15 @@ export default function Scorecard() {
             </button>
           ))}
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 12, color: '#aaa', alignSelf: 'center' }}>{isEstimator ? 'Estimator scorecard' : 'Sales scorecard'}</span>
+          <span style={{ fontSize: 12, color: '#aaa', alignSelf: 'center', marginRight: 14 }}>{isEstimator ? 'Estimator scorecard' : 'Sales scorecard'}</span>
+          {peopleError && <span style={{ fontSize: 12, color: '#b42318', alignSelf: 'center', marginRight: 10 }}>{peopleError}</span>}
+          <HiddenPeoplePicker
+            people={PEOPLE.map(p => ({ key: p, label: p, sub: ESTIMATORS.includes(p) ? 'Estimator' : 'Sales' }))}
+            hidden={hiddenPeople}
+            canEdit={myRole === 'management' || myRole === 'admin'}
+            showHidden={showHiddenPeople} setShowHidden={setShowHiddenPeople}
+            onToggle={togglePerson}
+          />
           <button
             onClick={() => setShowMetricPicker(v => !v)}
             style={{ marginLeft: 14, alignSelf: 'center', background: 'none', border: '0.5px solid #d0d0cc', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#555', cursor: 'pointer', fontFamily: 'inherit' }}
