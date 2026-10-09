@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ManagementShell, { Heading, ErrorBar, mgmtApi } from '../../components/ManagementShell'
 import { btnDark } from '../../components/MgmtRowsTable'
+import AutoTextarea from '../../components/AutoTextarea'
 
 // SWOT: four lists in the usual 2 x 2. Add, edit and remove points, then Save.
 const QUADS = [
@@ -55,9 +56,9 @@ export default function SWOT() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {list.map((item, i) => (
                     <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                      <textarea rows={1} value={item}
+                      <AutoTextarea value={item}
                         onChange={e => setList(q.key, list.map((x, j) => j === i ? e.target.value : x))}
-                        style={{ flex: 1, fontSize: 14, padding: '6px 8px', border: '1px solid #e1e0d9', borderRadius: 6, fontFamily: 'inherit', resize: 'vertical', background: '#fff' }} />
+                        style={{ flex: 1, fontSize: 14, lineHeight: 1.4, padding: '6px 8px', border: '1px solid #e1e0d9', borderRadius: 6, fontFamily: 'inherit', background: '#fff' }} />
                       <button onClick={() => setList(q.key, list.filter((_, j) => j !== i))} title="Remove"
                         style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 16, padding: '4px 2px' }}>×</button>
                     </div>

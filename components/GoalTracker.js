@@ -21,7 +21,7 @@ export default function GoalTracker({ active, title, doc, goalLabel, commentCols
     { key: 'measure', label: 'Success Measure', type: 'textarea', width: 240 },
     { key: 'targetMonth', label: 'Target Month', type: 'select', options: MONTHS, width: 120 },
     { key: 'targetYear', label: 'Target Year', type: 'year', width: 70 },
-    { key: 'leader', label: 'Leader Responsible', type: 'person', width: 160 },
+    { key: 'leader', label: 'Portal User Responsible', type: 'user', allowAll: true, width: 180 },
     { key: 'progress', label: 'Progress', type: 'select', options: PROGRESS, width: 200 },
     ...commentCols.map(c => ({ ...c, type: 'textarea', width: 220 })),
   ]

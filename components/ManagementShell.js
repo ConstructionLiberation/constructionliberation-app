@@ -2,6 +2,7 @@ import Head from 'next/head'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import BrandLogo from './BrandLogo'
+import ReportImprovementLink from './ReportImprovementLink'
 import { useFormat } from './TenantProvider'
 import { canAccessArea } from '../lib/roles'
 
@@ -47,6 +48,10 @@ export default function ManagementShell({ active, title, wide, children }) {
               <span style={div}>|</span>
             </span>
           ))}
+          {/* Same link, same place as every other portal nav - the shared
+              component, so it cannot drift from the others. */}
+          <div style={{ flex: 1, minWidth: 16 }} />
+          <ReportImprovementLink />
         </div>
         <div style={{ maxWidth: wide ? 'none' : 1100, margin: '0 auto', padding: 24 }}>
           {ok ? children : <div style={{ color: '#aaa', textAlign: 'center', padding: 40 }}>Loading…</div>}

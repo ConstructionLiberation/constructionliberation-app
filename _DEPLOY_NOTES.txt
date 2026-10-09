@@ -1,31 +1,61 @@
-PACKAGE 1022-1026 CUMULATIVE - one drop, final versions only
+PACKAGE 1027 - Management portal: first round of changes
 ================================================================================
 
-The build failed on:  ./pages/api/targets.js  cannot resolve ../../lib/scorecardPeople
+Ten files. Eight complete replacements, two NEW. No re-seed. No env changes.
+Built on 1026 (the cumulative package).
 
-lib/scorecardPeople.js is NEW in 1025. 1026 targets.js imports it, so 1025
-was either not deployed or its new files were not copied.
+  REPLACED  pages/management.js
+            lib/mgmtDocs.js
+            components/ManagementShell.js
+            components/MgmtRowsTable.js
+            components/GoalTracker.js
+            pages/management/swot.js
+            pages/management/org-chart.js
+            pages/management/meeting-actions.js
+  NEW       components/AutoTextarea.js
+            components/orgChartImage.js
 
-This zip replaces deploying 1022, 1023, 1024, 1025 and 1026 one by one. Every
-file is the LAST version from those five packages. Copy ALL 38 files over the
-repo, keeping the folders. Ten of them are NEW files - check these exist in
-the repo after copying:
 
-  lib/scorecardPeople.js            (1025)
-  components/HiddenPeoplePicker.js  (1025)
-  lib/mgmtDocs.js                   (1026)
-  lib/businessScorecard.js          (1026)
-  components/ManagementShell.js     (1026)
-  components/MgmtRowsTable.js       (1026)
-  components/GoalTracker.js         (1026)
-  pages/api/management/            (1026, three files incl. [doc].js)
-  pages/management/                 (1026, eight pages)
+WHAT CHANGED
+================================================================================
+1. /management opens straight on Vision, Mission & Values. The page of links
+   is gone - it repeated the nav bar. Server-side redirect, no flash.
 
-Safe to copy over files from any of 1022-1026 already deployed: these are the
-same or later versions.
+2. Text boxes grow to fit. SWOT points, and every multi-line cell in the goal
+   trackers and Meeting Actions (goal, success measure, comments, problem,
+   root cause, action, updates) grow as you type and shrink back. Loaded and
+   pasted text sizes correctly too.
 
-Checked before zipping: all five packages applied to the 1021 repo, and every
-page and API in this zip bundled against it with no missing module or missing
-export.
+3. "Portal User Responsible" replaces Leader Responsible on the Quarterly,
+   1-Year and 3-Year goals and on Meeting Actions: a dropdown of ACTIVE portal
+   users. The goals also offer "All", as the workbook did. Meeting Actions do
+   not - an action belongs to one person.
 
-The individual deploy notes and smoke tests for 1022-1026 still apply.
+   Saves the user id AND the name. If someone leaves, the row still shows
+   the name, marked "(no longer a portal user)", until it is reassigned.
+   Anything typed by hand before this package shows as "(not a portal user)".
+
+4. Meeting Actions: Team Member Responsible removed from the table. Any value
+   already saved is kept in the data, just not shown.
+
+5. Org chart downloads as a PNG - "Download chart (PNG)", top right. Titled
+   with the company name and the date, includes outsourced services, drawn at
+   double resolution for printing, named org-chart-YYYY-MM-DD.png.
+   Outsourced services now also appear on the on-screen chart (dashed boxes)
+   so the screen and the download match.
+
+6. "Report app improvement" at the top right of the Management nav - the same
+   shared component as every other portal nav.
+
+
+SMOKE TEST
+================================================================================
+1. Click the Management tile: opens on Vision, Mission & Values.
+2. SWOT: add a point, type three lines - the box grows. Delete text - it
+   shrinks. Save, reload - sized correctly on load.
+3. Quarterly Goals: Portal User Responsible lists current users and All.
+   Pick one, reload - kept. Long Success Measure - the cell grows.
+4. Meeting Actions: no Team Member column; Portal User Responsible dropdown.
+5. Org Chart: add an outsourced service - it appears on the chart. Download -
+   the PNG has everyone and the service in it.
+6. Report app improvement, top right - opens the same form as elsewhere.

@@ -1,18 +1,23 @@
 import { useEffect, useState } from 'react'
 import { mgmtApi, ErrorBar } from './ManagementShell'
+import AutoTextarea from './AutoTextarea'
 
 // An editable table over one 'rows' document (see lib/mgmtDocs.js). Used by
 // the three goal trackers and Meeting Actions, so they behave identically.
 //
 // columns: [{ key, label, type, options?, width?, wrap? }]
-//   type: 'text' | 'textarea' | 'select' | 'person' | 'date' | 'year'
+//   type: 'text' | 'textarea' | 'select' | 'person' | 'user' | 'date' | 'year'
+//
+// 'user' (1027) is a dropdown of ACTIVE PORTAL USERS. It saves two fields:
+// <key>Id, the user's id, and <key>, their name at the time - so a row still
+// says who it was after that person leaves. allowAll adds an "All" choice.
 //
 // Each cell saves on its own when you leave it. A refused save shows the
 // server's message and the cell keeps what you typed.
 //
 // doneField / doneValues: rows whose doneField is in doneValues are hidden
 // behind "Show completed" - the tracker stays about what is still open.
-export default function MgmtRowsTable({ doc, columns, people = [], doneField, doneValues = [], newRowDefaults = {}, rowColour }) {
+export default function MgmtRowsTable({ doc, columns, people = [], doneField, doneValues = [], newRowDefaults = {}, rowColour, onRowsChange }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [showDone, setShowDone] = useState(false)
@@ -22,6 +27,17 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
     try { setRows((await mgmtApi(`/api/management/${doc}`)).rows) } catch (e) { setError(e.message); setRows([]) }
   }
   useEffect(() => { load() }, [doc])
+  // The org chart draws outsourced services from these rows, so it is told
+  // whenever they change rather than holding its own stale copy.
+  useEffect(() => { if (rows && onRowsChange) onRowsChange(rows) }, [rows])
+
+  // Several fields in one save - a portal user is an id and a name together.
+  async function saveFields(id, fields) {
+    try {
+      const d = await mgmtApi(`/api/management/${doc}`, { op: 'upsert', row: { id, ...fields } })
+      setRows(d.rows); setError('')
+    } catch (e) { setError(`Not saved: ${e.message}`) }
+  }
 
   async function save(id, key, value) {
     const row = rows.find(r => r.id === id)
@@ -63,9 +79,33 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
         </select>
       )
     }
+    if (c.type === 'user') {
+      const ALL = '__all'
+      const id = r[`${c.key}Id`] || ''
+      const name = r[c.key] || ''
+      const current = id || (name === 'All' ? ALL : (name ? '__text' : ''))
+      const known = people.some(p => p.id === id)
+      return (
+        <select value={current} style={inp} onChange={e => {
+          const v = e.target.value
+          if (v === ALL) return saveFields(r.id, { [`${c.key}Id`]: '', [c.key]: 'All' })
+          if (v === '') return saveFields(r.id, { [`${c.key}Id`]: '', [c.key]: '' })
+          const p = people.find(x => x.id === v)
+          if (p) saveFields(r.id, { [`${c.key}Id`]: p.id, [c.key]: p.name })
+        }}>
+          <option value="">—</option>
+          {c.allowAll && <option value={ALL}>All</option>}
+          {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {/* Someone who has left keeps their name on the row, marked, until
+              it is reassigned. Typed text from before 1027 shows the same way. */}
+          {id && !known && <option value={id}>{name || 'Unknown'} (no longer a portal user)</option>}
+          {current === '__text' && <option value="__text">{name} (not a portal user)</option>}
+        </select>
+      )
+    }
     if (c.type === 'date') return <input type="date" {...common} onChange={e => { setDraft(e.target.value); save(r.id, c.key, e.target.value) }} onBlur={undefined} />
     if (c.type === 'person') return <input list="mgmt-people" {...common} />
-    if (c.type === 'textarea') return <textarea rows={2} {...common} style={{ ...inp, resize: 'vertical', minHeight: 36 }} />
+    if (c.type === 'textarea') return <AutoTextarea {...common} style={{ ...inp, lineHeight: 1.4 }} />
     return <input type="text" inputMode={c.type === 'year' ? 'numeric' : undefined} {...common} />
   }
 
