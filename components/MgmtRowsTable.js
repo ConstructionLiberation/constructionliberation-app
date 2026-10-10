@@ -205,7 +205,7 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr>
-              {priorityField && <th style={{ ...th, width: 118 }}>Priority</th>}
+              {priorityField && <th style={{ ...th, width: 72 }}>Priority</th>}
               {columns.map(c => <th key={c.key} style={{ ...th, minWidth: c.width || 120 }}>{c.label}</th>)}
               <th style={{ ...th, width: 40 }} />
             </tr>
@@ -229,13 +229,14 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
                     <button onClick={() => saveFields(r.id, { [priorityField]: isHigh(r) ? '' : 'high' })}
                       title={isHigh(r) ? 'High priority - click to clear' : 'Click to mark as high priority'}
                       aria-pressed={isHigh(r)}
+                      /* 1059: lighter red (pale fill, deep red text), half the size of 1052's badge. */
                       style={{
                         cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
-                        fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, lineHeight: 1,
-                        padding: '5px 8px', borderRadius: 999,
-                        border: `1px solid ${isHigh(r) ? '#dc2626' : '#dcdcd6'}`,
-                        background: isHigh(r) ? '#dc2626' : 'transparent',
-                        color: isHigh(r) ? '#fff' : '#c4c4bf',
+                        fontSize: 7, fontWeight: 700, letterSpacing: 0.3, lineHeight: 1,
+                        padding: '2px 4px', borderRadius: 999,
+                        border: `1px solid ${isHigh(r) ? '#fca5a5' : '#e4e4df'}`,
+                        background: isHigh(r) ? '#fee2e2' : 'transparent',
+                        color: isHigh(r) ? '#b91c1c' : '#cfcfca',
                       }}>HIGH PRIORITY</button>
                   </td>
                 )}
