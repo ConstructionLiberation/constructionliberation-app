@@ -1,34 +1,29 @@
-PACKAGE 1049 - Quarterly Goals: high priority flag
+PACKAGE 1050 - Goals: sort by person
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1048.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1049.
 
-  lib/mgmtDocs.js                       ('priority' accepted on Quarterly Goals)
   components/MgmtRowsTable.js
   components/GoalTracker.js
-  pages/management/quarterly-goals.js
 
-A flag button (⚑) at the start of every Quarterly Goals row.
-  Click      the goal becomes HIGH PRIORITY: red flag, red bar down the row's
-             left edge, and it moves to the TOP of the table.
-  Click again   back to normal, back in its place.
-  "High priority only (n)" beside the other filters shows just the flagged
-  goals; it works with the user filter and Show completed.
-Saves straight away, for everyone, like every other cell.
+A "Sort" dropdown beside the filters on Quarterly, 1-Year and 3-Year Goals:
 
-Flagged goals keep the order they were added in among themselves, and so do
-the rest - only the flag moves a row.
+  Sort: as added     the order goals were added (high priority first on
+                     Quarterly Goals) - as today
+  Sort: by person    grouped A-Z by Portal User Responsible:
+                       "All" first, then each person A-Z, unassigned last
+                       within each person, high priority first, then the
+                       order added
+                     Names are grouped ignoring capitals.
 
-Quarterly Goals only, as asked. The 1-Year and 3-Year trackers and Meeting
-Actions use the same table; switching it on for any of them is one word.
-The server refuses a priority on those for now, so nothing half-works.
+Works with the user filter, Show completed and High priority only. Resets to
+"as added" when the page is reloaded.
 
-Checked: set and clear through the save route (the goal's other fields
-untouched); a priority on 1-Year Goals refused; the ordering rule (flagged
-first, otherwise original order); every page using the shared table bundles;
-all 157 pages pass the browser check.
+Meeting Actions uses the same table but does not have it - one word to add.
+
+Checked: the ordering on mixed rows (All, names in mixed case, unassigned,
+flagged goals); the goal and Meeting Actions pages bundle; all 157 pages pass
+the browser check.
 
 SMOKE TEST
-1. Quarterly Goals: click ⚑ on a goal lower down - it turns red, gets a red
-   bar and jumps to the top. Reload - still there.
-2. Click it again - back to grey, back in place.
-3. Tick "High priority only" - just the flagged goals.
+Quarterly Goals -> Sort: by person. Goals group by person A-Z, "All" first,
+unassigned last; flagged goals first within each person.

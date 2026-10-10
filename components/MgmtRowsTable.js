@@ -20,11 +20,14 @@ import AutoTextarea from './AutoTextarea'
 // priorityField (1049): adds a flag button at the start of each row. Flagged
 // rows read 'high', show a red flag and a red bar down the left edge, sort to
 // the top (otherwise keeping their order), and can be shown on their own.
-export default function MgmtRowsTable({ doc, columns, people = [], doneField, doneValues = [], newRowDefaults = {}, rowColour, onRowsChange, priorityField }) {
+export default function MgmtRowsTable({ doc, columns, people = [], doneField, doneValues = [], newRowDefaults = {}, rowColour, onRowsChange, priorityField, sortByPerson = false }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [showDone, setShowDone] = useState(false)
   const [highOnly, setHighOnly] = useState(false)
+  // SORT BY PERSON (1050): 'added' (the order rows were added) or 'person'
+  // (grouped A-Z by the portal-user column). For this visit only.
+  const [sortBy, setSortBy] = useState('added')
   // FILTER BY USER (1029). Offered whenever the table has a portal-user
   // column - the three goal trackers and Meeting Actions. Matches on the user
   // id where the row has one, and on the name for rows from before 1027 or for
@@ -103,7 +106,17 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
   const isHigh = (r) => !!priorityField && r[priorityField] === 'high'
   const shown = (showDone ? filtered : filtered.filter(r => !isDone(r))).filter(r => !highOnly || isHigh(r))
   // High priority first; otherwise the order they were added in (a stable sort).
-  const visible = priorityField ? shown.map((r, i) => ({ r, i })).sort((a, b) => (isHigh(b.r) - isHigh(a.r)) || a.i - b.i).map(x => x.r) : shown
+  // By person: "All" first, then names A-Z, unassigned last - and within each
+  // person, high priority first, then the order added. Otherwise high
+  // priority first, then the order added.
+  const personRank = (r) => {
+    const n = userCol ? String(r[userCol.key] || '').trim() : ''
+    return n === 'All' ? '0' : (n ? `1${n.toLowerCase()}` : '2')
+  }
+  const visible = shown.map((r, i) => ({ r, i })).sort((a, b) =>
+    (sortBy === 'person' ? personRank(a.r).localeCompare(personRank(b.r)) : 0)
+    || (isHigh(b.r) - isHigh(a.r))
+    || a.i - b.i).map(x => x.r)
   const highCount = priorityField ? filtered.filter(isHigh).length : 0
 
   const cell = (r, c) => {
@@ -172,6 +185,13 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
             <input type="checkbox" checked={showDone} onChange={e => setShowDone(e.target.checked)} />
             Show completed ({doneCount})
           </label>
+        )}
+        {sortByPerson && userCol && (
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} title="Sort"
+            style={{ fontSize: 13, padding: '6px 8px', border: '1px solid #d0d0cc', borderRadius: 7, fontFamily: 'inherit', background: sortBy !== 'added' ? '#fffbeb' : '#fff' }}>
+            <option value="added">Sort: as added</option>
+            <option value="person">Sort: by person</option>
+          </select>
         )}
         {priorityField && (
           <label style={{ fontSize: 13, color: '#666', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
