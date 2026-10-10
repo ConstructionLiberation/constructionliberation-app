@@ -1,29 +1,42 @@
-PACKAGE 1050 - Goals: sort by person
+PACKAGE 1051 - Value of work priced: stop re-counting deals priced before history
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1049.
+One file. Complete replacement. No re-seed. No env changes.
 
-  components/MgmtRowsTable.js
-  components/GoalTracker.js
+  lib/crmValueChanges.js
 
-A "Sort" dropdown beside the filters on Quarterly, 1-Year and 3-Year Goals:
+THE FAULT
+Value priced is the CHANGE in a deal's value. A second rule, copied from how
+Pipedrive counted, also recorded a deal's WHOLE value whenever it moved INTO a
+priced stage (MC Unsecured, MC Secured, Negotiating, Variations), unless that
+value matched the last one recorded.
 
-  Sort: as added     the order goals were added (high priority first on
-                     Quarterly Goals) - as today
-  Sort: by person    grouped A-Z by Portal User Responsible:
-                       "All" first, then each person A-Z, unassigned last
-                       within each person, high priority first, then the
-                       order added
-                     Names are grouped ignoring capitals.
+  - For a deal priced in the CRM, the value edit is recorded when it happens,
+    so the stage rule always found a match and added nothing.
+  - For a deal priced BEFORE the CRM kept history, there was nothing to match,
+    so a stage move counted its whole value again.
 
-Works with the user filter, Show completed and High priority only. Resets to
-"as added" when the page is reloaded.
+Reproduced on the current code: Project A, priced at 100k a year ago, repriced
+to 112k and moved Review -> MC Unsecured this month, counted 124k (112k for the
+stage move + 12k for the change). It should be 12k.
 
-Meeting Actions uses the same table but does not have it - one word to add.
+THE FIX
+Stage moves are no longer counted. Only value edits are: blank -> 100k = 100k,
+100k -> 112k = 12k. The old rule is left in the file, switched off, with the
+reasoning.
 
-Checked: the ordering on mixed rows (All, names in mixed case, unassigned,
-flagged goals); the goal and Meeting Actions pages bundle; all 157 pages pass
-the browser check.
+Untouched: the stored list of Pipedrive-era value changes and anything added by
+hand on the dashboard.
+
+AFFECTS EVERY PAGE THAT COUNTS VALUE PRICED - they all read this one file:
+  Estimator scorecard   Total value of work priced, Value priced - existing
+  Sales Dashboard       value priced figures
+  Business Scorecard    Value of work priced, and the existing-customer version
+Months where a pre-history deal moved into a priced stage will drop by that
+deal's value. That is the correction, not a new fault.
+
+Checked: Project A now 12,000; a CRM-era deal created with a value and then
+moved into a priced stage still 50,000. All 157 pages pass the browser check.
 
 SMOKE TEST
-Quarterly Goals -> Sort: by person. Goals group by person A-Z, "All" first,
-unassigned last; flagged goals first within each person.
+Find Project A (or any older deal repriced this month) in the estimator
+scorecard's value-priced drill-down: it shows the 12k change only.
