@@ -44,6 +44,9 @@ export default function BusinessScorecard() {
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
   const [editValue, setEditValue] = useState('')
+  // The month clicked on a drill-down metric (1039): { key, month }.
+  const [drill, setDrill] = useState(null)
+  const openDrill = (m, month) => { if (m.drill && month) setDrill(d => d && d.key === m.key && d.month === month ? null : { key: m.key, month }) }
 
   async function load() {
     setError('')
@@ -139,7 +142,7 @@ export default function BusinessScorecard() {
               const firstF = m.hasForecast ? series.findIndex(s => s[fKey] != null) : -1
               const bridge = firstF > 0 && series[firstF - 1][m.key] != null ? firstF - 1 : -1
               const chartData = series.map((s, i) => ({
-                month: monthLabel(s.month), value: s[m.key], trend: trend[i],
+                mo: s.month, month: monthLabel(s.month), value: s[m.key], trend: trend[i],
                 forecast: m.hasForecast ? (s[fKey] ?? (i === bridge ? s[m.key] : null)) : null,
               }))
               const isOn = connected.has(m.key)
@@ -169,7 +172,9 @@ export default function BusinessScorecard() {
                       </div>
                     ) : values.some(v => v != null) && (
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
+                        <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}
+                          onClick={m.drill ? (e => openDrill(m, e?.activePayload?.[0]?.payload?.mo)) : undefined}
+                          style={m.drill ? { cursor: 'pointer' } : undefined}>
                           <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#bbb' }} interval="preserveStartEnd" />
                           <YAxis hide domain={['auto', 'auto']} />
                           <Tooltip formatter={(v) => fmt(m)(v)} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
@@ -180,6 +185,8 @@ export default function BusinessScorecard() {
                       </ResponsiveContainer>
                     )}
                   </div>}
+                  {m.drill && <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#aaa', marginTop: -10 }}>Click a month on the graph to see the reports behind it.</div>}
+                  {drill && drill.key === m.key && <DrillTable m={m} month={drill.month} rows={(data.details?.[m.key] || {})[drill.month] || []} label={monthLabel(drill.month)} onClose={() => setDrill(null)} />}
                 </div>
               )
             })}
@@ -203,7 +210,9 @@ export default function BusinessScorecard() {
                     {series.map(s => {
                       const isF = m.hasForecast && s[m.key] == null && s[`${m.key}__f`] != null
                       const v = isF ? s[`${m.key}__f`] : s[m.key]
-                      return <td key={s.month} title={isF ? 'Forecast' : undefined} style={{ ...td, textAlign: 'right', color: v == null ? '#ddd' : (isF ? '#d97706' : rag(v, targetOf(m), m.mode)), fontWeight: v == null ? 400 : 500, fontStyle: isF ? 'italic' : 'normal' }}>{fmt(m)(v)}</td>
+                      return <td key={s.month} title={isF ? 'Forecast' : (m.drill ? 'Click to see the reports' : undefined)}
+                        onClick={m.drill && v ? () => openDrill(m, s.month) : undefined}
+                        style={{ ...td, cursor: m.drill && v ? 'pointer' : 'default', textDecoration: m.drill && v ? 'underline dotted' : 'none', textAlign: 'right', color: v == null ? '#ddd' : (isF ? '#d97706' : rag(v, targetOf(m), m.mode)), fontWeight: v == null ? 400 : 500, fontStyle: isF ? 'italic' : 'normal' }}>{fmt(m)(v)}</td>
                     })}
                   </tr>
                 ))}
@@ -241,6 +250,44 @@ function YearStartSetup({ onSaved, onError }) {
       </select>
       <button onClick={save} disabled={!m || busy} style={{ fontSize: 13, padding: '7px 14px', border: 'none', borderRadius: 7, background: '#1a1a19', color: '#fff', cursor: m ? 'pointer' : 'default', opacity: m && !busy ? 1 : 0.4 }}>Save</button>
       <span style={{ fontSize: 12, color: '#a16207' }}>Until then the page shows the last 12 months.</span>
+    </div>
+  )
+}
+
+// The reports behind one month of a drill-down metric (1039). Each opens the
+// full report in Operations -> Forms.
+function DrillTable({ m, month, rows, label, onClose }) {
+  const th = { textAlign: 'left', padding: '7px 8px', fontWeight: 500, color: '#555', fontSize: 12, borderBottom: '1px solid #e1e0d9', whiteSpace: 'nowrap' }
+  const td = { padding: '7px 8px', borderBottom: '0.5px solid #f0efec', fontSize: 12.5, verticalAlign: 'top' }
+  return (
+    <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e1e0d9', paddingTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <strong style={{ fontSize: 13.5 }}>{m.label} - {label}: {rows.length} report{rows.length === 1 ? '' : 's'}</strong>
+        <button onClick={onClose} style={{ background: 'none', border: '1px solid #d0d0cc', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}>Close</button>
+      </div>
+      {rows.length === 0 ? <div style={{ color: '#aaa', fontSize: 13 }}>None in this month.</div> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>
+              <th style={th}>Date on form</th><th style={th}>Project</th><th style={th}>Reported by</th>
+              <th style={th}>Surveyed by</th><th style={th}>Cause</th><th style={th} />
+            </tr></thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id}>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>{r.date.split('-').reverse().join('/')}{!r.dateFromForm && <span title="No date on the form - date submitted used" style={{ color: '#d97706' }}> *</span>}</td>
+                  <td style={td}>{r.project || '—'}</td>
+                  <td style={td}>{r.reportedBy || '—'}</td>
+                  <td style={td}>{r.surveyedBy || '—'}</td>
+                  <td style={{ ...td, maxWidth: 380 }}>{r.cause || '—'}</td>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}><a href={`/operations/forms?open=${encodeURIComponent(r.id)}`} target="_blank" rel="noreferrer" style={{ color: '#2a78d6' }}>Open report ↗</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {rows.some(r => !r.dateFromForm) && <div style={{ fontSize: 11, color: '#d97706', marginTop: 6 }}>* No date filled in on the form - the date it was submitted is used.</div>}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,44 +1,57 @@
-PACKAGE 1037 - Forecast sales: actual to date + forecast from this month
+PACKAGE 1039 - Business Scorecard: Water ingress - our fault
 
-Three files. Complete replacements. No re-seed. No env changes.
-Built on 1036 - deploy that first.
+Four files: three complete replacements, one NEW. No re-seed. No env changes.
+Built on 1037 (1038 was withdrawn - do not deploy it).
 
-  lib/businessScorecard.js
-  pages/api/management/scorecard.js
-  pages/management/scorecard.js
+  NEW       lib/waterIngress.js
+  REPLACED  lib/businessScorecard.js
+            pages/api/management/scorecard.js
+            pages/management/scorecard.js
 
 
-THE SPLIT IS AT THIS MONTH
-  Finished months     ACTUAL sales from Xero - the same figure as Total sales.
-                      BLUE line, as on the other graphs.
-  This month onward   the Forecast P&L's revenue for that month.
-                      ORANGE line, starting on the last blue point so the two
-                      join. Orange and italic in the table.
+WHAT COUNTS
+  Water Ingress Reports where "Who is responsible for the water ingress?" is
+  answered "Rock". Main Contractor, Other Trade, End User and Inconclusive are
+  not counted. Drafts are not counted.
 
-On 10 October that is actual Dec - Sep, forecast Oct - Nov. September counts
-as actual even while Budgets still has it as a forecast month: it is
-finished, and Xero has its figure.
+  EVERY REPORT COUNTS. A second report on the same project is a second leak -
+  the first should have fixed it. No de-duplication.
 
-A finished month with no Xero figures yet (not synced) uses its forecast
-figure, is drawn orange, and is NAMED under the card - e.g. "Sep 26 not synced
-from Xero yet - forecast used". It is never dropped from the total.
-
+  THE DATE ON THE FORM decides the month: "Date on which the water ingress
+  survey and assessment took place". A report typed up late still lands in
+  the month it happened. If that date was left blank, the date submitted is
+  used and the report is marked * in the table.
 
 THE CARD
-  The financial year's total sales: actual + forecast.
-  Underneath, "2,200,119 actual + 521,852 forecast" in blue and orange, and
-  the months each part covers.
+  Big number   the total for the selected period - FY2026 to date by default.
+  Graph        the count each month. A month with none is 0 (a real zero); a
+               month not reached yet is blank.
+  Colour       against the target, LOWER is better.
 
-This is the sum of the monthly sales. The Forecast P&L's WIP and year-end WIP
-adjustments are not added - they belong to the margin, which the Forecast
-gross margin card already includes.
+CLICK A MONTH - on the graph, or a number in the trend table - and a table
+opens under the card: date on form, project, who reported it, who surveyed
+it, the cause, and "Open report" to the full report in Operations -> Forms.
+Click the month again or Close to shut it.
 
-Checked by running the route on the Forecast P&L screenshot's figures with
-10 October as today: blue Dec-Sep, orange Oct-Nov (521,852), total
-2,721,971 = hand sum. Then with September unsynced: forecast used and named.
+
+READ FROM THE FORM, NOT HARDCODED
+The responsibility question and the date are found from the form definition,
+so editing the form in the forms builder does not break the count. "Our fault"
+is that question's FIRST option - "Rock" on Rock's form, and whatever another
+company's copy says on theirs. Matching the word "Rock" would have counted
+nothing for anyone else.
+
+The shared "form date" rule (lib/formDates.js) was deliberately NOT changed:
+it does not recognise this form's date label, and widening it would change
+how Forms Missing scores other forms.
+
+Checked by running the route on the real form definition with: two leaks on
+one project in March (2), a Main Contractor and an Inconclusive report (not
+counted), a draft (not counted), a late-typed report (counted in the month on
+the form), and one with no date (submission date, marked).
 
 
 SMOKE TEST
-1. Forecast sales graph: blue Dec to Sep, orange Oct and Nov, joined.
-2. Card total = Total sales card + the Forecast P&L's Oct and Nov revenue.
-3. Table: Oct and Nov in orange italics.
+1. Water ingress card: a number for FY2026 to date; graph by month.
+2. Click a month with a leak - the table lists the reports; Open report works.
+3. Compare with Operations -> Forms, Water Ingress Report, answered "Rock".

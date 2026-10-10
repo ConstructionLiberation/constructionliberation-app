@@ -1,5 +1,6 @@
 import { requireArea } from '../../../lib/portalAuth'
-import { get, set } from '../../../lib/db'
+import { get, set, getSubmissionIndex, getSubmission, getForms } from '../../../lib/db'
+import { ourFaultWaterIngress } from '../../../lib/waterIngress'
 import withTenant from '../../../lib/withTenant'
 import { BUSINESS_METRICS, CONNECTED } from '../../../lib/businessScorecard'
 import { fyOfMonth, fyMonths, monthKeyOf } from '../../../lib/financialYear'
@@ -122,6 +123,28 @@ async function handler(req, res) {
     invoicedFy: { value: done.length ? agg.sales : null, label: rangeLabel, sub },
   }
 
+  // ---- water ingress, our fault (1039) -----------------------------------
+  // A count of things that happened, so a past or current month with none is
+  // a real 0. Months not reached yet are blank.
+  const details = {}
+  try {
+    const { reports, problem } = await ourFaultWaterIngress({ getSubmissionIndex, getSubmission, getForms })
+    if (problem) notices.push(`Water ingress: ${problem}`)
+    const inRange = reports.filter(r => months.includes(r.month))
+    for (const row of series) {
+      row.waterIngressRockFault = row.month <= thisMonth ? inRange.filter(r => r.month === row.month).length : null
+    }
+    headlines.waterIngressRockFault = {
+      value: problem ? null : inRange.length,
+      label: rangeLabel,
+      sub: `${inRange.length} report${inRange.length === 1 ? '' : 's'} where we were responsible`,
+    }
+    details.waterIngressRockFault = {}
+    for (const r of inRange) (details.waterIngressRockFault[r.month] ||= []).push(r)
+  } catch (e) {
+    notices.push(`Water ingress figures unavailable: ${e.message}`)
+  }
+
   // ---- the Forecast P&L (1035) -------------------------------------------
   // Always the CURRENT financial year - a forecast is about the year still
   // running, whatever range is selected. The Forecast P&L runs December to
@@ -179,7 +202,7 @@ async function handler(req, res) {
   }
 
   return res.status(200).json({
-    months, series, connected: CONNECTED, headlines,
+    months, series, connected: CONNECTED, headlines, details,
     from, to, defaultFrom, defaultTo, choices, fyStartMonth: start, notices,
   })
 }
