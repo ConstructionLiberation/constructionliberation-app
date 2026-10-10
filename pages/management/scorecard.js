@@ -35,8 +35,10 @@ export default function BusinessScorecard() {
   const { money } = useFormat()
   const fmt = (m) => m.unit === 'pct' ? pct : (m.unit === 'money' ? (n => n == null ? '—' : money(n, { dp: 0 })) : count)
 
-  // The period: the last 12 months, or one financial year (1032).
-  const [period, setPeriod] = useState('last12')
+  // THE PERIOD (1034): From and To months. Empty means "let the server
+  // decide", which is the current financial year - so the page opens on it.
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [data, setData] = useState(null)
   const [targets, setTargets] = useState(null)
   const [error, setError] = useState('')
@@ -47,13 +49,13 @@ export default function BusinessScorecard() {
     setError('')
     try {
       const [d, t] = await Promise.all([
-        mgmtApi(`/api/management/scorecard?period=${encodeURIComponent(period)}`),
+        mgmtApi(`/api/management/scorecard?from=${from}&to=${to}`),
         mgmtApi('/api/targets'),
       ])
       setData(d); setTargets(t.targets || {})
     } catch (e) { setError(e.message) }
   }
-  useEffect(() => { load() }, [period])
+  useEffect(() => { load() }, [from, to])
 
   const targetOf = (m) => targets?.business?.[m.key]
   const toInput = (m, t) => t == null ? '' : (m.unit === 'pct' ? String(Math.round(t * 1000) / 10) : String(t))
@@ -91,10 +93,25 @@ export default function BusinessScorecard() {
 
   return (
     <ManagementShell active="scorecard" title="Business Scorecard">
-      <Heading title="Business Scorecard" sub="The whole business. The last 12 months, or pick a financial year to look back."
-        action={<select value={period} onChange={e => setPeriod(e.target.value)} style={{ ...dateInp, fontSize: 13, padding: '7px 10px' }}>
-          {(data?.periods || [{ value: 'last12', label: 'Last 12 months' }]).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>} />
+      <Heading title="Business Scorecard" sub="Opens on this financial year. Change From and To to look at any other period - every card follows."
+        action={data && (() => {
+          // Month pickers rather than <input type="month">, which Firefox
+          // does not support. The range shown is whatever the server used.
+          const opts = data.choices || []
+          const pick = (value, set) => (
+            <select value={value} onChange={e => set(e.target.value)} style={{ ...dateInp, fontSize: 13, padding: '7px 10px' }}>
+              {opts.map(mo => <option key={mo} value={mo}>{monthLabel(mo)}</option>)}
+            </select>
+          )
+          const isDefault = data.from === data.defaultFrom && data.to === data.defaultTo
+          return (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#666' }}>
+              From {pick(data.from, v => { setFrom(v); setTo(data.to) })}
+              to {pick(data.to, v => { setFrom(data.from); setTo(v) })}
+              {!isDefault && <button onClick={() => { setFrom(''); setTo('') }} style={{ ...dateInp, fontSize: 12, cursor: 'pointer', background: '#fff' }}>This financial year</button>}
+            </div>
+          )
+        })()} />
       <ErrorBar error={error} onClose={() => setError('')} />
       {(data?.notices || []).map((n, i) => (
         <div key={i} style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>{n}</div>

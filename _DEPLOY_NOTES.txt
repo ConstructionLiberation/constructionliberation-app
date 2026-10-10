@@ -1,27 +1,48 @@
-PACKAGE 1033 - Business Scorecard: Total invoiced connected
+PACKAGE 1034 - Business Scorecard: opens on the financial year; From/To filter
 
-Two files. Complete replacements. No re-seed. No env changes.
-Built on 1032 - deploy that first (and fyStartMonth on tenant:rock).
+Three files. Complete replacements. No re-seed. No env changes.
+Built on 1033 - deploy that first.
 
   lib/businessScorecard.js
   pages/api/management/scorecard.js
+  pages/management/scorecard.js
 
-TOTAL INVOICED - set up exactly as Gross margin:
-  Source      the Xero P&L Business Financials reads (xero:pl-benchmark).
-  Each month  that month's sales. Line and trend line.
-  Headline    the financial year's total, first month to the last FULL month,
-              "FY2026 to date" with "Dec 25 - Sep 26, 10 months" under it.
-              A past year in the filter shows "FY2025 full year".
-  Current     month blank - part-posted.
+NEEDS "fyStartMonth": 12 ON tenant:rock (from 1032). If the page opens on
+November rather than December, that line is missing - the page also says so
+in a yellow notice.
 
-It is the SAME sales figure the margin card divides by, so the two cards always
-describe the same months.
 
-Checked against a made-up P&L before packaging: monthly figures, the
-year-to-date total, a past full year, and the current month left blank.
+THE FILTER
+  From [month] to [month] at the top, replacing the period dropdown.
+  Opens on the CURRENT FINANCIAL YEAR: December to November. The graphs and
+  the table start in December.
+  Change either month and every card follows. "This financial year" appears
+  once you have moved off it, to jump back.
+  Month dropdowns rather than a date box, because Firefox has no month picker.
+  A range entered backwards is turned round, not refused.
+
+THE BIG FIGURES - worked over the SELECTED PERIOD, finished months only
+  Gross margin %  the margin for the period, from its totals - by default the
+                  margin for the financial year to date, not the last month.
+  Total sales     (renamed from Total invoiced) the total sales for the period
+                  - by default the financial year to date.
+  Labels: "FY2026 to date" / "FY2025 full year" when the range is a whole
+  financial year, otherwise the months, e.g. "Jan 26 - Mar 26". The months
+  actually counted are underneath.
+
+  Months not finished (this month) or not yet reached (the rest of the year)
+  are blank on the graph, not zero.
+
+  The stored key for Total sales is unchanged, so any target already set is
+  kept.
+
+Checked by running the route against a made-up P&L: the default year, a past
+year, Jan-Mar (37.5% on 400,000, checked by hand), a reversed range, and no
+year start set.
 
 SMOKE TEST
-1. Business Scorecard: Total invoiced shows a figure, "FY2026 to date", the
-   month range, and a line. No "Not connected yet".
-2. Compare with Business Financials -> Sales for the same months: same.
-3. Filter -> FY2025: full-year total.
+1. Business Scorecard opens with From Dec 25 to Nov 26. Graphs start Dec.
+2. Gross margin big figure = Business Financials "Gross margin - FY2026".
+3. Total sales big figure = sum of the monthly figures in the table.
+4. From Dec 24 to Nov 25: both read "FY2025 full year".
+5. "This financial year" brings it back.
