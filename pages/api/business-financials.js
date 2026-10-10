@@ -5,6 +5,7 @@ import { getTokens, saveTokens, getProject } from '../../lib/db'
 import { computeApplicationSummary, backfillAppNumbers } from '../../lib/applications'
 import { refreshXeroToken, fetchBankSummary, fetchOutstandingBills, fetchOutstandingReceivables, fetchVatPosition, fetchBankAndCardBalances, fetchBalanceSheetAccounts, fetchPaidReceivables } from '../../lib/xero'
 import withTenant from '../../lib/withTenant'
+import { plMonth } from '../../lib/plMargin'
 
 // End-of-month + N days, matching paymentDate() on the project cash flow page. Used to
 // place materials on older forecasts that only stored a delivery date.
@@ -1663,10 +1664,9 @@ async function handler(req, res) {
     const b = bm[mo] || {}
     const byCode = b.byCode || {}
     const abs = (v) => Math.abs(v || 0)
-    const sales = abs(b.incomeTotal)
-    const cos = abs(b.costOfSalesTotal)
-    const overheads = abs(b.overheadsTotal)
-    const grossMargin = sales > 0 ? (sales - cos) / sales : null
+    // Sales, cost of sales and gross margin from the one shared rule (1032),
+    // so this summary and the Business Scorecard cannot disagree.
+    const { sales, cos, overheads, grossMargin } = plMonth(b)
     const netMargin = sales > 0 ? (sales - cos - overheads) / sales : null
     // Labour breakdown: direct wages (320) vs subcontract labour (321/328/334).
     const directWages = abs(byCode['320'])

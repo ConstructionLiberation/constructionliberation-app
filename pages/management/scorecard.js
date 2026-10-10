@@ -35,9 +35,8 @@ export default function BusinessScorecard() {
   const { money } = useFormat()
   const fmt = (m) => m.unit === 'pct' ? pct : (m.unit === 'money' ? (n => n == null ? '—' : money(n, { dp: 0 })) : count)
 
-  const now = new Date()
-  const [from, setFrom] = useState(new Date(now.getFullYear() - 1, now.getMonth(), 1).toISOString().slice(0, 10))
-  const [to, setTo] = useState(now.toISOString().slice(0, 10))
+  // The period: the last 12 months, or one financial year (1032).
+  const [period, setPeriod] = useState('last12')
   const [data, setData] = useState(null)
   const [targets, setTargets] = useState(null)
   const [error, setError] = useState('')
@@ -48,13 +47,13 @@ export default function BusinessScorecard() {
     setError('')
     try {
       const [d, t] = await Promise.all([
-        mgmtApi(`/api/management/scorecard?from=${from}&to=${to}`),
+        mgmtApi(`/api/management/scorecard?period=${encodeURIComponent(period)}`),
         mgmtApi('/api/targets'),
       ])
       setData(d); setTargets(t.targets || {})
     } catch (e) { setError(e.message) }
   }
-  useEffect(() => { load() }, [from, to])
+  useEffect(() => { load() }, [period])
 
   const targetOf = (m) => targets?.business?.[m.key]
   const toInput = (m, t) => t == null ? '' : (m.unit === 'pct' ? String(Math.round(t * 1000) / 10) : String(t))
@@ -92,18 +91,23 @@ export default function BusinessScorecard() {
 
   return (
     <ManagementShell active="scorecard" title="Business Scorecard">
-      <Heading title="Business Scorecard" sub="The whole business. Twelve months by default - move From back to look further."
-        action={<div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: '#888' }}>
-          From <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={dateInp} />
-          To <input type="date" value={to} onChange={e => setTo(e.target.value)} style={dateInp} />
-        </div>} />
+      <Heading title="Business Scorecard" sub="The whole business. The last 12 months, or pick a financial year to look back."
+        action={<select value={period} onChange={e => setPeriod(e.target.value)} style={{ ...dateInp, fontSize: 13, padding: '7px 10px' }}>
+          {(data?.periods || [{ value: 'last12', label: 'Last 12 months' }]).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </select>} />
       <ErrorBar error={error} onClose={() => setError('')} />
+      {(data?.notices || []).map((n, i) => (
+        <div key={i} style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>{n}</div>
+      ))}
       {!data ? (!error && <div style={{ color: '#aaa', padding: 40, textAlign: 'center' }}>Loading…</div>) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
             {BUSINESS_METRICS.map(m => {
               const values = series.map(s => s[m.key])
-              const latest = values.length ? values[values.length - 1] : null
+              // The big figure: the metric's own headline where it has one
+              // (gross margin: year to date), otherwise the latest month.
+              const head = data.headlines?.[m.key]
+              const latest = head ? head.value : [...values].reverse().find(v => v != null) ?? null
               const trend = trendline(values)
               const chartData = series.map((s, i) => ({ month: monthLabel(s.month), value: s[m.key], trend: trend[i] }))
               const isOn = connected.has(m.key)
@@ -115,6 +119,7 @@ export default function BusinessScorecard() {
                       <span style={{ width: 11, height: 11, borderRadius: '50%', background: rag(latest, targetOf(m), m.mode) }} />
                       <div style={{ fontSize: 26, fontWeight: 600, color: '#1a1a19' }}>{fmt(m)(latest)}</div>
                     </div>
+                    {head && <div style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>{head.label}<div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div></div>}
                     <div style={{ fontSize: 13, color: '#999' }}>{targetBox(m, false)}</div>
                   </div>
                   <div style={{ height: 116 }}>
