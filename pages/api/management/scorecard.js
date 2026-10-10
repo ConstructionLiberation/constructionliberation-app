@@ -4,7 +4,7 @@ import { ourFaultWaterIngress } from '../../../lib/waterIngress'
 import { getAllCrmValueChanges } from '../../../lib/crmValueChanges'
 import { crmDealsToFlat } from '../../../lib/crmDashboardAdapter'
 import { getMilestones } from '../../../lib/crmMilestones'
-import { valuePricedIn, valueSecuredIn, securedFromNegotiating, strikeRateValueTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
+import { valuePricedIn, valueSecuredIn, valuePricedExistingIn, valueSecuredExistingIn, securedFromNegotiating, strikeRateValueTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
 import { liveInvoiceLines, paylessFromLines } from '../../../lib/paylessNotices'
 import { recordAvgLiveAfa, readAvgLiveAfa } from '../../../lib/liveProjectValue'
 import withTenant from '../../../lib/withTenant'
@@ -168,17 +168,23 @@ async function handler(req, res) {
     const crmDeals = (await get('crm:deals')) || []
     const [changes, milestones] = await Promise.all([getAllCrmValueChanges(), getMilestones(crmDeals)])
     const deals = crmDealsToFlat(crmDeals, milestones)
-    let priced = 0, secured = 0
+    let priced = 0, secured = 0, pricedEx = 0, securedEx = 0
     for (const row of series) {
       if (!isFull(row.month)) continue
       row.valuePriced = valuePricedIn(changes, row.month).total
       row.valueSecured = valueSecuredIn(deals, row.month).total
       priced += row.valuePriced; secured += row.valueSecured
+      // Existing customers only (1047) - same months, same rules, filtered.
+      row.valuePricedExisting = valuePricedExistingIn(changes, deals, row.month).total
+      row.valueSecuredExisting = valueSecuredExistingIn(deals, row.month).total
+      pricedEx += row.valuePricedExisting; securedEx += row.valueSecuredExisting
     }
     const upTo = fullMonths
     const span = upTo.length ? `${label(upTo[0])} – ${label(upTo[upTo.length - 1])}` : 'No finished months yet'
     headlines.valuePriced = { value: upTo.length ? priced : null, label: rangeLabel, sub: span }
     headlines.valueSecured = { value: upTo.length ? secured : null, label: rangeLabel, sub: span }
+    headlines.valuePricedExisting = { value: upTo.length ? pricedEx : null, label: rangeLabel, sub: span }
+    headlines.valueSecuredExisting = { value: upTo.length ? securedEx : null, label: rangeLabel, sub: span }
 
     // Average value of a secured project (1041): won from Negotiating. A month
     // with none has no average - blank, not 0.

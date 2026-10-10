@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { applyLayout } from '../lib/scorecardLayout'
+import { useState, Fragment } from 'react'
+import { applyLayout, PALETTE } from '../lib/scorecardLayout'
 
 // THE GEAR ICON (1042) - hide and reorder a scorecard's metrics. One component
 // on every scorecard, so they all behave the same.
@@ -12,18 +12,24 @@ import { applyLayout } from '../lib/scorecardLayout'
 //
 // Each change saves at once. A refused save shows the server's message and
 // puts the list back as it was.
-export default function ScorecardGear({ scorecard, defs, layout, canEdit, onSaved, align = 'right' }) {
+// withColours (1047): also offer a light colour per card, for grouping cards
+// by department or theme. Business Scorecard only, for now.
+export default function ScorecardGear({ scorecard, defs, layout, canEdit, onSaved, align = 'right', withColours = false }) {
   const [open, setOpen] = useState(false)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pickFor, setPickFor] = useState(null)   // metric whose colour row is open
   if (!canEdit) return null
 
   const { all } = applyLayout(defs, layout)
   const hidden = new Set((layout && layout.hidden) || [])
+  const colours = (layout && layout.colours) || {}
 
-  async function save(order, hiddenList) {
+  // Every save sends the WHOLE layout - order, hidden and colours - so one
+  // kind of change never drops another.
+  async function save(order, hiddenList, colourMap = colours) {
     setBusy(true); setErr('')
-    const next = { order, hidden: hiddenList }
+    const next = { order, hidden: hiddenList, colours: colourMap }
     try {
       const r = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: { scorecard, ...next } }) })
       const d = await r.json().catch(() => ({}))
@@ -40,7 +46,13 @@ export default function ScorecardGear({ scorecard, defs, layout, canEdit, onSave
     save(k, [...hidden])
   }
   const toggle = (key) => save(keys, hidden.has(key) ? [...hidden].filter(x => x !== key) : [...hidden, key])
-  const reset = () => save([], [])
+  const reset = () => save([], [], {})
+  const setColour = (key, c) => {
+    const next = { ...colours }
+    if (c) next[key] = c; else delete next[key]
+    setPickFor(null)
+    save(keys, [...hidden], next)
+  }
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -51,14 +63,30 @@ export default function ScorecardGear({ scorecard, defs, layout, canEdit, onSave
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Metrics on this scorecard</div>
           <div style={{ fontSize: 11.5, color: '#888', marginBottom: 10 }}>Untick to hide. Arrows move a metric up or down. Applies for everyone.</div>
           {err && <div style={{ fontSize: 12, color: '#b42318', background: '#fdecec', borderRadius: 6, padding: '6px 8px', marginBottom: 8 }}>Not saved: {err}</div>}
-          {all.map((d, i) => (
-            <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', borderBottom: '0.5px solid #f0efec', opacity: hidden.has(d.key) ? 0.55 : 1 }}>
+          {all.map((d, i) => (<Fragment key={d.key}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', borderBottom: '0.5px solid #f0efec', opacity: hidden.has(d.key) ? 0.55 : 1 }}>
               <input type="checkbox" checked={!hidden.has(d.key)} disabled={busy} onChange={() => toggle(d.key)} style={{ cursor: 'pointer' }} />
               <span style={{ flex: 1, fontSize: 13, color: '#1a1a19', lineHeight: 1.25 }}>{d.label}</span>
+              {withColours && (
+                <button onClick={() => setPickFor(pickFor === d.key ? null : d.key)} title="Card colour" disabled={busy}
+                  style={{ ...arrow, background: PALETTE[colours[d.key]]?.bg || '#fff', borderColor: PALETTE[colours[d.key]]?.edge || '#d0d0cc' }}>
+                  <span style={{ fontSize: 11, color: '#888' }}>◐</span>
+                </button>
+              )}
               <button disabled={busy || i === 0} onClick={() => move(i, -1)} title="Move up" style={arrow}>▲</button>
               <button disabled={busy || i === all.length - 1} onClick={() => move(i, 1)} title="Move down" style={arrow}>▼</button>
             </div>
-          ))}
+            {withColours && pickFor === d.key && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 4px 8px 30px', borderBottom: '0.5px solid #f0efec' }}>
+                <button onClick={() => setColour(d.key, null)} title="None (white)"
+                  style={{ ...swatch, background: '#fff', borderColor: !colours[d.key] ? '#1a1a19' : '#d0d0cc' }}>×</button>
+                {Object.entries(PALETTE).map(([id, p]) => (
+                  <button key={id} onClick={() => setColour(d.key, id)} title={p.label}
+                    style={{ ...swatch, background: p.bg, borderColor: colours[d.key] === id ? '#1a1a19' : p.edge }} />
+                ))}
+              </div>
+            )}
+          </Fragment>))}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
             <button onClick={reset} disabled={busy} style={{ ...arrow, width: 'auto', padding: '4px 10px', fontSize: 12 }}>Reset to default</button>
             <button onClick={() => setOpen(false)} style={{ ...arrow, width: 'auto', padding: '4px 12px', fontSize: 12, background: '#1a1a19', color: '#fff', border: 'none' }}>Done</button>
@@ -68,4 +96,5 @@ export default function ScorecardGear({ scorecard, defs, layout, canEdit, onSave
     </div>
   )
 }
+const swatch = { width: 24, height: 24, borderRadius: 6, border: '2px solid', cursor: 'pointer', fontSize: 11, color: '#999', padding: 0 }
 const arrow = { width: 26, height: 24, fontSize: 10, border: '1px solid #d0d0cc', borderRadius: 5, background: '#fff', color: '#555', cursor: 'pointer', fontFamily: 'inherit' }

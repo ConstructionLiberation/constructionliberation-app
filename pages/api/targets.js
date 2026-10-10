@@ -87,11 +87,11 @@ async function handler(req, res) {
       if (!['management', 'admin'].includes(session.role)) {
         return res.status(403).json({ error: 'Only management can change which metrics a scorecard shows.' })
       }
-      const { scorecard, order, hidden } = req.body.layout || {}
+      const { scorecard, order, hidden, colours } = req.body.layout || {}
       if (!SCORECARD_IDS[scorecard]) return res.status(400).json({ error: `scorecard must be one of: ${Object.keys(SCORECARD_IDS).join(', ')}` })
       const all = cleanLayouts(await get('scorecard:layouts'))
-      const one = cleanLayouts({ [scorecard]: { order, hidden } })[scorecard]
-      if (!one.order.length && !one.hidden.length) delete all[scorecard]   // Reset to default
+      const one = cleanLayouts({ [scorecard]: { order, hidden, colours } })[scorecard]
+      if (!one.order.length && !one.hidden.length && !Object.keys(one.colours).length) delete all[scorecard]   // Reset to default
       else all[scorecard] = one
       await set('scorecard:layouts', all)
       return res.status(200).json({ success: true, layouts: all })

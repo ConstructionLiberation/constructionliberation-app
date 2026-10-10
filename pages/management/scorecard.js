@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import ManagementShell, { Heading, ErrorBar, mgmtApi } from '../../components/ManagementShell'
 import { useFormat } from '../../components/TenantProvider'
 import { BUSINESS_METRICS } from '../../lib/businessScorecard'
-import { applyLayout } from '../../lib/scorecardLayout'
+import { applyLayout, colourOf } from '../../lib/scorecardLayout'
 import ScorecardGear from '../../components/ScorecardGear'
 
 // BUSINESS SCORECARD - the whole business, on the same pattern as the other
@@ -119,7 +119,7 @@ export default function BusinessScorecard() {
           const isDefault = data.from === data.defaultFrom && data.to === data.defaultTo
           return (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#666' }}>
-              <ScorecardGear scorecard="business" defs={BUSINESS_METRICS} layout={layouts.business} canEdit
+              <ScorecardGear scorecard="business" defs={BUSINESS_METRICS} layout={layouts.business} canEdit withColours
                 onSaved={l => setLayouts(prev => ({ ...prev, business: l }))} />
               From {pick(data.from, v => { setFrom(v); setTo(data.to) })}
               to {pick(data.to, v => { setFrom(data.from); setTo(v) })}
@@ -155,7 +155,11 @@ export default function BusinessScorecard() {
               }))
               const isOn = connected.has(m.key)
               return (
-                <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: '1px solid #e1e0d9', display: 'grid', gridTemplateColumns: m.noChart ? '1fr' : '240px 1fr', gap: 20, alignItems: 'center', minHeight: m.noChart ? 0 : 140 }}>
+                // Card colour from the gear (1047): a light tint, a matching
+                // border and a stronger left bar. Plain white when none is set.
+                <div key={m.key} style={{ background: colourOf(layouts.business, m.key)?.bg || '#fff', borderRadius: 10, padding: '14px 16px',
+                  border: `1px solid ${colourOf(layouts.business, m.key)?.edge || '#e1e0d9'}`,
+                  borderLeft: colourOf(layouts.business, m.key) ? `5px solid ${colourOf(layouts.business, m.key).edge}` : '1px solid #e1e0d9', display: 'grid', gridTemplateColumns: m.noChart ? '1fr' : '240px 1fr', gap: 20, alignItems: 'center', minHeight: m.noChart ? 0 : 140 }}>
                   <div>
                     <div style={{ fontSize: 13.5, color: '#888', lineHeight: 1.3 }}>{m.label}<div style={{ color: '#bbb', fontSize: 12 }}>({m.basis})</div></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
@@ -218,7 +222,7 @@ export default function BusinessScorecard() {
               <tbody>
                 {METRICS.filter(m => !m.noChart).map(m => (
                   <tr key={m.key}>
-                    <td style={{ ...td, position: 'sticky', left: 0, background: '#fff' }}>{m.label}<span style={{ fontSize: 10, color: '#bbb' }}> ({m.basis})</span></td>
+                    <td style={{ ...td, position: 'sticky', left: 0, background: colourOf(layouts.business, m.key)?.bg || '#fff', borderLeft: `4px solid ${colourOf(layouts.business, m.key)?.edge || 'transparent'}` }}>{m.label}<span style={{ fontSize: 10, color: '#bbb' }}> ({m.basis})</span></td>
                     <td style={{ ...td, color: '#888' }}>{targetBox(m, true)}</td>
                     {series.map(s => {
                       const isF = m.hasForecast && s[m.key] == null && s[`${m.key}__f`] != null
