@@ -17,10 +17,20 @@ import AutoTextarea from './AutoTextarea'
 //
 // doneField / doneValues: rows whose doneField is in doneValues are hidden
 // behind "Show completed" - the tracker stays about what is still open.
-export default function MgmtRowsTable({ doc, columns, people = [], doneField, doneValues = [], newRowDefaults = {}, rowColour, onRowsChange }) {
+// priorityField (1049): adds a flag button at the start of each row. Flagged
+// rows read 'high', show a red flag and a red bar down the left edge, sort to
+// the top (otherwise keeping their order), and can be shown on their own.
+export default function MgmtRowsTable({ doc, columns, people = [], doneField, doneValues = [], newRowDefaults = {}, rowColour, onRowsChange, priorityField }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [showDone, setShowDone] = useState(false)
+  const [highOnly, setHighOnly] = useState(false)
+  // FILTER BY USER (1029). Offered whenever the table has a portal-user
+  // column - the three goal trackers and Meeting Actions. Matches on the user
+  // id where the row has one, and on the name for rows from before 1027 or for
+  // someone who has left. Rows set to "All" count as everyone's, so they stay
+  // in when one person is picked.
+  const [userFilter, setUserFilter] = useState('')
   const [drafts, setDrafts] = useState({})   // `${id}:${key}` -> unsaved text
 
   async function load() {
@@ -62,8 +72,39 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
   if (rows === null) return <div style={{ color: '#aaa', padding: 30, textAlign: 'center' }}>Loading…</div>
 
   const isDone = (r) => doneField && doneValues.includes(r[doneField])
-  const doneCount = rows.filter(isDone).length
-  const visible = showDone ? rows : rows.filter(r => !isDone(r))
+  const userCol = columns.find(c => c.type === 'user')
+  const rowUserKey = (r) => {
+    if (!userCol) return ''
+    const id = r[`${userCol.key}Id`], name = r[userCol.key] || ''
+    if (id) return `id:${id}`
+    if (name === 'All') return 'all'
+    return name ? `name:${name.trim().toLowerCase()}` : ''
+  }
+  const matchesUser = (r) => {
+    if (!userFilter) return true
+    const k = rowUserKey(r)
+    if (userFilter === '__none') return !k
+    return k === userFilter || k === 'all'
+  }
+  // Everyone who can be picked: current users, then anyone named on a row who
+  // is not one (leavers, typed names), so their rows can still be found.
+  const filterOptions = !userCol ? [] : (() => {
+    const opts = people.map(p => ({ value: `id:${p.id}`, label: p.name }))
+    const seen = new Set(opts.map(o => o.value))
+    for (const r of rows) {
+      const k = rowUserKey(r)
+      if (k && k !== 'all' && !seen.has(k)) { seen.add(k); opts.push({ value: k, label: `${r[userCol.key] || 'Unknown'} (not a current user)` }) }
+    }
+    return opts
+  })()
+
+  const filtered = rows.filter(matchesUser)
+  const doneCount = filtered.filter(isDone).length
+  const isHigh = (r) => !!priorityField && r[priorityField] === 'high'
+  const shown = (showDone ? filtered : filtered.filter(r => !isDone(r))).filter(r => !highOnly || isHigh(r))
+  // High priority first; otherwise the order they were added in (a stable sort).
+  const visible = priorityField ? shown.map((r, i) => ({ r, i })).sort((a, b) => (isHigh(b.r) - isHigh(a.r)) || a.i - b.i).map(x => x.r) : shown
+  const highCount = priorityField ? filtered.filter(isHigh).length : 0
 
   const cell = (r, c) => {
     const k = `${r.id}:${c.key}`
@@ -118,10 +159,24 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
       </datalist>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <button onClick={addRow} style={btnDark}>+ Add row</button>
+        {userCol && (
+          <select value={userFilter} onChange={e => setUserFilter(e.target.value)}
+            style={{ fontSize: 13, padding: '6px 8px', border: '1px solid #d0d0cc', borderRadius: 7, fontFamily: 'inherit', background: userFilter ? '#fffbeb' : '#fff' }}>
+            <option value="">All users</option>
+            {filterOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            <option value="__none">Nobody assigned</option>
+          </select>
+        )}
         {doneField && (
           <label style={{ fontSize: 13, color: '#666', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
             <input type="checkbox" checked={showDone} onChange={e => setShowDone(e.target.checked)} />
             Show completed ({doneCount})
+          </label>
+        )}
+        {priorityField && (
+          <label style={{ fontSize: 13, color: '#666', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={highOnly} onChange={e => setHighOnly(e.target.checked)} />
+            High priority only ({highCount})
           </label>
         )}
         <span style={{ fontSize: 12, color: '#aaa' }}>Changes save when you leave a box.</span>
@@ -130,18 +185,32 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr>
+              {priorityField && <th style={{ ...th, width: 36 }} title="High priority" />}
               {columns.map(c => <th key={c.key} style={{ ...th, minWidth: c.width || 120 }}>{c.label}</th>)}
               <th style={{ ...th, width: 40 }} />
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 && (
-              <tr><td colSpan={columns.length + 1} style={{ padding: 28, textAlign: 'center', color: '#aaa' }}>
-                {rows.length ? 'Everything here is completed. Tick "Show completed" to see it.' : 'Nothing yet. Add the first row.'}
+              <tr><td colSpan={columns.length + (priorityField ? 2 : 1)} style={{ padding: 28, textAlign: 'center', color: '#aaa' }}>
+                {!rows.length ? 'Nothing yet. Add the first row.'
+                  : !filtered.length ? 'Nothing for this user. Choose "All users" to see everything.'
+                  : highOnly && !visible.length ? 'No high-priority goals here. Untick "High priority only" to see everything.'
+                  : 'Everything here is completed. Tick "Show completed" to see it.'}
               </td></tr>
             )}
             {visible.map(r => (
-              <tr key={r.id} style={{ borderTop: '0.5px solid #f0efec', background: rowColour ? rowColour(r) : undefined }}>
+              <tr key={r.id} style={{ borderTop: '0.5px solid #f0efec', background: rowColour ? rowColour(r) : undefined,
+                boxShadow: isHigh(r) ? 'inset 4px 0 0 #dc2626' : undefined }}>
+                {priorityField && (
+                  <td style={{ ...td, textAlign: 'center', verticalAlign: 'middle' }}>
+                    <button onClick={() => saveFields(r.id, { [priorityField]: isHigh(r) ? '' : 'high' })}
+                      title={isHigh(r) ? 'High priority - click to clear' : 'Mark as high priority'}
+                      aria-pressed={isHigh(r)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 2,
+                        color: isHigh(r) ? '#dc2626' : '#d4d4d0', filter: isHigh(r) ? 'none' : 'grayscale(1)' }}>⚑</button>
+                  </td>
+                )}
                 {columns.map(c => <td key={c.key} style={td}>{cell(r, c)}</td>)}
                 <td style={{ ...td, textAlign: 'center' }}>
                   <button onClick={() => removeRow(r.id)} title="Delete row" style={{ background: 'none', border: 'none', color: '#bbb', cursor: 'pointer', fontSize: 16 }}>×</button>

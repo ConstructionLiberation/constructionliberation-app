@@ -12,7 +12,7 @@ const PROGRESS_TINT = {
   'On Hold': '#f5f5f4',
 }
 
-export default function GoalTracker({ active, title, doc, goalLabel, commentCols }) {
+export default function GoalTracker({ active, title, doc, goalLabel, commentCols, withPriority = false }) {
   const people = usePeople()
   const columns = [
     { key: 'monthSet', label: 'Month Set', type: 'select', options: MONTHS, width: 120 },
@@ -28,7 +28,7 @@ export default function GoalTracker({ active, title, doc, goalLabel, commentCols
   return (
     <ManagementShell active={active} title={title} wide>
       <Heading title={title} />
-      <MgmtRowsTable doc={doc} columns={columns} people={people}
+      <MgmtRowsTable doc={doc} columns={columns} people={people} priorityField={withPriority ? 'priority' : undefined}
         doneField="progress" doneValues={['Complete']}
         newRowDefaults={{ monthSet: MONTHS[new Date().getMonth()], yearSet: String(new Date().getFullYear()), progress: 'Not Started' }}
         rowColour={r => PROGRESS_TINT[r.progress]} />

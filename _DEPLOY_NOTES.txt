@@ -1,32 +1,34 @@
-PACKAGE 1048 - Strike rate on value: existing customers
+PACKAGE 1049 - Quarterly Goals: high priority flag
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1047.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1048.
 
-  lib/precontractTotals.js
-  lib/businessScorecard.js
-  pages/api/management/scorecard.js
+  lib/mgmtDocs.js                       ('priority' accepted on Quarterly Goals)
+  components/MgmtRowsTable.js
+  components/GoalTracker.js
+  pages/management/quarterly-goals.js
 
-NEW CARD, under Strike rate on value:
-  Strike rate on value - existing customers
+A flag button (⚑) at the start of every Quarterly Goals row.
+  Click      the goal becomes HIGH PRIORITY: red flag, red bar down the row's
+             left edge, and it moves to the TOP of the table.
+  Click again   back to normal, back in its place.
+  "High priority only (n)" beside the other filters shows just the flagged
+  goals; it works with the user filter and Show completed.
+Saves straight away, for everyone, like every other cell.
 
-Exactly the same as Strike rate on value - rolling six months to each month
-end, won value / decided value, deals with a value, last full month on the
-card - but counting only deals where the customer was EXISTING when the deal
-was decided: a different project won for that organisation strictly before
-that day (the 1047 definition, reused, not restated). A loss is tested the
-same way as a win.
+Flagged goals keep the order they were added in among themselves, and so do
+the rest - only the flag moves a row.
 
-Built as a filter on the all-customer strike rate, so the two always use the
-same window and the same rules. A period with no existing-customer decisions
-shows blank, not 0%.
+Quarterly Goals only, as asked. The 1-Year and 3-Year trackers and Meeting
+Actions use the same table; switching it on for any of them is one word.
+The server refuses a priority on those for now, so nothing half-works.
 
-If a gear order has been saved, the new card appears after the saved ones.
-
-Checked: the rule on a set of wins and losses (all 53.3%, existing 40.0% -
-the second Acme win against Acme's later loss; first wins excluded); through
-the full route (June 100%, July on 40%, card to Sep 26, October blank); all
-157 pages pass the browser check.
+Checked: set and clear through the save route (the goal's other fields
+untouched); a priority on 1-Year Goals refused; the ordering rule (flagged
+first, otherwise original order); every page using the shared table bundles;
+all 157 pages pass the browser check.
 
 SMOKE TEST
-The new card sits under Strike rate on value and reads "Rolling 6 months to
-<last month>", with "X won of Y decided, existing customers" under it.
+1. Quarterly Goals: click ⚑ on a goal lower down - it turns red, gets a red
+   bar and jumps to the top. Reload - still there.
+2. Click it again - back to grey, back in place.
+3. Tick "High priority only" - just the flagged goals.
