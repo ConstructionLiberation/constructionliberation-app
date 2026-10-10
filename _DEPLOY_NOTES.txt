@@ -1,57 +1,52 @@
-PACKAGE 1039 - Business Scorecard: Water ingress - our fault
+PACKAGE 1040 - Business Scorecard: Value of work priced, Value of work secured
 
-Four files: three complete replacements, one NEW. No re-seed. No env changes.
-Built on 1037 (1038 was withdrawn - do not deploy it).
+Five files: four complete replacements, one NEW. No re-seed. No env changes.
+Built on 1039.
 
-  NEW       lib/waterIngress.js
+  NEW       lib/precontractTotals.js
   REPLACED  lib/businessScorecard.js
             pages/api/management/scorecard.js
-            pages/management/scorecard.js
+            pages/scorecard-crm.js            (pre-contract scorecard)
 
 
-WHAT COUNTS
-  Water Ingress Reports where "Who is responsible for the water ingress?" is
-  answered "Rock". Main Contractor, Other Trade, End User and Inconclusive are
-  not counted. Drafts are not counted.
+VALUE OF WORK PRICED
+  Each month: every value change on every project in the month, added up.
+  Blank -> 100k adds 100k. 20k -> 25k adds 5k. A price cut subtracts.
+  A project repriced twice in a month counts both changes.
+  Card: the total for the period - FY2026 to date by default.
 
-  EVERY REPORT COUNTS. A second report on the same project is a second leak -
-  the first should have fixed it. No de-duplication.
+VALUE OF WORK SECURED
+  Each month: the value of every deal WON that month, all estimators. Lost
+  deals and won deals with no value are not counted.
+  Card: the total for the period. Line and trend line as the others.
 
-  THE DATE ON THE FORM decides the month: "Date on which the water ingress
-  survey and assessment took place". A report typed up late still lands in
-  the month it happened. If that date was left blank, the date submitted is
-  used and the report is marked * in the table.
+Both are exactly the estimator scorecard's "All estimators" cards - Total
+value of work priced and Total value of work secured. The two rules now live
+in ONE file, lib/precontractTotals.js, and the estimator scorecard was
+switched onto it, so the two pages cannot disagree. Its figures are
+unchanged: same rules, moved.
 
-THE CARD
-  Big number   the total for the selected period - FY2026 to date by default.
-  Graph        the count each month. A month with none is 0 (a real zero); a
-               month not reached yet is blank.
-  Colour       against the target, LOWER is better.
-
-CLICK A MONTH - on the graph, or a number in the trend table - and a table
-opens under the card: date on form, project, who reported it, who surveyed
-it, the cause, and "Open report" to the full report in Operations -> Forms.
-Click the month again or Close to shut it.
+A month reached with nothing priced or won is a real 0. A month not reached
+yet is blank.
 
 
-READ FROM THE FORM, NOT HARDCODED
-The responsibility question and the date are found from the form definition,
-so editing the form in the forms builder does not break the count. "Our fault"
-is that question's FIRST option - "Rock" on Rock's form, and whatever another
-company's copy says on theirs. Matching the word "Rock" would have counted
-nothing for anyone else.
+THE SECOND "SECURED" CARD - REMOVED
+"Value of secured work - as at month end" (added in 1029) is gone. It was a
+separate request at the time - the order book at each month end, a stock
+rather than a flow - but it was never connected, and Value of work secured is
+the one secured-work card now. Any target typed on it is left in the data,
+unread.
 
-The shared "form date" rule (lib/formDates.js) was deliberately NOT changed:
-it does not recognise this form's date label, and widening it would change
-how Forms Missing scores other forms.
 
-Checked by running the route on the real form definition with: two leaks on
-one project in March (2), a Main Contractor and an Inconclusive report (not
-counted), a draft (not counted), a late-typed report (counted in the month on
-the form), and one with no date (submission date, marked).
+Checked by running the route on: blank->100k and 20k->25k in March (105,000),
+a price cut in April (-3,000), last year's change (not counted); two won deals
+in April (122,000), a zero-value win, a lost deal and last year's win (none
+counted).
 
 
 SMOKE TEST
-1. Water ingress card: a number for FY2026 to date; graph by month.
-2. Click a month with a leak - the table lists the reports; Open report works.
-3. Compare with Operations -> Forms, Water Ingress Report, answered "Rock".
+1. Value of work priced card = the sum, over the same months, of the
+   estimator scorecard's "Total value of work priced" (All estimators tab).
+2. Value of work secured card = the same for "Total value of work secured".
+3. Only one secured-work card on the page.
+4. Pre-contract scorecard: those two cards show the same figures as before.

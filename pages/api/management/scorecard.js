@@ -1,6 +1,10 @@
 import { requireArea } from '../../../lib/portalAuth'
 import { get, set, getSubmissionIndex, getSubmission, getForms } from '../../../lib/db'
 import { ourFaultWaterIngress } from '../../../lib/waterIngress'
+import { getAllCrmValueChanges } from '../../../lib/crmValueChanges'
+import { crmDealsToFlat } from '../../../lib/crmDashboardAdapter'
+import { getMilestones } from '../../../lib/crmMilestones'
+import { valuePricedIn, valueSecuredIn } from '../../../lib/precontractTotals'
 import withTenant from '../../../lib/withTenant'
 import { BUSINESS_METRICS, CONNECTED } from '../../../lib/businessScorecard'
 import { fyOfMonth, fyMonths, monthKeyOf } from '../../../lib/financialYear'
@@ -143,6 +147,30 @@ async function handler(req, res) {
     for (const r of inRange) (details.waterIngressRockFault[r.month] ||= []).push(r)
   } catch (e) {
     notices.push(`Water ingress figures unavailable: ${e.message}`)
+  }
+
+  // ---- pre-contract: value priced, value secured (1040) -------------------
+  // The same data the estimator scorecard reads (/api/deals-crm and
+  // /api/value-changes-crm build theirs with these same functions) and the
+  // same per-month rules (lib/precontractTotals.js). A month reached with no
+  // activity is a real 0; a month not reached yet is blank.
+  try {
+    const crmDeals = (await get('crm:deals')) || []
+    const [changes, milestones] = await Promise.all([getAllCrmValueChanges(), getMilestones(crmDeals)])
+    const deals = crmDealsToFlat(crmDeals, milestones)
+    let priced = 0, secured = 0
+    for (const row of series) {
+      if (row.month > thisMonth) continue
+      row.valuePriced = valuePricedIn(changes, row.month).total
+      row.valueSecured = valueSecuredIn(deals, row.month).total
+      priced += row.valuePriced; secured += row.valueSecured
+    }
+    const upTo = months.filter(mo => mo <= thisMonth)
+    const span = upTo.length ? `${label(upTo[0])} – ${label(upTo[upTo.length - 1])}` : 'No months reached yet'
+    headlines.valuePriced = { value: upTo.length ? priced : null, label: rangeLabel, sub: span }
+    headlines.valueSecured = { value: upTo.length ? secured : null, label: rangeLabel, sub: span }
+  } catch (e) {
+    notices.push(`Pre-contract figures unavailable: ${e.message}`)
   }
 
   // ---- the Forecast P&L (1035) -------------------------------------------

@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import PreContractNav from '../components/PreContractNav'
 import HiddenPeoplePicker from '../components/HiddenPeoplePicker'
 import { personKey } from '../lib/scorecardPeople'
+import { valuePricedIn, valueSecuredIn } from '../lib/precontractTotals'
 
 const fmt = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n)
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
@@ -740,20 +741,22 @@ export default function Scorecard() {
       : null
 
     // #7 Total value of work priced: value changes across ALL estimators in month m
-    const allMonthChanges = valueChanges.filter(v => v.changeDate && monthKey(v.changeDate) === m)
+    // One rule with the Business Scorecard (1040) - lib/precontractTotals.js.
+    const allMonthChanges = valuePricedIn(valueChanges, m).list
     const allMonthChangesEnriched = allMonthChanges.map(v => {
       const deal = deals.find(d => String(d.id) === v.dealId)
       return { ...v, dealTitle: deal?.title || v.dealId, orgName: deal?.orgName || deal?.organisation || '—', estimator: deal?.estimator || '—', stageName: deal?.stageName || '—' }
     })
-    const totalValuePriced = allMonthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
+    const totalValuePriced = valuePricedIn(valueChanges, m).total
 
     // #8 Projects priced >=200k: all estimators, value change where newValue >= 200k
     const projectsPricedOver200kList = allMonthChangesEnriched.filter(v => (v.newValue || 0) >= 200000)
     const projectsPricedOver200k = projectsPricedOver200kList.length
 
     // #9 Total value secured: all estimators, won deals decided in month m
-    const allMonthWon = deals.filter(d => d.status === 'won' && d.value > 0 && monthKey(d.closeTime) === m)
-    const totalValueSecured = allMonthWon.reduce((s,d)=>s+d.value,0)
+    // One rule with the Business Scorecard (1040) - lib/precontractTotals.js.
+    const allMonthWon = valueSecuredIn(deals, m).list
+    const totalValueSecured = valueSecuredIn(deals, m).total
 
     // #10 Projects secured >=200k: all estimators, won deals in month m with value >= 200k
     const projectsSecuredOver200kList = allMonthWon.filter(d => d.value >= 200000)
