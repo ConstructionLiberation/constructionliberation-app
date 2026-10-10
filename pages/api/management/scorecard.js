@@ -140,7 +140,14 @@ async function handler(req, res) {
   // ---- water ingress, our fault (1039) -----------------------------------
   // A count of things that happened, so a past or current month with none is
   // a real 0. Months not reached yet are blank.
+  // DRILL-DOWN ROWS (1039, extended 1053): details[metricKey][month] = the rows
+  // behind that month's figure, for the pop-out when a month is clicked. Built
+  // from the SAME lists the figures are summed from, so a pop-out's total always
+  // equals its point on the graph.
   const details = {}
+  const slimChange = (v) => ({ id: v.id, title: v.dealTitle || '', organizationName: v.organizationName || '', estimator: v.estimator || '', oldValue: v.oldValue ?? null, newValue: v.newValue ?? null, change: v.valueChange || 0, date: v.changeDate || '', notes: v.notes || '' })
+  const slimDeal = (d) => ({ id: String(d.id), title: d.title || '', organizationName: d.organizationName || '', estimator: d.estimator || '', salesPerson: d.salesPerson || '', stage: d.stageName || '', leadSource: d.leadSource || '', value: d.value || 0, status: d.status || '', date: d.closeTime ? String(d.closeTime).slice(0, 10) : '' })
+  const put = (key, month, rows) => { (details[key] ||= {})[month] = rows }
   try {
     const { reports, problem } = await ourFaultWaterIngress({ getSubmissionIndex, getSubmission, getForms })
     if (problem) notices.push(`Water ingress: ${problem}`)
@@ -171,7 +178,11 @@ async function handler(req, res) {
     let priced = 0, secured = 0, pricedEx = 0, securedEx = 0
     for (const row of series) {
       if (!isFull(row.month)) continue
-      row.valuePriced = valuePricedIn(changes, row.month).total
+      const vp = valuePricedIn(changes, row.month), vs = valueSecuredIn(deals, row.month)
+      const vpe = valuePricedExistingIn(changes, deals, row.month), vse = valueSecuredExistingIn(deals, row.month)
+      put('valuePriced', row.month, vp.list.map(slimChange)); put('valueSecured', row.month, vs.list.map(slimDeal))
+      put('valuePricedExisting', row.month, vpe.list.map(slimChange)); put('valueSecuredExisting', row.month, vse.list.map(slimDeal))
+      row.valuePriced = vp.total
       row.valueSecured = valueSecuredIn(deals, row.month).total
       priced += row.valuePriced; secured += row.valueSecured
       // Existing customers only (1047) - same months, same rules, filtered.
@@ -194,13 +205,21 @@ async function handler(req, res) {
 
     // Strike rate on value (1041): rolling six months to each month end, whole
     // business. Headline: the latest month reached.
-    for (const row of series) if (isFull(row.month)) row.strikeRateValue = strikeRateValueTo(deals, row.month).rate
+    for (const row of series) if (isFull(row.month)) {
+      const sr = strikeRateValueTo(deals, row.month)
+      row.strikeRateValue = sr.rate
+      put('strikeRateValue', row.month, sr.decided.map(slimDeal))
+    }
     if (upTo.length) {
       const last = upTo[upTo.length - 1], sr = strikeRateValueTo(deals, last)
       headlines.strikeRateValue = { value: sr.rate, label: `Rolling 6 months to ${label(last)}`, sub: `${sr.won.length} won of ${sr.decided.length} decided` }
     }
     // Existing customers only (1048) - the same, filtered.
-    for (const row of series) if (isFull(row.month)) row.strikeRateExisting = strikeRateExistingTo(deals, row.month).rate
+    for (const row of series) if (isFull(row.month)) {
+      const sr = strikeRateExistingTo(deals, row.month)
+      row.strikeRateExisting = sr.rate
+      put('strikeRateExisting', row.month, sr.decided.map(slimDeal))
+    }
     if (upTo.length) {
       const last = upTo[upTo.length - 1], sr = strikeRateExistingTo(deals, last)
       headlines.strikeRateExisting = { value: sr.rate, label: `Rolling 6 months to ${label(last)}`, sub: `${sr.won.length} won of ${sr.decided.length} decided, existing customers` }
@@ -212,7 +231,10 @@ async function handler(req, res) {
     // 1044: finished months only - the value at each MONTH END. This month
     // has not ended, so it has no point and the card shows the last month end.
     for (const row of series) {
-      if (isFull(row.month)) row.negotiatingPipeline = negotiatingAt(crmDeals, monthEndDay(row.month)).total
+      if (!isFull(row.month)) continue
+      const np = negotiatingAt(crmDeals, monthEndDay(row.month))
+      row.negotiatingPipeline = np.total
+      put('negotiatingPipeline', row.month, np.list.map(x => ({ ...x, date: monthEndDay(row.month) })))
     }
     if (upTo.length) {
       const last = upTo[upTo.length - 1]
@@ -228,11 +250,14 @@ async function handler(req, res) {
   // projects, same dating, same manual month adjustments (lib/paylessNotices).
   try {
     const { lines } = await liveInvoiceLines(get)
-    const { countByMonth } = paylessFromLines(lines, (await get('config:payless-adjustments')) || {})
+    const { countByMonth, byMonth } = paylessFromLines(lines, (await get('config:payless-adjustments')) || {})
     let total = 0
     for (const row of series) {
       if (!isFull(row.month)) continue
       row.paylessNotices = countByMonth[row.month]?.adjusted ?? 0
+      // The credit notes themselves; where the month was adjusted by hand on the
+      // Commercial Scorecard, the pop-out says so (the count can be lower).
+      put('paylessNotices', row.month, (byMonth[row.month] || []).map(c => ({ ...c, adjustedTo: countByMonth[row.month]?.isAdjusted ? countByMonth[row.month].adjusted : null })))
       total += row.paylessNotices
     }
     const upTo = fullMonths

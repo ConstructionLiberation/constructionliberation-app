@@ -1,24 +1,54 @@
-PACKAGE 1052 - Quarterly Goals: HIGH PRIORITY badge instead of a flag
+PACKAGE 1053 - Business Scorecard: click a month for the pop-out behind it
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1051.
+Four files: three complete replacements, one NEW. No re-seed. No env changes.
+Built on 1052.
 
-  components/MgmtRowsTable.js
+  NEW       components/ScorecardDrillModal.js
+  REPLACED  lib/precontractTotals.js           (pipeline also returns its deals)
+            pages/api/management/scorecard.js
+            pages/management/scorecard.js
 
-The flag at the start of each Quarterly Goals row is now a badge reading
-HIGH PRIORITY, in a column headed "Priority".
+Click a month - a point on the graph, or a number in the trend table - and a
+pop-out opens with what makes up that figure. Same style as the pre-contract
+scorecard's pop-outs: dark backdrop, title and count, fixed header, Escape or x
+to close; a stray click behind it does not close it.
 
-  Set       solid red badge, white text - plus the red bar down the row and the
-            row at the top, as before
-  Not set   the same badge as a faint grey outline, so it is obvious where to
-            click
-  Click     switches it either way; saves straight away
+  Value of work priced (+ existing)    each value change: project, organisation,
+                                       estimator, previous, new, change, date
+                                       - total change at the foot
+  Value of work secured (+ existing)   each project won: project, organisation,
+                                       value, estimator, sales person, stage,
+                                       lead source, decision date - total at foot
+  Strike rate on value (+ existing)    every project DECIDED in the rolling six
+                                       months, Won or Lost - "Won X of Y decided
+                                       = Z%" at the foot
+  Negotiating pipeline                 each project in Negotiating at that month
+                                       end, with its value then - total at foot
+  Payless notices                      each credit note: job, project, credit
+                                       note no, invoice, customer, date, amount.
+                                       If the month was adjusted by hand on the
+                                       Commercial Scorecard, the pop-out says so
+                                       (e.g. counted as 1, not 2)
+  Water ingress                        now in the same pop-out (it was a table
+                                       under the card): date on form, project,
+                                       reported by, surveyed by, cause, Open report
 
-Nothing else changes: the stored value, the "High priority only" filter, the
-sort by person and the server rules are as in 1049-1050.
+EVERY POP-OUT ADDS UP TO ITS POINT ON THE GRAPH. The rows come from the same
+lists the figures are summed from, and the total line is worked from the rows
+shown. Checked across 80 metric-months of test data: no mismatches.
 
-Checked: the goal pages and Meeting Actions bundle; all 157 pages pass the
-browser check.
+Months with nothing behind them are not clickable. Underlined-dotted numbers in
+the trend table are.
+
+The pre-contract scorecard is unchanged - it already had its pop-outs.
+
+Checked: the pop-out totals against the graph (80 metric-months, 0
+mismatches); the payless adjustment note; the pop-out rendered with rows,
+footer and note; all 157 pages pass the browser check.
 
 SMOKE TEST
-Quarterly Goals: each row has a faint HIGH PRIORITY badge. Click one - it turns
-solid red and the row moves to the top. Click again - back to faint.
+1. Business Scorecard: click a month on Value of work priced - the pop-out
+   lists the changes; the total at the foot equals that month's figure.
+2. Same on Value secured, Strike rate (Won/Lost listed, % at foot), Negotiating
+   pipeline, Payless notices, Water ingress.
+3. Escape closes it.

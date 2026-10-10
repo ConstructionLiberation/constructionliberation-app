@@ -5,6 +5,7 @@ import { useFormat } from '../../components/TenantProvider'
 import { BUSINESS_METRICS } from '../../lib/businessScorecard'
 import { applyLayout, colourOf } from '../../lib/scorecardLayout'
 import ScorecardGear from '../../components/ScorecardGear'
+import ScorecardDrillModal from '../../components/ScorecardDrillModal'
 
 // BUSINESS SCORECARD - the whole business, on the same pattern as the other
 // scorecards: a card per metric with its trend line, then the month-by-month
@@ -52,7 +53,10 @@ export default function BusinessScorecard() {
   const METRICS = applyLayout(BUSINESS_METRICS, layouts.business).visible
   // The month clicked on a drill-down metric (1039): { key, month }.
   const [drill, setDrill] = useState(null)
-  const openDrill = (m, month) => { if (m.drill && month) setDrill(d => d && d.key === m.key && d.month === month ? null : { key: m.key, month }) }
+  // A month is clickable when the route sent the rows behind it (1053).
+  const drillRows = (m, month) => (data?.details?.[m.key] || {})[month] || null
+  const canDrill = (m, month) => !!DRILL[m.key] && !!drillRows(m, month)
+  const openDrill = (m, month) => { if (month && canDrill(m, month)) setDrill({ key: m.key, month }) }
 
   async function load() {
     setError('')
@@ -129,6 +133,15 @@ export default function BusinessScorecard() {
         })()} />
       <ErrorBar error={error} onClose={() => setError('')} />
       {data && !data.fyStartMonth && <YearStartSetup onSaved={() => { setFrom(''); setTo(''); load() }} onError={setError} />}
+      {drill && data && (() => {
+        const m = BUSINESS_METRICS.find(x => x.key === drill.key)
+        const spec = DRILL[drill.key]
+        const rows = drillRows(m, drill.month) || []
+        return <ScorecardDrillModal title={`${m.label} - ${monthLabel(drill.month)}`} countLabel={spec.countLabel}
+          columns={spec.columns({ money: (n) => n == null ? '—' : money(n, { dp: 0 }) })} rows={spec.sort ? [...rows].sort(spec.sort) : rows}
+          footer={spec.footer && spec.footer(rows, (n) => money(n, { dp: 0 }))} note={spec.note && spec.note(rows)}
+          onClose={() => setDrill(null)} />
+      })()}
       {(data?.notices || []).map((n, i) => (
         <div key={i} style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>{n}</div>
       ))}
@@ -190,8 +203,8 @@ export default function BusinessScorecard() {
                     ) : values.some(v => v != null) && (
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}
-                          onClick={m.drill ? (e => openDrill(m, e?.activePayload?.[0]?.payload?.mo)) : undefined}
-                          style={m.drill ? { cursor: 'pointer' } : undefined}>
+                          onClick={DRILL[m.key] ? (e => openDrill(m, e?.activePayload?.[0]?.payload?.mo)) : undefined}
+                          style={DRILL[m.key] ? { cursor: 'pointer' } : undefined}>
                           <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#bbb' }} interval="preserveStartEnd" />
                           <YAxis hide domain={['auto', 'auto']} />
                           <Tooltip formatter={(v) => fmt(m)(v)} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
@@ -202,8 +215,7 @@ export default function BusinessScorecard() {
                       </ResponsiveContainer>
                     )}
                   </div>}
-                  {m.drill && <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#aaa', marginTop: -10 }}>Click a month on the graph to see the reports behind it.</div>}
-                  {drill && drill.key === m.key && <DrillTable m={m} month={drill.month} rows={(data.details?.[m.key] || {})[drill.month] || []} label={monthLabel(drill.month)} onClose={() => setDrill(null)} />}
+                  {DRILL[m.key] && <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#aaa', marginTop: -10 }}>Click a month on the graph to see what is behind it.</div>}
                 </div>
               )
             })}
@@ -227,9 +239,10 @@ export default function BusinessScorecard() {
                     {series.map(s => {
                       const isF = m.hasForecast && s[m.key] == null && s[`${m.key}__f`] != null
                       const v = isF ? s[`${m.key}__f`] : s[m.key]
-                      return <td key={s.month} title={isF ? 'Forecast' : (m.drill ? 'Click to see the reports' : undefined)}
-                        onClick={m.drill && v ? () => openDrill(m, s.month) : undefined}
-                        style={{ ...td, cursor: m.drill && v ? 'pointer' : 'default', textDecoration: m.drill && v ? 'underline dotted' : 'none', textAlign: 'right', color: v == null ? '#ddd' : (isF ? '#d97706' : rag(v, targetOf(m), m.mode)), fontWeight: v == null ? 400 : 500, fontStyle: isF ? 'italic' : 'normal' }}>{fmt(m)(v)}</td>
+                      const dr = canDrill(m, s.month)
+                      return <td key={s.month} title={isF ? 'Forecast' : (dr ? 'Click to see what is behind this' : undefined)}
+                        onClick={dr ? () => openDrill(m, s.month) : undefined}
+                        style={{ ...td, cursor: dr ? 'pointer' : 'default', textDecoration: dr ? 'underline dotted' : 'none', textAlign: 'right', color: v == null ? '#ddd' : (isF ? '#d97706' : rag(v, targetOf(m), m.mode)), fontWeight: v == null ? 400 : 500, fontStyle: isF ? 'italic' : 'normal' }}>{fmt(m)(v)}</td>
                     })}
                   </tr>
                 ))}
@@ -271,40 +284,78 @@ function YearStartSetup({ onSaved, onError }) {
   )
 }
 
-// The reports behind one month of a drill-down metric (1039). Each opens the
-// full report in Operations -> Forms.
-function DrillTable({ m, month, rows, label, onClose }) {
-  const th = { textAlign: 'left', padding: '7px 8px', fontWeight: 500, color: '#555', fontSize: 12, borderBottom: '1px solid #e1e0d9', whiteSpace: 'nowrap' }
-  const td = { padding: '7px 8px', borderBottom: '0.5px solid #f0efec', fontSize: 12.5, verticalAlign: 'top' }
-  return (
-    <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e1e0d9', paddingTop: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <strong style={{ fontSize: 13.5 }}>{m.label} - {label}: {rows.length} report{rows.length === 1 ? '' : 's'}</strong>
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid #d0d0cc', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}>Close</button>
-      </div>
-      {rows.length === 0 ? <div style={{ color: '#aaa', fontSize: 13 }}>None in this month.</div> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr>
-              <th style={th}>Date on form</th><th style={th}>Project</th><th style={th}>Reported by</th>
-              <th style={th}>Surveyed by</th><th style={th}>Cause</th><th style={th} />
-            </tr></thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.id}>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>{r.date.split('-').reverse().join('/')}{!r.dateFromForm && <span title="No date on the form - date submitted used" style={{ color: '#d97706' }}> *</span>}</td>
-                  <td style={td}>{r.project || '—'}</td>
-                  <td style={td}>{r.reportedBy || '—'}</td>
-                  <td style={td}>{r.surveyedBy || '—'}</td>
-                  <td style={{ ...td, maxWidth: 380 }}>{r.cause || '—'}</td>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}><a href={`/operations/forms?open=${encodeURIComponent(r.id)}`} target="_blank" rel="noreferrer" style={{ color: '#2a78d6' }}>Open report ↗</a></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {rows.some(r => !r.dateFromForm) && <div style={{ fontSize: 11, color: '#d97706', marginTop: 6 }}>* No date filled in on the form - the date it was submitted is used.</div>}
-        </div>
-      )}
-    </div>
-  )
+
+// WHAT EACH POP-OUT SHOWS (1053). Columns follow the pre-contract scorecard's
+// pop-outs; every footer is worked from the rows shown, so it can be checked
+// against the figure that was clicked.
+const day = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—'
+const sum = (rows, k) => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0)
+const CHANGE_COLS = ({ money }) => [
+  { label: 'Project', cell: r => r.title || '—' },
+  { label: 'Organisation', cell: r => r.organizationName || '—' },
+  { label: 'Estimator', cell: r => r.estimator || '—' },
+  { label: 'Previous value', align: 'right', cell: r => r.oldValue ? money(r.oldValue) : 'blank' },
+  { label: 'New value', align: 'right', cell: r => money(r.newValue) },
+  { label: 'Change', align: 'right', cell: r => <span style={{ color: r.change < 0 ? '#b42318' : '#1a1a19', fontWeight: 600 }}>{money(r.change)}</span> },
+  { label: 'Date', cell: r => day(r.date) },
+]
+const DEAL_COLS = ({ money }) => [
+  { label: 'Project', cell: r => r.title || '—' },
+  { label: 'Organisation', cell: r => r.organizationName || '—' },
+  { label: 'Value', align: 'right', cell: r => money(r.value) },
+  { label: 'Estimator', cell: r => r.estimator || '—' },
+  { label: 'Sales person', cell: r => r.salesPerson || '—' },
+  { label: 'Stage', cell: r => r.stage || '—' },
+  { label: 'Lead source', cell: r => r.leadSource || '—' },
+  { label: 'Decision date', cell: r => day(r.date) },
+]
+const DECIDED_COLS = (f) => [...DEAL_COLS(f), { label: 'Result', cell: r => <span style={{ fontWeight: 600, color: r.status === 'won' ? '#16a34a' : '#b42318' }}>{r.status === 'won' ? 'Won' : 'Lost'}</span> }]
+const byDateDesc = (a, b) => String(b.date).localeCompare(String(a.date))
+const strikeFooter = (rows, money) => {
+  const won = sum(rows.filter(r => r.status === 'won'), 'value'), all = sum(rows, 'value')
+  return `Won ${money(won)} of ${money(all)} decided = ${all ? (won / all * 100).toFixed(1) : '—'}%  (rolling 6 months to this month end)`
+}
+const DRILL = {
+  valuePriced: { countLabel: 'value change', columns: CHANGE_COLS, sort: byDateDesc, footer: (rows, money) => `Total change ${money(sum(rows, 'change'))}` },
+  valuePricedExisting: { countLabel: 'value change', columns: CHANGE_COLS, sort: byDateDesc, footer: (rows, money) => `Total change ${money(sum(rows, 'change'))} - existing customers only` },
+  valueSecured: { countLabel: 'project', columns: DEAL_COLS, sort: byDateDesc, footer: (rows, money) => `Total secured ${money(sum(rows, 'value'))}` },
+  valueSecuredExisting: { countLabel: 'project', columns: DEAL_COLS, sort: byDateDesc, footer: (rows, money) => `Total secured ${money(sum(rows, 'value'))} - existing customers only` },
+  strikeRateValue: { countLabel: 'decided project', columns: DECIDED_COLS, sort: byDateDesc, footer: strikeFooter },
+  strikeRateExisting: { countLabel: 'decided project', columns: DECIDED_COLS, sort: byDateDesc, footer: strikeFooter },
+  negotiatingPipeline: {
+    countLabel: 'project', sort: (a, b) => b.value - a.value,
+    columns: ({ money }) => [
+      { label: 'Project', cell: r => r.title || '—' },
+      { label: 'Organisation', cell: r => r.organizationName || '—' },
+      { label: 'Estimator', cell: r => r.estimator || '—' },
+      { label: 'Value at month end', align: 'right', cell: r => money(r.value) },
+    ],
+    footer: (rows, money) => rows.length ? `Total in Negotiating at ${day(rows[0].date)}: ${money(sum(rows, 'value'))}` : null,
+  },
+  paylessNotices: {
+    countLabel: 'credit note', sort: byDateDesc,
+    columns: ({ money }) => [
+      { label: 'Job no', cell: r => r.jobNo || '—' },
+      { label: 'Project', cell: r => r.projectName || '—' },
+      { label: 'Credit note', cell: r => r.creditNoteNumber || '—' },
+      { label: 'Against invoice', cell: r => r.appliedToInvoice || '—' },
+      { label: 'Customer', cell: r => r.contact || '—' },
+      { label: 'Date', cell: r => day(r.date) },
+      { label: 'Amount', align: 'right', cell: r => money(r.amount) },
+    ],
+    note: (rows) => rows[0]?.adjustedTo != null ? `This month was adjusted by hand on the Commercial Scorecard: counted as ${rows[0].adjustedTo}, not ${rows.length}.` : null,
+    footer: (rows, money) => `Total credited ${money(sum(rows, 'amount'))}`,
+  },
+  waterIngressRockFault: {
+    countLabel: 'report', sort: byDateDesc,
+    columns: () => [
+      { label: 'Date on form', cell: r => <span>{day(r.date)}{!r.dateFromForm && <span title="No date on the form - date submitted used" style={{ color: '#d97706' }}> *</span>}</span> },
+      { label: 'Project', cell: r => r.project || '—' },
+      { label: 'Reported by', cell: r => r.reportedBy || '—' },
+      { label: 'Surveyed by', cell: r => r.surveyedBy || '—' },
+      { label: 'Cause', cell: r => <span style={{ display: 'inline-block', maxWidth: 380 }}>{r.cause || '—'}</span> },
+      { label: '', cell: r => <a href={`/operations/forms?open=${encodeURIComponent(r.id)}`} target="_blank" rel="noreferrer" style={{ color: '#2a78d6', whiteSpace: 'nowrap' }}>Open report ↗</a> },
+    ],
+    note: (rows) => rows.some(r => !r.dateFromForm) ? '* No date filled in on the form - the date it was submitted is used.' : null,
+  },
 }
