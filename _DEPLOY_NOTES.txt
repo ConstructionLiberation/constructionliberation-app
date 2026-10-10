@@ -1,49 +1,55 @@
-PACKAGE 1056 - Average value of secured project: matched to Edita's scorecard
+PACKAGE 1057 - Existing customer: judged when the deal is won or lost
 
-Five files. Complete replacements. No re-seed. No env changes. Built on 1055.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1056.
 
-  lib/precontractTotals.js           (avgSecuredRolling - the one rule)
-  lib/businessScorecard.js
-  pages/api/management/scorecard.js
-  pages/management/scorecard.js
-  pages/scorecard-crm.js             (sales and estimator cards use the same rule)
+  lib/crmDashboardAdapter.js
+  lib/precontractTotals.js
+  pages/scorecard-crm.js
 
-WHY THEY DID NOT MATCH
-                       Sales scorecard (Edita)        Business Scorecard (before)
-  Which wins           every won project except       only projects won from
-                       variations, any stage          Negotiating (1041)
-  Period               rolling 6 months               each month on its own;
-                                                      card = average over the period
+THE MISMATCH (Apr-Sep, Existing Customer)
+Sales Dashboard 46 decided, 17.1%; Business Scorecard 50 decided, 13.8%. The
+difference was exactly four deals: 1157 60 New Later Living (Kori), J228
+Farmstead V07 (Oakwood), 1347 Freestone Road (Watkin Jones), 1449 Val D'or
+(Torsion). The dashboard labelled each deal when the enquiry CAME IN (a
+hand-typed label winning); the scorecard judged it when the deal was DECIDED.
+A customer whose first win landed between the two was Prospect on one and
+Existing on the other.
 
-NOW - THE SALES SCORECARD'S DEFINITION, EVERYWHERE
-  Every WON project with a value, EXCEPT variations, rolling 6 months to each
-  month end, total / count. The card shows the last full month: "Rolling 6
-  months to Sep 26", with the number of projects under it.
+THE RULE NOW - ONE LABEL PER DEAL, USED EVERYWHERE
+  EXISTING CUSTOMER   we had already won a DIFFERENT project for that
+                      organisation before the day THIS deal was WON or LOST
+  PROSPECT            otherwise
+  Open deals          judged as of today, so the label can change when the
+                      deal is decided
+  Typed by hand       IGNORED
 
-ONE FUNCTION (lib/precontractTotals.js avgSecuredRolling) is now used by:
-  - Edita's sales tab              (unchanged result - proven, see below)
-  - each estimator's card          (see the fix below)
-  - the Business Scorecard
-so they cannot drift apart again.
+Every existing-customer figure reads this one label from the deal:
+  Sales Dashboard customer type (filter, breakdowns, detail)
+  Business Scorecard: strike rate, value secured, value priced - existing
+  Estimator cards: value priced - existing customers
+So they agree by construction.
 
-New on the Business Scorecard: click a month for the pop-out - the projects in
-that 6-month window, with "Total X over N projects = Y average" at the foot.
+Value priced - existing customers now follows the deal's label too (it used the
+date of each price change). A price change on a deal still open therefore
+counts as existing if the customer is existing today - and can move once that
+deal is decided. A value change whose deal no longer exists (an old Pipedrive
+record) still uses the rule as at the change date.
 
-A FIX ON THE ESTIMATOR CARDS
-Their version built its window with dates converted to UTC, which in UK summer
-time and in New Zealand ended the window a day early - a project won on the
-last day of a month was left out. Shown with test data: one estimator's figure
-read 300,000 instead of the correct 200,000. The shared rule works in plain
-months. Estimator figures may move slightly where that happened; they are now
-right.
+WHAT WILL MOVE
+The four deals above now count as Existing Customer on the Sales Dashboard as
+well, so the dashboard's Existing Customer strike rate for Apr-Sep moves from
+17.1% to the Business Scorecard's figure. Deals with a hand-typed Customer type
+now show the calculated one instead.
 
-Checked: the ORIGINAL sales-scorecard calculation, copied unchanged, against
-the Business Scorecard on the same deals for every month - 10 months, 0
-mismatches (including a win from MC Secured, a variation, a loss, a zero-value
-win and a win late on 31 May); the estimator window fix in UK and NZ time; the
-pop-out totals (80 metric-months, 0 mismatches); all 157 pages pass the browser
-check.
+Checked: the four-deal situation through the real code (enquiry before the
+customer's first win but decided after -> Existing; hand-typed Prospect
+ignored; first win and never-won stay Prospect; open deal judged today);
+dashboard and Business Scorecard identical; all earlier route tests unchanged
+(pop-outs 80 metric-months 0 mismatches; average secured 0 mismatches); all 157
+pages pass the browser check.
 
 SMOKE TEST
-Business Scorecard "Average value of secured project" for the last full month
-= Edita's sales tab "Average value of projects secured" for the same month.
+Sales Dashboard -> Strike Rate, Customer type = Existing Customer, 1 Apr to
+30 Sep: decided count and strike rate (value) = the Business Scorecard's
+"Strike rate on value - existing customers" for Sep 26 (click it for the same
+list).

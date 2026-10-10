@@ -550,10 +550,12 @@ export default function Scorecard() {
     // project won BEFORE THE DATE OF THIS PRICE CHANGE. It used to read the
     // deal's Customer type label, which nobody had filled in, so this card read
     // zero. Same answer on both scorecards now.
+    // 1057: the deal's customer type label - judged when it is won or lost,
+    // the same label the Sales Dashboard and the Business Scorecard use.
     const _wins = winsByOrg(deals)
     const existingChanges = monthChanges.filter(v => {
       const deal = deals.find(d => String(d.id) === String(v.dealId))
-      return isExistingCustomer(_wins, deal?.organizationName ?? v.organizationName, v.changeDate, v.dealId)
+      return deal ? deal.customerType === 'Existing Customer' : isExistingCustomer(_wins, v.organizationName, v.changeDate, v.dealId)
     })
     const valuePricedExisting = existingChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
     const totalValuePriced = monthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
