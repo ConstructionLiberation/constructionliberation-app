@@ -1,55 +1,41 @@
-PACKAGE 1057 - Existing customer: judged when the deal is won or lost
+PACKAGE 1058 - 3-Year Org Chart
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1056.
+Five files: three complete replacements, two NEW. No re-seed. No env changes.
+Built on 1057.
 
-  lib/crmDashboardAdapter.js
-  lib/precontractTotals.js
-  pages/scorecard-crm.js
+  NEW       components/PlanOrgChart.js
+            pages/management/org-chart-3-year.js
+  REPLACED  pages/management/org-chart-1-year.js   (now a thin page over PlanOrgChart)
+            components/ManagementShell.js          (nav: 3-Year Org Chart)
+            lib/mgmtDocs.js                        (the 3-year plan's record)
 
-THE MISMATCH (Apr-Sep, Existing Customer)
-Sales Dashboard 46 decided, 17.1%; Business Scorecard 50 decided, 13.8%. The
-difference was exactly four deals: 1157 60 New Later Living (Kori), J228
-Farmstead V07 (Oakwood), 1347 Freestone Road (Watkin Jones), 1449 Val D'or
-(Torsion). The dashboard labelled each deal when the enquiry CAME IN (a
-hand-typed label winning); the scorecard judged it when the deal was DECIDED.
-A customer whose first win landed between the two was Prospect on one and
-Existing on the other.
+THE 3-YEAR ORG CHART
+A new Management page, after 1-Year Org Chart in the nav. Works exactly like
+the 1-Year chart: its own people, roles and vacancies (Existing / New role /
+Vacancy), Arrange chart to drag or click people into place, Edit details, and
+Download chart (PNG) titled "3-Year Organisation Chart".
 
-THE RULE NOW - ONE LABEL PER DEAL, USED EVERYWHERE
-  EXISTING CUSTOMER   we had already won a DIFFERENT project for that
-                      organisation before the day THIS deal was WON or LOST
-  PROSPECT            otherwise
-  Open deals          judged as of today, so the label can change when the
-                      deal is decided
-  Typed by hand       IGNORED
+Starting points:
+  Copy current chart   today's people in today's positions
+  Copy 1-year chart    NEW - the 1-year plan's cards and positions, to grow
+                       the 3-year plan from
+Both ask before replacing anything already there. After copying, the charts
+are independent - changing one never changes another.
 
-Every existing-customer figure reads this one label from the deal:
-  Sales Dashboard customer type (filter, breakdowns, detail)
-  Business Scorecard: strike rate, value secured, value priced - existing
-  Estimator cards: value priced - existing customers
-So they agree by construction.
+Stored separately at mgmt:org:future-3y.
 
-Value priced - existing customers now follows the deal's label too (it used the
-date of each price change). A price change on a deal still open therefore
-counts as existing if the customer is existing today - and can move once that
-deal is decided. A value change whose deal no longer exists (an old Pipedrive
-record) still uses the rule as at the change date.
+ONE PAGE, TWO PLANS
+The 1-Year page's code moved into components/PlanOrgChart.js and both charts
+now use it, so they cannot drift apart. The 1-Year chart behaves exactly as
+before and keeps its saved plan.
 
-WHAT WILL MOVE
-The four deals above now count as Existing Customer on the Sales Dashboard as
-well, so the dashboard's Existing Customer strike rate for Apr-Sep moves from
-17.1% to the Business Scorecard's figure. Deals with a hand-typed Customer type
-now show the calculated one instead.
-
-Checked: the four-deal situation through the real code (enquiry before the
-customer's first win but decided after -> Existing; hand-typed Prospect
-ignored; first win and never-won stay Prospect; open deal judged today);
-dashboard and Business Scorecard identical; all earlier route tests unchanged
-(pop-outs 80 metric-months 0 mismatches; average secured 0 mismatches); all 157
-pages pass the browser check.
+Checked: the 3-year record starts empty; Copy 1-year chart brings the cards
+and positions across; a role added to the 3-year plan leaves the 1-year plan
+untouched; the org chart pages bundle; all 158 pages (including the new one)
+pass the browser check.
 
 SMOKE TEST
-Sales Dashboard -> Strike Rate, Customer type = Existing Customer, 1 Apr to
-30 Sep: decided count and strike rate (value) = the Business Scorecard's
-"Strike rate on value - existing customers" for Sep 26 (click it for the same
-list).
+1. Management nav: 3-Year Org Chart. Opens empty.
+2. Copy 1-year chart - the 1-year plan appears. Add a role, arrange it.
+3. Open 1-Year Org Chart - unchanged.
+4. Download chart (PNG) on the 3-year page - titled 3-Year Organisation Chart.
