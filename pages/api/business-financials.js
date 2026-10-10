@@ -110,6 +110,18 @@ function computePredictedByCodeMonth(codes, actualsByCode, availableMonths, budg
 // POST /api/business-financials { syncBank:true } -> refresh the Bank Summary (money in/out) per month
 async function handler(req, res) {
   if (!requireRole(req, res, ['admin'])) return
+  return businessFinancials(req, res)
+}
+
+// THE ROUTE'S BODY, WITHOUT ITS AUTH CHECK (1035).
+//
+// Exported so the Business Scorecard can build the Forecast P&L on the server
+// from exactly these views - the same figures the Forecast P&L page shows -
+// and give management two numbers from it without handing them the admin-only
+// reports. Only ever call it from a route that has done its OWN auth, inside
+// withTenant, with a GET for one view. It reads; the GET views write nothing
+// but caches.
+export async function businessFinancials(req, res) {
   const redis = await getClient()
 
   const [benchmark, catConfig, bank] = await Promise.all([

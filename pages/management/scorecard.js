@@ -75,7 +75,11 @@ export default function BusinessScorecard() {
   const months = data?.months || []
   const series = data?.series || []
   const connected = new Set(data?.connected || [])
-  const monthLabel = (s) => new Date(s + '-01').toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+  // Built from the 'YYYY-MM' text itself (1035). new Date('2025-12-01') is
+  // midnight UTC, which in any timezone behind UTC is still 30 November - so a
+  // December column could be labelled Nov. Text in, text out: no timezone.
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthLabel = (s) => { const [y, m] = String(s).split('-').map(Number); return `${MON[m - 1]} ${String(y).slice(2)}` }
 
   const targetBox = (m, small) => editing === m.key + (small ? ':t' : '') ? (
     <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
@@ -129,7 +133,7 @@ export default function BusinessScorecard() {
               const chartData = series.map((s, i) => ({ month: monthLabel(s.month), value: s[m.key], trend: trend[i] }))
               const isOn = connected.has(m.key)
               return (
-                <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: '1px solid #e1e0d9', display: 'grid', gridTemplateColumns: '240px 1fr', gap: 20, alignItems: 'center', minHeight: 140 }}>
+                <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: '1px solid #e1e0d9', display: 'grid', gridTemplateColumns: m.noChart ? '1fr' : '240px 1fr', gap: 20, alignItems: 'center', minHeight: m.noChart ? 0 : 140 }}>
                   <div>
                     <div style={{ fontSize: 13.5, color: '#888', lineHeight: 1.3 }}>{m.label}<div style={{ color: '#bbb', fontSize: 12 }}>({m.basis})</div></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
@@ -139,7 +143,9 @@ export default function BusinessScorecard() {
                     {head && <div style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>{head.label}<div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div></div>}
                     <div style={{ fontSize: 13, color: '#999' }}>{targetBox(m, false)}</div>
                   </div>
-                  <div style={{ height: 116 }}>
+                  {/* noChart (1035): the figure only - e.g. the forecast margin,
+                      which is one number for the year, not a monthly series. */}
+                  {!m.noChart && <div style={{ height: 116 }}>
                     {!isOn ? (
                       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #e1e0d9', borderRadius: 8, color: '#aaa', fontSize: 13 }}>
                         Not connected yet - data source to be agreed
@@ -155,7 +161,7 @@ export default function BusinessScorecard() {
                         </LineChart>
                       </ResponsiveContainer>
                     )}
-                  </div>
+                  </div>}
                 </div>
               )
             })}
@@ -172,7 +178,7 @@ export default function BusinessScorecard() {
                 </tr>
               </thead>
               <tbody>
-                {BUSINESS_METRICS.map(m => (
+                {BUSINESS_METRICS.filter(m => !m.noChart).map(m => (
                   <tr key={m.key}>
                     <td style={{ ...td, position: 'sticky', left: 0, background: '#fff' }}>{m.label}<span style={{ fontSize: 10, color: '#bbb' }}> ({m.basis})</span></td>
                     <td style={{ ...td, color: '#888' }}>{targetBox(m, true)}</td>

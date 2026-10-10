@@ -1,48 +1,72 @@
-PACKAGE 1034 - Business Scorecard: opens on the financial year; From/To filter
+PACKAGE 1035 - Business Scorecard: Forecast sales, Forecast gross margin
 
-Three files. Complete replacements. No re-seed. No env changes.
-Built on 1033 - deploy that first.
+Six files: five complete replacements, one NEW. No re-seed. No env changes.
+Built on 1034 - deploy that first.
 
-  lib/businessScorecard.js
-  pages/api/management/scorecard.js
-  pages/management/scorecard.js
+  NEW       lib/forecastServer.js
+  REPLACED  lib/forecastMonths.js             (adds forecastFromViews, nothing changed)
+            lib/businessScorecard.js
+            pages/api/business-financials.js  (auth split from body, nothing changed)
+            pages/api/management/scorecard.js
+            pages/management/scorecard.js
 
-NEEDS "fyStartMonth": 12 ON tenant:rock (from 1032). If the page opens on
-November rather than December, that line is missing - the page also says so
-in a yellow notice.
+
+FORECAST SALES - new card, under Total sales
+  Source    the Forecast P&L (12-month forecast).
+  Card      the total revenue in the FORECAST months still to come this
+            financial year - the "£877,055 forecast" on the Forecast P&L's
+            Revenue box. "Rest of FY2026", with "Sep 26 - Nov 26, 3 forecast
+            months" underneath.
+  Graph     each forecast month's revenue, in its own column.
+  Actual and manual months are not forecast, so they are not counted.
+
+FORECAST GROSS MARGIN
+  Source    the Forecast P&L, NOT the balance sheet: its Gross profit
+            percentage - the whole financial year, actual months + forecast
+            months + the WIP and year-end WIP adjustments. 26.6% on the
+            current figures.
+  Card      the figure only. No graph, and no row in the trend table.
+
+Both are the CURRENT financial year's forecast whatever From/To is set to - a
+forecast is about the year still running.
 
 
-THE FILTER
-  From [month] to [month] at the top, replacing the period dropdown.
-  Opens on the CURRENT FINANCIAL YEAR: December to November. The graphs and
-  the table start in December.
-  Change either month and every card follows. "This financial year" appears
-  once you have moved off it, to jump back.
-  Month dropdowns rather than a date box, because Firefox has no month picker.
-  A range entered backwards is turned round, not refused.
+HOW THE FIGURES ARE GUARANTEED TO MATCH THE FORECAST P&L PAGE
+The Forecast P&L is built in the browser from three Business Financials views.
+The scorecard now builds it on the server from the SAME three views - by
+calling the Business Financials route's own body, not a copy - and the SAME
+model with the SAME saved settings (manual months, WIP lock, WIP include,
+year-end WIP). One function, lib/forecastMonths.js forecastFromViews, holds the
+settings-to-model step.
 
-THE BIG FIGURES - worked over the SELECTED PERIOD, finished months only
-  Gross margin %  the margin for the period, from its totals - by default the
-                  margin for the financial year to date, not the last month.
-  Total sales     (renamed from Total invoiced) the total sales for the period
-                  - by default the financial year to date.
-  Labels: "FY2026 to date" / "FY2025 full year" when the range is a whole
-  financial year, otherwise the months, e.g. "Jan 26 - Mar 26". The months
-  actually counted are underneath.
+Management users get the two numbers. They do not get access to the
+admin-only Business Financials reports - the admin check is skipped only for
+this internal call, which the scorecard makes after its own management check.
 
-  Months not finished (this month) or not yet reached (the rest of the year)
-  are blank on the graph, not zero.
+Business Financials itself is unchanged: the route's auth check was moved
+into a two-line wrapper so the body could be called; every view behaves as
+before.
 
-  The stored key for Total sales is unchanged, so any target already set is
-  kept.
+Cost: the three views are read on each scorecard load. Fine at this size;
+if the page feels slow, that is where to look.
 
-Checked by running the route against a made-up P&L: the default year, a past
-year, Jan-Mar (37.5% on 400,000, checked by hand), a reversed range, and no
-year start set.
+
+DECEMBER-ONLY, BY DESIGN
+The Forecast P&L assumes a December year. The forecast cards therefore show
+only when fyStartMonth is 12; any other year start gets a notice rather than
+a December forecast set against another year's actuals.
+
+
+MONTH LABELS
+Column and axis labels are now built from the month text itself. Before, the
+page turned '2025-12' into a date at midnight UTC, which anywhere behind UTC is
+still 30 November. Not the cause of what you saw from NZ, but it would have
+been for anyone viewing from the Americas.
+
 
 SMOKE TEST
-1. Business Scorecard opens with From Dec 25 to Nov 26. Graphs start Dec.
-2. Gross margin big figure = Business Financials "Gross margin - FY2026".
-3. Total sales big figure = sum of the monthly figures in the table.
-4. From Dec 24 to Nov 25: both read "FY2025 full year".
-5. "This financial year" brings it back.
+1. Forecast sales sits under Total sales: same figure as the "forecast" part
+   of Forecast P&L -> Revenue (FY). Graph shows Sep, Oct, Nov.
+2. Forecast gross margin: same % as Forecast P&L -> Gross profit. No graph.
+3. Sign in as a management (not admin) user: both figures show.
+4. Business Financials -> Forecast P&L, Summary, Budgets: unchanged.

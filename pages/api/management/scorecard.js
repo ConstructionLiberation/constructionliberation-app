@@ -5,6 +5,7 @@ import { BUSINESS_METRICS, CONNECTED } from '../../../lib/businessScorecard'
 import { fyStartMonth } from '../../../lib/tenantSettings'
 import { fyOfMonth, fyMonths, monthKeyOf } from '../../../lib/financialYear'
 import { plMonth, marginOver } from '../../../lib/plMargin'
+import { computeForecastPl } from '../../../lib/forecastServer'
 
 // GET /api/management/scorecard?from=YYYY-MM&to=YYYY-MM
 //
@@ -104,6 +105,37 @@ async function handler(req, res) {
   const headlines = {
     gmFytd: { value: agg.grossMargin, label: rangeLabel, sub },
     invoicedFy: { value: done.length ? agg.sales : null, label: rangeLabel, sub },
+  }
+
+  // ---- the Forecast P&L (1035) -------------------------------------------
+  // Always the CURRENT financial year - a forecast is about the year still
+  // running, whatever range is selected. The Forecast P&L runs December to
+  // November, so it is used only when this company's year does too; anything
+  // else would put a December year's forecast against another year's actuals.
+  if (start === 12) {
+    try {
+      const f = await computeForecastPl()
+      const adj = f.adjTotals
+      const fMonths = f.rows.filter(r => r.source === 'forecast')
+      const fyName = `FY${f.fyEnd}`
+      headlines.gmForecastFyEnd = {
+        value: adj.revenue > 0 ? adj.gross / adj.revenue : null,
+        label: `${fyName} forecast, full year`,
+        sub: `${f.rows.length - fMonths.length} actual/manual + ${fMonths.length} forecast month${fMonths.length === 1 ? '' : 's'}`,
+      }
+      headlines.salesForecast = {
+        value: fMonths.length ? adj.fRev : null,
+        label: fMonths.length ? `Rest of ${fyName}` : `${fyName} - no forecast months left`,
+        sub: fMonths.length ? `${label(fMonths[0].mo)} – ${label(fMonths[fMonths.length - 1].mo)}, ${fMonths.length} forecast month${fMonths.length === 1 ? '' : 's'}` : 'Every month is actual or manual',
+      }
+      // The graph: each forecast month's revenue, where it falls in the range.
+      const byMo = Object.fromEntries(fMonths.map(r => [r.mo, r.revenue]))
+      for (const row of series) if (row.month in byMo) row.salesForecast = byMo[row.month]
+    } catch (e) {
+      notices.push(`Forecast figures unavailable: ${e.message}`)
+    }
+  } else if (start) {
+    notices.push('Forecast figures need a December financial year: the Forecast P&L runs December to November.')
   }
 
   return res.status(200).json({
