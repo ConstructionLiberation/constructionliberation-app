@@ -168,7 +168,8 @@ export default function BusinessScorecard() {
                         <span style={{ color: '#aaa' }}> + </span>
                         <span style={{ color: '#d97706' }}>{fmt(m)(head.parts[1].value)} forecast</span>
                       </div>}
-                      {head.avgPerMonth != null && <div style={{ fontSize: 12, color: '#555', marginTop: 1 }}>{fmt(m)(head.avgPerMonth)} average per month</div>}
+                      {/* A count's average is a fraction - one decimal place (1044). */}
+                      {head.avgPerMonth != null && <div style={{ fontSize: 12, color: '#555', marginTop: 1 }}>{m.unit === 'count' ? head.avgPerMonth.toFixed(1) : fmt(m)(head.avgPerMonth)} average per month</div>}
                       <div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div></div>}
                     <div style={{ fontSize: 13, color: '#999' }}>{targetBox(m, false)}</div>
                   </div>

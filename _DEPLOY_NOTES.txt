@@ -1,31 +1,42 @@
-PACKAGE 1042 + 1043 COMBINED - eleven files, one drop
+PACKAGE 1044 - Business Scorecard: last full month only; payless average
 
-The last build failed on lib/precontractTotals.js importing from
-'./crmValueChanges'. That is the 1041 version of the file. 1043 replaces it,
-and 1042 does not contain it - so 1043's copy was overwritten after it
-deployed, most likely by pushing a working folder that did not have 1043 in
-it.
+Three files. Complete replacements. No re-seed. No env changes.
+Built on 1042 + 1043 (the combined zip).
 
-This zip is 1042 and 1043 together, final versions. Copy ALL of it over the
-repo, keeping the folders, and push once.
+  lib/businessScorecard.js
+  pages/api/management/scorecard.js
+  pages/management/scorecard.js
 
-  components/ScorecardGear.js          1042
-  lib/scorecardLayout.js               1042
-  pages/management/scorecard.js        1042
-  pages/api/management/scorecard.js    1042
-  pages/api/targets.js                 1042
-  pages/operations/scorecards.js       1042
-  pages/scorecard-crm.js               1042
-  pages/commercial-scorecard.js        1042
-  lib/crmHistoryParse.js               1043  NEW
-  lib/crmValueChanges.js               1043
-  lib/precontractTotals.js             1043
 
-BEFORE PUSHING, open lib/precontractTotals.js and check line 7 reads:
+LAST FULL MONTH ONLY
+Every metric now counts finished months only. This month is blank on every
+graph and in the table, and every card stops at the end of last month.
 
-  import { parseMoneyPair, parseStagePair } from './crmHistoryParse'
+  Changed:  Water ingress, Value priced, Value secured, Average value of
+            secured project, Strike rate (to last month), Negotiating
+            pipeline (at last month end - no more "Today"), Payless notices
+  Already:  Gross margin, Total sales
+  Excepted, as agreed: Forecast sales - actual to last month PLUS the
+            forecast from this month on. Forecast gross margin - the whole
+            year's forecast.
 
-If it says './crmValueChanges', the old file is still there.
+Defined once (isFull in the route), so every metric follows the same rule.
 
-Every file here is byte-identical to the repo the 157-page browser check
-passed on.
+PAYLESS NOTICES
+The average per month under the total, as on Total sales - the total over
+the finished months, divided by how many. Shown to one decimal place, since
+a count's average is a fraction (e.g. 0.2 average per month).
+
+
+Checked by running the route with activity deliberately placed in October
+(today being 10 October): a leak, a price change, a win and a credit note.
+October came out empty on all seven metrics, each card stopped at September,
+and payless read 2 with 0.2 per month over 10 months. All 157 pages pass the
+browser check.
+
+
+SMOKE TEST
+1. This month's column is blank on every graph and in the table.
+2. Negotiating pipeline card reads "At 30/09/2026", not "Today".
+3. Strike rate reads "Rolling 6 months to Sep 26".
+4. Payless notices: total, and the average per month underneath.
