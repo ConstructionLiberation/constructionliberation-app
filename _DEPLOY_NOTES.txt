@@ -1,61 +1,99 @@
-PACKAGE 1027 - Management portal: first round of changes
+PACKAGE 1031 - Org chart arranged by hand; 1-Year Org Chart
 ================================================================================
 
-Ten files. Eight complete replacements, two NEW. No re-seed. No env changes.
-Built on 1026 (the cumulative package).
+Seven files. Four complete replacements, three NEW. No re-seed. No env changes.
+Built on 1027-1030 - deploy those first.
 
-  REPLACED  pages/management.js
-            lib/mgmtDocs.js
-            components/ManagementShell.js
-            components/MgmtRowsTable.js
-            components/GoalTracker.js
-            pages/management/swot.js
+  REPLACED  lib/mgmtDocs.js
+            components/ManagementShell.js        (nav: 1-Year Org Chart)
+            components/orgChartImage.js          (now draws the tree)
             pages/management/org-chart.js
-            pages/management/meeting-actions.js
-  NEW       components/AutoTextarea.js
-            components/orgChartImage.js
+  NEW       lib/orgTree.js
+            components/OrgTree.js
+            pages/management/org-chart-1-year.js
+
+Note: components/OrgTree.js and lib/orgTree.js differ only by capital O and
+live in different folders. Both are needed. On Windows, copy them as files
+into their own folders - do not let anything merge or rename them.
 
 
-WHAT CHANGED
+1. CURRENT ORG CHART - ARRANGED BY HAND
 ================================================================================
-1. /management opens straight on Vision, Mission & Values. The page of links
-   is gone - it repeated the nav bar. Server-side redirect, no flash.
+The chart is now a proper tree: who reports to whom, with connector lines.
 
-2. Text boxes grow to fit. SWOT points, and every multi-line cell in the goal
-   trackers and Meeting Actions (goal, success measure, comments, problem,
-   root cause, action, updates) grow as you type and shrink back. Loaded and
-   pasted text sizes correctly too.
+WHO is on it stays automatic - every active portal login, plus the outsourced
+services table. WHERE they sit is now yours to set. Only the layout is saved
+(mgmt:org:layout); nothing about a person is copied.
 
-3. "Portal User Responsible" replaces Leader Responsible on the Quarterly,
-   1-Year and 3-Year goals and on Meeting Actions: a dropdown of ACTIVE portal
-   users. The goals also offer "All", as the workbook did. Meeting Actions do
-   not - an action belongs to one person.
+  - First visit: everyone is in the tray "Not placed yet". Nobody is put in
+    a position by guesswork - the old job-role tiers are gone.
+  - New login: appears in the tray, ready to place.
+  - Someone leaves: drops off; anyone under them moves up to report to whoever
+    they reported to. The team stays together.
+  - Job role changed in Admin: the card updates; its position is kept.
 
-   Saves the user id AND the name. If someone leaves, the row still shows
-   the name, marked "(no longer a portal user)", until it is reassigned.
-   Anything typed by hand before this package shows as "(not a portal user)".
+"Arrange chart" switches editing on. Two ways to move someone:
 
-4. Meeting Actions: Team Member Responsible removed from the table. Any value
-   already saved is kept in the data, just not shown.
+  DRAG (desktop) a card onto another card:
+     middle of the card      -> UNDER that person
+     left or right edge      -> BESIDE them (an amber bar shows which side)
+     the bar at the top      -> top level
+     the tray at the bottom  -> off the chart (their team moves up a level)
 
-5. Org chart downloads as a PNG - "Download chart (PNG)", top right. Titled
-   with the company name and the date, includes outsourced services, drawn at
-   double resolution for printing, named org-chart-YYYY-MM-DD.png.
-   Outsourced services now also appear on the on-screen chart (dashed boxes)
-   so the screen and the download match.
+  CLICK a card (works on phone and tablet too): a panel with
+     Reports to [dropdown], Move left, Move right, Take off chart.
 
-6. "Report app improvement" at the top right of the Management nav - the same
-   shared component as every other portal nav.
+Putting someone under a person who reports to them is refused with a message.
+
+Outsourced services now go ON the chart like anyone else - dashed, grey,
+tagged OUTSOURCED - and are placed the same way. The table's "Managed By"
+column is gone because placing the card says it; any value already saved is
+kept in the data.
+
+
+2. 1-YEAR ORG CHART - NEW PAGE
+================================================================================
+Its own nav item. A plan, so nobody comes from the logins - every card is
+added by hand: "+ Add person or role" with Name (blank if not known yet),
+Role, Status and Notes.
+
+  Status   Existing  - solid, red top (as the current chart)
+           New role  - dashed, green, tagged NEW ROLE
+           Vacancy   - dashed, amber, tagged VACANCY
+
+"Copy current chart" fills it once with today's people in today's positions
+as a starting point. It asks before replacing anything already there. After
+that the two charts are independent.
+
+Arranged exactly like the current chart. In Arrange mode, clicking a card
+also offers "Edit details" (rename, change status, delete). Deleting a card
+moves anyone under it up a level.
+
+Stored whole at mgmt:org:future.
+
+
+BOTH CHARTS
+================================================================================
+  - Download chart (PNG) draws the tree as shown, titled and dated.
+  - Saves carry the version they started from. If someone else rearranged
+    the chart in between, the move is refused with their name and the chart
+    reloads - one layout never silently replaces another.
 
 
 SMOKE TEST
 ================================================================================
-1. Click the Management tile: opens on Vision, Mission & Values.
-2. SWOT: add a point, type three lines - the box grows. Delete text - it
-   shrinks. Save, reload - sized correctly on load.
-3. Quarterly Goals: Portal User Responsible lists current users and All.
-   Pick one, reload - kept. Long Success Measure - the cell grows.
-4. Meeting Actions: no Team Member column; Portal User Responsible dropdown.
-5. Org Chart: add an outsourced service - it appears on the chart. Download -
-   the PNG has everyone and the service in it.
-6. Report app improvement, top right - opens the same form as elsewhere.
+Current chart:
+1. Everyone appears in the tray. Arrange chart -> drag a director to the top
+   bar. Drag two people onto the director's middle - they appear under.
+2. Drag a third onto the right edge of one of those - appears beside it.
+3. Try to drag the director under one of their reports - refused.
+4. Click a card -> Reports to -> pick someone. Move left / right.
+5. Reload - layout kept. Download - PNG matches the screen.
+6. Add an outsourced service in the table - appears in the tray; place it.
+
+1-Year chart:
+7. Copy current chart - same structure appears.
+8. + Add person or role: no name, role "Estimator", Vacancy - appears in
+   the tray dashed amber. Drag it into place.
+9. Click a card -> Edit details -> change status -> Save.
+10. Change the current chart - the 1-year chart does not move.

@@ -19,6 +19,7 @@ export const MGMT_NAV = [
   { key: 'one-year', label: '1-Year Goals', href: '/management/one-year-goals' },
   { key: 'three-year', label: '3-Year Goals', href: '/management/three-year-goals' },
   { key: 'org', label: 'Org Chart', href: '/management/org-chart' },
+  { key: 'org-1y', label: '1-Year Org Chart', href: '/management/org-chart-1-year' },
   { key: 'actions', label: 'Meeting Actions', href: '/management/meeting-actions' },
 ]
 
