@@ -174,8 +174,12 @@ export default function Dashboard() {
     const noSplit = ['customerType', 'estimator', 'salesPerson', 'organizationName', 'region', 'status', 'projectType']
     const vals = arr.map(d => d[key])
     const blankOpt = BLANK_ELIGIBLE.includes(key) ? ['Blank'] : []
+    // Customer type always offers the CRM field's three options, whether or not
+    // any deal in view has them yet (1055) - otherwise "Existing Customer" was
+    // missing until a deal happened to carry it.
+    const always = key === 'customerType' ? ['Existing Customer', 'New Customer', 'Prospect'] : []
     const unique = noSplit.includes(key)
-      ? ['All', ...blankOpt, ...new Set(vals.filter(Boolean))].sort((a,b) => a === 'All' ? -1 : b === 'All' ? 1 : a === 'Blank' ? -1 : b === 'Blank' ? 1 : a.localeCompare(b))
+      ? ['All', ...blankOpt, ...new Set([...always, ...vals.filter(Boolean)])].sort((a,b) => a === 'All' ? -1 : b === 'All' ? 1 : a === 'Blank' ? -1 : b === 'Blank' ? 1 : a.localeCompare(b))
       : ['All', ...blankOpt, ...new Set(vals.filter(Boolean).flatMap(v => v.includes(',') ? v.split(',').map(s => s.trim()) : [v]))].sort((a,b) => a === 'All' ? -1 : b === 'All' ? 1 : a === 'Blank' ? -1 : b === 'Blank' ? 1 : a.localeCompare(b))
     return unique
   }

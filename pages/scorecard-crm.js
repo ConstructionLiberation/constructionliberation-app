@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import PreContractNav from '../components/PreContractNav'
 import HiddenPeoplePicker from '../components/HiddenPeoplePicker'
 import { personKey } from '../lib/scorecardPeople'
-import { valuePricedIn, valueSecuredIn, strikeRateValueTo } from '../lib/precontractTotals'
+import { valuePricedIn, valueSecuredIn, strikeRateValueTo, winsByOrg, isExistingCustomer } from '../lib/precontractTotals'
 import { applyLayout } from '../lib/scorecardLayout'
 import ScorecardGear from '../components/ScorecardGear'
 
@@ -553,9 +553,14 @@ export default function Scorecard() {
     const strikeRateMCSecured = mcRolling.length ? mcRollingWon.reduce((s,d)=>s+d.value,0) / mcRolling.reduce((s,d)=>s+d.value,0) : null
 
     const monthChanges = personValueChanges.filter(v => v.changeDate && monthKey(v.changeDate) === m)
+    // 1055: the Business Scorecard's rule - the organisation had a different
+    // project won BEFORE THE DATE OF THIS PRICE CHANGE. It used to read the
+    // deal's Customer type label, which nobody had filled in, so this card read
+    // zero. Same answer on both scorecards now.
+    const _wins = winsByOrg(deals)
     const existingChanges = monthChanges.filter(v => {
-      const deal = deals.find(d => String(d.id) === v.dealId)
-      return deal?.customerType === 'Existing Customer'
+      const deal = deals.find(d => String(d.id) === String(v.dealId))
+      return isExistingCustomer(_wins, deal?.organizationName ?? v.organizationName, v.changeDate, v.dealId)
     })
     const valuePricedExisting = existingChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
     const totalValuePriced = monthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
