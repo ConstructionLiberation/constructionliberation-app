@@ -1,44 +1,31 @@
-PACKAGE 1043 - fixes the 1041 build failure
+PACKAGE 1042 + 1043 COMBINED - eleven files, one drop
 
-Three files: two complete replacements, one NEW. No re-seed. No env changes.
-Deploy on top of 1041 (and 1042, which is unaffected).
+The last build failed on lib/precontractTotals.js importing from
+'./crmValueChanges'. That is the 1041 version of the file. 1043 replaces it,
+and 1042 does not contain it - so 1043's copy was overwritten after it
+deployed, most likely by pushing a working folder that did not have 1043 in
+it.
 
-  NEW       lib/crmHistoryParse.js
-  REPLACED  lib/crmValueChanges.js
-            lib/precontractTotals.js
+This zip is 1042 and 1043 together, final versions. Copy ALL of it over the
+repo, keeping the folders, and push once.
 
+  components/ScorecardGear.js          1042
+  lib/scorecardLayout.js               1042
+  pages/management/scorecard.js        1042
+  pages/api/management/scorecard.js    1042
+  pages/api/targets.js                 1042
+  pages/operations/scorecards.js       1042
+  pages/scorecard-crm.js               1042
+  pages/commercial-scorecard.js        1042
+  lib/crmHistoryParse.js               1043  NEW
+  lib/crmValueChanges.js               1043
+  lib/precontractTotals.js             1043
 
-THE FAILURE
-  Module not found: Can't resolve 'async_hooks'
-  ./lib/db.js <- ./lib/crmValueChanges.js <- ./lib/precontractTotals.js
-  <- ./pages/scorecard-crm.js
+BEFORE PUSHING, open lib/precontractTotals.js and check line 7 reads:
 
-The pre-contract scorecard is a BROWSER page and imports
-lib/precontractTotals.js. 1041 made that file import two history parsers
-from lib/crmValueChanges.js - which also imports the database, whose tenant
-code uses async_hooks, a Node-only module. So the database code was pulled
-into a browser bundle.
+  import { parseMoneyPair, parseStagePair } from './crmHistoryParse'
 
-THE FIX
-The two parsers moved, unchanged, into lib/crmHistoryParse.js, which imports
-nothing. precontractTotals imports them from there. crmValueChanges imports
-and re-exports them, so nothing else changes.
+If it says './crmValueChanges', the old file is still there.
 
-
-WHY MY CHECKS MISSED IT
-I bundled every changed page as SERVER code, where async_hooks exists. From
-here on, every package also bundles every page in the repo for the BROWSER
-and compares against the original 1021 repo:
-  157 pages checked, nothing newly failing.
-And the check was proved: putting the 1041 import back in a copy fails with
-exactly Vercel's error.
-
-The pipeline and strike-rate results are identical to 1041's tests.
-
-
-THE WARNINGS ABOVE THE ERROR
-The "Attempted import error" lines - pipedrive-sync, deals, fieldmap, sync,
-webhook, upload-bills, xero/backfill-labour, xero/sync - are OLD. They were
-in the 1021 build too, are warnings not errors, and come from Pipedrive-era
-routes importing functions that no longer exist. Those routes would fail if
-called. Worth deleting or fixing as a separate tidy-up.
+Every file here is byte-identical to the repo the 157-page browser check
+passed on.
