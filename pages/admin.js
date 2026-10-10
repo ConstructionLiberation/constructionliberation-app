@@ -21,7 +21,11 @@ const AREA_LABEL = {
 }
 // Fixed job roles (descriptive) — matches the old Team Members list plus the
 // roles the IHM/Pre-Start dropdowns need.
-const JOB_ROLES = ['Operative', 'Contracts Manager', 'Operations Manager', 'Estimator', 'Quantity Surveyor', 'Design Manager', 'Site Supervisor', 'Sales Manager', 'Director', 'Other']
+// Job titles - a description on the user, separate from the access role.
+// Only two drive anything: 'Director' (RAMS sign-off) and 'Operations Manager'
+// (deliveries and H&S emails). 1046 added Project Manager, Bookkeeper and
+// Accountant - labels only. 'Other' stays last.
+const JOB_ROLES = ['Operative', 'Contracts Manager', 'Project Manager', 'Operations Manager', 'Estimator', 'Quantity Surveyor', 'Design Manager', 'Site Supervisor', 'Sales Manager', 'Bookkeeper', 'Accountant', 'Director', 'Other']
 
 export default function AdminPage() {
   const { companyName: brand } = useFormat()

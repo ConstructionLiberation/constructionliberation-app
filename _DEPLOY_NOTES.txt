@@ -1,71 +1,25 @@
-PACKAGE 1045 - Average value of live projects: connected, recorded at month end
+PACKAGE 1046 - three new job titles
 
-Seven files: five complete replacements, two NEW. No re-seed. No env changes.
-Built on 1044.
+One file. Complete replacement. No re-seed. No env changes.
 
-  NEW       lib/liveProjectValue.js
-            pages/api/cron/month-end-snapshots.js
-  REPLACED  vercel.json                          (one cron ADDED - nothing else changed)
-            pages/api/dashboard.js               (body exported - nothing changed)
-            lib/businessScorecard.js
-            pages/api/management/scorecard.js
-            pages/management/scorecard.js
+  pages/admin.js
 
+Admin -> Users -> Job role now also offers:
 
-THE METRIC  (renamed "Average value of live projects")
-  Live     "In progress" on Project Financials (INPROGRESS) - not Defects,
-           not Closed - minus the shared hidden list, as that page filters.
-  Value    each project's AFA, read THROUGH Project Financials' own route
-           (/api/dashboard), so it is the figure that page shows.
-  Average  total AFA / number of live projects.
+  Project Manager    (next to Contracts Manager)
+  Bookkeeper
+  Accountant         (both before Director; Other stays last)
 
+These are JOB TITLES - a description shown on the user and on the org chart.
+They do not change what anyone can open; that is the ACCESS ROLE (Pre-Contract,
+Post-Contract, Accounts, Designer, Management, Admin), which is unchanged. A
+bookkeeper or accountant who needs Bookkeeping or Commercial still needs the
+Accounts access role.
 
-RECORDED AT MONTH END, FROM NOW ON
-Nothing stores what a project's AFA was, or whether it was live, on a past
-date. AFA comes from the last application sent, stamped overrides and the
-final account; there is no status history. Rebuilding past months would mean
-a second copy of those rules and a guess at which projects were live - so the
-figure is RECORDED instead:
-
-  - A new daily job, month-end-snapshots, runs at 22:45 UTC (23:45 UK in
-    summer) and overwrites this month's entry. The entry left standing for
-    each month is therefore its LAST DAY's.
-  - Opening the Business Scorecard also records today's figure (at most every
-    6 hours), as a backstop.
-
-What you will see:
-  NOW        the card reads "No month end recorded yet", says the first
-             month-end figure is 31/10/2026, and shows today's figure underneath
-             for reference ("... today - counts once the month ends").
-  1 NOV      October's month end appears: the card reads "At 31/10/2026".
-  Earlier    months stay blank - there is nothing true to put there.
-
-Last full month only, as the rest of the scorecard.
-
-
-THE NEW CRON
-Added to vercel.json - every existing cron is unchanged (checked). The health
-alert picks it up automatically from vercel.json. Like every cron it runs once
-per customer through forEachTenant. It does NOT call the portal's own API over
-HTTP (the PORTAL_BASE_URL hazard in the handover) - it calls the dashboard
-route's code directly, inside each customer's own context.
-
-/api/dashboard: its body is now exported so the recorder can call it. The route
-itself behaves exactly as before.
-
-
-Checked by running the scorecard route on a stand-in Project Financials feed:
-three In progress projects averaging 200,000 counted; Defects, Closed and a
-hidden project left out; first visit records today and shows no month end;
-with a recorded September month end the card reads 180,000 "At 30/09/2026"
-and October stays blank. All 157 pages pass the browser check.
-
+Only two job titles trigger anything in the portal - Director (RAMS sign-off)
+and Operations Manager (deliveries and H&S emails) - so the new ones are safe
+labels. The server stores whatever title is picked, so nothing else changes.
 
 SMOKE TEST
-1. Business Scorecard: "Average value of live projects - No month end recorded
-   yet", with today's figure underneath.
-2. Compare today's figure with Project Financials, In progress filter: total
-   AFA / number of projects.
-3. Vercel -> Crons: month-end-snapshots listed. After tonight, its last run
-   is green.
-4. On 1 November: the card reads "At 31/10/2026".
+Admin -> Users -> edit a user -> Job role: the three new titles. Save, reload -
+kept, and shown on the Org Chart card.
