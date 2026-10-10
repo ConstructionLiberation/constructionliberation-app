@@ -7,23 +7,34 @@
 // Returns a PNG Blob, drawn at 2x so it stays sharp printed or zoomed.
 
 const SCALE = 2
-const PAD = 40, H_GAP = 14, V_GAP = 44, BOX_H = 62, ROOT_GAP = 36
+const PAD = 40, H_GAP = 14, V_GAP = 44, ROOT_GAP = 36
 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 
-export async function drawOrgChart({ title, subtitle, roots }) {
+// dotted (1060): [{ from, to }] node keys - drawn as dashed curves behind the
+// boxes. Comments (node.comment) get their own line, and every box grows to
+// fit when any card has one.
+export async function drawOrgChart({ title, subtitle, roots, dotted = [] }) {
   const m = document.createElement('canvas').getContext('2d')
   const textW = (t, size, weight = 400) => { m.font = `${weight} ${size}px ${FONT}`; return m.measureText(t || '').width }
 
   // Pass 1: each box's width, each subtree's width.
   const size = (t) => {
     const n = t.node
-    t.w = Math.min(240, Math.max(140, Math.ceil(Math.max(textW(n.title, 14, 600), textW(n.subtitle, 12), textW((n.tag || '').toUpperCase(), 10, 600))) + 28))
+    t.w = Math.min(240, Math.max(140, Math.ceil(Math.max(textW(n.title, 14, 600), textW(n.subtitle, 12), textW((n.tag || '').toUpperCase(), 10, 600), textW(n.comment, 11, 400))) + 28))
     t.children.forEach(size)
     const kids = t.children.reduce((a, c) => a + c.sw, 0) + H_GAP * Math.max(0, t.children.length - 1)
     t.sw = Math.max(t.w, kids)
     t.depth = 1 + (t.children.length ? Math.max(...t.children.map(c => c.depth)) : 0)
   }
   roots.forEach(size)
+  // One box height for the whole chart: room for a comment line if any card
+  // has one, so rows stay level.
+  const all = []
+  const walk = (t) => { all.push(t); t.children.forEach(walk) }
+  roots.forEach(walk)
+  const anyComment = all.some(t => t.node.comment)
+  const BOX_H = anyComment ? 76 : 62
+
   const treesW = roots.reduce((a, r) => a + r.sw, 0) + ROOT_GAP * Math.max(0, roots.length - 1)
   const depth = roots.length ? Math.max(...roots.map(r => r.depth)) : 0
   const headH = 76
@@ -69,6 +80,25 @@ export async function drawOrgChart({ title, subtitle, roots }) {
   }
   roots.forEach(lines)
 
+  // Dotted lines (1060): between the two boxes, behind them, bowed below
+  // when both sit on the same row.
+  const byKey = new Map(all.map(t => [t.node.key, t]))
+  g.save(); g.setLineDash([5, 4]); g.strokeStyle = '#8b8b85'; g.lineWidth = 1.5
+  for (const l of dotted) {
+    const a = byKey.get(l.from), c = byKey.get(l.to)
+    if (!a || !c) continue
+    g.beginPath()
+    if (Math.abs(a.y - c.y) < 2) {
+      const [p, q] = a.cx < c.cx ? [a, c] : [c, a], y = p.y + BOX_H
+      g.moveTo(p.cx, y); g.bezierCurveTo(p.cx, y + 28, q.cx, y + 28, q.cx, y)
+    } else {
+      const [p, q] = a.y < c.y ? [a, c] : [c, a], y1 = p.y + BOX_H, y2 = q.y, my = (y1 + y2) / 2
+      g.moveTo(p.cx, y1); g.bezierCurveTo(p.cx, my, q.cx, my, q.cx, y2)
+    }
+    g.stroke()
+  }
+  g.restore()
+
   const box = (t) => {
     const n = t.node
     roundRect(g, t.x, t.y, t.w, BOX_H, 8)
@@ -78,7 +108,8 @@ export async function drawOrgChart({ title, subtitle, roots }) {
     g.textAlign = 'center'
     g.fillStyle = '#1a1a19'; g.font = `600 14px ${FONT}`; g.fillText(fit(g, n.title || '—', t.w - 16), t.cx, t.y + 25)
     if (n.subtitle) { g.fillStyle = '#888888'; g.font = `400 12px ${FONT}`; g.fillText(fit(g, n.subtitle, t.w - 16), t.cx, t.y + 42) }
-    if (n.tag) { g.fillStyle = n.accent || '#888888'; g.font = `600 10px ${FONT}`; g.fillText(n.tag.toUpperCase(), t.cx, t.y + 56) }
+    if (n.comment) { g.fillStyle = '#6b7280'; g.font = `italic 400 11px ${FONT}`; g.fillText(fit(g, n.comment, t.w - 16), t.cx, t.y + 57) }
+    if (n.tag) { g.fillStyle = n.accent || '#888888'; g.font = `600 10px ${FONT}`; g.fillText(n.tag.toUpperCase(), t.cx, t.y + (n.comment ? 71 : 56)) }
     t.children.forEach(box)
   }
   roots.forEach(box)

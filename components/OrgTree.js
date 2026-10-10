@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import { buildForest, moveNode, descendants } from '../lib/orgTree'
 
 // THE ORG CHART, DRAWN AND EDITED (1031). Used by the current and the 1-year
@@ -18,13 +18,62 @@ import { buildForest, moveNode, descendants } from '../lib/orgTree'
 //        off the chart. Drag to the top bar for the top level.
 //   CLICK a card - a panel opens with "Reports to", move left / right, and
 //        remove. Works everywhere.
-export default function OrgTree({ nodes, placements, editable, onChange, onEditNode, onError, trayTitle = 'Not on the chart yet' }) {
+// 1060:
+//   node.comment   a short line shown under the role (e.g. "Office")
+//   dotted         [{ from, to }] - dotted lines between cards: a working
+//                  relationship outside the reporting line. Drawn behind the
+//                  cards; only between cards that are on the chart.
+//   onDottedChange async (next) => void - omit to show lines without editing
+export default function OrgTree({ nodes, placements, editable, onChange, onEditNode, onError, trayTitle = 'Not on the chart yet', dotted = [], onDottedChange }) {
   const [dragKey, setDragKey] = useState(null)
   const [hover, setHover] = useState(null)       // { key, where }
   const [selected, setSelected] = useState(null)
   const [busy, setBusy] = useState(false)
 
   const { roots, unplaced, parentOf, byKey } = buildForest(nodes, placements)
+
+  // DOTTED LINES (1060). The tree is laid out by CSS, so where a card ends up
+  // is only known once it is on screen: measure each card (data-orgkey)
+  // against the chart's own box and draw the lines in an SVG behind the cards.
+  // Re-measured whenever the chart changes size.
+  const chartRef = useRef(null)
+  const [lines, setLines] = useState([])
+  const placedSet = new Set(nodes.filter(n => placements[n.key]).map(n => n.key))
+  const liveDotted = (dotted || []).filter(l => placedSet.has(l.from) && placedSet.has(l.to))
+  const dottedSig = JSON.stringify(liveDotted) + '|' + JSON.stringify(placements) + '|' + nodes.map(n => n.key + (n.comment || '')).join(',')
+  useLayoutEffect(() => {
+    const box = chartRef.current
+    if (!box) { setLines([]); return }
+    const measure = () => {
+      const b = box.getBoundingClientRect()
+      const at = (k) => { const el = box.querySelector(`[data-orgkey="${CSS.escape(k)}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height } }
+      setLines(liveDotted.map(l => {
+        const a = at(l.from), c = at(l.to)
+        if (!a || !c) return null
+        const ax = a.x + a.w / 2, cx = c.x + c.w / 2
+        if (Math.abs((a.y + a.h / 2) - (c.y + c.h / 2)) < 8) {
+          // Same row: from the facing sides, bowed below the cards.
+          const [l1, r1] = ax < cx ? [a, c] : [c, a]
+          const x1 = l1.x + l1.w / 2, x2 = r1.x + r1.w / 2, y = Math.max(l1.y + l1.h, r1.y + r1.h)
+          return { d: `M ${x1} ${y} C ${x1} ${y + 26}, ${x2} ${y + 26}, ${x2} ${y}`, key: l.from + '|' + l.to }
+        }
+        const [top, bot] = a.y < c.y ? [a, c] : [c, a]
+        const x1 = top.x + top.w / 2, y1 = top.y + top.h, x2 = bot.x + bot.w / 2, y2 = bot.y
+        const my = (y1 + y2) / 2
+        return { d: `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`, key: l.from + '|' + l.to }
+      }).filter(Boolean))
+    }
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (ro) ro.observe(box)
+    return () => { if (ro) ro.disconnect() }
+  }, [dottedSig])
+
+  async function changeDotted(next) {
+    if (!onDottedChange || busy) return
+    setBusy(true)
+    try { await onDottedChange(next) } finally { setBusy(false) }
+  }
 
   async function move(key, targetKey, where) {
     if (busy) return
@@ -47,6 +96,7 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
     const isSel = selected === n.key
     return (
       <div
+        data-orgkey={n.key}
         draggable={editable && !busy}
         onDragStart={e => { setDragKey(n.key); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', n.key) }}
         onDragEnd={() => { setDragKey(null); setHover(null) }}
@@ -55,7 +105,7 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
         onDrop={editable ? (e => { e.preventDefault(); const k = dragKey; const w = whereFromEvent(e); setHover(null); setDragKey(null); if (k && k !== n.key) move(k, n.key, w) }) : undefined}
         onClick={editable ? (() => setSelected(isSel ? null : n.key)) : undefined}
         style={{
-          position: 'relative', background: isHover && !edge ? '#fff7ed' : '#fff',
+          position: 'relative', zIndex: 1, background: isHover && !edge ? '#fff7ed' : '#fff',
           border: `1px ${n.dashed ? 'dashed' : 'solid'} ${isSel ? '#1a1a19' : (isHover && !edge ? '#f59e0b' : '#e1e0d9')}`,
           borderTop: `3px solid ${n.accent || '#be123c'}`, borderRadius: 8, padding: '9px 12px',
           minWidth: 140, maxWidth: 200, textAlign: 'center', cursor: editable ? 'grab' : 'default',
@@ -64,6 +114,7 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
         {edge && <div style={{ position: 'absolute', top: -4, bottom: -4, [edge === 'before' ? 'left' : 'right']: -7, width: 4, borderRadius: 2, background: '#f59e0b' }} />}
         <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1a19', lineHeight: 1.25 }}>{n.title || '—'}</div>
         {n.subtitle && <div style={{ fontSize: 11.5, color: '#888', marginTop: 2, lineHeight: 1.25 }}>{n.subtitle}</div>}
+        {n.comment && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3, fontStyle: 'italic', lineHeight: 1.25 }}>{n.comment}</div>}
         {n.tag && <div style={{ fontSize: 10, marginTop: 4, color: n.accent || '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>{n.tag}</div>}
       </div>
     )
@@ -88,6 +139,7 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
   return (
     <div>
       <style>{TREE_CSS}</style>
+      {liveDotted.length > 0 && <div style={{ fontSize: 11.5, color: '#888', marginBottom: 6 }}>┄ Dotted line: works with, but does not report to.</div>}
 
       {editable && (
         <div
@@ -119,6 +171,30 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
             </>
           )}
           {onEditNode && <button onClick={() => onEditNode(selected)} style={smallBtn}>Edit details</button>}
+          {onDottedChange && selPlaced && (() => {
+            const mine = (dotted || []).filter(l => l.from === selected || l.to === selected)
+            const linked = new Set(mine.map(l => l.from === selected ? l.to : l.from))
+            const choices = nodes.filter(n => placements[n.key] && n.key !== selected && !linked.has(n.key))
+            return (
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', borderLeft: '1px solid #e1e0d9', paddingLeft: 10 }}>
+                <select value="" disabled={busy} onChange={e => { const v = e.target.value; if (v) changeDotted([...(dotted || []), { from: selected, to: v }]) }}
+                  style={{ fontSize: 13, padding: '5px 7px', border: '1px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }}>
+                  <option value="">Dotted line to…</option>
+                  {choices.map(n => <option key={n.key} value={n.key}>{n.title}{n.subtitle ? ` - ${n.subtitle}` : ''}</option>)}
+                </select>
+                {mine.map(l => {
+                  const other = byKey.get(l.from === selected ? l.to : l.from)
+                  return (
+                    <span key={l.from + '|' + l.to} style={{ fontSize: 12, border: '1px dashed #9ca3af', borderRadius: 999, padding: '3px 4px 3px 9px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      ┄ {other ? other.title : '?'}
+                      <button title="Remove this dotted line" disabled={busy} onClick={() => changeDotted((dotted || []).filter(x => x !== l))}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1 }}>×</button>
+                    </span>
+                  )
+                })}
+              </span>
+            )
+          })()}
           <button onClick={() => setSelected(null)} style={{ ...smallBtn, marginLeft: 'auto' }}>Done</button>
         </div>
       )}
@@ -129,7 +205,12 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
             {editable ? 'Nobody is on the chart yet. Drag someone up from below, or click them and choose who they report to.' : 'Nobody is on the chart yet.'}
           </div>
         ) : (
-          <div className="oc"><ul className="oc-roots">{roots.map(branch)}</ul></div>
+          <div ref={chartRef} style={{ position: 'relative', display: 'inline-block', minWidth: '100%' }}>
+            <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none', zIndex: 0 }}>
+              {lines.map(l => <path key={l.key} d={l.d} fill="none" stroke="#8b8b85" strokeWidth="1.5" strokeDasharray="5 4" />)}
+            </svg>
+            <div className="oc"><ul className="oc-roots">{roots.map(branch)}</ul></div>
+          </div>
         )}
       </div>
 

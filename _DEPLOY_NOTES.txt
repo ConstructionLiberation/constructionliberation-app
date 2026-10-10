@@ -1,21 +1,63 @@
-PACKAGE 1059 - Quarterly Goals: HIGH PRIORITY badge lighter and smaller
+PACKAGE 1060 - Org charts: add roles to the current chart, dotted lines,
+               comments under the role
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1058.
+Five files. Complete replacements. No re-seed. No env changes. Built on 1059.
 
-  components/MgmtRowsTable.js
+  lib/mgmtDocs.js
+  components/OrgTree.js
+  components/orgChartImage.js
+  components/PlanOrgChart.js            (1-Year and 3-Year charts)
+  pages/management/org-chart.js         (current chart)
 
-The HIGH PRIORITY badge:
-  Colour   set: pale red background, deep red text and a light red edge
-           (was solid red with white text)
-           not set: a fainter grey outline, as before
-  Size     half the size - smaller text and padding; the Priority column is
-           narrowed to match
+AFTER DEPLOYING, RELOAD ANY ORG CHART PAGE THAT WAS ALREADY OPEN before
+arranging it - see "Saving" below.
 
-Unchanged: clicking it, the red bar down a high-priority row, high-priority
-rows at the top, the High priority only filter, sort by person.
+1. ADD ROLES TO THE CURRENT ORG CHART
+"+ Add role" on the Org Chart: name (blank if not known), role, status
+(Existing / New role / Vacancy - styled as on the planned charts) and a
+comment. The card lands in the tray; place it like anyone else. In Arrange
+mode, click it -> Edit details to change or delete it (anyone under it moves
+up a level). Copy current chart on the 1-Year / 3-Year pages now brings these
+roles across too.
 
-Checked: the goal pages bundle; all 158 pages pass the browser check.
+2. DOTTED LINES - ALL THREE CHARTS
+For someone who works with another person or area without reporting to them.
+In Arrange mode click a card: "Dotted line to..." picks anyone on the chart;
+existing links show beside it with x to remove. Drawn as a dashed curve
+behind the cards, with a key above the chart, and in the PNG download. A line
+has no direction and is kept once. Lines to someone who leaves, or a card
+taken off the chart, simply stop showing. Copying a chart brings its lines.
+
+3. COMMENT UNDER THE ROLE - ALL THREE CHARTS
+A short line in grey italics under the role, e.g. "Office" or
+"Pre-construction". Arrange mode -> click the card -> Edit details:
+  people with a login, outsourced services   the comment only (their name and
+                                             role come from Admin / the table)
+  roles added by hand, planned-chart cards   everything, comment included
+                                             (the planned charts' old "Notes"
+                                             field IS this comment)
+Shown in the PNG too; boxes grow a line when any card has a comment.
+
+SAVING
+The current chart used to save only positions. It now saves positions, added
+roles, comments and dotted lines together every time - a positions-only save
+would wipe the rest (shown in testing). A page opened BEFORE this deploy still
+has the old code, so reload it first.
+
+Checked: storage rules (duplicate/reversed lines kept once, self-links
+dropped, comments trimmed); the tree rendered with comments, the line layer
+and every card tagged for measuring; the PNG drawn with comments and exactly
+one dashed curve (a link to a missing card skipped); the current chart's save
+through the real route - a move keeps roles, comments and lines; all three
+org chart pages bundle; all 158 pages pass the browser check.
 
 SMOKE TEST
-Quarterly Goals: a high-priority goal shows a small pale-red HIGH PRIORITY
-badge; click it - faint grey; click again - pale red.
+1. Org Chart -> + Add role: Vacancy, "Office Manager", comment "Office". Place
+   it under a director.
+2. Arrange -> click a person -> Edit details -> comment "Pre-construction".
+3. Click a person -> Dotted line to... the Office Manager. A dashed curve
+   joins them.
+4. Move someone, reload - role, comment and line all still there.
+5. Download chart (PNG) - comments and the dashed line are in it.
+6. 1-Year Org Chart -> Copy current chart - the role, comments and line come
+   across.

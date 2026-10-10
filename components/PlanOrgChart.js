@@ -38,16 +38,19 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
   const [busy, setBusy] = useState(false)
 
   async function load() {
-    try { const d = await mgmtApi(`/api/management/${docKey}`); setDoc({ nodes: d.data.nodes || [], placements: d.data.placements || {} }); setBase(d.updatedAt) }
+    try { const d = await mgmtApi(`/api/management/${docKey}`); setDoc({ nodes: d.data.nodes || [], placements: d.data.placements || {}, dotted: d.data.dotted || [] }); setBase(d.updatedAt) }
     catch (e) { setError(e.message) }
   }
   useEffect(() => { load() }, [])
 
-  async function save(next) {
+  // Every save carries the dotted lines (1060) unless the caller passes its own,
+  // so editing a card or moving someone can never drop them.
+  async function save(nextIn) {
+    const next = { dotted: (doc && doc.dotted) || [], ...nextIn }
     setError('')
     try {
       const d = await mgmtApi(`/api/management/${docKey}`, { data: next, baseUpdatedAt: base })
-      setDoc({ nodes: d.data.nodes, placements: d.data.placements }); setBase(d.updatedAt)
+      setDoc({ nodes: d.data.nodes, placements: d.data.placements, dotted: d.data.dotted || [] }); setBase(d.updatedAt)
       return true
     } catch (e) {
       setError(e.message)
@@ -73,7 +76,7 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
       if (k === key) continue
       placements[k] = p.parentKey === key ? { ...p, parentKey: up } : p
     }
-    if (await save({ nodes: doc.nodes.filter(x => x.key !== key), placements })) setForm(null)
+    if (await save({ nodes: doc.nodes.filter(x => x.key !== key), placements, dotted: (doc.dotted || []).filter(l => l.from !== key && l.to !== key) })) setForm(null)
   }
 
   // A one-off copy of the current chart as the starting point - the people
@@ -85,11 +88,14 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
       const [org, layout] = await Promise.all([mgmtApi('/api/management/org-chart'), mgmtApi('/api/management/org-layout')])
       const cur = layout.data?.placements || {}
       const map = {}, nodes = []
-      for (const p of org.people || []) { const k = newKey(); map[`user:${p.id}`] = k; nodes.push({ key: k, name: p.name, role: p.jobRole || '', status: 'existing', notes: '' }) }
+      const curNotes = layout.data?.notes || {}
+      for (const p of org.people || []) { const k = newKey(); map[`user:${p.id}`] = k; nodes.push({ key: k, name: p.name, role: p.jobRole || '', status: 'existing', notes: curNotes[`user:${p.id}`] || '' }) }
+      // Roles added by hand on the current chart (1060), with their status.
+      for (const x of layout.data?.extraNodes || []) { const k = newKey(); map[x.key] = k; nodes.push({ ...x, key: k }) }
       for (const r of org.external || []) {
         if (!r.service && !r.provider) continue
         const k = newKey(); map[`ext:${r.id}`] = k
-        nodes.push({ key: k, name: r.provider || r.service, role: r.provider ? `${r.service} (outsourced)` : 'Outsourced', status: 'existing', notes: '' })
+        nodes.push({ key: k, name: r.provider || r.service, role: r.provider ? `${r.service} (outsourced)` : 'Outsourced', status: 'existing', notes: curNotes[`ext:${r.id}`] || '' })
       }
       // Keep positions only for people who are still here, through
       // buildForest so a leaver's team moves up exactly as on the current chart.
@@ -101,7 +107,9 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
         const parent = parentOf.get(oldKey)
         placements[newK] = { parentKey: parent ? map[parent] : null, order: cur[oldKey].order ?? 0 }
       }
-      if (await save({ nodes, placements })) setEditing(true)
+      // Dotted lines between cards that came across (1060).
+      const dotted = (layout.data?.dotted || []).filter(l => map[l.from] && map[l.to]).map(l => ({ from: map[l.from], to: map[l.to] }))
+      if (await save({ nodes, placements, dotted })) setEditing(true)
     } catch (e) { setError(e.message) }
     setBusy(false)
   }
@@ -116,7 +124,7 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
       const src = await mgmtApi(`/api/management/${copyPlan.doc}`)
       const nodes = src.data?.nodes || []
       if (!nodes.length) throw new Error(`The ${copyPlan.label.toLowerCase()} chart is empty.`)
-      if (await save({ nodes, placements: src.data?.placements || {} })) setEditing(true)
+      if (await save({ nodes, placements: src.data?.placements || {}, dotted: src.data?.dotted || [] })) setEditing(true)
     } catch (e) { setError(e.message) }
     setBusy(false)
   }
@@ -130,7 +138,7 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
       const blob = await drawOrgChart({
         title: `${companyName ? companyName + ' - ' : ''}${label} Organisation Chart`,
         subtitle: `Plan as at ${today.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}`,
-        roots,
+        roots, dotted: doc.dotted || [],
       })
       saveBlob(blob, `org-chart-${slug}-${today.toISOString().slice(0, 10)}.png`)
     } catch (e) { setError(`Download failed: ${e.message}`) }
@@ -142,6 +150,7 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
     title: n.name || n.role || 'Unnamed',
     subtitle: n.name ? n.role : '',
     accent: STATUS[n.status]?.accent, dashed: STATUS[n.status]?.dashed, tag: STATUS[n.status]?.tag,
+    comment: n.notes || '',   // shown under the role (1060)
   }))
 
   return (
@@ -167,7 +176,7 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
               {Object.entries(STATUS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
             </select>
           </Field>
-          <Field label="Notes"><input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={inp} /></Field>
+          <Field label="Comment under the role (e.g. Office)"><input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={inp} /></Field>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={saveForm} style={btnDark}>{form.key ? 'Save' : 'Add'}</button>
             <button onClick={() => setForm(null)} style={{ ...btnDark, background: '#fff', color: '#1a1a19', border: '1px solid #d0d0cc' }}>Cancel</button>
@@ -187,6 +196,7 @@ export default function PlanOrgChart({ active, label, doc: docKey, slug, copyPla
           </div>
           <OrgTree nodes={treeNodes} placements={doc.placements} editable={editing}
             onChange={next => save({ nodes: doc.nodes, placements: next })}
+            dotted={doc.dotted || []} onDottedChange={next => save({ nodes: doc.nodes, placements: doc.placements, dotted: next })}
             onEditNode={key => { const n = doc.nodes.find(x => x.key === key); if (n) setForm({ ...EMPTY, ...n }) }}
             onError={setError}
             trayTitle="Not placed yet" />
