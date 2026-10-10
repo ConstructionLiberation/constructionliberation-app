@@ -4,7 +4,7 @@ import { ourFaultWaterIngress } from '../../../lib/waterIngress'
 import { getAllCrmValueChanges } from '../../../lib/crmValueChanges'
 import { crmDealsToFlat } from '../../../lib/crmDashboardAdapter'
 import { getMilestones } from '../../../lib/crmMilestones'
-import { valuePricedIn, valueSecuredIn, valuePricedExistingIn, valueSecuredExistingIn, securedFromNegotiating, strikeRateValueTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
+import { valuePricedIn, valueSecuredIn, valuePricedExistingIn, valueSecuredExistingIn, securedFromNegotiating, strikeRateValueTo, strikeRateExistingTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
 import { liveInvoiceLines, paylessFromLines } from '../../../lib/paylessNotices'
 import { recordAvgLiveAfa, readAvgLiveAfa } from '../../../lib/liveProjectValue'
 import withTenant from '../../../lib/withTenant'
@@ -198,6 +198,12 @@ async function handler(req, res) {
     if (upTo.length) {
       const last = upTo[upTo.length - 1], sr = strikeRateValueTo(deals, last)
       headlines.strikeRateValue = { value: sr.rate, label: `Rolling 6 months to ${label(last)}`, sub: `${sr.won.length} won of ${sr.decided.length} decided` }
+    }
+    // Existing customers only (1048) - the same, filtered.
+    for (const row of series) if (isFull(row.month)) row.strikeRateExisting = strikeRateExistingTo(deals, row.month).rate
+    if (upTo.length) {
+      const last = upTo[upTo.length - 1], sr = strikeRateExistingTo(deals, last)
+      headlines.strikeRateExisting = { value: sr.rate, label: `Rolling 6 months to ${label(last)}`, sub: `${sr.won.length} won of ${sr.decided.length} decided, existing customers` }
     }
 
     // Negotiating pipeline (1041): past months at their month end, rebuilt
