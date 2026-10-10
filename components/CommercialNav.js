@@ -80,10 +80,25 @@ export default function CommercialNav({ active, right = null }) {
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <ReportImprovementLink />
-            {right}
           </div>
         </div>
       </div>
+
+      {/* PAGE CONTROLS GET THEIR OWN STRIP (1054). They used to sit in the main
+          bar beside the links. Project Financials puts a report switch, a month
+          picker and three sync buttons there; on an iPad they could not fit, so
+          the LINKS wrapped onto extra lines and the bar ballooned. Now the main
+          bar holds only the links - slim, like every other portal - and a page's
+          own controls sit in this strip under it, same dark background so their
+          styling still fits, wrapping neatly if the screen is narrow. Pages with
+          no controls get no strip. */}
+      {right && (
+        <div style={{ background: '#232322', borderTop: '1px solid #2e2e2c', padding: '6px 24px' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', minHeight: 34 }}>
+            {right}
+          </div>
+        </div>
+      )}
 
       {/* Sub-nav row (only for grouped pages) - matches the Ops sub-nav style */}
       {activeGroup && (

@@ -1,54 +1,37 @@
-PACKAGE 1053 - Business Scorecard: click a month for the pop-out behind it
+PACKAGE 1054 - Commercial nav: slim on an iPad
 
-Four files: three complete replacements, one NEW. No re-seed. No env changes.
-Built on 1052.
+One file. Complete replacement. No re-seed. No env changes. Built on 1053.
 
-  NEW       components/ScorecardDrillModal.js
-  REPLACED  lib/precontractTotals.js           (pipeline also returns its deals)
-            pages/api/management/scorecard.js
-            pages/management/scorecard.js
+  components/CommercialNav.js
 
-Click a month - a point on the graph, or a number in the trend table - and a
-pop-out opens with what makes up that figure. Same style as the pre-contract
-scorecard's pop-outs: dark backdrop, title and count, fixed header, Escape or x
-to close; a stray click behind it does not close it.
+THE CAUSE
+The nav bar is shared by every Commercial page, but three pages put their own
+controls INSIDE it, beside the links:
 
-  Value of work priced (+ existing)    each value change: project, organisation,
-                                       estimator, previous, new, change, date
-                                       - total change at the foot
-  Value of work secured (+ existing)   each project won: project, organisation,
-                                       value, estimator, sales person, stage,
-                                       lead source, decision date - total at foot
-  Strike rate on value (+ existing)    every project DECIDED in the rolling six
-                                       months, Won or Lost - "Won X of Y decided
-                                       = Z%" at the foot
-  Negotiating pipeline                 each project in Negotiating at that month
-                                       end, with its value then - total at foot
-  Payless notices                      each credit note: job, project, credit
-                                       note no, invoice, customer, date, amount.
-                                       If the month was adjusted by hand on the
-                                       Commercial Scorecard, the pop-out says so
-                                       (e.g. counted as 1, not 2)
-  Water ingress                        now in the same pop-out (it was a table
-                                       under the card): date on form, project,
-                                       reported by, surveyed by, cause, Open report
+  Project Financials    Budget Tracker / EOM Report switch, month picker,
+                        three sync buttons with their last-run times
+  Outstanding Invoices  one sync button
+  Retention             one sync button
 
-EVERY POP-OUT ADDS UP TO ITS POINT ON THE GRAPH. The rows come from the same
-lists the figures are summed from, and the total line is worked from the rows
-shown. Checked across 80 metric-months of test data: no mismatches.
+On a desktop they fit. On an iPad Project Financials' controls could not, so
+the LINKS wrapped onto extra lines and the bar ballooned.
 
-Months with nothing behind them are not clickable. Underlined-dotted numbers in
-the trend table are.
+THE FIX
+The main bar now holds only the links and Report app improvement - slim, the
+same on every page, like the other portals. A page's own controls sit in a
+slim strip directly under it, in the same dark colour so they look as before,
+wrapping neatly if the screen is narrow. Pages with no controls get no strip.
 
-The pre-contract scorecard is unchanged - it already had its pop-outs.
+Nothing about the controls themselves changes - same switch, same picker,
+same sync buttons, same behaviour. On a desktop they now sit in the strip
+rather than at the far right of the bar.
 
-Checked: the pop-out totals against the graph (80 metric-months, 0
-mismatches); the payless adjustment note; the pop-out rendered with rows,
-footer and note; all 157 pages pass the browser check.
+Checked: the nav rendered with and without page controls (strip only when
+there are controls; controls in the strip, not the bar); every page using the
+Commercial nav bundles; all 157 pages pass the browser check.
 
-SMOKE TEST
-1. Business Scorecard: click a month on Value of work priced - the pop-out
-   lists the changes; the total at the foot equals that month's figure.
-2. Same on Value secured, Strike rate (Won/Lost listed, % at foot), Negotiating
-   pipeline, Payless notices, Water ingress.
-3. Escape closes it.
+SMOKE TEST - on the iPad
+1. Commercial > Project Financials: the dark bar is one slim row of links; the
+   switch, month picker and sync buttons sit in a strip under it.
+2. Outstanding Invoices and Retention: same, with their sync button.
+3. Applications, WIP etc.: no strip, unchanged.
