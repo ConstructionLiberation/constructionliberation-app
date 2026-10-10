@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import PreContractNav from '../components/PreContractNav'
 import HiddenPeoplePicker from '../components/HiddenPeoplePicker'
 import { personKey } from '../lib/scorecardPeople'
-import { valuePricedIn, valueSecuredIn } from '../lib/precontractTotals'
+import { valuePricedIn, valueSecuredIn, strikeRateValueTo } from '../lib/precontractTotals'
 
 const fmt = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n)
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
@@ -724,14 +724,13 @@ export default function Scorecard() {
     const chasedScored5Count = chasedScored5Projects.length
 
     // #5 Strike rate (value): rolling 6 months, all estimators, all decided deals with a value
-    const rolling6All = deals.filter(d =>
-      (d.status === 'won' || d.status === 'lost') && d.value > 0 &&
-      d.closeTime >= sixMonthsAgo && d.closeTime <= mEnd
-    )
-    const rolling6AllWon = rolling6All.filter(d => d.status === 'won')
-    const strikeRateValue = rolling6All.length
-      ? rolling6AllWon.reduce((s,d)=>s+d.value,0) / rolling6All.reduce((s,d)=>s+d.value,0)
-      : null
+    // One rule with the Business Scorecard (1041) - lib/precontractTotals.js.
+    // Its window is plain dates: the old toISOString() bounds slipped a day
+    // early anywhere ahead of UTC, dropping a deal decided on the month's last day.
+    const _sr = strikeRateValueTo(deals, m)
+    const rolling6All = _sr.decided
+    const rolling6AllWon = _sr.won
+    const strikeRateValue = _sr.rate
 
     // #6 Strike rate MC Secured/Negotiating: rolling 6 months, all estimators, MC Secured + Negotiating only
     const rolling6MC = rolling6All.filter(d => ['MC Secured','Negotiating'].includes(d.stageName))

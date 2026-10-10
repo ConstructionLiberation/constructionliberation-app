@@ -4,7 +4,8 @@ import { ourFaultWaterIngress } from '../../../lib/waterIngress'
 import { getAllCrmValueChanges } from '../../../lib/crmValueChanges'
 import { crmDealsToFlat } from '../../../lib/crmDashboardAdapter'
 import { getMilestones } from '../../../lib/crmMilestones'
-import { valuePricedIn, valueSecuredIn } from '../../../lib/precontractTotals'
+import { valuePricedIn, valueSecuredIn, securedFromNegotiating, strikeRateValueTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
+import { liveInvoiceLines, paylessFromLines } from '../../../lib/paylessNotices'
 import withTenant from '../../../lib/withTenant'
 import { BUSINESS_METRICS, CONNECTED } from '../../../lib/businessScorecard'
 import { fyOfMonth, fyMonths, monthKeyOf } from '../../../lib/financialYear'
@@ -169,8 +170,54 @@ async function handler(req, res) {
     const span = upTo.length ? `${label(upTo[0])} – ${label(upTo[upTo.length - 1])}` : 'No months reached yet'
     headlines.valuePriced = { value: upTo.length ? priced : null, label: rangeLabel, sub: span }
     headlines.valueSecured = { value: upTo.length ? secured : null, label: rangeLabel, sub: span }
+
+    // Average value of a secured project (1041): won from Negotiating. A month
+    // with none has no average - blank, not 0.
+    for (const row of series) if (row.month <= thisMonth) row.avgValueSecured = securedFromNegotiating(deals, [row.month]).avg
+    const sp = securedFromNegotiating(deals, upTo)
+    headlines.avgValueSecured = { value: sp.avg, label: rangeLabel, sub: `${sp.count} project${sp.count === 1 ? '' : 's'} won from Negotiating` }
+
+    // Strike rate on value (1041): rolling six months to each month end, whole
+    // business. Headline: the latest month reached.
+    for (const row of series) if (row.month <= thisMonth) row.strikeRateValue = strikeRateValueTo(deals, row.month).rate
+    if (upTo.length) {
+      const last = upTo[upTo.length - 1], sr = strikeRateValueTo(deals, last)
+      headlines.strikeRateValue = { value: sr.rate, label: `Rolling 6 months to ${label(last)}`, sub: `${sr.won.length} won of ${sr.decided.length} decided` }
+    }
+
+    // Negotiating pipeline (1041): past months at their month end, rebuilt
+    // from deal history; this month as it stands today, by /api/negotiating's
+    // own rule. Headline: the latest.
+    for (const row of series) {
+      if (row.month < thisMonth) row.negotiatingPipeline = negotiatingAt(crmDeals, monthEndDay(row.month)).total
+      else if (row.month === thisMonth) row.negotiatingPipeline = negotiatingNow(deals).total
+    }
+    if (upTo.length) {
+      const last = upTo[upTo.length - 1]
+      const now = last === thisMonth
+      const r = now ? negotiatingNow(deals) : negotiatingAt(crmDeals, monthEndDay(last))
+      headlines.negotiatingPipeline = { value: r.total, label: now ? 'Today' : `At ${monthEndDay(last).split('-').reverse().join('/')}`, sub: `${r.count} project${r.count === 1 ? '' : 's'} in Negotiating` }
+    }
   } catch (e) {
     notices.push(`Pre-contract figures unavailable: ${e.message}`)
+  }
+
+  // ---- payless notices (1041) --------------------------------------------
+  // Credit notes counted exactly as the Commercial Scorecard does - same
+  // projects, same dating, same manual month adjustments (lib/paylessNotices).
+  try {
+    const { lines } = await liveInvoiceLines(get)
+    const { countByMonth } = paylessFromLines(lines, (await get('config:payless-adjustments')) || {})
+    let total = 0
+    for (const row of series) {
+      if (row.month > thisMonth) continue
+      row.paylessNotices = countByMonth[row.month]?.adjusted ?? 0
+      total += row.paylessNotices
+    }
+    const upTo = months.filter(mo => mo <= thisMonth)
+    headlines.paylessNotices = { value: upTo.length ? total : null, label: rangeLabel, sub: 'Credit notes on live projects, as the Commercial Scorecard' }
+  } catch (e) {
+    notices.push(`Payless notices unavailable: ${e.message}`)
   }
 
   // ---- the Forecast P&L (1035) -------------------------------------------

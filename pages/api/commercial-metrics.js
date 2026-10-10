@@ -3,6 +3,7 @@ import { getCachedProjects } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { computeProjectWip } from '../../lib/wipCalc'
 import withTenant from '../../lib/withTenant'
+import { liveInvoiceLines, paylessFromLines } from '../../lib/paylessNotices'
 
 
 function parseXeroDate(d) {
@@ -44,23 +45,13 @@ async function handler(req, res) {
 
   try {
     // Get all live projects from dashboard cache, excluding the shared hidden list.
+    // (cached and hiddenSet are still used below for the payment-days figures.)
     const cached = await redis.get('dashboard:cache')
     const hiddenIds = (await redis.get('config:hidden-projects').catch(() => null)) || []
     const hiddenSet = new Set(hiddenIds.map(String))
-    const projects = (cached || []).filter(p => p.status === 'INPROGRESS' && !hiddenSet.has(String(p.xeroId)))
-
-    // Collect all invoice lines across all projects
-    const allInvoiceLines = []
-    for (const p of projects) {
-      try {
-        const lines = await redis.get(`invoiced:lines:${p.xeroId}`)
-        if (lines) {
-          for (const inv of lines) {
-            allInvoiceLines.push({ ...inv, projectName: p.name, jobNo: p.jobNo })
-          }
-        }
-      } catch {}
-    }
+    // Live projects and their invoice lines - lib/paylessNotices.js (1041), so
+    // the Business Scorecard counts credit notes from exactly the same set.
+    const { projects, lines: allInvoiceLines } = await liveInvoiceLines((k) => redis.get(k))
 
     // For "Average Time to Get Paid" we must look at ALL projects, not just
     // in-progress ones: invoices are usually fully paid AFTER a job has moved to
@@ -152,38 +143,10 @@ async function handler(req, res) {
     // Every credit note applied against a project counts as one payless notice.
     // Counted by the month the credit note is dated. Each month's count can be
     // manually overridden (e.g. 7 raw, adjusted to 4 because 3 were minor).
-    const creditNoteDetails = allInvoiceLines
-      .filter(l => l.creditNote)
-      .map(l => ({
-        projectName: l.projectName || '',
-        jobNo: l.jobNo || '',
-        creditNoteNumber: l.invoiceNumber || '',
-        appliedToInvoice: l.appliedToInvoice || l.reference || '',
-        date: l.date || '',
-        amount: Math.abs(l.sales200 != null ? l.sales200 : (l.subTotal || l.total || 0)),
-        contact: l.contact || '',
-      }))
-
-    // Group credit notes by month.
-    const paylessByMonth = {}
-    let paylessUndated = 0
-    for (const cn of creditNoteDetails) {
-      const mk = monthKey(cn.date)
-      if (!mk) { paylessUndated++; continue }
-      if (!paylessByMonth[mk]) paylessByMonth[mk] = []
-      paylessByMonth[mk].push(cn)
-    }
-
-    // Manual per-month adjustments: { 'YYYY-MM': adjustedCount }. When set, the
-    // adjusted number is used for the metric; the raw credit notes still show in the
-    // drill-down.
+    // Shared with the Business Scorecard (1041) - lib/paylessNotices.js.
     const paylessManual = (await redis.get('config:payless-adjustments').catch(() => null)) || {}
-    const paylessCountByMonth = {}
-    for (const mk of Object.keys(paylessByMonth)) {
-      const raw = paylessByMonth[mk].length
-      const adj = paylessManual[mk]
-      paylessCountByMonth[mk] = { raw, adjusted: (adj != null && adj !== '') ? Number(adj) : raw, isAdjusted: adj != null && adj !== '' }
-    }
+    const { details: creditNoteDetails, byMonth: paylessByMonth, countByMonth: paylessCountByMonth, undated: paylessUndated } =
+      paylessFromLines(allInvoiceLines, paylessManual)
 
     // -- Average Days Beyond Terms (paid vs due date) --
     // For each fully-paid SALES invoice: daysOverdue = fullyPaidOnDate - dueDate.

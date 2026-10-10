@@ -1,52 +1,67 @@
-PACKAGE 1040 - Business Scorecard: Value of work priced, Value of work secured
+PACKAGE 1041 - Business Scorecard: four more metrics
 
-Five files: four complete replacements, one NEW. No re-seed. No env changes.
-Built on 1039.
+Seven files: six complete replacements, one NEW. No re-seed.
+No env changes. Built on 1040.
 
-  NEW       lib/precontractTotals.js
-  REPLACED  lib/businessScorecard.js
+  NEW       lib/paylessNotices.js
+  REPLACED  lib/precontractTotals.js          (four more shared rules)
+            lib/crmValueChanges.js            (two parsers exported, nothing changed)
+            lib/businessScorecard.js
             pages/api/management/scorecard.js
-            pages/scorecard-crm.js            (pre-contract scorecard)
+            pages/api/commercial-metrics.js   (uses the shared credit-note rule)
+            pages/scorecard-crm.js            (uses the shared strike rate)
 
 
-VALUE OF WORK PRICED
-  Each month: every value change on every project in the month, added up.
-  Blank -> 100k adds 100k. 20k -> 25k adds 5k. A price cut subtracts.
-  A project repriced twice in a month counts both changes.
-  Card: the total for the period - FY2026 to date by default.
+AVERAGE VALUE OF SECURED PROJECT  (renamed from "...newly secured projects")
+  Deals WON while at the Negotiating stage, with a value. Each month: that
+  month's average. Card: the average over the period (total / count, not an
+  average of monthly averages). A month with no wins is blank, not 0.
 
-VALUE OF WORK SECURED
-  Each month: the value of every deal WON that month, all estimators. Lost
-  deals and won deals with no value are not counted.
-  Card: the total for the period. Line and trend line as the others.
+STRIKE RATE ON VALUE
+  The estimator scorecard's strike rate (value), whole business: won value /
+  decided value, rolling six months to each month end. Card: the latest month.
+  ONE rule now (lib/precontractTotals.js) - the estimator page calls it too.
 
-Both are exactly the estimator scorecard's "All estimators" cards - Total
-value of work priced and Total value of work secured. The two rules now live
-in ONE file, lib/precontractTotals.js, and the estimator scorecard was
-switched onto it, so the two pages cannot disagree. Its figures are
-unchanged: same rules, moved.
+  This also FIXES the estimator page's window. It built month ends with
+  toISOString(), which is UTC: anywhere ahead of UTC (the UK in summer, NZ
+  always) the "31st" became the 30th, so a deal decided on a month's last day
+  fell outside the window. Its all-estimator strike rate can move slightly on
+  months where that happened - it is now right. (The PER-PERSON strike rate
+  cards still use the old window; same fix available if wanted.)
 
-A month reached with nothing priced or won is a real 0. A month not reached
-yet is blank.
+NEGOTIATING PIPELINE
+  Open deals at Negotiating, total value, at each MONTH END. This month: as it
+  stands today, by exactly the Negotiating page's rule.
+  Past month ends are REBUILT from each deal's history - its stage and value
+  at the end of that day, and whether it had been won or lost by then.
+  Limit: a deal with no recorded history (Pipedrive era) is taken to have
+  been at its current stage since it was created, and at its current value.
+  Exact for everything recorded in the CRM.
+  Card: the latest - "Today", or the last month end of a past range.
+
+PAYLESS NOTICES
+  Credit notes, counted EXACTLY as the Commercial Scorecard: live projects,
+  dated by the credit note, your manual month adjustments applied. Card: the
+  total for the period. The Commercial Scorecard's route now uses the same
+  shared rule - checked by running it before and after on the same data: the
+  whole response is identical.
 
 
-THE SECOND "SECURED" CARD - REMOVED
-"Value of secured work - as at month end" (added in 1029) is gone. It was a
-separate request at the time - the order book at each month end, a stock
-rather than a flow - but it was never connected, and Value of work secured is
-the one secured-work card now. Any target typed on it is left in the data,
-unread.
+NOT DONE - AWAITING A DECISION
+  Average value of live projects (AFA at month end). See the message.
 
 
-Checked by running the route on: blank->100k and 20k->25k in March (105,000),
-a price cut in April (-3,000), last year's change (not counted); two won deals
-in April (122,000), a zero-value win, a lost deal and last year's win (none
-counted).
+Checked by running the whole scorecard route on the real CRM, pipeline and
+credit-note code with test deals: Negotiating win counted and MC Secured win
+not; strike rate 100% -> 66.7% after a loss; pipeline 80k -> 430k -> 480k
+(reprice) -> 230k (win) -> 80k (loss); credit notes with an adjustment.
 
 
 SMOKE TEST
-1. Value of work priced card = the sum, over the same months, of the
-   estimator scorecard's "Total value of work priced" (All estimators tab).
-2. Value of work secured card = the same for "Total value of work secured".
-3. Only one secured-work card on the page.
-4. Pre-contract scorecard: those two cards show the same figures as before.
+1. Average value of secured project: compare a month with the CRM's won deals
+   that were in Negotiating.
+2. Strike rate card = estimator scorecard, All estimators, Strike rate (value)
+   for the same month.
+3. Negotiating pipeline "Today" = the total on the Negotiating page.
+4. Payless notices for a month = the Commercial Scorecard's count.
+5. Commercial Scorecard: payless and every other card unchanged.
