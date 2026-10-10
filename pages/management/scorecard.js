@@ -170,7 +170,10 @@ export default function BusinessScorecard() {
                       </div>}
                       {/* A count's average is a fraction - one decimal place (1044). */}
                       {head.avgPerMonth != null && <div style={{ fontSize: 12, color: '#555', marginTop: 1 }}>{m.unit === 'count' ? head.avgPerMonth.toFixed(1) : fmt(m)(head.avgPerMonth)} average per month</div>}
-                      <div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div></div>}
+                      <div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div>
+                      {/* A recorded-at-month-end metric (1045): today's figure for
+                          reference - it counts once the month has ended. */}
+                      {head.today != null && <div style={{ color: '#888', fontSize: 11 }}>{fmt(m)(head.today)} today - counts once the month ends</div>}</div>}
                     <div style={{ fontSize: 13, color: '#999' }}>{targetBox(m, false)}</div>
                   </div>
                   {/* noChart (1035): the figure only - e.g. the forecast margin,

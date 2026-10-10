@@ -6,6 +6,7 @@ import { crmDealsToFlat } from '../../../lib/crmDashboardAdapter'
 import { getMilestones } from '../../../lib/crmMilestones'
 import { valuePricedIn, valueSecuredIn, securedFromNegotiating, strikeRateValueTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
 import { liveInvoiceLines, paylessFromLines } from '../../../lib/paylessNotices'
+import { recordAvgLiveAfa, readAvgLiveAfa } from '../../../lib/liveProjectValue'
 import withTenant from '../../../lib/withTenant'
 import { BUSINESS_METRICS, CONNECTED } from '../../../lib/businessScorecard'
 import { fyOfMonth, fyMonths, monthKeyOf } from '../../../lib/financialYear'
@@ -231,6 +232,40 @@ async function handler(req, res) {
     }
   } catch (e) {
     notices.push(`Payless notices unavailable: ${e.message}`)
+  }
+
+  // ---- average value of live projects (1045) -----------------------------
+  // Recorded figures only: each finished month shows the entry recorded on its
+  // last day. Opening the scorecard also records today's figure for this
+  // month (at most every 6 hours - it reads Project Financials, which may
+  // rebuild from Xero), as a backstop to the daily cron.
+  try {
+    let snaps = await readAvgLiveAfa()
+    const cur = snaps[thisMonth]
+    if (!cur || Date.now() - Date.parse(cur.takenAt || 0) > 6 * 3600 * 1000) {
+      try { await recordAvgLiveAfa(thisMonth); snaps = await readAvgLiveAfa() }
+      catch (e) { notices.push(`Average value of live projects: today's figure not recorded - ${e.message}`) }
+    }
+    for (const row of series) if (isFull(row.month) && snaps[row.month]) row.avgProjectValue = snaps[row.month].value
+    const recorded = fullMonths.filter(mo => snaps[mo])
+    const first = Object.keys(snaps).sort()[0]
+    const today = snaps[thisMonth]
+    if (recorded.length) {
+      const last = recorded[recorded.length - 1]
+      headlines.avgProjectValue = {
+        value: snaps[last].value, label: `At ${monthEndDay(last).split('-').reverse().join('/')}`,
+        sub: `${snaps[last].count} live project${snaps[last].count === 1 ? '' : 's'}`,
+        today: today ? today.value : null,
+      }
+    } else {
+      headlines.avgProjectValue = {
+        value: null, label: 'No month end recorded yet',
+        sub: first ? `Recording since ${first}; the first month-end figure is ${monthEndDay(first).split('-').reverse().join('/')}.` : 'Not recorded yet.',
+        today: today ? today.value : null,
+      }
+    }
+  } catch (e) {
+    notices.push(`Average value of live projects unavailable: ${e.message}`)
   }
 
   // ---- the Forecast P&L (1035) -------------------------------------------

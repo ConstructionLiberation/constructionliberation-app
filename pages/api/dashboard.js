@@ -15,7 +15,13 @@ function getValuationDateForMonth(monthKey, valuationDay) {
   return new Date(Date.UTC(year, month - 1, parseInt(valuationDay)))
 }
 
-async function handler(req, res) {
+// Exported (1045) so the month-end recording of live projects' average AFA
+// reads the projects THROUGH THIS ROUTE - the same AFA the Commercial page
+// shows, rebuilt from Xero if the 4-hour cache has expired - rather than a
+// second copy of how AFA is worked out. It reads only req.query.sync. Call it
+// inside withTenant or forEachTenant; the portal's login middleware is this
+// route's only guard, so the caller must do its own auth.
+export async function handler(req, res) {
   const redis = await getClient()
 
   // Try cache first unless sync=true. Ignore a cache built before the completeness

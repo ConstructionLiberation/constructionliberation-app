@@ -64,6 +64,10 @@
     {
       "path": "/api/cron/health-alert",
       "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/month-end-snapshots",
+      "schedule": "45 22 * * *"
     }
   ]
 }
