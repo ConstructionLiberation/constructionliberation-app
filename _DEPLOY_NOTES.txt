@@ -1,79 +1,27 @@
-PACKAGE 1032 - Business Scorecard: Gross margin connected; financial-year filter
-================================================================================
+PACKAGE 1033 - Business Scorecard: Total invoiced connected
 
-Seven files. Five complete replacements, two NEW. No re-seed.
-Built on 1031 - deploy that first.
+Two files. Complete replacements. No re-seed. No env changes.
+Built on 1032 - deploy that first (and fyStartMonth on tenant:rock).
 
-  NEW       lib/financialYear.js
-            lib/plMargin.js
-  REPLACED  lib/tenantSettings.js             (adds fyStartMonth())
-            lib/businessScorecard.js
-            pages/api/business-financials.js  (uses the shared margin rule)
-            pages/api/management/scorecard.js
-            pages/management/scorecard.js
+  lib/businessScorecard.js
+  pages/api/management/scorecard.js
 
-ONE RECORD EDIT - Rock's tenant record in control-registry (tenant:rock):
+TOTAL INVOICED - set up exactly as Gross margin:
+  Source      the Xero P&L Business Financials reads (xero:pl-benchmark).
+  Each month  that month's sales. Line and trend line.
+  Headline    the financial year's total, first month to the last FULL month,
+              "FY2026 to date" with "Dec 25 - Sep 26, 10 months" under it.
+              A past year in the filter shows "FY2025 full year".
+  Current     month blank - part-posted.
 
-    "fyStartMonth": 12,
+It is the SAME sales figure the margin card divides by, so the two cards always
+describe the same months.
 
-12 = December, so the year runs 1 December to 30 November. Copy the record to
-a text file first, validate the JSON before saving, as before. Without it the
-scorecard shows a yellow notice and no year-to-date figure - it will not
-guess. The demo tenant is left without it (no Management module there).
-
-
-GROSS MARGIN %
-================================================================================
-Source: the Xero P&L that Business Financials reads (xero:pl-benchmark,
-filled by Bookkeeping -> Sync Xero figures). No new Xero calls.
-
-  Each month    that month's gross profit / that month's sales
-                (sales - cost of sales) / sales. Trend line as the others.
-  Headline      the margin for the financial year so far, first month to the
-                last FULL month, labelled e.g. "FY2026 to date" with
-                "Dec 25 - Sep 26, 10 months" underneath.
-                Worked from the TOTALS, not an average of the monthly
-                percentages - a big month counts for more than a quiet one.
-  Current month blank. It is part-posted and would swing the line.
-  No sales      blank, not 0%.
-
-The rule is now ONE function (lib/plMargin.js), used by both the scorecard and
-Business Financials, so the two can never show different margins. Business
-Financials' figures are unchanged - same calculation, moved.
-
-
-THE FILTER
-================================================================================
-Replaces the From/To dates. Options:
-
-  Last 12 months                          (default)
-  FY2026 (Dec 25 - Nov 26) - this year
-  FY2025 (Dec 24 - Nov 25)
-  ... one per year that has Xero figures
-
-Pick a past year: the twelve months of that year, and the headline becomes
-"FY2025 full year". Applies to every card.
-
-
-FINANCIAL YEAR - NOW A SETTING
-================================================================================
-Business Financials has always assumed December. That is a fact about Rock
-sitting in shared code; an April-start customer would have got figures cut on
-the wrong year with nothing on screen to say so. The scorecard reads
-fyStartMonth from the tenant record instead.
-
-NOT CHANGED here: the Business Financials PAGES still assume December in
-several places (summary cards, VAT refund, budgets, cash schedule). Correct
-for Rock. Added to the outstanding list for a second customer.
-
+Checked against a made-up P&L before packaging: monthly figures, the
+year-to-date total, a past full year, and the current month left blank.
 
 SMOKE TEST
-================================================================================
-1. Add "fyStartMonth": 12 to tenant:rock. Wait a minute.
-2. Business Scorecard: Gross margin card shows a figure, "FY2026 to date",
-   and the month range. No "Not connected yet" on that card.
-3. Compare the headline with Business Financials -> Summary -> "Gross margin -
-   FY2026". Same figure.
-4. This month's column is blank.
-5. Filter -> FY2025: twelve months Dec 24 - Nov 25, headline "full year".
-6. Business Financials Summary: all figures as before.
+1. Business Scorecard: Total invoiced shows a figure, "FY2026 to date", the
+   month range, and a line. No "Not connected yet".
+2. Compare with Business Financials -> Sales for the same months: same.
+3. Filter -> FY2025: full-year total.

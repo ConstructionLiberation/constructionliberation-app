@@ -66,6 +66,9 @@ async function handler(req, res) {
     const row = { month }
     for (const m of BUSINESS_METRICS) row[m.key] = null
     row.gmFytd = gmOf(month)
+    // Total invoiced (1033): the month's P&L sales - the same figure the
+    // margin divides by, so the two cards always describe the same months.
+    row.invoicedFy = complete(month) ? plMonth(bm[month]).sales : null
     return row
   })
 
@@ -78,11 +81,14 @@ async function handler(req, res) {
     const done = fyMonths(fy, start).filter(complete)
     const agg = marginOver(done.map(mo => plMonth(bm[mo])))
     const finished = fy < currentFy
-    headlines.gmFytd = {
-      value: agg.grossMargin,
+    const span = {
       label: finished ? `FY${fy} full year` : `FY${fy} to date`,
       sub: done.length ? `${label(done[0])} – ${label(done[done.length - 1])}, ${done.length} month${done.length === 1 ? '' : 's'}` : 'No finished months with Xero figures yet',
     }
+    headlines.gmFytd = { value: agg.grossMargin, ...span }
+    // Total invoiced: the same months, summed. No finished months -> blank,
+    // not a total of zero.
+    headlines.invoicedFy = { value: done.length ? agg.sales : null, ...span }
   }
   if (!Object.keys(bm).length) notices.push('No Xero P&L figures yet. Sync them from Bookkeeping → Sync Xero figures.')
 
