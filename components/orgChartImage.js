@@ -1,4 +1,4 @@
-import { dottedRoute } from '../lib/orgTree'
+import { routeAround } from '../lib/orgTree'
 
 // Draws an org chart to a PNG (1027, redrawn as a tree in 1031). Plain canvas
 // - no library, and real text rendering, so names with accents or macrons
@@ -89,8 +89,8 @@ export async function drawOrgChart({ title, subtitle, roots, dotted = [] }) {
   for (const l of dotted) {
     const a = byKey.get(l.from), c = byKey.get(l.to)
     if (!a || !c) continue
-    // Straight runs at right angles (1061) - the same route as on screen.
-    const pts = dottedRoute({ x: a.x, y: a.y, w: a.w, h: BOX_H }, { x: c.x, y: c.y, w: c.w, h: BOX_H })
+    // Around every other box, at right angles (1062) - the same route as on screen.
+    const pts = routeAround({ x: a.x, y: a.y, w: a.w, h: BOX_H }, { x: c.x, y: c.y, w: c.w, h: BOX_H }, all.map(t => ({ x: t.x, y: t.y, w: t.w, h: BOX_H })))
     g.beginPath()
     pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))
     g.stroke()

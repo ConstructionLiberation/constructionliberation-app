@@ -1,32 +1,38 @@
-PACKAGE 1061 - Org charts: dotted lines run straight, at right angles
+PACKAGE 1062 - Org charts: dotted lines go around cards
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1060.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1061.
 
-  lib/orgTree.js                (dottedRoute - the one route)
+  lib/orgTree.js                (routeAround - the router)
   components/OrgTree.js         (screen)
   components/orgChartImage.js   (PNG)
 
-Dotted lines are no longer curves. They run in straight lines at right
-angles:
+Dotted lines no longer pass behind cards. They route AROUND every card on the
+chart, keeping a small clear margin, still in straight runs at right angles:
 
-  Same row                      one straight horizontal line between the
-                                facing sides of the two cards
-  Different levels, side by     out of the side facing the other card, down
-  side                          (or up) at the midpoint between them, then
-                                across into the other card's side -
-                                e.g. right, down, right
-  One directly above the other  one straight vertical line, bottom edge to
-                                top edge
+  - Neighbours on a row: one straight line.
+  - Cards in the way: the line goes round them - e.g. dropping into the gap
+    between rows, across, and back up (right, down, right, up, right).
+  - Different levels: through the gaps - e.g. right, down, right.
+  - A line can leave and arrive on whichever side of a card gives the
+    cleanest route; fewer bends are preferred over a slightly shorter line.
 
-Still dashed, still behind the cards. The screen and the PNG use the same
-route (lib/orgTree.js dottedRoute), so the download matches what you see.
+How: every card is an obstacle; the router searches a grid of the gaps
+between cards for the shortest route, with a penalty for each bend. If no
+route exists (cards packed with no gap), it falls back to the 1061 straight
+route rather than drawing nothing.
 
-Checked: the route for every arrangement - straight segments only, no
-diagonals (same row: right; upper-left to lower-right: right, down, right;
-upper-right to lower-left: right, up, right; stacked: down); the PNG drawn
-with no curves; the org chart pages bundle; all 158 pages pass the browser
-check.
+The screen and the PNG use the same router, so the download matches what you
+see. Lines may run along the gaps where the reporting lines are; they stay
+dashed so the two are told apart.
+
+Checked on a realistic chart (a director, a row of four, a row of three):
+neighbours; same row with two cards between; down a level past cards; across
+and down past cards; director to the far bottom; stacked. Every route: only
+horizontal and vertical runs, never through a card, reaching both cards, in
+3-12 ms. The PNG draws no curves; the org chart pages bundle; all 158 pages
+pass the browser check.
 
 SMOKE TEST
-Org Chart: link two people on the same row - a straight line. Link people on
-different levels - right, down, right. Download the PNG - the same shape.
+Org Chart: link two people on the same row with someone between them - the
+dashed line goes round, not behind. Link across levels - it follows the gaps.
+Download the PNG - the same routes.

@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from 'react'
-import { buildForest, moveNode, descendants, dottedRoute } from '../lib/orgTree'
+import { buildForest, moveNode, descendants, routeAround } from '../lib/orgTree'
 
 // THE ORG CHART, DRAWN AND EDITED (1031). Used by the current and the 1-year
 // charts.
@@ -47,12 +47,13 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
     const measure = () => {
       const b = box.getBoundingClientRect()
       const at = (k) => { const el = box.querySelector(`[data-orgkey="${CSS.escape(k)}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height } }
-      // Straight runs at right angles (1061) - lib/orgTree.js dottedRoute, the
-      // same route the PNG draws.
+      // Straight runs at right angles that go AROUND every other card (1062) -
+      // lib/orgTree.js routeAround, the same route the PNG draws.
+      const cardsOnChart = [...box.querySelectorAll('[data-orgkey]')].map(el => at(el.getAttribute('data-orgkey'))).filter(Boolean)
       setLines(liveDotted.map(l => {
         const a = at(l.from), c = at(l.to)
         if (!a || !c) return null
-        const pts = dottedRoute(a, c)
+        const pts = routeAround(a, c, cardsOnChart)
         return { d: pts.map((p, i) => `${i ? 'L' : 'M'} ${p[0]} ${p[1]}`).join(' '), key: l.from + '|' + l.to }
       }).filter(Boolean))
     }
