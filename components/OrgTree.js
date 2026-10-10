@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from 'react'
-import { buildForest, moveNode, descendants } from '../lib/orgTree'
+import { buildForest, moveNode, descendants, dottedRoute } from '../lib/orgTree'
 
 // THE ORG CHART, DRAWN AND EDITED (1031). Used by the current and the 1-year
 // charts.
@@ -47,20 +47,13 @@ export default function OrgTree({ nodes, placements, editable, onChange, onEditN
     const measure = () => {
       const b = box.getBoundingClientRect()
       const at = (k) => { const el = box.querySelector(`[data-orgkey="${CSS.escape(k)}"]`); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height } }
+      // Straight runs at right angles (1061) - lib/orgTree.js dottedRoute, the
+      // same route the PNG draws.
       setLines(liveDotted.map(l => {
         const a = at(l.from), c = at(l.to)
         if (!a || !c) return null
-        const ax = a.x + a.w / 2, cx = c.x + c.w / 2
-        if (Math.abs((a.y + a.h / 2) - (c.y + c.h / 2)) < 8) {
-          // Same row: from the facing sides, bowed below the cards.
-          const [l1, r1] = ax < cx ? [a, c] : [c, a]
-          const x1 = l1.x + l1.w / 2, x2 = r1.x + r1.w / 2, y = Math.max(l1.y + l1.h, r1.y + r1.h)
-          return { d: `M ${x1} ${y} C ${x1} ${y + 26}, ${x2} ${y + 26}, ${x2} ${y}`, key: l.from + '|' + l.to }
-        }
-        const [top, bot] = a.y < c.y ? [a, c] : [c, a]
-        const x1 = top.x + top.w / 2, y1 = top.y + top.h, x2 = bot.x + bot.w / 2, y2 = bot.y
-        const my = (y1 + y2) / 2
-        return { d: `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`, key: l.from + '|' + l.to }
+        const pts = dottedRoute(a, c)
+        return { d: pts.map((p, i) => `${i ? 'L' : 'M'} ${p[0]} ${p[1]}`).join(' '), key: l.from + '|' + l.to }
       }).filter(Boolean))
     }
     measure()

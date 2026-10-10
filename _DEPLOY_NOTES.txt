@@ -1,63 +1,32 @@
-PACKAGE 1060 - Org charts: add roles to the current chart, dotted lines,
-               comments under the role
+PACKAGE 1061 - Org charts: dotted lines run straight, at right angles
 
-Five files. Complete replacements. No re-seed. No env changes. Built on 1059.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1060.
 
-  lib/mgmtDocs.js
-  components/OrgTree.js
-  components/orgChartImage.js
-  components/PlanOrgChart.js            (1-Year and 3-Year charts)
-  pages/management/org-chart.js         (current chart)
+  lib/orgTree.js                (dottedRoute - the one route)
+  components/OrgTree.js         (screen)
+  components/orgChartImage.js   (PNG)
 
-AFTER DEPLOYING, RELOAD ANY ORG CHART PAGE THAT WAS ALREADY OPEN before
-arranging it - see "Saving" below.
+Dotted lines are no longer curves. They run in straight lines at right
+angles:
 
-1. ADD ROLES TO THE CURRENT ORG CHART
-"+ Add role" on the Org Chart: name (blank if not known), role, status
-(Existing / New role / Vacancy - styled as on the planned charts) and a
-comment. The card lands in the tray; place it like anyone else. In Arrange
-mode, click it -> Edit details to change or delete it (anyone under it moves
-up a level). Copy current chart on the 1-Year / 3-Year pages now brings these
-roles across too.
+  Same row                      one straight horizontal line between the
+                                facing sides of the two cards
+  Different levels, side by     out of the side facing the other card, down
+  side                          (or up) at the midpoint between them, then
+                                across into the other card's side -
+                                e.g. right, down, right
+  One directly above the other  one straight vertical line, bottom edge to
+                                top edge
 
-2. DOTTED LINES - ALL THREE CHARTS
-For someone who works with another person or area without reporting to them.
-In Arrange mode click a card: "Dotted line to..." picks anyone on the chart;
-existing links show beside it with x to remove. Drawn as a dashed curve
-behind the cards, with a key above the chart, and in the PNG download. A line
-has no direction and is kept once. Lines to someone who leaves, or a card
-taken off the chart, simply stop showing. Copying a chart brings its lines.
+Still dashed, still behind the cards. The screen and the PNG use the same
+route (lib/orgTree.js dottedRoute), so the download matches what you see.
 
-3. COMMENT UNDER THE ROLE - ALL THREE CHARTS
-A short line in grey italics under the role, e.g. "Office" or
-"Pre-construction". Arrange mode -> click the card -> Edit details:
-  people with a login, outsourced services   the comment only (their name and
-                                             role come from Admin / the table)
-  roles added by hand, planned-chart cards   everything, comment included
-                                             (the planned charts' old "Notes"
-                                             field IS this comment)
-Shown in the PNG too; boxes grow a line when any card has a comment.
-
-SAVING
-The current chart used to save only positions. It now saves positions, added
-roles, comments and dotted lines together every time - a positions-only save
-would wipe the rest (shown in testing). A page opened BEFORE this deploy still
-has the old code, so reload it first.
-
-Checked: storage rules (duplicate/reversed lines kept once, self-links
-dropped, comments trimmed); the tree rendered with comments, the line layer
-and every card tagged for measuring; the PNG drawn with comments and exactly
-one dashed curve (a link to a missing card skipped); the current chart's save
-through the real route - a move keeps roles, comments and lines; all three
-org chart pages bundle; all 158 pages pass the browser check.
+Checked: the route for every arrangement - straight segments only, no
+diagonals (same row: right; upper-left to lower-right: right, down, right;
+upper-right to lower-left: right, up, right; stacked: down); the PNG drawn
+with no curves; the org chart pages bundle; all 158 pages pass the browser
+check.
 
 SMOKE TEST
-1. Org Chart -> + Add role: Vacancy, "Office Manager", comment "Office". Place
-   it under a director.
-2. Arrange -> click a person -> Edit details -> comment "Pre-construction".
-3. Click a person -> Dotted line to... the Office Manager. A dashed curve
-   joins them.
-4. Move someone, reload - role, comment and line all still there.
-5. Download chart (PNG) - comments and the dashed line are in it.
-6. 1-Year Org Chart -> Copy current chart - the role, comments and line come
-   across.
+Org Chart: link two people on the same row - a straight line. Link people on
+different levels - right, down, right. Download the PNG - the same shape.

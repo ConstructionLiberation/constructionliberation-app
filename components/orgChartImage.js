@@ -1,3 +1,5 @@
+import { dottedRoute } from '../lib/orgTree'
+
 // Draws an org chart to a PNG (1027, redrawn as a tree in 1031). Plain canvas
 // - no library, and real text rendering, so names with accents or macrons
 // come out right.
@@ -87,14 +89,10 @@ export async function drawOrgChart({ title, subtitle, roots, dotted = [] }) {
   for (const l of dotted) {
     const a = byKey.get(l.from), c = byKey.get(l.to)
     if (!a || !c) continue
+    // Straight runs at right angles (1061) - the same route as on screen.
+    const pts = dottedRoute({ x: a.x, y: a.y, w: a.w, h: BOX_H }, { x: c.x, y: c.y, w: c.w, h: BOX_H })
     g.beginPath()
-    if (Math.abs(a.y - c.y) < 2) {
-      const [p, q] = a.cx < c.cx ? [a, c] : [c, a], y = p.y + BOX_H
-      g.moveTo(p.cx, y); g.bezierCurveTo(p.cx, y + 28, q.cx, y + 28, q.cx, y)
-    } else {
-      const [p, q] = a.y < c.y ? [a, c] : [c, a], y1 = p.y + BOX_H, y2 = q.y, my = (y1 + y2) / 2
-      g.moveTo(p.cx, y1); g.bezierCurveTo(p.cx, my, q.cx, my, q.cx, y2)
-    }
+    pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))
     g.stroke()
   }
   g.restore()
