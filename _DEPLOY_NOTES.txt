@@ -1,70 +1,44 @@
-PACKAGE 1042 - Gear icon on every scorecard; Total sales average per month
+PACKAGE 1043 - fixes the 1041 build failure
 
-Eight files: six complete replacements, two NEW. No re-seed. No env changes.
-Built on 1041.
+Three files: two complete replacements, one NEW. No re-seed. No env changes.
+Deploy on top of 1041 (and 1042, which is unaffected).
 
-  NEW       lib/scorecardLayout.js
-            components/ScorecardGear.js
-  REPLACED  pages/api/targets.js
-            pages/api/management/scorecard.js
-            pages/management/scorecard.js        Business Scorecard
-            pages/operations/scorecards.js       Operations (CM + OM)
-            pages/scorecard-crm.js               Pre-Contract (Estimator + Sales)
-            pages/commercial-scorecard.js        Commercial Scorecard
+  NEW       lib/crmHistoryParse.js
+  REPLACED  lib/crmValueChanges.js
+            lib/precontractTotals.js
 
 
-TOTAL SALES - AVERAGE PER MONTH
-Under the total: "110,000 average per month" - the total over the same
-finished months, divided by how many there are.
+THE FAILURE
+  Module not found: Can't resolve 'async_hooks'
+  ./lib/db.js <- ./lib/crmValueChanges.js <- ./lib/precontractTotals.js
+  <- ./pages/scorecard-crm.js
+
+The pre-contract scorecard is a BROWSER page and imports
+lib/precontractTotals.js. 1041 made that file import two history parsers
+from lib/crmValueChanges.js - which also imports the database, whose tenant
+code uses async_hooks, a Node-only module. So the database code was pulled
+into a browser bundle.
+
+THE FIX
+The two parsers moved, unchanged, into lib/crmHistoryParse.js, which imports
+nothing. precontractTotals imports them from there. crmValueChanges imports
+and re-exports them, so nothing else changes.
 
 
-THE GEAR (⚙)
-On all four scorecard pages - six scorecards, each with its own layout:
+WHY MY CHECKS MISSED IT
+I bundled every changed page as SERVER code, where async_hooks exists. From
+here on, every package also bundles every page in the repo for the BROWSER
+and compares against the original 1021 repo:
+  157 pages checked, nothing newly failing.
+And the check was proved: putting the 1041 import back in a copy fails with
+exactly Vercel's error.
 
-  Business Scorecard                  beside From / To
-  Operations - Contracts Manager      beside the tabs (changes with the tab)
-  Operations - Operations Manager     beside the tabs
-  Pre-Contract - Estimator            beside the tabs (changes with the tab)
-  Pre-Contract - Sales                beside the tabs
-  Commercial Scorecard                beside "Commercial Team"
-
-Click it: every metric, in order, with a tick to show/hide and arrows to move
-it up or down. Each change saves at once and applies for EVERYONE. "Reset to
-default" puts the scorecard back to the code's order with nothing hidden.
-Hiding or moving a metric changes the cards and the trend table together.
-
-WHO: management and admin. Everyone else sees no gear - and the server
-refuses the change too, not just the screen.
-
-CHANGE TO NOTE - PRE-CONTRACT: its old "Metrics" button is replaced by the
-gear. That button let ANYONE on the page hide metrics; now it is management
-and admin, the same as hiding a person. Also, Estimator and Sales used to
-share ONE hidden list (hiding "Total value of work priced" on one hid it on
-the other); each now has its own. Until a layout is first saved, both start
-from the old shared list, so nothing appears or disappears on deploy.
-
-COMMERCIAL SCORECARD: its six cards were written out one by one, so they were
-moved into a list to make them reorderable. Each card's content is unchanged
-- checked by comparing the code with only the list markers removed:
-identical.
-
-A metric added to a scorecard later appears after the saved ones rather than
-staying hidden. Stored at scorecard:layouts, through /api/targets.
+The pipeline and strike-rate results are identical to 1041's tests.
 
 
-Checked: the layout ordering rules (saved order, a new metric, a stale key,
-bad stored data); the targets route (management saves, post-contract refused,
-two scorecards saved independently, unknown scorecard refused, reset, read);
-the gear rendered for an editor and a non-editor; the average per month
-through the route (1,100,000 over 10 months = 110,000). Every changed page
-bundles against the full repo.
-
-
-SMOKE TEST - as management
-1. Business Scorecard: under Total sales, the average per month.
-2. Each of the four pages: the gear. Hide a metric - gone from the cards and
-   the table. Move one up - moves in both. Reload - kept.
-3. Operations: CM and OM tabs have separate layouts. Same for Estimator and
-   Sales.
-4. Reset to default - back as it was.
-5. As a non-management user: no gear on any page.
+THE WARNINGS ABOVE THE ERROR
+The "Attempted import error" lines - pipedrive-sync, deals, fieldmap, sync,
+webhook, upload-bills, xero/backfill-labour, xero/sync - are OLD. They were
+in the 1021 build too, are warnings not errors, and come from Pipedrive-era
+routes importing functions that no longer exist. Those routes would fail if
+called. Worth deleting or fixing as a separate tidy-up.
