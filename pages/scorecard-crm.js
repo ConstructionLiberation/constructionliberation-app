@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import PreContractNav from '../components/PreContractNav'
 import HiddenPeoplePicker from '../components/HiddenPeoplePicker'
 import { personKey } from '../lib/scorecardPeople'
-import { valuePricedIn, valueSecuredIn, strikeRateValueTo, winsByOrg, isExistingCustomer } from '../lib/precontractTotals'
+import { valuePricedIn, valueSecuredIn, strikeRateValueTo, winsByOrg, isExistingCustomer, avgSecuredRolling } from '../lib/precontractTotals'
 import { applyLayout } from '../lib/scorecardLayout'
 import ScorecardGear from '../components/ScorecardGear'
 
@@ -530,19 +530,12 @@ export default function Scorecard() {
     // "how much did they win", which Total value of work secured already answers.
     // Zero-value wins are excluded: a won deal with no value is a data gap, not a cheap
     // job, and it would drag the average down for no reason.
+    // One rule with the sales tab and the Business Scorecard (1056). This used to
+    // build its window with toISOString(), which slipped a day early anywhere
+    // ahead of UTC; the shared rule works in plain months.
     const avgSecuredWindow = (endDate, backMonths) => {
-      const end = new Date(endDate)
-      const start = new Date(end.getFullYear(), end.getMonth() - (backMonths - 1), 1).toISOString().split('T')[0]
-      const endStr = end.toISOString().split('T')[0]
-      // VARIATIONS EXCLUDED. A variation is extra work on a job already won, usually
-      // small, and it is not a project secured. Leaving them in dragged the average
-      // towards the size of a typical variation rather than a typical job - nineteen
-      // won variations averaging £6,700 against real projects in the hundreds of
-      // thousands would have halved the figure and told you nothing.
-      const won = personDeals.filter(d => d.status === 'won' && d.value > 0
-        && d.stageName !== 'Variations'
-        && d.closeTime && d.closeTime >= start && d.closeTime <= endStr)
-      return won.length ? { avg: won.reduce((a, d) => a + d.value, 0) / won.length, count: won.length, list: won } : { avg: null, count: 0, list: [] }
+      const _d = new Date(endDate)
+      return avgSecuredRolling(personDeals, `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}`, backMonths)
     }
     const avgSecNow = avgSecuredWindow(mEndDate, 6)
     const priorEndDate = new Date(mEndDate.getFullYear(), mEndDate.getMonth() - 6 + 1, 0)
@@ -785,17 +778,9 @@ export default function Scorecard() {
     // DEAL, not per month: "what is a job worth to us now" rather than "how much did we
     // win". Zero-value wins are excluded - they drag the average down without meaning
     // anything, and a won deal with no value is a data gap, not a cheap job.
-    const avgWindow = (endMonth, backMonths) => {
-      const end = new Date(`${endMonth}-01T00:00:00Z`)
-      const start = new Date(end); start.setMonth(start.getMonth() - (backMonths - 1))
-      const startKey = `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`
-      // Variations excluded here too - same reason as the estimator cards. The two must
-      // agree about what counts as a secured project or they cannot be compared.
-      const won = deals.filter(d => d.status === 'won' && d.closeTime && d.value > 0
-        && d.stageName !== 'Variations'
-        && monthKey(d.closeTime) >= startKey && monthKey(d.closeTime) <= endMonth)
-      return won.length ? { avg: won.reduce((s, d) => s + d.value, 0) / won.length, count: won.length, list: won } : { avg: null, count: 0, list: [] }
-    }
+    // One rule with the Business Scorecard and the estimator cards (1056) -
+    // lib/precontractTotals.js avgSecuredRolling. Variations excluded there.
+    const avgWindow = (endMonth, backMonths) => avgSecuredRolling(deals, endMonth, backMonths)
     const priorEnd = (() => {
       const e = new Date(`${m}-01T00:00:00Z`); e.setMonth(e.getMonth() - 6)
       return `${e.getUTCFullYear()}-${String(e.getUTCMonth() + 1).padStart(2, '0')}`

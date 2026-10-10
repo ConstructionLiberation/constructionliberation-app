@@ -346,6 +346,10 @@ const DRILL = {
     note: (rows) => rows[0]?.adjustedTo != null ? `This month was adjusted by hand on the Commercial Scorecard: counted as ${rows[0].adjustedTo}, not ${rows.length}.` : null,
     footer: (rows, money) => `Total credited ${money(sum(rows, 'amount'))}`,
   },
+  avgValueSecured: {
+    countLabel: 'project', columns: DEAL_COLS, sort: byDateDesc,
+    footer: (rows, money) => rows.length ? `Total ${money(sum(rows, 'value'))} over ${rows.length} project${rows.length === 1 ? '' : 's'} = ${money(sum(rows, 'value') / rows.length)} average  (rolling 6 months, variations excluded)` : null,
+  },
   waterIngressRockFault: {
     countLabel: 'report', sort: byDateDesc,
     columns: () => [

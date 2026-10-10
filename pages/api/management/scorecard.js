@@ -4,7 +4,7 @@ import { ourFaultWaterIngress } from '../../../lib/waterIngress'
 import { getAllCrmValueChanges } from '../../../lib/crmValueChanges'
 import { crmDealsToFlat } from '../../../lib/crmDashboardAdapter'
 import { getMilestones } from '../../../lib/crmMilestones'
-import { valuePricedIn, valueSecuredIn, valuePricedExistingIn, valueSecuredExistingIn, securedFromNegotiating, strikeRateValueTo, strikeRateExistingTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
+import { valuePricedIn, valueSecuredIn, valuePricedExistingIn, valueSecuredExistingIn, securedFromNegotiating, avgSecuredRolling, strikeRateValueTo, strikeRateExistingTo, negotiatingAt, negotiatingNow, monthEndDay } from '../../../lib/precontractTotals'
 import { liveInvoiceLines, paylessFromLines } from '../../../lib/paylessNotices'
 import { recordAvgLiveAfa, readAvgLiveAfa } from '../../../lib/liveProjectValue'
 import withTenant from '../../../lib/withTenant'
@@ -199,9 +199,17 @@ async function handler(req, res) {
 
     // Average value of a secured project (1041): won from Negotiating. A month
     // with none has no average - blank, not 0.
-    for (const row of series) if (isFull(row.month)) row.avgValueSecured = securedFromNegotiating(deals, [row.month]).avg
-    const sp = securedFromNegotiating(deals, upTo)
-    headlines.avgValueSecured = { value: sp.avg, label: rangeLabel, sub: `${sp.count} project${sp.count === 1 ? '' : 's'} won from Negotiating` }
+    // 1056: the sales scorecard's rule exactly - every won project except
+    // variations, rolling 6 months to each month end. Headline: last full month.
+    for (const row of series) if (isFull(row.month)) {
+      const a = avgSecuredRolling(deals, row.month, 6)
+      row.avgValueSecured = a.avg
+      put('avgValueSecured', row.month, a.list.map(slimDeal))
+    }
+    if (upTo.length) {
+      const last = upTo[upTo.length - 1], a = avgSecuredRolling(deals, last, 6)
+      headlines.avgValueSecured = { value: a.avg, label: `Rolling 6 months to ${label(last)}`, sub: `${a.count} project${a.count === 1 ? '' : 's'} secured, excluding variations` }
+    }
 
     // Strike rate on value (1041): rolling six months to each month end, whole
     // business. Headline: the latest month reached.

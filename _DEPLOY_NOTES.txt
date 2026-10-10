@@ -1,60 +1,49 @@
-PACKAGE 1055 - Customer type: Existing Customer, automatically
+PACKAGE 1056 - Average value of secured project: matched to Edita's scorecard
 
-Five files: four complete replacements, one NEW. No re-seed. No env changes.
-Built on 1054.
+Five files. Complete replacements. No re-seed. No env changes. Built on 1055.
 
-  NEW       lib/existingCustomers.js
-  REPLACED  lib/crmDashboardAdapter.js
-            lib/precontractTotals.js
-            pages/sales-crm.js           (Sales Dashboard)
-            pages/scorecard-crm.js       (Pre-Contract scorecard)
+  lib/precontractTotals.js           (avgSecuredRolling - the one rule)
+  lib/businessScorecard.js
+  pages/api/management/scorecard.js
+  pages/management/scorecard.js
+  pages/scorecard-crm.js             (sales and estimator cards use the same rule)
 
-TWO PROBLEMS, BOTH FIXED
+WHY THEY DID NOT MATCH
+                       Sales scorecard (Edita)        Business Scorecard (before)
+  Which wins           every won project except       only projects won from
+                       variations, any stage          Negotiating (1041)
+  Period               rolling 6 months               each month on its own;
+                                                      card = average over the period
 
-1. THE DROPDOWN ONLY LISTED VALUES IT FOUND ON DEALS. No deal was "Existing
-   Customer", so the option never appeared. The Sales Dashboard's Customer type
-   filter now always offers the CRM field's three options: Existing Customer,
-   New Customer, Prospect (plus All and Blank, as before).
+NOW - THE SALES SCORECARD'S DEFINITION, EVERYWHERE
+  Every WON project with a value, EXCEPT variations, rolling 6 months to each
+  month end, total / count. The card shows the last full month: "Rolling 6
+  months to Sep 26", with the number of projects under it.
 
-2. NOBODY HAD FILLED THE FIELD IN, so every deal read "Prospect". A deal is now
-   labelled automatically when the field is blank:
+ONE FUNCTION (lib/precontractTotals.js avgSecuredRolling) is now used by:
+  - Edita's sales tab              (unchanged result - proven, see below)
+  - each estimator's card          (see the fix below)
+  - the Business Scorecard
+so they cannot drift apart again.
 
-     EXISTING CUSTOMER  we had already won a DIFFERENT project for that
-                        organisation before this deal came in (its created
-                        date)
-     PROSPECT           otherwise
+New on the Business Scorecard: click a month for the pop-out - the projects in
+that 6-month window, with "Total X over N projects = Y average" at the foot.
 
-   The same rule as the Business Scorecard. A value TYPED BY HAND on a deal
-   always wins - nobody's entry is overwritten, including "New Customer" or a
-   deliberate "Prospect".
+A FIX ON THE ESTIMATOR CARDS
+Their version built its window with dates converted to UTC, which in UK summer
+time and in New Zealand ended the window a day early - a project won on the
+last day of a month was left out. Shown with test data: one estimator's figure
+read 300,000 instead of the correct 200,000. The shared rule works in plain
+months. Estimator figures may move slightly where that happened; they are now
+right.
 
-   Organisation names are matched ignoring case and spacing. A deal with no
-   organisation stays Prospect.
-
-WHAT THIS CHANGES ON SCREEN
-  Sales Dashboard   the Existing / New / Prospect breakdowns and the filter show
-                    real splits for the first time; before, everything sat
-                    under Prospect.
-  Pre-Contract scorecard   "Value priced - existing customers" now uses the
-                    Business Scorecard's rule exactly (organisation already won
-                    before the date of each price change). It read the label
-                    before, which was blank, so it showed zero against its
-                    target. The two scorecards now agree.
-
-The rule moved into its own small file (lib/existingCustomers.js) so the deals
-code and the scorecards can both use it without loading each other.
-
-Checked: the labelling (existing after a first win; prospect before it, on the
-first win itself, and with no win; typed values kept); the existing-customer
-scorecard tests unchanged; the Business Scorecard route unchanged (80
-metric-months, 0 mismatches); affected pages and routes bundle; all 157 pages
-pass the browser check.
+Checked: the ORIGINAL sales-scorecard calculation, copied unchanged, against
+the Business Scorecard on the same deals for every month - 10 months, 0
+mismatches (including a win from MC Secured, a variation, a loss, a zero-value
+win and a win late on 31 May); the estimator window fix in UK and NZ time; the
+pop-out totals (80 metric-months, 0 mismatches); all 157 pages pass the browser
+check.
 
 SMOKE TEST
-1. Sales Dashboard -> Customer type: Existing Customer, New Customer and
-   Prospect are all listed.
-2. Pick Existing Customer: deals for organisations we had already won work
-   from.
-3. A deal with Customer type typed in: it keeps what was typed.
-4. Pre-Contract scorecard: "Value priced - existing customers" shows a figure
-   matching the Business Scorecard's card for the same month.
+Business Scorecard "Average value of secured project" for the last full month
+= Edita's sales tab "Average value of projects secured" for the same month.
