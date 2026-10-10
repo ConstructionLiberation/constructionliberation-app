@@ -125,13 +125,23 @@ export default function BusinessScorecard() {
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
             {BUSINESS_METRICS.map(m => {
-              const values = series.map(s => s[m.key])
+              // A metric with a forecast part (1037): <key> is actual (blue),
+              // <key>__f forecast (orange). The trend runs through both.
+              const fKey = `${m.key}__f`
+              const values = series.map(s => s[m.key] ?? (m.hasForecast ? s[fKey] : null) ?? null)
               // The big figure: the metric's own headline where it has one
               // (gross margin: year to date), otherwise the latest month.
               const head = data.headlines?.[m.key]
               const latest = head ? head.value : [...values].reverse().find(v => v != null) ?? null
               const trend = trendline(values)
-              const chartData = series.map((s, i) => ({ month: monthLabel(s.month), value: s[m.key], trend: trend[i] }))
+              // The orange line starts ON the last actual point, so the two
+              // lines join rather than leaving a gap at the handover month.
+              const firstF = m.hasForecast ? series.findIndex(s => s[fKey] != null) : -1
+              const bridge = firstF > 0 && series[firstF - 1][m.key] != null ? firstF - 1 : -1
+              const chartData = series.map((s, i) => ({
+                month: monthLabel(s.month), value: s[m.key], trend: trend[i],
+                forecast: m.hasForecast ? (s[fKey] ?? (i === bridge ? s[m.key] : null)) : null,
+              }))
               const isOn = connected.has(m.key)
               return (
                 <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: '1px solid #e1e0d9', display: 'grid', gridTemplateColumns: m.noChart ? '1fr' : '240px 1fr', gap: 20, alignItems: 'center', minHeight: m.noChart ? 0 : 140 }}>
@@ -141,7 +151,13 @@ export default function BusinessScorecard() {
                       <span style={{ width: 11, height: 11, borderRadius: '50%', background: rag(latest, targetOf(m), m.mode) }} />
                       <div style={{ fontSize: 26, fontWeight: 600, color: '#1a1a19' }}>{fmt(m)(latest)}</div>
                     </div>
-                    {head && <div style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>{head.label}<div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div></div>}
+                    {head && <div style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>{head.label}
+                      {head.parts && <div style={{ fontSize: 11.5, marginTop: 1 }}>
+                        <span style={{ color: '#2a78d6' }}>{fmt(m)(head.parts[0].value)} actual</span>
+                        <span style={{ color: '#aaa' }}> + </span>
+                        <span style={{ color: '#d97706' }}>{fmt(m)(head.parts[1].value)} forecast</span>
+                      </div>}
+                      <div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div></div>}
                     <div style={{ fontSize: 13, color: '#999' }}>{targetBox(m, false)}</div>
                   </div>
                   {/* noChart (1035): the figure only - e.g. the forecast margin,
@@ -157,7 +173,8 @@ export default function BusinessScorecard() {
                           <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#bbb' }} interval="preserveStartEnd" />
                           <YAxis hide domain={['auto', 'auto']} />
                           <Tooltip formatter={(v) => fmt(m)(v)} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
-                          <Line type="monotone" dataKey="value" stroke="#2a78d6" strokeWidth={2} dot={{ r: 2 }} connectNulls />
+                          <Line type="monotone" dataKey="value" stroke="#2a78d6" strokeWidth={2} dot={{ r: 2 }} connectNulls name="Actual" />
+                          {m.hasForecast && <Line type="monotone" dataKey="forecast" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} connectNulls name="Forecast" />}
                           <Line type="linear" dataKey="trend" stroke="#bbb" strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
                         </LineChart>
                       </ResponsiveContainer>
@@ -184,8 +201,9 @@ export default function BusinessScorecard() {
                     <td style={{ ...td, position: 'sticky', left: 0, background: '#fff' }}>{m.label}<span style={{ fontSize: 10, color: '#bbb' }}> ({m.basis})</span></td>
                     <td style={{ ...td, color: '#888' }}>{targetBox(m, true)}</td>
                     {series.map(s => {
-                      const v = s[m.key]
-                      return <td key={s.month} style={{ ...td, textAlign: 'right', color: v == null ? '#ddd' : rag(v, targetOf(m), m.mode), fontWeight: v == null ? 400 : 500 }}>{fmt(m)(v)}</td>
+                      const isF = m.hasForecast && s[m.key] == null && s[`${m.key}__f`] != null
+                      const v = isF ? s[`${m.key}__f`] : s[m.key]
+                      return <td key={s.month} title={isF ? 'Forecast' : undefined} style={{ ...td, textAlign: 'right', color: v == null ? '#ddd' : (isF ? '#d97706' : rag(v, targetOf(m), m.mode)), fontWeight: v == null ? 400 : 500, fontStyle: isF ? 'italic' : 'normal' }}>{fmt(m)(v)}</td>
                     })}
                   </tr>
                 ))}

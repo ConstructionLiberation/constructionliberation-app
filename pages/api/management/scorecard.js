@@ -138,14 +138,39 @@ async function handler(req, res) {
         label: `${fyName} forecast, full year`,
         sub: `${f.rows.length - fMonths.length} actual/manual + ${fMonths.length} forecast month${fMonths.length === 1 ? '' : 's'}`,
       }
-      headlines.salesForecast = {
-        value: fMonths.length ? adj.fRev : null,
-        label: fMonths.length ? `Rest of ${fyName}` : `${fyName} - no forecast months left`,
-        sub: fMonths.length ? `${label(fMonths[0].mo)} – ${label(fMonths[fMonths.length - 1].mo)}, ${fMonths.length} forecast month${fMonths.length === 1 ? '' : 's'}` : 'Every month is actual or manual',
+      // FORECAST SALES (1037). The year split at THIS month, not at the
+      // Forecast P&L's own actual/forecast line:
+      //   finished months   -> actual Xero sales, the same figure as Total
+      //                        sales. September is finished on 10 October even
+      //                        if Budgets still has it as a forecast month.
+      //   this month onward -> the Forecast P&L's revenue for that month.
+      // A finished month with no Xero figures yet takes the forecast figure,
+      // counts as forecast, and is NAMED on the card - never silently dropped.
+      const fyAll = f.rows.map(r => r.mo)
+      const plRev = Object.fromEntries(f.rows.map(r => [r.mo, r.revenue]))
+      const actual = {}, forecast = {}, unsynced = []
+      for (const mo of fyAll) {
+        if (mo < thisMonth && bm[mo]) actual[mo] = plMonth(bm[mo]).sales
+        else {
+          forecast[mo] = plRev[mo] || 0
+          if (mo < thisMonth) unsynced.push(mo)
+        }
       }
-      // The graph: each forecast month's revenue, where it falls in the range.
-      const byMo = Object.fromEntries(fMonths.map(r => [r.mo, r.revenue]))
-      for (const row of series) if (row.month in byMo) row.salesForecast = byMo[row.month]
+      const sum = (o) => Object.values(o).reduce((a, v) => a + v, 0)
+      const aMos = Object.keys(actual).sort(), fMos = Object.keys(forecast).sort()
+      headlines.salesForecast = {
+        value: sum(actual) + sum(forecast),
+        label: `${fyName} total, actual + forecast`,
+        sub: [
+          aMos.length ? `actual ${label(aMos[0])} – ${label(aMos[aMos.length - 1])}` : null,
+          fMos.length ? `forecast ${label(fMos[0])} – ${label(fMos[fMos.length - 1])}` : null,
+        ].filter(Boolean).join(', ') + (unsynced.length ? `. ${unsynced.map(label).join(', ')} not synced from Xero yet - forecast used` : ''),
+        parts: [{ label: 'actual', value: sum(actual) }, { label: 'forecast', value: sum(forecast) }],
+      }
+      for (const row of series) {
+        if (row.month in actual) row.salesForecast = actual[row.month]
+        if (row.month in forecast) row.salesForecast__f = forecast[row.month]
+      }
     } catch (e) {
       notices.push(`Forecast figures unavailable: ${e.message}`)
     }

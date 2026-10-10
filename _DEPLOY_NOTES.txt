@@ -1,48 +1,44 @@
-PACKAGE 1036 - Business Scorecard: financial year set on screen
+PACKAGE 1037 - Forecast sales: actual to date + forecast from this month
 
-Four files. Complete replacements. No re-seed. No env changes.
-Built on 1035 - deploy that first.
+Three files. Complete replacements. No re-seed. No env changes.
+Built on 1036 - deploy that first.
 
-  lib/tenantSettings.js            (fyStartMonth() removed)
-  lib/financialYear.js             (comment only)
+  lib/businessScorecard.js
   pages/api/management/scorecard.js
   pages/management/scorecard.js
 
-NO UPSTASH EDIT NEEDED. If "fyStartMonth" was added to tenant:rock, it is now
-ignored and can stay or go.
+
+THE SPLIT IS AT THIS MONTH
+  Finished months     ACTUAL sales from Xero - the same figure as Total sales.
+                      BLUE line, as on the other graphs.
+  This month onward   the Forecast P&L's revenue for that month.
+                      ORANGE line, starting on the last blue point so the two
+                      join. Orange and italic in the table.
+
+On 10 October that is actual Dec - Sep, forecast Oct - Nov. September counts
+as actual even while Budgets still has it as a forecast month: it is
+finished, and Xero has its figure.
+
+A finished month with no Xero figures yet (not synced) uses its forecast
+figure, is drawn orange, and is NAMED under the card - e.g. "Sep 26 not synced
+from Xero yet - forecast used". It is never dropped from the total.
 
 
-WHY IT DID NOT OPEN ON THE FINANCIAL YEAR
-The year start was read from a field on the tenant record. When that field is
-missing the page falls back to the last 12 months - which is the November-to-
-October view you kept seeing. A setting that only works after hand-editing JSON
-in Upstash is the wrong place for it.
+THE CARD
+  The financial year's total sales: actual + forecast.
+  Underneath, "2,200,119 actual + 521,852 forecast" in blue and orange, and
+  the months each part covers.
 
+This is the sum of the monthly sales. The Forecast P&L's WIP and year-end WIP
+adjustments are not added - they belong to the margin, which the Forecast
+gross margin card already includes.
 
-NOW
-The year start is stored in the company's own database
-(config:financial-year-start) and set ON THE SCORECARD:
-
-  1. First visit after deploy: a yellow bar at the top -
-     "Set your financial year once. It starts on the 1st of [month] [Save]"
-  2. Choose December, Save.
-  3. The page reloads on 1 Dec 25 to 30 Nov 26 and opens there every time.
-
-Nothing is guessed: until it is saved the page says so and shows the last 12
-months.
-
-
-THE GRAPHS
-With the financial year range, every graph and the trend table have all twelve
-columns, December to November. Months still to come are there and empty - not
-zero, not missing.
-
-Checked by running the route: not set -> last 12 months; 13 refused; December
-saved; reopened on Dec 25 -> Nov 26, 12 columns, Oct and Nov empty.
+Checked by running the route on the Forecast P&L screenshot's figures with
+10 October as today: blue Dec-Sep, orange Oct-Nov (521,852), total
+2,721,971 = hand sum. Then with September unsynced: forecast used and named.
 
 
 SMOKE TEST
-1. Business Scorecard: the yellow bar. Choose December, Save.
-2. From Dec 25 to Nov 26. Graphs run Dec to Nov; Oct and Nov empty.
-3. Reload - still Dec to Nov, no yellow bar.
-4. Forecast sales and Forecast gross margin show (they need December).
+1. Forecast sales graph: blue Dec to Sep, orange Oct and Nov, joined.
+2. Card total = Total sales card + the Forecast P&L's Oct and Nov revenue.
+3. Table: Oct and Nov in orange italics.
