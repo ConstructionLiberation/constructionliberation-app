@@ -1,67 +1,70 @@
-PACKAGE 1041 - Business Scorecard: four more metrics
+PACKAGE 1042 - Gear icon on every scorecard; Total sales average per month
 
-Seven files: six complete replacements, one NEW. No re-seed.
-No env changes. Built on 1040.
+Eight files: six complete replacements, two NEW. No re-seed. No env changes.
+Built on 1041.
 
-  NEW       lib/paylessNotices.js
-  REPLACED  lib/precontractTotals.js          (four more shared rules)
-            lib/crmValueChanges.js            (two parsers exported, nothing changed)
-            lib/businessScorecard.js
+  NEW       lib/scorecardLayout.js
+            components/ScorecardGear.js
+  REPLACED  pages/api/targets.js
             pages/api/management/scorecard.js
-            pages/api/commercial-metrics.js   (uses the shared credit-note rule)
-            pages/scorecard-crm.js            (uses the shared strike rate)
+            pages/management/scorecard.js        Business Scorecard
+            pages/operations/scorecards.js       Operations (CM + OM)
+            pages/scorecard-crm.js               Pre-Contract (Estimator + Sales)
+            pages/commercial-scorecard.js        Commercial Scorecard
 
 
-AVERAGE VALUE OF SECURED PROJECT  (renamed from "...newly secured projects")
-  Deals WON while at the Negotiating stage, with a value. Each month: that
-  month's average. Card: the average over the period (total / count, not an
-  average of monthly averages). A month with no wins is blank, not 0.
-
-STRIKE RATE ON VALUE
-  The estimator scorecard's strike rate (value), whole business: won value /
-  decided value, rolling six months to each month end. Card: the latest month.
-  ONE rule now (lib/precontractTotals.js) - the estimator page calls it too.
-
-  This also FIXES the estimator page's window. It built month ends with
-  toISOString(), which is UTC: anywhere ahead of UTC (the UK in summer, NZ
-  always) the "31st" became the 30th, so a deal decided on a month's last day
-  fell outside the window. Its all-estimator strike rate can move slightly on
-  months where that happened - it is now right. (The PER-PERSON strike rate
-  cards still use the old window; same fix available if wanted.)
-
-NEGOTIATING PIPELINE
-  Open deals at Negotiating, total value, at each MONTH END. This month: as it
-  stands today, by exactly the Negotiating page's rule.
-  Past month ends are REBUILT from each deal's history - its stage and value
-  at the end of that day, and whether it had been won or lost by then.
-  Limit: a deal with no recorded history (Pipedrive era) is taken to have
-  been at its current stage since it was created, and at its current value.
-  Exact for everything recorded in the CRM.
-  Card: the latest - "Today", or the last month end of a past range.
-
-PAYLESS NOTICES
-  Credit notes, counted EXACTLY as the Commercial Scorecard: live projects,
-  dated by the credit note, your manual month adjustments applied. Card: the
-  total for the period. The Commercial Scorecard's route now uses the same
-  shared rule - checked by running it before and after on the same data: the
-  whole response is identical.
+TOTAL SALES - AVERAGE PER MONTH
+Under the total: "110,000 average per month" - the total over the same
+finished months, divided by how many there are.
 
 
-NOT DONE - AWAITING A DECISION
-  Average value of live projects (AFA at month end). See the message.
+THE GEAR (⚙)
+On all four scorecard pages - six scorecards, each with its own layout:
+
+  Business Scorecard                  beside From / To
+  Operations - Contracts Manager      beside the tabs (changes with the tab)
+  Operations - Operations Manager     beside the tabs
+  Pre-Contract - Estimator            beside the tabs (changes with the tab)
+  Pre-Contract - Sales                beside the tabs
+  Commercial Scorecard                beside "Commercial Team"
+
+Click it: every metric, in order, with a tick to show/hide and arrows to move
+it up or down. Each change saves at once and applies for EVERYONE. "Reset to
+default" puts the scorecard back to the code's order with nothing hidden.
+Hiding or moving a metric changes the cards and the trend table together.
+
+WHO: management and admin. Everyone else sees no gear - and the server
+refuses the change too, not just the screen.
+
+CHANGE TO NOTE - PRE-CONTRACT: its old "Metrics" button is replaced by the
+gear. That button let ANYONE on the page hide metrics; now it is management
+and admin, the same as hiding a person. Also, Estimator and Sales used to
+share ONE hidden list (hiding "Total value of work priced" on one hid it on
+the other); each now has its own. Until a layout is first saved, both start
+from the old shared list, so nothing appears or disappears on deploy.
+
+COMMERCIAL SCORECARD: its six cards were written out one by one, so they were
+moved into a list to make them reorderable. Each card's content is unchanged
+- checked by comparing the code with only the list markers removed:
+identical.
+
+A metric added to a scorecard later appears after the saved ones rather than
+staying hidden. Stored at scorecard:layouts, through /api/targets.
 
 
-Checked by running the whole scorecard route on the real CRM, pipeline and
-credit-note code with test deals: Negotiating win counted and MC Secured win
-not; strike rate 100% -> 66.7% after a loss; pipeline 80k -> 430k -> 480k
-(reprice) -> 230k (win) -> 80k (loss); credit notes with an adjustment.
+Checked: the layout ordering rules (saved order, a new metric, a stale key,
+bad stored data); the targets route (management saves, post-contract refused,
+two scorecards saved independently, unknown scorecard refused, reset, read);
+the gear rendered for an editor and a non-editor; the average per month
+through the route (1,100,000 over 10 months = 110,000). Every changed page
+bundles against the full repo.
 
 
-SMOKE TEST
-1. Average value of secured project: compare a month with the CRM's won deals
-   that were in Negotiating.
-2. Strike rate card = estimator scorecard, All estimators, Strike rate (value)
-   for the same month.
-3. Negotiating pipeline "Today" = the total on the Negotiating page.
-4. Payless notices for a month = the Commercial Scorecard's count.
-5. Commercial Scorecard: payless and every other card unchanged.
+SMOKE TEST - as management
+1. Business Scorecard: under Total sales, the average per month.
+2. Each of the four pages: the gear. Hide a metric - gone from the cards and
+   the table. Move one up - moves in both. Reload - kept.
+3. Operations: CM and OM tabs have separate layouts. Same for Estimator and
+   Sales.
+4. Reset to default - back as it was.
+5. As a non-management user: no gear on any page.

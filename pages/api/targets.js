@@ -2,6 +2,7 @@ import { requireArea } from '../../lib/portalAuth'
 import { get, set } from '../../lib/db'
 import withTenant from '../../lib/withTenant'
 import { SCORECARDS, personKey, cleanHiddenPeople } from '../../lib/scorecardPeople'
+import { SCORECARD_IDS, cleanLayouts } from '../../lib/scorecardLayout'
 
 const DEFAULT_TARGETS = {
   commercial: {
@@ -62,18 +63,40 @@ async function handler(req, res) {
     // every existing tenant has.
     //
     // HIDDEN PEOPLE ride along for the same reason - see lib/scorecardPeople.js.
-    const [stored, hidden, hiddenPeople] = await Promise.all([
+    // LAYOUTS (1042) - per-scorecard metric order and hidden list, from the
+    // gear icon. See lib/scorecardLayout.js.
+    const [stored, hidden, hiddenPeople, layouts] = await Promise.all([
       get('scorecard:targets'),
       get('scorecard:hidden'),
       get('scorecard:hiddenPeople'),
+      get('scorecard:layouts'),
     ])
     return res.status(200).json({
       targets: stored || DEFAULT_TARGETS,
       hidden: Array.isArray(hidden) ? hidden : [],
       hiddenPeople: cleanHiddenPeople(hiddenPeople),
+      layouts: cleanLayouts(layouts),
     })
   }
   if (req.method === 'POST') {
+    // ONE SCORECARD'S LAYOUT: { layout: { scorecard, order, hidden } } (1042)
+    // Management and admin only, like hiding a person: it changes what everyone
+    // is measured on. Merged per scorecard on the server, so saving one
+    // scorecard's layout never touches another's.
+    if (req.body.layout !== undefined) {
+      if (!['management', 'admin'].includes(session.role)) {
+        return res.status(403).json({ error: 'Only management can change which metrics a scorecard shows.' })
+      }
+      const { scorecard, order, hidden } = req.body.layout || {}
+      if (!SCORECARD_IDS[scorecard]) return res.status(400).json({ error: `scorecard must be one of: ${Object.keys(SCORECARD_IDS).join(', ')}` })
+      const all = cleanLayouts(await get('scorecard:layouts'))
+      const one = cleanLayouts({ [scorecard]: { order, hidden } })[scorecard]
+      if (!one.order.length && !one.hidden.length) delete all[scorecard]   // Reset to default
+      else all[scorecard] = one
+      await set('scorecard:layouts', all)
+      return res.status(200).json({ success: true, layouts: all })
+    }
+
     // HIDE OR SHOW ONE PERSON: { hidePerson: { scorecard, key, hidden } }
     //
     // Management and admin only - hiding a colleague's scorecard is not

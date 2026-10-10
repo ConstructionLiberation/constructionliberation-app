@@ -3,6 +3,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import OperationsShell, { PageHeading, SubTabs } from '../../components/OperationsShell'
 import HiddenPeoplePicker from '../../components/HiddenPeoplePicker'
 import { personKey } from '../../lib/scorecardPeople'
+import { applyLayout } from '../../lib/scorecardLayout'
+import ScorecardGear from '../../components/ScorecardGear'
 
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
 const num = (n) => n == null ? '—' : String(n)
@@ -77,6 +79,8 @@ export default function OpsScorecardsPage() {
   // Hidden tabs (1025) - people who have left. Keys are personKey(tab.key),
   // so 'cm:' and 'ops:' stay distinct for someone who was both.
   const [hiddenPeople, setHiddenPeople] = useState([])
+  // Metric order and hidden metrics per scorecard, from the gear (1042).
+  const [layouts, setLayouts] = useState({})
   const [showHidden, setShowHidden] = useState(false)
   const [myRole, setMyRole] = useState('')
   useEffect(() => {
@@ -105,6 +109,7 @@ export default function OpsScorecardsPage() {
       ])
       setData(d); setTargets(t.targets || {})
       setHiddenPeople(t.hiddenPeople?.operations || [])
+      setLayouts(t.layouts || {})
     } catch {}
     setLoading(false)
   }
@@ -179,7 +184,11 @@ export default function OpsScorecardsPage() {
   const entry = !current ? null : (current.kind === 'cm' ? cmEntry() : (data?.ops || null))
   const series = entry?.series || []
   const latest = entry?.latest || {}
-  const metrics = current && current.kind === 'ops' ? OPS_METRICS : CM_METRICS
+  // Contracts Manager and Operations Manager are two scorecards, each with its
+  // own layout (1042). One list feeds the cards and the trend table.
+  const layoutId = current && current.kind === 'ops' ? 'ops-om' : 'ops-cm'
+  const allMetrics = current && current.kind === 'ops' ? OPS_METRICS : CM_METRICS
+  const metrics = applyLayout(allMetrics, layouts[layoutId]).visible
   const latestMonth = data?.months?.[data.months.length - 1]
   const months = data?.months || []
 
@@ -268,6 +277,9 @@ export default function OpsScorecardsPage() {
           active={current ? current.key : ''}
           onChange={setSub}
         />
+        <ScorecardGear scorecard={layoutId} defs={allMetrics} layout={layouts[layoutId]} align="left"
+          canEdit={myRole === 'management' || myRole === 'admin'}
+          onSaved={l => setLayouts(prev => ({ ...prev, [layoutId]: l }))} />
         <HiddenPeoplePicker
           people={ALL_TABS.map(t => ({ key: t.key, label: t.label, sub: t.role }))}
           hidden={hiddenPeople}

@@ -6,6 +6,8 @@ import PreContractNav from '../components/PreContractNav'
 import HiddenPeoplePicker from '../components/HiddenPeoplePicker'
 import { personKey } from '../lib/scorecardPeople'
 import { valuePricedIn, valueSecuredIn, strikeRateValueTo } from '../lib/precontractTotals'
+import { applyLayout } from '../lib/scorecardLayout'
+import ScorecardGear from '../components/ScorecardGear'
 
 const fmt = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n)
 const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
@@ -332,7 +334,8 @@ export default function Scorecard() {
   // Metric keys this customer has chosen not to see. Empty for everyone until
   // somebody hides one.
   const [hidden, setHidden] = useState([])
-  const [showMetricPicker, setShowMetricPicker] = useState(false)
+  // Metric order and hidden metrics per scorecard, from the gear (1042).
+  const [layouts, setLayouts] = useState({})
   // Hidden PEOPLE (1025) - someone who has left. Their tab goes; their deals
   // stay in every team total. See lib/scorecardPeople.js.
   const [hiddenPeople, setHiddenPeople] = useState([])
@@ -430,6 +433,7 @@ export default function Scorecard() {
       setTargets(td.targets || DEFAULT_TARGETS)
       setHidden(Array.isArray(td.hidden) ? td.hidden : [])
       setHiddenPeople(td.hiddenPeople?.['pre-contract'] || [])
+      setLayouts(td.layouts || {})
       // Load Xero project data for GP margin cards
       // The EOM report hides these; the scorecard was counting them.
       try { setHiddenProjects((await fetch('/api/hidden-projects').then(r => r.json())).hidden || []) } catch { setHiddenProjects([]) }
@@ -907,19 +911,18 @@ export default function Scorecard() {
   ]
 
   const allMetricDefs = isEstimator ? estimatorMetricDefs : salesMetricDefs
-  // One filter point, and metricDefs feeds all three renderers - both card
-  // grids and the trend table - so hiding a metric hides it everywhere.
-  const metricDefs = allMetricDefs.filter(m => !hidden.includes(m.key))
-
-  const toggleHidden = async (key) => {
-    const next = hidden.includes(key) ? hidden.filter(k => k !== key) : [...hidden, key]
-    setHidden(next)
-    // targets deliberately not sent - see the note in pages/api/targets.js.
-    await fetch('/api/targets', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hidden: next }),
-    })
-  }
+  // ONE POINT where the layout is applied, and metricDefs feeds all three
+  // renderers - both card grids and the trend table - so hiding or moving a
+  // metric changes them together.
+  //
+  // 1042: Estimator and Sales are now two scorecards, each with its own order
+  // and hidden list, set from the gear by management. Before, one hidden list
+  // covered both, so hiding "Total value of work priced" on one hid it on the
+  // other. Until a scorecard's layout is first saved, it starts from that old
+  // shared list - nothing appears or disappears on deploy.
+  const layoutId = isEstimator ? 'pre-estimator' : 'pre-sales'
+  const layoutNow = layouts[layoutId] || { order: [], hidden }
+  const metricDefs = applyLayout(allMetricDefs, layoutNow).visible
 
   const targetDisplay = (key) => {
     const val = t[key]
@@ -1134,39 +1137,18 @@ export default function Scorecard() {
             showHidden={showHiddenPeople} setShowHidden={setShowHiddenPeople}
             onToggle={togglePerson}
           />
-          <button
-            onClick={() => setShowMetricPicker(v => !v)}
-            style={{ marginLeft: 14, alignSelf: 'center', background: 'none', border: '0.5px solid #d0d0cc', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#555', cursor: 'pointer', fontFamily: 'inherit' }}
-          >{showMetricPicker ? 'Done' : 'Metrics'}{hidden.length ? ` (${hidden.length} hidden)` : ''}</button>
+          <span style={{ marginLeft: 14, alignSelf: 'center' }}>
+            <ScorecardGear scorecard={layoutId} defs={allMetricDefs} layout={layoutNow}
+              canEdit={myRole === 'management' || myRole === 'admin'}
+              onSaved={l => setLayouts(prev => ({ ...prev, [layoutId]: l }))} />
+          </span>
         </div>
 
-        {/* WHICH METRICS THIS CUSTOMER WANTS TO SEE.
-            Not every metric applies to every business: Glenigan is a UK data
-            source, emails sent needs the mailbox sync connected, and a customer
-            will have measures we have never thought of. Hiding beats seeding a
-            number that means nothing.
-            Stored per tenant, and it hides the metric on BOTH month cards and
-            in the trend table, because all three read the same filtered list. */}
-        {showMetricPicker ? (
-          <div style={{ background: '#f8f8f7', borderBottom: '0.5px solid #e1e0d9', padding: '14px 24px' }}>
-            <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
-              Untick a metric to hide it from the {isEstimator ? 'estimator' : 'sales'} scorecard. Nothing is deleted - the figures are still there if you turn it back on.
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 22px' }}>
-              {allMetricDefs.map(m => (
-                <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#1a1a19', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={!hidden.includes(m.key)}
-                    onChange={() => toggleHidden(m.key)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  {m.label}
-                </label>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        {/* WHICH METRICS THIS CUSTOMER WANTS TO SEE - now the gear beside the
+            tabs (1042), which also reorders. Not every metric applies to every
+            business: Glenigan is a UK data source, emails sent needs the
+            mailbox sync connected. Hiding beats seeding a number that means
+            nothing. */}
 
         <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
           {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#888' }}>Loading…</div> : (

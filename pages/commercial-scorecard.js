@@ -3,6 +3,8 @@ import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import Link from 'next/link'
 import CommercialNav from '../components/CommercialNav'
+import { applyLayout } from '../lib/scorecardLayout'
+import ScorecardGear from '../components/ScorecardGear'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 const fmt = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -183,6 +185,12 @@ export default function CommercialScorecard() {
   const [retentionInvoiced, setRetentionInvoiced] = useState({})
   const [extra, setExtra] = useState(null)   // task % + weekly reports
   const [targets, setTargets] = useState(DEFAULT_TARGETS)
+  // Metric order and hidden metrics, from the gear (1042), and who may change them.
+  const [layout, setLayout] = useState(undefined)
+  const [myRole, setMyRole] = useState('')
+  useEffect(() => {
+    fetch('/api/portal-auth?action=me').then(r => r.ok ? r.json() : null).then(d => setMyRole(d?.user?.role || '')).catch(() => {})
+  }, [])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [paylessOpen, setPaylessOpen] = useState(false)
@@ -242,6 +250,7 @@ export default function CommercialScorecard() {
       setMetrics(md)
       setRetentionInvoiced(rd.data || {})
       setTargets(td.targets?.commercial || DEFAULT_TARGETS)
+      setLayout(td.layouts?.commercial)
     } catch (e) { console.error(e) }
     setLoading(false)
   }
@@ -492,53 +501,15 @@ export default function CommercialScorecard() {
   // All payment time invoices for current modal month or all
   const allPaymentInvoices = Object.values(metrics?.avgPaymentTime || {}).flatMap(m => m.invoices || [])
 
-  return (
-    <>
-      <Head><title>{brand ? `${brand} - Commercial Scorecard` : 'Commercial Scorecard'}</title></Head>
-      <div style={{ ...s, minHeight: '100vh', background: '#f0f2f5' }}>
-        {modal && <DrillModal title={modal.title} rows={modal.rows} columns={modal.columns} allowEmpty={modal.allowEmpty} footer={modal.footer} onClose={() => setModal(null)} />}
-        {paylessOpen && <PaylessModal
-          byMonth={metrics?.paylessByMonth || {}}
-          countByMonth={metrics?.paylessCountByMonth || {}}
-          columns={paylessColumns}
-          monthLabelFn={monthLabel}
-          onSaveAdjust={savePaylessAdjust}
-          onClose={() => setPaylessOpen(false)} />}
 
-        {/* Nav */}
-        <CommercialNav active="/commercial-scorecard" />
+  // THE COMMERCIAL SCORECARD'S CARDS, in their default order (1042). Moved here
+  // unchanged from the JSX so they can be hidden and reordered - each entry is
+  // exactly what was passed to renderCard before.
+  function commercialCards() {
+    return [
 
-        <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
-          {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#888' }}>Loading...</div> : (
-            <>
-              {/* Date filter + key */}
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
-                <div>
-                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
-                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
-                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
-                </div>
-                <div style={{ flex: 1 }} />
-                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#888', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 500 }}>Key:</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#16a34a', fontSize: 36, lineHeight: 1 }}>●</span> On target</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ca8a04', fontSize: 36, lineHeight: 1 }}>●</span> Close (≥85%)</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#e63946', fontSize: 36, lineHeight: 1 }}>●</span> Below target</span>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>Commercial Team</span>
-                <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Live projects · {metrics?.liveProjectCount || 0} projects tracked</span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* 1. Gross Margin - live from Xero P&L, trailing 12-month rolling */}
-                {renderCard({
+                /* 1. Gross Margin - live from Xero P&L, trailing 12-month rolling */
+                ({
                   key: 'gpMargin',
                   label: 'Gross Margin',
                   sub: xeroGMLoading
@@ -627,10 +598,10 @@ export default function CommercialScorecard() {
                       <div style={{ color: '#aaa', fontSize: 10 }}>Sales: {fmt(gpTrailing.sales)} - Costs: {fmt(gpTrailing.directCosts)} (Labour {fmt(gpTrailing.labour)} + Materials {fmt(gpTrailing.materials)}) - overheads excl.</div>
                     </div>
                   ),
-                })}
+                }),
 
-                {/* 2. Payless Notices = Credit Notes (per month) */}
-                {renderCard({
+                /* 2. Payless Notices = Credit Notes (per month) */
+                ({
                   key: 'paylessNotices',
                   label: 'Payless Notices',
                   sub: `Credit notes per month${paylessLatestLabel ? ` - ${paylessLatestLabel}: ${paylessLatestCount}` : ''} (click to view & adjust)`,
@@ -654,10 +625,10 @@ export default function CommercialScorecard() {
                         : (metrics?.paylessTotal ? ' None fall in the last 12 months (older, or a date issue).' : '')}
                     </div>
                   ),
-                })}
+                }),
 
-                {/* Weekly Commercial Tasks % achieved */}
-                {renderCard({
+                /* Weekly Commercial Tasks % achieved */
+                ({
                   key: 'weeklyTasks',
                   label: 'Weekly Commercial Tasks',
                   sub: '% of weekly tasks completed - target 100% each week',
@@ -666,10 +637,10 @@ export default function CommercialScorecard() {
                   target: targets.weeklyTasks != null ? targets.weeklyTasks : 1,
                   targetKey: 'weeklyTasks',
                   trendData: weeklyTaskTrend,
-                })}
+                }),
 
-                {/* Monthly Commercial Tasks % achieved */}
-                {renderCard({
+                /* Monthly Commercial Tasks % achieved */
+                ({
                   key: 'monthlyTasks',
                   label: 'Monthly Commercial Tasks',
                   sub: '% of monthly tasks completed - target 100% each month',
@@ -678,10 +649,10 @@ export default function CommercialScorecard() {
                   target: targets.monthlyTasks != null ? targets.monthlyTasks : 1,
                   targetKey: 'monthlyTasks',
                   trendData: monthlyTaskTrend,
-                })}
+                }),
 
-                {/* No. of Weekly Project Reports completed vs required */}
-                {renderCard({
+                /* No. of Weekly Project Reports completed vs required */
+                ({
                   key: 'weeklyReports',
                   label: 'No. of Weekly Project Reports',
                   // With a requirement, show the percentage. Without one - nobody marked
@@ -697,10 +668,10 @@ export default function CommercialScorecard() {
                   target: targets.weeklyReports != null ? targets.weeklyReports : 1,
                   targetKey: 'weeklyReports',
                   trendData: weeklyReportsTrend,
-                })}
+                }),
 
-                {/* 4. Average Days Beyond Terms (paid vs due date) */}
-                {renderCard({
+                /* 4. Average Days Beyond Terms (paid vs due date) */
+                ({
                   key: 'avgPaymentDays',
                   label: 'Average Days Beyond Terms (v3)',
                   sub: 'Paid date minus due date (+ late / - early)',
@@ -735,7 +706,64 @@ export default function CommercialScorecard() {
                       )}
                     </div>
                   ),
-                })}
+                }),
+
+    ]
+  }
+
+  return (
+    <>
+      <Head><title>{brand ? `${brand} - Commercial Scorecard` : 'Commercial Scorecard'}</title></Head>
+      <div style={{ ...s, minHeight: '100vh', background: '#f0f2f5' }}>
+        {modal && <DrillModal title={modal.title} rows={modal.rows} columns={modal.columns} allowEmpty={modal.allowEmpty} footer={modal.footer} onClose={() => setModal(null)} />}
+        {paylessOpen && <PaylessModal
+          byMonth={metrics?.paylessByMonth || {}}
+          countByMonth={metrics?.paylessCountByMonth || {}}
+          columns={paylessColumns}
+          monthLabelFn={monthLabel}
+          onSaveAdjust={savePaylessAdjust}
+          onClose={() => setPaylessOpen(false)} />}
+
+        {/* Nav */}
+        <CommercialNav active="/commercial-scorecard" />
+
+        <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
+          {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#888' }}>Loading...</div> : (
+            <>
+              {/* Date filter + key */}
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+                </div>
+                <div style={{ flex: 1 }} />
+                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#888', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 500 }}>Key:</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#16a34a', fontSize: 36, lineHeight: 1 }}>●</span> On target</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ca8a04', fontSize: 36, lineHeight: 1 }}>●</span> Close (≥85%)</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#e63946', fontSize: 36, lineHeight: 1 }}>●</span> Below target</span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Commercial Team</span>
+                <span style={{ marginLeft: 10, verticalAlign: 'middle' }}>
+                  <ScorecardGear scorecard="commercial" defs={commercialCards()} layout={layout} align="left"
+                    canEdit={myRole === 'management' || myRole === 'admin'} onSaved={setLayout} />
+                </span>
+                <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Live projects · {metrics?.liveProjectCount || 0} projects tracked</span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* The six cards are a LIST (1042), so the gear can hide and
+                    reorder them. Defined in commercialCards() above the return;
+                    rendered here in the saved order. */}
+                {applyLayout(commercialCards(), layout).visible.map(renderCard)}
 
               </div>
             </>

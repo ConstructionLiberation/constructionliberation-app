@@ -125,7 +125,9 @@ async function handler(req, res) {
     : 'No finished months with Xero figures in this range'
   const headlines = {
     gmFytd: { value: agg.grossMargin, label: rangeLabel, sub },
-    invoicedFy: { value: done.length ? agg.sales : null, label: rangeLabel, sub },
+    // avgPerMonth (1042): the total over the same finished months, divided by
+    // how many there are - shown under the total.
+    invoicedFy: { value: done.length ? agg.sales : null, label: rangeLabel, sub, avgPerMonth: done.length ? agg.sales / done.length : null },
   }
 
   // ---- water ingress, our fault (1039) -----------------------------------

@@ -3,6 +3,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import ManagementShell, { Heading, ErrorBar, mgmtApi } from '../../components/ManagementShell'
 import { useFormat } from '../../components/TenantProvider'
 import { BUSINESS_METRICS } from '../../lib/businessScorecard'
+import { applyLayout } from '../../lib/scorecardLayout'
+import ScorecardGear from '../../components/ScorecardGear'
 
 // BUSINESS SCORECARD - the whole business, on the same pattern as the other
 // scorecards: a card per metric with its trend line, then the month-by-month
@@ -44,6 +46,10 @@ export default function BusinessScorecard() {
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
   const [editValue, setEditValue] = useState('')
+  // Metric order and hidden metrics, from the gear (1042). Everyone who can
+  // open the Management portal is management or admin, so all may edit.
+  const [layouts, setLayouts] = useState({})
+  const METRICS = applyLayout(BUSINESS_METRICS, layouts.business).visible
   // The month clicked on a drill-down metric (1039): { key, month }.
   const [drill, setDrill] = useState(null)
   const openDrill = (m, month) => { if (m.drill && month) setDrill(d => d && d.key === m.key && d.month === month ? null : { key: m.key, month }) }
@@ -55,7 +61,7 @@ export default function BusinessScorecard() {
         mgmtApi(`/api/management/scorecard?from=${from}&to=${to}`),
         mgmtApi('/api/targets'),
       ])
-      setData(d); setTargets(t.targets || {})
+      setData(d); setTargets(t.targets || {}); setLayouts(t.layouts || {})
     } catch (e) { setError(e.message) }
   }
   useEffect(() => { load() }, [from, to])
@@ -113,6 +119,8 @@ export default function BusinessScorecard() {
           const isDefault = data.from === data.defaultFrom && data.to === data.defaultTo
           return (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#666' }}>
+              <ScorecardGear scorecard="business" defs={BUSINESS_METRICS} layout={layouts.business} canEdit
+                onSaved={l => setLayouts(prev => ({ ...prev, business: l }))} />
               From {pick(data.from, v => { setFrom(v); setTo(data.to) })}
               to {pick(data.to, v => { setFrom(data.from); setTo(v) })}
               {!isDefault && <button onClick={() => { setFrom(''); setTo('') }} style={{ ...dateInp, fontSize: 12, cursor: 'pointer', background: '#fff' }}>This financial year</button>}
@@ -127,7 +135,7 @@ export default function BusinessScorecard() {
       {!data ? (!error && <div style={{ color: '#aaa', padding: 40, textAlign: 'center' }}>Loading…</div>) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
-            {BUSINESS_METRICS.map(m => {
+            {METRICS.map(m => {
               // A metric with a forecast part (1037): <key> is actual (blue),
               // <key>__f forecast (orange). The trend runs through both.
               const fKey = `${m.key}__f`
@@ -160,6 +168,7 @@ export default function BusinessScorecard() {
                         <span style={{ color: '#aaa' }}> + </span>
                         <span style={{ color: '#d97706' }}>{fmt(m)(head.parts[1].value)} forecast</span>
                       </div>}
+                      {head.avgPerMonth != null && <div style={{ fontSize: 12, color: '#555', marginTop: 1 }}>{fmt(m)(head.avgPerMonth)} average per month</div>}
                       <div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div></div>}
                     <div style={{ fontSize: 13, color: '#999' }}>{targetBox(m, false)}</div>
                   </div>
@@ -203,7 +212,7 @@ export default function BusinessScorecard() {
                 </tr>
               </thead>
               <tbody>
-                {BUSINESS_METRICS.filter(m => !m.noChart).map(m => (
+                {METRICS.filter(m => !m.noChart).map(m => (
                   <tr key={m.key}>
                     <td style={{ ...td, position: 'sticky', left: 0, background: '#fff' }}>{m.label}<span style={{ fontSize: 10, color: '#bbb' }}> ({m.basis})</span></td>
                     <td style={{ ...td, color: '#888' }}>{targetBox(m, true)}</td>
