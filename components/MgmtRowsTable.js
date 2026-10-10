@@ -205,7 +205,7 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr>
-              {priorityField && <th style={{ ...th, width: 36 }} title="High priority" />}
+              {priorityField && <th style={{ ...th, width: 118 }}>Priority</th>}
               {columns.map(c => <th key={c.key} style={{ ...th, minWidth: c.width || 120 }}>{c.label}</th>)}
               <th style={{ ...th, width: 40 }} />
             </tr>
@@ -224,11 +224,19 @@ export default function MgmtRowsTable({ doc, columns, people = [], doneField, do
                 boxShadow: isHigh(r) ? 'inset 4px 0 0 #dc2626' : undefined }}>
                 {priorityField && (
                   <td style={{ ...td, textAlign: 'center', verticalAlign: 'middle' }}>
+                    {/* A HIGH PRIORITY badge (1052, was a flag): solid red when set,
+                        a faint outline of the same badge when not. Click to switch. */}
                     <button onClick={() => saveFields(r.id, { [priorityField]: isHigh(r) ? '' : 'high' })}
-                      title={isHigh(r) ? 'High priority - click to clear' : 'Mark as high priority'}
+                      title={isHigh(r) ? 'High priority - click to clear' : 'Click to mark as high priority'}
                       aria-pressed={isHigh(r)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 2,
-                        color: isHigh(r) ? '#dc2626' : '#d4d4d0', filter: isHigh(r) ? 'none' : 'grayscale(1)' }}>⚑</button>
+                      style={{
+                        cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+                        fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, lineHeight: 1,
+                        padding: '5px 8px', borderRadius: 999,
+                        border: `1px solid ${isHigh(r) ? '#dc2626' : '#dcdcd6'}`,
+                        background: isHigh(r) ? '#dc2626' : 'transparent',
+                        color: isHigh(r) ? '#fff' : '#c4c4bf',
+                      }}>HIGH PRIORITY</button>
                   </td>
                 )}
                 {columns.map(c => <td key={c.key} style={td}>{cell(r, c)}</td>)}

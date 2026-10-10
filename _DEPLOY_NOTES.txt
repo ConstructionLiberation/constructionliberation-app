@@ -1,42 +1,24 @@
-PACKAGE 1051 - Value of work priced: stop re-counting deals priced before history
+PACKAGE 1052 - Quarterly Goals: HIGH PRIORITY badge instead of a flag
 
-One file. Complete replacement. No re-seed. No env changes.
+One file. Complete replacement. No re-seed. No env changes. Built on 1051.
 
-  lib/crmValueChanges.js
+  components/MgmtRowsTable.js
 
-THE FAULT
-Value priced is the CHANGE in a deal's value. A second rule, copied from how
-Pipedrive counted, also recorded a deal's WHOLE value whenever it moved INTO a
-priced stage (MC Unsecured, MC Secured, Negotiating, Variations), unless that
-value matched the last one recorded.
+The flag at the start of each Quarterly Goals row is now a badge reading
+HIGH PRIORITY, in a column headed "Priority".
 
-  - For a deal priced in the CRM, the value edit is recorded when it happens,
-    so the stage rule always found a match and added nothing.
-  - For a deal priced BEFORE the CRM kept history, there was nothing to match,
-    so a stage move counted its whole value again.
+  Set       solid red badge, white text - plus the red bar down the row and the
+            row at the top, as before
+  Not set   the same badge as a faint grey outline, so it is obvious where to
+            click
+  Click     switches it either way; saves straight away
 
-Reproduced on the current code: Project A, priced at 100k a year ago, repriced
-to 112k and moved Review -> MC Unsecured this month, counted 124k (112k for the
-stage move + 12k for the change). It should be 12k.
+Nothing else changes: the stored value, the "High priority only" filter, the
+sort by person and the server rules are as in 1049-1050.
 
-THE FIX
-Stage moves are no longer counted. Only value edits are: blank -> 100k = 100k,
-100k -> 112k = 12k. The old rule is left in the file, switched off, with the
-reasoning.
-
-Untouched: the stored list of Pipedrive-era value changes and anything added by
-hand on the dashboard.
-
-AFFECTS EVERY PAGE THAT COUNTS VALUE PRICED - they all read this one file:
-  Estimator scorecard   Total value of work priced, Value priced - existing
-  Sales Dashboard       value priced figures
-  Business Scorecard    Value of work priced, and the existing-customer version
-Months where a pre-history deal moved into a priced stage will drop by that
-deal's value. That is the correction, not a new fault.
-
-Checked: Project A now 12,000; a CRM-era deal created with a value and then
-moved into a priced stage still 50,000. All 157 pages pass the browser check.
+Checked: the goal pages and Meeting Actions bundle; all 157 pages pass the
+browser check.
 
 SMOKE TEST
-Find Project A (or any older deal repriced this month) in the estimator
-scorecard's value-priced drill-down: it shows the 12k change only.
+Quarterly Goals: each row has a faint HIGH PRIORITY badge. Click one - it turns
+solid red and the row moves to the top. Click again - back to faint.
