@@ -1,72 +1,48 @@
-PACKAGE 1035 - Business Scorecard: Forecast sales, Forecast gross margin
+PACKAGE 1036 - Business Scorecard: financial year set on screen
 
-Six files: five complete replacements, one NEW. No re-seed. No env changes.
-Built on 1034 - deploy that first.
+Four files. Complete replacements. No re-seed. No env changes.
+Built on 1035 - deploy that first.
 
-  NEW       lib/forecastServer.js
-  REPLACED  lib/forecastMonths.js             (adds forecastFromViews, nothing changed)
-            lib/businessScorecard.js
-            pages/api/business-financials.js  (auth split from body, nothing changed)
-            pages/api/management/scorecard.js
-            pages/management/scorecard.js
+  lib/tenantSettings.js            (fyStartMonth() removed)
+  lib/financialYear.js             (comment only)
+  pages/api/management/scorecard.js
+  pages/management/scorecard.js
 
-
-FORECAST SALES - new card, under Total sales
-  Source    the Forecast P&L (12-month forecast).
-  Card      the total revenue in the FORECAST months still to come this
-            financial year - the "£877,055 forecast" on the Forecast P&L's
-            Revenue box. "Rest of FY2026", with "Sep 26 - Nov 26, 3 forecast
-            months" underneath.
-  Graph     each forecast month's revenue, in its own column.
-  Actual and manual months are not forecast, so they are not counted.
-
-FORECAST GROSS MARGIN
-  Source    the Forecast P&L, NOT the balance sheet: its Gross profit
-            percentage - the whole financial year, actual months + forecast
-            months + the WIP and year-end WIP adjustments. 26.6% on the
-            current figures.
-  Card      the figure only. No graph, and no row in the trend table.
-
-Both are the CURRENT financial year's forecast whatever From/To is set to - a
-forecast is about the year still running.
+NO UPSTASH EDIT NEEDED. If "fyStartMonth" was added to tenant:rock, it is now
+ignored and can stay or go.
 
 
-HOW THE FIGURES ARE GUARANTEED TO MATCH THE FORECAST P&L PAGE
-The Forecast P&L is built in the browser from three Business Financials views.
-The scorecard now builds it on the server from the SAME three views - by
-calling the Business Financials route's own body, not a copy - and the SAME
-model with the SAME saved settings (manual months, WIP lock, WIP include,
-year-end WIP). One function, lib/forecastMonths.js forecastFromViews, holds the
-settings-to-model step.
-
-Management users get the two numbers. They do not get access to the
-admin-only Business Financials reports - the admin check is skipped only for
-this internal call, which the scorecard makes after its own management check.
-
-Business Financials itself is unchanged: the route's auth check was moved
-into a two-line wrapper so the body could be called; every view behaves as
-before.
-
-Cost: the three views are read on each scorecard load. Fine at this size;
-if the page feels slow, that is where to look.
+WHY IT DID NOT OPEN ON THE FINANCIAL YEAR
+The year start was read from a field on the tenant record. When that field is
+missing the page falls back to the last 12 months - which is the November-to-
+October view you kept seeing. A setting that only works after hand-editing JSON
+in Upstash is the wrong place for it.
 
 
-DECEMBER-ONLY, BY DESIGN
-The Forecast P&L assumes a December year. The forecast cards therefore show
-only when fyStartMonth is 12; any other year start gets a notice rather than
-a December forecast set against another year's actuals.
+NOW
+The year start is stored in the company's own database
+(config:financial-year-start) and set ON THE SCORECARD:
+
+  1. First visit after deploy: a yellow bar at the top -
+     "Set your financial year once. It starts on the 1st of [month] [Save]"
+  2. Choose December, Save.
+  3. The page reloads on 1 Dec 25 to 30 Nov 26 and opens there every time.
+
+Nothing is guessed: until it is saved the page says so and shows the last 12
+months.
 
 
-MONTH LABELS
-Column and axis labels are now built from the month text itself. Before, the
-page turned '2025-12' into a date at midnight UTC, which anywhere behind UTC is
-still 30 November. Not the cause of what you saw from NZ, but it would have
-been for anyone viewing from the Americas.
+THE GRAPHS
+With the financial year range, every graph and the trend table have all twelve
+columns, December to November. Months still to come are there and empty - not
+zero, not missing.
+
+Checked by running the route: not set -> last 12 months; 13 refused; December
+saved; reopened on Dec 25 -> Nov 26, 12 columns, Oct and Nov empty.
 
 
 SMOKE TEST
-1. Forecast sales sits under Total sales: same figure as the "forecast" part
-   of Forecast P&L -> Revenue (FY). Graph shows Sep, Oct, Nov.
-2. Forecast gross margin: same % as Forecast P&L -> Gross profit. No graph.
-3. Sign in as a management (not admin) user: both figures show.
-4. Business Financials -> Forecast P&L, Summary, Budgets: unchanged.
+1. Business Scorecard: the yellow bar. Choose December, Save.
+2. From Dec 25 to Nov 26. Graphs run Dec to Nov; Oct and Nov empty.
+3. Reload - still Dec to Nov, no yellow bar.
+4. Forecast sales and Forecast gross margin show (they need December).

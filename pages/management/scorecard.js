@@ -117,6 +117,7 @@ export default function BusinessScorecard() {
           )
         })()} />
       <ErrorBar error={error} onClose={() => setError('')} />
+      {data && !data.fyStartMonth && <YearStartSetup onSaved={() => { setFrom(''); setTo(''); load() }} onError={setError} />}
       {(data?.notices || []).map((n, i) => (
         <div key={i} style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>{n}</div>
       ))}
@@ -200,3 +201,28 @@ export default function BusinessScorecard() {
 const th = { padding: '8px 10px', fontWeight: 500, color: '#555', textAlign: 'left', fontSize: 12, borderBottom: '1px solid #e1e0d9', whiteSpace: 'nowrap' }
 const td = { padding: '7px 10px', borderBottom: '0.5px solid #f0efec', fontSize: 12, whiteSpace: 'nowrap' }
 const dateInp = { fontSize: 12, padding: '5px 8px', border: '1px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }
+
+// Shown until the financial year start is set (1036). Once saved, the page
+// opens on the current financial year, first month to last.
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+function YearStartSetup({ onSaved, onError }) {
+  const [m, setM] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function save() {
+    setBusy(true)
+    try { await mgmtApi('/api/management/scorecard', { fyStartMonth: Number(m) }); onSaved() }
+    catch (e) { onError(`Not saved: ${e.message}`) }
+    setBusy(false)
+  }
+  return (
+    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13.5, color: '#92400e' }}>
+      <strong>Set your financial year once.</strong> It starts on the 1st of
+      <select value={m} onChange={e => setM(e.target.value)} style={{ ...dateInp, fontSize: 13, padding: '6px 8px' }}>
+        <option value="">Choose a month…</option>
+        {MONTH_NAMES.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+      </select>
+      <button onClick={save} disabled={!m || busy} style={{ fontSize: 13, padding: '7px 14px', border: 'none', borderRadius: 7, background: '#1a1a19', color: '#fff', cursor: m ? 'pointer' : 'default', opacity: m && !busy ? 1 : 0.4 }}>Save</button>
+      <span style={{ fontSize: 12, color: '#a16207' }}>Until then the page shows the last 12 months.</span>
+    </div>
+  )
+}

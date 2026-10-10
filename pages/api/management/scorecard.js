@@ -1,8 +1,7 @@
 import { requireArea } from '../../../lib/portalAuth'
-import { get } from '../../../lib/db'
+import { get, set } from '../../../lib/db'
 import withTenant from '../../../lib/withTenant'
 import { BUSINESS_METRICS, CONNECTED } from '../../../lib/businessScorecard'
-import { fyStartMonth } from '../../../lib/tenantSettings'
 import { fyOfMonth, fyMonths, monthKeyOf } from '../../../lib/financialYear'
 import { plMonth, marginOver } from '../../../lib/plMargin'
 import { computeForecastPl } from '../../../lib/forecastServer'
@@ -37,12 +36,29 @@ function monthsFrom(from, to) {
   return out
 }
 
+// THE FINANCIAL YEAR START (1036) lives in the company's OWN database, at
+// config:financial-year-start, and is set once on the Business Scorecard.
+// It was a field on the tenant record (1032-1035), which meant editing JSON in
+// Upstash to make the page work - and a page that silently fell back to the
+// last 12 months when that edit had not happened. Not set now means the page
+// ASKS, it does not guess.
+const FY_KEY = 'config:financial-year-start'
+const validStart = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 12 ? n : null }
+
 async function handler(req, res) {
   if (!requireArea(req, res, 'management')) return
+
+  // POST { fyStartMonth: 1-12 } - set the year start.
+  if (req.method === 'POST') {
+    const v = validStart((req.body || {}).fyStartMonth)
+    if (!v) return res.status(400).json({ error: 'fyStartMonth must be a month number, 1 to 12.' })
+    await set(FY_KEY, v)
+    return res.status(200).json({ ok: true, fyStartMonth: v })
+  }
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   const thisMonth = monthKeyOf(new Date())
-  const start = fyStartMonth()
+  const start = validStart(await get(FY_KEY))
   const notices = []
 
   const benchmark = (await get('xero:pl-benchmark')) || { months: {} }
@@ -58,7 +74,6 @@ async function handler(req, res) {
   } else {
     // Without the company's year start, fall back to the last 12 months -
     // and say so, rather than cutting the year on someone else's calendar.
-    notices.push('The financial year start is not set for this company (fyStartMonth on the tenant record), so the page opens on the last 12 months instead of the financial year.')
     defaultFrom = addMonths(thisMonth, -11); defaultTo = thisMonth
   }
 
