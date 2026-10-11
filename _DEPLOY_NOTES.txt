@@ -1,50 +1,49 @@
-PACKAGE 1077 - Tech Subs: several customer approvers, and proof they were told
+PACKAGE 1078 - Retention tracker: every column's hover text checked against
+               what the column actually does
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1076.
+One file. Complete replacement. No re-seed. No env changes. Built on 1077.
 
-  pages/api/design-techsubs.js
-  pages/design/[project]/tech-sub.js
+  pages/retention.js
 
-YOUR QUESTION: does issuing a Tech Sub notify the customer?
-YES - adding a Tech Sub, or a new revision, has always emailed the chosen
-customer automatically (there is no separate button, unlike drawings). But
-before this package there was NO RECORD of it, and a failed send - or a
-customer with no email address on their user - was silently swallowed, so it
-looked exactly like a customer who had been told. That is fixed below.
+Every header's hover text was read against the code that fills that column.
 
-1. SEVERAL CUSTOMERS
-The approver window is now a tick list - tick as many customer contacts as
-needed. Each is emailed; ANY ONE of them can approve. A new revision starts
-with the previous revision's approvers ticked. A customer with no email
-address is marked as such in the list.
+WRONG - CORRECTED
+  ✓ (after Invoiced)   said Applied for vs Invoiced. It compares CERTIFIED vs
+                       INVOICED - as you thought. Now says so, with what a red
+                       flag means and what a dash means.
+  ✓ (after 612         described an old test (released = nothing, half or all
+     Released)         of deducted). It actually checks two things: 612 DEDUCTED
+                       = RETENTION OWED, and 612 RELEASED = what you have MARKED
+                       released. Now says so, with what "ties" / "deducted out"
+                       / "released out" / "both out" mean.
+  1st Value,           said half the retention on APPLIED FOR. They are half
+  2nd Value            the retention on the FINAL ACCOUNT (Final Account x
+                       Ret % / 2). Now says so.
 
-2. HOW YOU KNOW THEY WERE NOTIFIED
-  - Straight after adding: a box at the top says who was emailed and anyone
-    who was not, with why ("No email address on their user", a send failure).
-  - On every Tech Sub, under Approval: the approvers' names, and
-    "Notified 2 · 11 Oct 14:05" - hover for each person's result - or
-    "1 not sent" in amber.
-  - Every send is recorded on the Tech Sub (who, when, each result).
+INCOMPLETE - ADDED TO
+  VAT                  now also says a figure typed in Edit replaces the
+                       calculation, and that mixed VAT treatments show 0 until
+                       one is typed.
 
-3. NOTIFY AGAIN
-On any current Tech Sub not yet approved: "Notify again" - tick the customers,
-Send. Re-sends, records the result, and those ticked become its approvers.
+A FIGURES FIX, NOT JUST WORDING
+  Account Remaining    the hover text, the code's own documentation and the
+                       Remaining to Claim card all say Final Account - APPLIED
+                       FOR (what is still to claim). The COLUMN was showing
+                       Final Account - INVOICED, so the card was not the sum of
+                       the column it says it totals. The column now uses the
+                       same calculation as the card. Where a project has
+                       applied for more than it has invoiced, its Account
+                       Remaining will now be LOWER than before.
 
-Also fixed: adding a Tech Sub or revision now checks the server's reply - it
-was ignored, so a failed save looked like success.
+CHECKED AND ALREADY RIGHT
+  Ref, Customer, Project, Proj. Final Account, MCD, Final Account, Applied for,
+  Certified, Invoiced, Retention Owed, 612 Deducted, 612 Released, Ret %,
+  PC Type, QS, 1st Date, 2nd Date, VAT Type, Total Due, Total Paid,
+  Total Remaining (Check), Comments.
 
-Older Tech Subs with a single approver keep working.
+Unchanged and deliberate: moving a project to Defects Liability still needs
+the Final Account to equal the invoiced value.
 
-Checked through the real route: a Tech Sub added for two customers - one
-emailed, the other reported "No email address on their user", recorded, and
-only the real address sent to; a non-approver refused, the SECOND approver able
-to approve; Notify again to two customers - both emailed, approvers updated, a
-second record; notify with nobody refused; an older single-approver Tech Sub
-approved by its approver. Both files bundle; all 158 pages pass the browser
-check.
-
-SMOKE TEST
-1. Design -> a project -> Tech Sub -> Add -> tick two customers -> choose a
-   file. The box at the top lists who was emailed.
-2. The row shows the approvers and "Notified 2 · <time>".
-3. Notify again -> Send - a new time.
+Checked: all six changes in place; no other copy of the Account Remaining
+calculation; the tracker and the Bookkeeping page that embeds it bundle; all
+158 pages pass the browser check.
