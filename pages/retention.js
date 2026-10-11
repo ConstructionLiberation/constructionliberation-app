@@ -249,6 +249,58 @@ function calcTotalRemaining(entry) {
 }
 // Retention lifecycle status: 'live' -> 'defects' -> 'complete' (all manual, gated).
 // Older records used a markedComplete boolean; treat that as 'complete'.
+// EXPORT COLUMNS (1079) - the tracker's columns in the table's order, each
+// worked out with the SAME functions the cells use, so a figure in the
+// spreadsheet is always the figure on the screen. money: true -> a real number
+// in Excel (2 dp), so it can be summed.
+function exportColumns(term) {
+  const n = (v) => (v == null || v === '' || isNaN(parseFloat(v))) ? null : Math.round(parseFloat(v) * 100) / 100
+  const invNetOf = (e) => e.invoicedNet != null ? n(e.invoicedNet) : (e.invoiced != null ? n(e.invoiced) : null)
+  const noRet = (e) => !(parseFloat(e.retentionPct) > 0)
+  const recon = (e) => {
+    if (!e.ret612Lines) return ''
+    const ded = parseFloat(e.retention612Deducted) || 0, rel = parseFloat(e.retention612Released) || 0
+    const owed = calcRetentionOwed(e)
+    const markedRel = (released1(e) ? calcReleaseHalf(e) : 0) + (released2(e) ? calcReleaseHalf(e) : 0)
+    const dOk = Math.abs(ded - owed) < 1, rOk = Math.abs(rel - markedRel) < 1
+    return dOk && rOk ? 'Ties' : !dOk && !rOk ? 'Both out' : !dOk ? 'Deducted out' : 'Released out'
+  }
+  const statusText = (e) => ({ live: 'Live', defects: 'Defects Liability', complete: 'Complete' })[retStatusOf(e)] || ''
+  return [
+    { key: 'status', label: 'Status', get: statusText, extra: true },
+    { key: 'ref', label: 'Ref', get: e => e.ourRef || '' },
+    { key: 'customer', label: 'Customer', get: e => e.customerName || '' },
+    { key: 'project', label: 'Project', get: e => e.projectName || '' },
+    { key: 'projFa', label: 'Proj. Final Account', money: true, get: e => n(e.afaGross) },
+    { key: 'mcd', label: 'MCD', money: true, get: e => n(e.mcdValue || 0) },
+    { key: 'fa', label: 'Final Account', money: true, get: e => n(accountValue(e) || null) },
+    { key: 'applied', label: 'Applied for', money: true, get: e => n(e.appliedFor) },
+    { key: 'certified', label: 'Certified', money: true, get: e => n(e.certified) },
+    { key: 'invoiced', label: 'Invoiced', money: true, get: invNetOf },
+    { key: 'certMatch', label: 'Certified = Invoiced', get: e => (n(e.certified) == null || invNetOf(e) == null) ? '' : (Math.abs(n(e.certified) - invNetOf(e)) < 1 ? 'Yes' : 'No') },
+    { key: 'accRemaining', label: 'Account Remaining', money: true, get: e => accountValue(e) ? n(calcAccountRemaining(e)) : null },
+    { key: 'retOwed', label: 'Retention Owed', money: true, get: e => n(calcRetentionOwed(e)) },
+    { key: 'r612ded', label: '612 Deducted', money: true, get: e => e.ret612Lines ? n(e.retention612Deducted || 0) : null },
+    { key: 'r612rel', label: '612 Released', money: true, get: e => e.ret612Lines ? n(e.retention612Released || 0) : null },
+    { key: 'recon', label: '612 Reconciliation', get: recon },
+    { key: 'retPct', label: 'Ret %', get: e => n(e.retentionPct) },
+    { key: 'pcType', label: 'PC Type', get: e => e.pcType || '' },
+    { key: 'qs', label: 'QS', get: e => e.qsName || '' },
+    { key: 'r1v', label: '1st Value', money: true, get: e => noRet(e) ? null : n(calcReleaseHalf(e)) },
+    { key: 'r1rel', label: '1st Released?', get: e => noRet(e) ? '' : (released1(e) ? 'Yes' : 'No'), extra: true },
+    { key: 'r1d', label: '1st Date', get: e => noRet(e) ? '' : (e.release1Date || (e.pcDateTBC ? 'TBC' : '')) },
+    { key: 'r2v', label: '2nd Value', money: true, get: e => noRet(e) ? null : n(calcReleaseHalf(e)) },
+    { key: 'r2rel', label: '2nd Released?', get: e => noRet(e) ? '' : (released2(e) ? 'Yes' : 'No'), extra: true },
+    { key: 'r2d', label: '2nd Date', get: e => noRet(e) ? '' : (e.release2Date || (e.defectsDateTBC ? 'TBC' : '')) },
+    { key: 'vat', label: term('vat'), money: true, get: e => n(calcVat(e)) },
+    { key: 'vatType', label: `${term('vat')} Type`, get: e => (e.vatRateLabel && e.vatRateLabel !== '—') ? e.vatRateLabel : '' },
+    { key: 'totalDue', label: 'Total Due', money: true, get: e => n(calcTotalDue(e)) },
+    { key: 'paid', label: 'Total Paid', money: true, get: e => n(e.paid) },
+    { key: 'totalRem', label: 'Total Remaining (Check)', money: true, get: e => n(calcTotalRemaining(e)) },
+    { key: 'comments', label: 'Comments', get: e => e.comments || '' },
+  ]
+}
+
 const retStatusOf = (entry) => entry.retStatus || (entry.markedComplete ? 'complete' : 'live')
 const isClosed = (entry) => retStatusOf(entry) === 'complete'
 
@@ -373,6 +425,11 @@ export default function RetentionPage() {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState(EMPTY_ENTRY)
   const [showAddForm, setShowAddForm] = useState(false)
+  // Export (1079): the window, the ticked columns (remembered in this browser),
+  // and whether to export the rows on screen or every project.
+  const [showExport, setShowExport] = useState(false)
+  const [exportCols, setExportCols] = useState(null)
+  const [exportScope, setExportScope] = useState('filtered')
   const [addForm, setAddForm] = useState(EMPTY_ENTRY)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -1041,6 +1098,71 @@ export default function RetentionPage() {
           }}>{loadError}</div>
         ) : null}
 
+        {/* EXPORT TO EXCEL (1079) - choose the columns, then download. */}
+        {showExport && exportCols && (() => {
+          const cols = exportColumns(term)
+          const rows = exportScope === 'all' ? everyEntry : allEntries
+          const toggle = (k) => setExportCols(prev => { const nx = new Set(prev); nx.has(k) ? nx.delete(k) : nx.add(k); return nx })
+          const download = () => {
+            const chosen = cols.filter(c => exportCols.has(c.key))
+            try { localStorage.setItem('retention:exportCols', JSON.stringify(chosen.map(c => c.key))) } catch {}
+            const aoa = [chosen.map(c => c.label), ...rows.map(e => chosen.map(c => { const v = c.get(e); return v == null ? '' : v }))]
+            const ws = XLSX.utils.aoa_to_sheet(aoa)
+            // Money as real numbers with a 2-dp, thousands-separated format.
+            const range = XLSX.utils.decode_range(ws['!ref'])
+            chosen.forEach((c, ci) => {
+              if (!c.money) return
+              for (let r = 1; r <= range.e.r; r++) {
+                const cell = ws[XLSX.utils.encode_cell({ r, c: ci })]
+                if (cell && cell.t === 'n') cell.z = '#,##0.00'
+              }
+            })
+            ws['!cols'] = chosen.map(c => ({ wch: c.key === 'project' || c.key === 'comments' ? 36 : c.key === 'customer' ? 26 : Math.max(10, c.label.length + 2) }))
+            const wb = XLSX.utils.book_new()
+            XLSX.utils.book_append_sheet(wb, ws, 'Retention')
+            XLSX.writeFile(wb, `Retention-tracker-${new Date().toISOString().slice(0, 10)}.xlsx`)
+            setShowExport(false)
+          }
+          return (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+              <div role="dialog" aria-label="Export to Excel" style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 640, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>Export to Excel</div>
+                  <button onClick={() => setShowExport(false)} aria-label="Close" style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>&times;</button>
+                </div>
+                <div style={{ padding: '14px 20px', overflow: 'auto' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#555', marginBottom: 6 }}>Rows</div>
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 13 }}>
+                    <label style={{ cursor: 'pointer' }}><input type="radio" checked={exportScope === 'filtered'} onChange={() => setExportScope('filtered')} /> As shown - {allEntries.length} project{allEntries.length === 1 ? '' : 's'} (your status filters)</label>
+                    <label style={{ cursor: 'pointer' }}><input type="radio" checked={exportScope === 'all'} onChange={() => setExportScope('all')} /> Every project - {everyEntry.length}</label>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#555' }}>Columns <span style={{ fontWeight: 400, color: '#999' }}>({exportCols.size} of {cols.length})</span></div>
+                    <div style={{ display: 'flex', gap: 10, fontSize: 12 }}>
+                      <button onClick={() => setExportCols(new Set(cols.map(c => c.key)))} style={{ border: 'none', background: 'none', color: '#2563eb', cursor: 'pointer', padding: 0 }}>Select all</button>
+                      <button onClick={() => setExportCols(new Set())} style={{ border: 'none', background: 'none', color: '#2563eb', cursor: 'pointer', padding: 0 }}>Clear</button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '2px 12px', border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
+                    {cols.map(c => (
+                      <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, padding: '3px 0', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={exportCols.has(c.key)} onChange={() => toggle(c.key)} />
+                        <span>{c.label}{c.extra && <span style={{ color: '#9ca3af', fontSize: 11 }}> (extra)</span>}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#999', marginTop: 8 }}>Figures are worked out exactly as on screen. Money columns are numbers, so they can be added up in Excel. Your column choice is remembered for next time.</div>
+                </div>
+                <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button onClick={() => setShowExport(false)} style={{ border: '1px solid #ddd', background: '#fff', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Cancel</button>
+                  <button onClick={download} disabled={!exportCols.size || !rows.length}
+                    style={{ border: 'none', background: '#16a34a', color: '#fff', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: !exportCols.size || !rows.length ? 0.5 : 1 }}>Download ({rows.length} row{rows.length === 1 ? '' : 's'})</button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         {appliedForFor && (() => {
           const d = appliedForFor.appliedForDetail || null
           const th3 = { padding: '6px 8px', textAlign: 'left', fontSize: 10.5, color: '#888', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #e5e7eb' }
@@ -1313,6 +1435,14 @@ export default function RetentionPage() {
                   onChange={(e) => { importFile(e.target.files && e.target.files[0]); e.target.value = '' }}
                   style={{ display: 'none' }} />
               </label>
+              <button onClick={() => {
+                  const all = exportColumns(term)
+                  let saved = null
+                  try { saved = JSON.parse(localStorage.getItem('retention:exportCols') || 'null') } catch {}
+                  setExportCols(new Set(Array.isArray(saved) && saved.length ? saved.filter(k => all.some(c => c.key === k)) : all.filter(c => !c.extra).map(c => c.key)))
+                  setShowExport(true)
+                }}
+                style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>Export to Excel</button>
             </div>
             )}
           </div>

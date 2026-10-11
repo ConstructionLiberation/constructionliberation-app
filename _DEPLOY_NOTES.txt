@@ -1,49 +1,32 @@
-PACKAGE 1078 - Retention tracker: every column's hover text checked against
-               what the column actually does
+PACKAGE 1079 - Retention tracker: Export to Excel, choosing the columns
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1077.
+One file. Complete replacement. No re-seed. No env changes. Built on 1078.
 
   pages/retention.js
 
-Every header's hover text was read against the code that fills that column.
+"Export to Excel" sits beside Import spreadsheet. It opens a window:
 
-WRONG - CORRECTED
-  ✓ (after Invoiced)   said Applied for vs Invoiced. It compares CERTIFIED vs
-                       INVOICED - as you thought. Now says so, with what a red
-                       flag means and what a dash means.
-  ✓ (after 612         described an old test (released = nothing, half or all
-     Released)         of deducted). It actually checks two things: 612 DEDUCTED
-                       = RETENTION OWED, and 612 RELEASED = what you have MARKED
-                       released. Now says so, with what "ties" / "deducted out"
-                       / "released out" / "both out" mean.
-  1st Value,           said half the retention on APPLIED FOR. They are half
-  2nd Value            the retention on the FINAL ACCOUNT (Final Account x
-                       Ret % / 2). Now says so.
+  ROWS      As shown (your status filters) - or every project on the register
+  COLUMNS   every tracker column, in the table's order, each with a tick box;
+            Select all / Clear. Three EXTRA columns are offered that the screen
+            only shows as colour: Status, 1st Released?, 2nd Released?
+            Your choice is remembered in this browser for next time.
+  Download  -> Retention-tracker-<date>.xlsx
 
-INCOMPLETE - ADDED TO
-  VAT                  now also says a figure typed in Edit replaces the
-                       calculation, and that mixed VAT treatments show 0 until
-                       one is typed.
+The figures are worked out with the SAME functions as the table cells (final
+account, account remaining, retention owed, release values, VAT, totals, the
+two match columns as Yes/No and Ties/Deducted out/Released out/Both out), so
+the spreadsheet always matches the screen. Money columns are real numbers
+formatted #,##0.00, so they can be summed. 0%-retention release cells and the
+reconciliation for projects with no 612 lines are left blank, as on screen.
 
-A FIGURES FIX, NOT JUST WORDING
-  Account Remaining    the hover text, the code's own documentation and the
-                       Remaining to Claim card all say Final Account - APPLIED
-                       FOR (what is still to claim). The COLUMN was showing
-                       Final Account - INVOICED, so the card was not the sum of
-                       the column it says it totals. The column now uses the
-                       same calculation as the card. Where a project has
-                       applied for more than it has invoiced, its Account
-                       Remaining will now be LOWER than before.
+On the full Retention page only - the read-only copy inside Bookkeeping has no
+buttons, as before.
 
-CHECKED AND ALREADY RIGHT
-  Ref, Customer, Project, Proj. Final Account, MCD, Final Account, Applied for,
-  Certified, Invoiced, Retention Owed, 612 Deducted, 612 Released, Ret %,
-  PC Type, QS, 1st Date, 2nd Date, VAT Type, Total Due, Total Paid,
-  Total Remaining (Check), Comments.
-
-Unchanged and deliberate: moving a project to Defects Liability still needs
-the Final Account to equal the invoiced value.
-
-Checked: all six changes in place; no other copy of the Account Remaining
-calculation; the tracker and the Bookkeeping page that embeds it bundle; all
-158 pages pass the browser check.
+Checked: a workbook built from two sample projects with the page's OWN
+calculation code and read back - every figure verified by hand (Account
+Remaining 10,493.22 = Final Account - Applied for; Retention Owed 7,230.52 =
+3% of invoiced, reconciliation "Ties"; 1st Value 4,112.07; VAT 0 on reverse
+charge and 19,500 at 20%; Total Remaining 44,138.21 and 17,000), money
+formatted as numbers, 0%-retention and no-612 cells blank. The tracker and the
+Bookkeeping page bundle; all 158 pages pass the browser check.
