@@ -1,72 +1,27 @@
-PACKAGE 1080 - Email Notifications: Register and Sent log tabs
+PACKAGE 1081 - "Forms due this week": copied to each project's Contracts Manager
 
-Nine files: five complete replacements, four NEW. No re-seed. No env changes.
-Built on 1079.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1080.
 
-  NEW       lib/emailLog.js              (records every email sent)
-            lib/emailRegister.js         (the register of automatic emails)
-            components/EmailAdminTabs.js (the two new tabs)
-            pages/api/email-admin.js
-  REPLACED  pages/admin/notifications.js (three tabs)
-            lib/withTenant.js            (installs the recorder; passes the route)
-            lib/forEachTenant.js         (passes each scheduled job's name)
-            lib/tenantContext.js         (carries the route/job running)
-            lib/db.js                    (list operations for the log)
+  pages/api/cron/forms-weekly-notify.js
+  lib/emailRegister.js                  (the Register's description of it)
 
-Admin > Email Notifications now has three tabs (admin only, as before):
+"Rock Roofing - Forms due this week (w/c ...)" - the Monday digest to each site
+supervisor - is now COPIED (cc) to the Contracts Manager of every project
+listed in it. A supervisor covering two projects with different CMs: both CMs
+are copied.
 
-1. TASK REMINDERS - the reminders set up here. Unchanged.
+Each project line now names its CM, e.g.
+  J240 - Market Drayton (CM: Will McVeigh)
+so a CM copied on a digest covering several projects can see which are theirs.
 
-2. REGISTER - every email the portal sends automatically (37), in two groups,
-   Scheduled (12) and When something happens (25). Each row: what it is for,
-   when / how often, who receives it, and when it was last sent. Where the
-   recipients are set by role or job title, the people it reaches TODAY are
-   listed (e.g. WIP complete -> the active Accounts users); if nobody matches,
-   it says so in amber - that email goes to no one.
+Nobody is copied to themselves: where the CM is also the supervisor, they get
+the one email.
 
-3. SENT LOG - every email actually sent, newest first: when, to (and cc),
-   subject, what it was for, and Sent / Failed with the reason. Search by
-   recipient or subject; filter sent / failed; last 24 hours to everything
-   kept. The most recent 3,000 are kept. It starts recording from this deploy.
+The Pre-Start digest to CMs ("Up and coming Pre-Start Notifications") is
+unchanged. The Register tab's "who receives it" is updated, and the Sent log
+shows the cc.
 
-HOW THE LOG WORKS
-Every portal email goes to one address, the email service. The server's
-request function is wrapped once: any call to that address is passed through
-UNTOUCHED and its result recorded in the company's own database, with the route
-or scheduled job that sent it. So every email is logged - including any added
-later - without changing 30-odd senders. Recording can never stop an email:
-every step is guarded, and the response is cloned so the sender still reads it.
-"Sent" means the email service accepted it, not that it was opened.
-
-WHEN AN EMAIL IS ADDED TO THE PORTAL, ADD IT TO lib/emailRegister.js. The log
-records it regardless.
-
-FOUND WHILE CHECKING - NOT CHANGED HERE
-Compiling every server route found 8 that import functions which do not exist
-(present in the original repo too - not caused by this package). Next.js builds
-them, and they fail only when that line runs:
-  upload-bills, xero/sync, xero/backfill-labour  -> extractJobNoFromDescription
-                                                    (xero/sync: fetchAllCostBills)
-  sync, deals, fieldmap, webhook, cron/pipedrive-sync -> old Pipedrive storage
-                                                    functions
-Upload Bills is on the weekly commercial checklist - worth checking it works.
-
-Checked:
-  - the recorder: a send recorded with to/cc/subject/attachments/source; a
-    rejection recorded with the service's reason; a network failure recorded and
-    still thrown to the sender; a batch send recorded as two; other requests
-    untouched; the sender still reads its own response; installing twice does
-    not double-wrap; nothing kept outside a company context
-  - the register: every route and job it names exists; every route that sends
-    email directly is in it (one missed during checking - Design customer login
-    - added)
-  - the admin route: today's recipients resolve from real users (deactivated
-    excluded; by role and by job title); the log returned and matched to its
-    register entry; non-admin refused
-  - all 202 other server routes compile; all 158 pages pass the browser check
-
-SMOKE TEST
-1. Admin > Email Notifications: three tabs; Task reminders as before.
-2. Register: the lists, with today's recipients on the role-based rows.
-3. Send something (e.g. Send test on Task reminders) -> Sent log: it is there,
-   with Sent.
+Checked: the job run with three projects - Steve's digest (two projects, CMs
+Will and Mike) sent to Steve, cc Will and Mike, each line naming its CM; Will's
+digest for the project he supervises AND manages sent to him alone, no cc. The
+job and the daily run that calls it bundle.

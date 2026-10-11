@@ -107,7 +107,9 @@ export async function runFormsWeeklyNotify({ force = false } = {}) {
   const cmTasks = {}   // cmName -> { preStart:[{name, when}] }
   const supTasks = {}  // supName -> { startOnSite:[], siteDiaryProjects:[], wah:[] }
   const pushCM = (nm, item) => { (cmTasks[nm] = cmTasks[nm] || { preStart: [] }).preStart.push(item) }
-  const ensureSup = (nm) => (supTasks[nm] = supTasks[nm] || { startOnSite: [], siteDiaryProjects: [], wah: [] })
+  // cms (1081): the Contracts Managers of the projects in this supervisor's
+  // digest - they are copied in.
+  const ensureSup = (nm) => (supTasks[nm] = supTasks[nm] || { startOnSite: [], siteDiaryProjects: [], wah: [], cms: new Set() })
 
   const twoWeeks = new Date(weekMon.getTime() + 14 * DAY)  // start/return within 14 calendar days
 
@@ -135,11 +137,14 @@ export async function runFormsWeeklyNotify({ force = false } = {}) {
     // SUPERVISOR tasks
     if (pm.supervisor) {
       const s = ensureSup(pm.supervisor)
+      const before = s.startOnSite.length + s.siteDiaryProjects.length + s.wah.length
+      // Each line names the project's Contracts Manager (1081).
+      const label = `${pm.projectNo} — ${pm.name}${pm.cm ? ` (CM: ${pm.cm})` : ''}`
       // Start on Site Checklist — week containing the first-ever allocated day
-      if (inThisWeek(firstDay) && !doneFor(pm.projectNo, 'start on site')) s.startOnSite.push(`${pm.projectNo} — ${pm.name}`)
+      if (inThisWeek(firstDay) && !doneFor(pm.projectNo, 'start on site')) s.startOnSite.push(label)
       // Daily Site Diary — list the project if it has any allocated day this week
       const diaryDays = pm.days.filter(dk => weekDays.includes(dk)).length
-      if (diaryDays > 0) s.siteDiaryProjects.push(`${pm.projectNo} — ${pm.name}`)
+      if (diaryDays > 0) s.siteDiaryProjects.push(label)
       // Works Area Handover — a finish day this week followed by a 5+ calendar-day gap before the next
       // visit (or no next visit = project end). Checked per allocated day that falls in this week.
       for (let i = 0; i < dayObjs.length; i++) {
@@ -147,8 +152,10 @@ export async function runFormsWeeklyNotify({ force = false } = {}) {
         if (!inThisWeek(d)) continue
         const next = dayObjs[i + 1] || null
         const gapDays = next ? Math.round((next - d) / DAY) : Infinity
-        if (gapDays >= 5 && !doneFor(pm.projectNo, 'works area handover')) { s.wah.push(`${pm.projectNo} — ${pm.name}`); break }
+        if (gapDays >= 5 && !doneFor(pm.projectNo, 'works area handover')) { s.wah.push(label); break }
       }
+      // This project put something in the digest: copy in its Contracts Manager.
+      if (pm.cm && s.startOnSite.length + s.siteDiaryProjects.length + s.wah.length > before) s.cms.add(pm.cm)
     }
   }
 
@@ -156,13 +163,14 @@ export async function runFormsWeeklyNotify({ force = false } = {}) {
   const wcLabel = weekMon.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
   const sent = []; const skipped = []
 
-  async function sendMail(to, subject, html) {
+  async function sendMail(to, subject, html, cc = []) {
     if (!to) { skipped.push('(no email)'); return }
+    const ccList = [...new Set(cc.filter(e => e && e.toLowerCase() !== String(to).toLowerCase()))]
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+      body: JSON.stringify({ from: FROM, to: [to], ...(ccList.length ? { cc: ccList } : {}), subject, html }),
     })
-    if (r.ok) sent.push(to); else skipped.push(to)
+    if (r.ok) sent.push(ccList.length ? `${to} (cc ${ccList.join(', ')})` : to); else skipped.push(to)
   }
 
   const listHtml = (items) => `<ul style="margin:4px 0 12px;padding-left:18px">${items.map(i => `<li style="margin:2px 0">${i}</li>`).join('')}</ul>`
@@ -195,7 +203,9 @@ export async function runFormsWeeklyNotify({ force = false } = {}) {
       ${body}
       <p style="color:#999;font-size:12px;margin-top:16px">Complete these on the Site App.</p>
     </div>`
-    await sendMail(email, `Rock Roofing — Forms due this week (w/c ${weekMon.toLocaleDateString('en-GB')})`, html)
+    // Copied to the Contracts Manager of each project listed (1081).
+    const cmEmails = [...t.cms].map(c => emailByName[String(c).toLowerCase()]).filter(Boolean)
+    await sendMail(email, `Rock Roofing — Forms due this week (w/c ${weekMon.toLocaleDateString('en-GB')})`, html, cmEmails)
   }
 
   return { ok: true, sent: sent.length, skipped, cms: Object.keys(cmTasks).length, supervisors: Object.keys(supTasks).length }
