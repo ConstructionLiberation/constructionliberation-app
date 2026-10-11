@@ -1,27 +1,31 @@
-PACKAGE 1081 - "Forms due this week": copied to each project's Contracts Manager
+PACKAGE 1082 - Site App: Forms Completed set up like the portal's Completed page
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1080.
+One file. Complete replacement. No re-seed. No env changes. Built on 1081.
 
-  pages/api/cron/forms-weekly-notify.js
-  lib/emailRegister.js                  (the Register's description of it)
+  pages/forms/cm/forms-completed.js
 
-"Rock Roofing - Forms due this week (w/c ...)" - the Monday digest to each site
-supervisor - is now COPIED (cc) to the Contracts Manager of every project
-listed in it. A supervisor covering two projects with different CMs: both CMs
-are copied.
+Contracts Manager > Forms Completed on the Site App no longer asks for a
+project first. It opens straight onto every form submitted on the CM's projects
+- or on every live project, where the CM has been given all-projects access
+(the same rule as every CM screen).
 
-Each project line now names its CM, e.g.
-  J240 - Market Drayton (CM: Will McVeigh)
-so a CM copied on a digest covering several projects can see which are theirs.
+  DAYS       Today / Yesterday / Last 7 days / Last 30 days / Custom (From-To).
+             Opens on Last 7 days. Forms are grouped under a heading per day -
+             Today, Yesterday, Tuesday 29 September... - newest first.
+  FILTERS    Project (the CM's projects) and Form type, with a count.
+  EACH FORM  form type, project, operative, the time submitted, and any flags.
+             Tap to open it, as before.
 
-Nobody is copied to themselves: where the CM is also the supervisor, they get
-the one email.
+Days are LOCAL: a form submitted at 23:40 is under that day, not the next.
+(The portal's Completed page reads typed dates as midnight UTC, which shifts
+them an hour in UK summer time - not copied here.)
 
-The Pre-Start digest to CMs ("Up and coming Pre-Start Notifications") is
-unchanged. The Register tab's "who receives it" is updated, and the Sent log
-shows the cc.
+Site issues are not listed (as on the portal page).
 
-Checked: the job run with three projects - Steve's digest (two projects, CMs
-Will and Mike) sent to Steve, cc Will and Mike, each line naming its CM; Will's
-digest for the project he supervises AND manages sent to him alone, no cc. The
-job and the daily run that calls it bundle.
+Checked in a simulated browser with forms across two of the CM's projects,
+another CM's project, a site issue, a late-evening form and older forms:
+opens on Last 7 days grouped Today (2) / Yesterday (1); the 23:40 form stays
+under Yesterday; Today, Yesterday and Last 30 days each right (a 12-day-old
+form under its weekday heading); the project and form-type filters correct;
+the other CM's project and the issue excluded; the project list offers only
+the CM's projects. All 158 pages pass the browser check.
