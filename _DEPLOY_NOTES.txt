@@ -1,38 +1,27 @@
-PACKAGE 1062 - Org charts: dotted lines go around cards
+PACKAGE 1063 - Value of work priced: latest full month, monthly target
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1061.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1062.
 
-  lib/orgTree.js                (routeAround - the router)
-  components/OrgTree.js         (screen)
-  components/orgChartImage.js   (PNG)
+  lib/businessScorecard.js
+  pages/api/management/scorecard.js
+  pages/management/scorecard.js
 
-Dotted lines no longer pass behind cards. They route AROUND every card on the
-chart, keeping a small clear margin, still in straight runs at right angles:
+VALUE OF WORK PRICED - BUSINESS SCORECARD
+  Big number   the LATEST FULL MONTH's value priced (e.g. "Sep 26"), not the
+               total for the period
+  Target       per MONTH - the coloured dot compares that month with it, as
+               the monthly figures in the trend table already were
+  Underneath   the period's total for reference, e.g. "375,000 total, FY2026
+               to date"
+Graph, trend table and pop-outs unchanged.
 
-  - Neighbours on a row: one straight line.
-  - Cards in the way: the line goes round them - e.g. dropping into the gap
-    between rows, across, and back up (right, down, right, up, right).
-  - Different levels: through the gaps - e.g. right, down, right.
-  - A line can leave and arrive on whichever side of a card gives the
-    cleanest route; fewer bends are preferred over a slightly shorter line.
+RE-ENTER THE TARGET IF IT WAS SET FOR THE YEAR. The card now treats the
+target as a monthly figure; an annual figure left in place would make every
+month read red.
 
-How: every card is an obstacle; the router searches a grid of the gaps
-between cards for the shortest route, with a penalty for each bend. If no
-route exists (cards packed with no gap), it falls back to the 1061 straight
-route rather than drawing nothing.
+"Value of work priced - existing customers" is unchanged (still the period
+total). Same change available if wanted.
 
-The screen and the PNG use the same router, so the download matches what you
-see. Lines may run along the gaps where the reporting lines are; they stay
-dashed so the two are told apart.
-
-Checked on a realistic chart (a director, a row of four, a row of three):
-neighbours; same row with two cards between; down a level past cards; across
-and down past cards; director to the far bottom; stacked. Every route: only
-horizontal and vertical runs, never through a card, reaching both cards, in
-3-12 ms. The PNG draws no curves; the org chart pages bundle; all 158 pages
-pass the browser check.
-
-SMOKE TEST
-Org Chart: link two people on the same row with someone between them - the
-dashed line goes round, not behind. Link across levels - it follows the gaps.
-Download the PNG - the same routes.
+Checked: the route with pricing in August, September (two changes) and part of
+October - card 175,000 for Sep 26, total 375,000, October excluded; the page
+bundles; all 158 pages pass the browser check.

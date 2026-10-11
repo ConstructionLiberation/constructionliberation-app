@@ -192,7 +192,12 @@ async function handler(req, res) {
     }
     const upTo = fullMonths
     const span = upTo.length ? `${label(upTo[0])} – ${label(upTo[upTo.length - 1])}` : 'No finished months yet'
-    headlines.valuePriced = { value: upTo.length ? priced : null, label: rangeLabel, sub: span }
+    // 1063: the LATEST FULL MONTH, against a MONTHLY target; the period's total
+    // shown underneath for reference.
+    if (upTo.length) {
+      const last = upTo[upTo.length - 1]
+      headlines.valuePriced = { value: series.find(r => r.month === last)?.valuePriced ?? null, label: label(last), sub: `${span}`, periodTotal: priced, periodLabel: rangeLabel }
+    } else headlines.valuePriced = { value: null, label: rangeLabel, sub: span }
     headlines.valueSecured = { value: upTo.length ? secured : null, label: rangeLabel, sub: span }
     headlines.valuePricedExisting = { value: upTo.length ? pricedEx : null, label: rangeLabel, sub: span }
     headlines.valueSecuredExisting = { value: upTo.length ? securedEx : null, label: rangeLabel, sub: span }

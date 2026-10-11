@@ -186,6 +186,8 @@ export default function BusinessScorecard() {
                         <span style={{ color: '#d97706' }}>{fmt(m)(head.parts[1].value)} forecast</span>
                       </div>}
                       {/* A count's average is a fraction - one decimal place (1044). */}
+                      {/* A month headline with the period's total underneath (1063). */}
+                      {head.periodTotal != null && <div style={{ fontSize: 12, color: '#555', marginTop: 1 }}>{fmt(m)(head.periodTotal)} total, {head.periodLabel}</div>}
                       {head.avgPerMonth != null && <div style={{ fontSize: 12, color: '#555', marginTop: 1 }}>{m.unit === 'count' ? head.avgPerMonth.toFixed(1) : fmt(m)(head.avgPerMonth)} average per month</div>}
                       <div style={{ color: '#aaa', fontSize: 11 }}>{head.sub}</div>
                       {/* A recorded-at-month-end metric (1045): today's figure for
