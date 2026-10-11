@@ -1,72 +1,20 @@
-PACKAGE 1075 - CRM: merge two projects
+PACKAGE 1076 - Procurement schedule: comments no longer required
 
-Five files: three complete replacements, two NEW. No re-seed. No env changes.
-Built on 1074.
+One file. Complete replacement. No re-seed. No env changes. Built on 1075.
 
-  NEW       lib/crmMerge.js                 (the merge rules)
-            components/MergeDealModal.js    (the merge window)
-  REPLACED  pages/crm.js                    (Merge button, window, link redirect)
-            pages/api/crm.js                (merge action, guards)
-            lib/crmEmailSync.js             ([CRM-n] tags of merged projects)
+  pages/operations/project-management/procurement.js
 
-HOW IT WORKS
-1. Inside a project, "Merge" sits to the left of Delete.
-2. A search box narrows the list as you type - project name, organisation,
-   or CRM number. Each result shows organisation, stage, status and value.
-3. Pick the other project. A side-by-side window shows every field that
-   DIFFERS between the two, with a choice of which to keep (defaulting to
-   whichever side has a value). Three rows are chosen as a whole:
-     Project name
-     Value AND its value history      - only ONE deal's value history carries
-                                        forward, so the pricing is not counted
-                                        twice in Value of work priced
-     Stage and status AND their history (stage moves, won, lost, reopened) -
-                                        warned when the two differ, as it
-                                        changes the scorecards
-   The received date is the earlier of the two.
-4. Merge. The project you are in SURVIVES and keeps its CRM number; the other
-   is merged into it and removed from every list. A note in the survivor's
-   history records the merge, who did it, and which side each history came
-   from. The page reloads on the survivor.
-Anyone with the CRM can merge. It cannot be undone.
+To mark an order as PLACED, only these are now required:
+  Budget Total
+  Buying Total
+- the two figures the saving / overspend is worked from.
 
-FROM BOTH, INTO THE SURVIVOR
-  notes, comments, calls and other history; activities (open ones on the
-  activity list); filed emails; the email-thread links that file replies;
-  email-review suggestions; milestones (earlier dates kept - the project is
-  counted ONCE in Deals Researched); and for a negotiated project, its
-  contracted rates, cash flow and planning (moved; planning days combined; if
-  both had rates or cash flow, the survivor's are kept and the result says so)
-Hand-entered value changes: only the kept value history's survive.
+Budget Comments and Buying Comments are OPTIONAL. The columns and boxes stay
+on the schedule for anyone who wants to use them.
 
-NOTHING LEFT POINTING AT THE OLD PROJECT
-  - Links to it (mention emails, bookmarks: /crm?deal=<old>) open the survivor.
-  - Emails tagged [CRM-<old number>] file to the survivor.
-  - A browser tab opened BEFORE the merge cannot undo it: the server refuses to
-    recreate the merged project, and refuses an older copy of the survivor that
-    would wipe the merged history. The tab is told to reload.
-  - Merge is disabled while the page is still saving your last change, so it
-    always works from what is saved.
+Applies in both places an order can be marked placed: the schedule table and
+the item's edit form. The warnings now read "Budget Total and Buying Total".
 
-Checked - a full merge through the real CRM route against a store holding
-everything a project can own:
-  survivor has the chosen name, value, status, organisation and Glenigan id,
-  the earlier received date; history = the kept value entry only, the won entry
-  from the chosen status, notes from both, the merge note; activities, notes,
-  emails, thread link and queue suggestion all moved to the survivor (finished
-  activities off the open list; another project untouched); milestones with the
-  earlier dates; only the kept side's value change; negotiated rates moved and
-  planning days combined; the merged map recorded and returned to the page
-Plus:
-  a stale-tab save could not recreate the merged project or overwrite the
-  survivor, while an unrelated project's edit in the same save went through;
-  merging a project with itself refused; an email tagged [CRM-<old>] matched to
-  the survivor; the CRM page, routes and email sync bundle; all 158 pages pass
-  the browser check.
-
-SMOKE TEST
-1. Open a project -> Merge -> type part of a duplicate's name -> pick it.
-2. Choose the value, stage and fields to keep -> Merge.
-3. The page reloads on the survivor: both projects' notes, activities and
-   emails are there; the duplicate is gone from the board and lists.
-4. Open /crm?deal=<the old number> - it lands on the survivor.
+Checked: the rule - both totals and no comments -> can be placed; a total
+missing -> still blocked, even with comments; a buying total of 0 counts as
+entered. The page bundles; all 158 pages pass the browser check.

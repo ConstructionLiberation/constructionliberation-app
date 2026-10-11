@@ -15,8 +15,11 @@ const phas = (v) => v !== '' && v != null
 // Total Savings = Budget Total - Buying Total, so buying under budget is a POSITIVE saving.
 const totalSavings = (r) => pnum(r.budgetTotal) - pnum(r.buyingTotal)
 // Order can only be placed once the savings fields are filled in.
+// What must be filled before an order can be marked placed: the BUDGET and
+// BUYING totals - the two figures the saving / overspend is worked from.
+// Comments are optional (1076); they were required until then.
 function savingsComplete(r) {
-  return phas(r.budgetTotal) && phas(r.buyingTotal) && (r.budgetComments || '').trim() !== '' && (r.buyingComments || '').trim() !== ''
+  return phas(r.budgetTotal) && phas(r.buyingTotal)
 }
 
 export default function Procurement() {
@@ -260,7 +263,7 @@ export default function Procurement() {
                         <select value={r.orderPlaced ? 'yes' : 'no'}
                           onChange={e => {
                             if (e.target.value === 'yes' && !savingsComplete(r)) {
-                              alert('Complete the procurement savings first (Budget Total, Budget Comments, Buying Total and Buying Comments) before marking the order as placed.')
+                              alert('Complete the procurement savings first (Budget Total and Buying Total) before marking the order as placed.')
                               return
                             }
                             patchItem(r.id, { orderPlaced: e.target.value === 'yes' })
@@ -341,11 +344,11 @@ function ProcModal({ item, team, projectOptions, onClose, onSave }) {
       <div style={{ marginTop: 12 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
           <input type="checkbox" checked={!!f.orderPlaced} onChange={e => {
-            if (e.target.checked && !savingsComplete(f)) { alert('Complete the procurement savings first (Budget Total, Budget Comments, Buying Total and Buying Comments) before marking the order as placed.'); return }
+            if (e.target.checked && !savingsComplete(f)) { alert('Complete the procurement savings first (Budget Total and Buying Total) before marking the order as placed.'); return }
             setF({ ...f, orderPlaced: e.target.checked })
           }} /> Order placed
         </label>
-        {!f.orderPlaced && !savingsComplete(f) && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>Order can't be placed until Budget Total, Budget Comments, Buying Total and Buying Comments are all filled in.</div>}
+        {!f.orderPlaced && !savingsComplete(f) && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>Order can't be placed until Budget Total and Buying Total are filled in.</div>}
       </div>
       {late && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '9px 12px', fontSize: 13, marginTop: 8 }}>⚠ Not enough lead-in time — the order date needed to hit "required on site" has already passed.</div>}
       <Lbl>Supplier contact details</Lbl><textarea value={f.supplierContact || ''} onChange={e => setF({ ...f, supplierContact: e.target.value })} style={{ ...inp2, minHeight: 44 }} />
