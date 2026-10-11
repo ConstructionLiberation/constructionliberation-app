@@ -1,28 +1,23 @@
-PACKAGE 1070 - Report weather: the source in the bracket after "Weather"
+PACKAGE 1071 - Lessons Learnt: no person responsible on lessons
 
-Four files: three complete replacements, one NEW. No re-seed. No env changes.
-Built on 1069.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1070.
 
-  NEW       lib/siteWeatherLabel.js
-  REPLACED  lib/siteWeather.js
-            lib/projectReportPdf.js
-            pages/operations/project-management/report.js
+  pages/lessons-learnt.js
+  pages/api/lessons-learnt.js
 
-The bracket after "Weather" now says where the weather came from:
+The "Person responsible" field is removed from LESSONS:
+  - gone from the lesson form in the monthly minutes
+  - the "Responsible" column is gone from the Lessons Learnt table
+  - no longer required: completing a meeting no longer stops with "Lesson n:
+    no person responsible" - checked on the page AND on the server, so it
+    cannot be demanded by one and not the other
+A lesson still needs its item, its detail and who it's for.
 
-  Editor   Weather (Source: Open-Meteo, Met Office UK model)
-           with "the 14 days to this report's date" beside it
-  View     Weather (Source: Open-Meteo, Met Office UK model)
-  PDF      WEATHER (SOURCE: OPEN-METEO, MET OFFICE UK MODEL)
-           "The 14 days to the report date." underneath
+UNCHANGED - meeting ACTIONS keep their person responsible. They are pushed to
+the live task list on "Meeting complete", and a task needs an owner.
 
-Weeks older than about three months come from Open-Meteo's archive and read
-"(Source: Open-Meteo historical archive)".
+Lessons already saved keep whatever person they had in the data; it is simply
+no longer shown.
 
-Reports saved before this package stored the source as "Open-Meteo (Met
-Office UK model)"; they read the same as new ones - no brackets inside
-brackets.
-
-Checked: the label for new, older-wording, archive and missing sources; a PDF
-regenerated and read back; the report page and routes bundle; all 158 pages
-pass the browser check.
+Checked: no remaining lesson-level person in the form, table or either check;
+both files bundle; all 158 pages pass the browser check.

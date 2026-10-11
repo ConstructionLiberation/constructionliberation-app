@@ -146,7 +146,6 @@ function LessonsTable() {
               <th style={{ ...th, width: 110 }}>Month</th>
               <th style={{ ...th, width: 220 }}>Lessons Learnt item</th>
               <th style={th}>Lessons Learnt</th>
-              <th style={{ ...th, width: 140 }}>Responsible</th>
               <th style={{ ...th, width: 250 }}>Who it's for</th>
               {isAdmin && <th style={{ ...th, width: 40 }}></th>}
             </tr></thead>
@@ -157,7 +156,6 @@ function LessonsTable() {
                   <td style={{ ...td, color: '#8a857c', whiteSpace: 'nowrap' }}>{l.monthLabel}</td>
                   <td style={{ ...td, fontWeight: 600, color: '#1a1a2e' }}>{l.item || <span style={{ color: '#bbb', fontWeight: 400 }}>-</span>}</td>
                   <td style={td}>{l.detail}</td>
-                  <td style={{ ...td, color: '#555', whiteSpace: 'nowrap' }}>{l.responsibleName || <span style={{ color: '#bbb' }}>-</span>}</td>
                   <td style={td}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {Object.keys(DEPT_LABEL).map(d => <DeptChip key={d} d={d} small on={(l.depts || []).includes(d)} onClick={() => canEdit && updateDepts(l.id, (l.depts || []).includes(d) ? l.depts.filter(x => x !== d) : [...(l.depts || []), d])} />)}
@@ -278,11 +276,10 @@ function MinutesEditor({ initial, users = [], canEdit = false, onClose }) {
     const problems = []
     ;(m.lessonRows || []).forEach((r, i) => {
       const n = i + 1
-      const hasAny = (r.item || '').trim() || (r.detail || '').trim() || (r.responsible || '') || (r.depts || []).length
+      const hasAny = (r.item || '').trim() || (r.detail || '').trim() || (r.depts || []).length
       if (!hasAny) return
       if (!(r.item || '').trim()) problems.push(`Lesson ${n}: missing the Lessons Learnt item`)
       if (!(r.detail || '').trim()) problems.push(`Lesson ${n}: missing the Lessons Learnt detail`)
-      if (!(r.responsible || '')) problems.push(`Lesson ${n}: no person responsible`)
       if (!(r.depts || []).length) problems.push(`Lesson ${n}: not categorised (pick who it's for)`)
     })
     ;(m.actions || []).forEach((a, i) => {
@@ -395,14 +392,8 @@ function MinutesEditor({ initial, users = [], canEdit = false, onClose }) {
                   {Object.keys(DEPT_LABEL).map(d => <DeptChip key={d} d={d} small on={(r.depts || []).includes(d)} onClick={() => !locked && toggleLessonDept(i, d)} />)}
                 </div>
               </div>
-              <div style={{ flex: '0 1 220px' }}>
-                <Lbl>Person responsible</Lbl>
-                <select disabled={locked} value={r.responsible || ''} onChange={e => setLesson(i, { responsible: e.target.value, responsibleName: users.find(u => u.id === e.target.value)?.name || '' })} style={inp}>
-                  <option value="">Select...</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  {r.responsible && !users.some(u => u.id === r.responsible) && <option value={r.responsible}>{r.responsibleName || r.responsible}</option>}
-                </select>
-              </div>
+              {/* Person responsible removed from lessons (1071), by decision. Meeting
+                  actions keep theirs - they become live tasks, which need an owner. */}
             </div>
           </div>
         ))}

@@ -221,18 +221,17 @@ async function handler(req, res) {
 }
 
 // Validation for marking a meeting complete. Returns a list of human-readable problems
-// (empty = OK). Each lesson row needs item + detail + a responsible person + >=1 dept;
+// (empty = OK). Each lesson row needs item + detail + >=1 dept (no person since 1071);
 // each meeting action needs a person responsible.
 function validateForComplete(rec) {
   const problems = []
   const rows = rec.lessonRows || []
   rows.forEach((r, i) => {
     const n = i + 1
-    const hasAny = (r.item || '').trim() || (r.detail || '').trim() || (r.responsible || '') || (r.depts || []).length
+    const hasAny = (r.item || '').trim() || (r.detail || '').trim() || (r.depts || []).length
     if (!hasAny) return // completely empty row is ignored (treated as not added)
     if (!(r.item || '').trim()) problems.push(`Lesson ${n}: missing the Lessons Learnt item`)
     if (!(r.detail || '').trim()) problems.push(`Lesson ${n}: missing the Lessons Learnt detail`)
-    if (!(r.responsible || '')) problems.push(`Lesson ${n}: no person responsible`)
     if (!(r.depts || []).length) problems.push(`Lesson ${n}: not categorised (pick who it's for)`)
   })
   ;(rec.actions || []).forEach((a, i) => {
