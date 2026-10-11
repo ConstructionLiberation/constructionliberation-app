@@ -1,83 +1,72 @@
-PACKAGE 1073 - Contracted Rates: Labour Rates tab and subcontractor schedules
+PACKAGE 1075 - CRM: merge two projects
 
-Six files: two complete replacements, four NEW. No re-seed. No env changes.
-Built on 1072.
+Five files: three complete replacements, two NEW. No re-seed. No env changes.
+Built on 1074.
 
-  NEW       lib/labourSchedule.js          (what goes in the schedule - shared)
-            lib/projectStore.js            (project load/save, moved out of the rates route)
-            pages/api/labour-schedules.js  (save, schedules, Excel/PDF download)
-            components/LabourRates.js      (the tab)
-  REPLACED  pages/contracted-rates.js      (the two tabs)
-            pages/api/contracted-rates.js  (now uses lib/projectStore - behaviour unchanged)
+  NEW       lib/crmMerge.js                 (the merge rules)
+            components/MergeDealModal.js    (the merge window)
+  REPLACED  pages/crm.js                    (Merge button, window, link redirect)
+            pages/api/crm.js                (merge action, guards)
+            lib/crmEmailSync.js             ([CRM-n] tags of merged projects)
 
-TWO TABS on Contracted Rates, styled as on Variations:
-  Contracted Rates   exactly as before
-  Labour Rates       new
-The project picker is shared - pick once, both tabs follow.
+HOW IT WORKS
+1. Inside a project, "Merge" sits to the left of Delete.
+2. A search box narrows the list as you type - project name, organisation,
+   or CRM number. Each result shows organisation, stage, status and value.
+3. Pick the other project. A side-by-side window shows every field that
+   DIFFERS between the two, with a choice of which to keep (defaulting to
+   whichever side has a value). Three rows are chosen as a whole:
+     Project name
+     Value AND its value history      - only ONE deal's value history carries
+                                        forward, so the pricing is not counted
+                                        twice in Value of work priced
+     Stage and status AND their history (stage moves, won, lost, reopened) -
+                                        warned when the two differ, as it
+                                        changes the scorecards
+   The received date is the earlier of the two.
+4. Merge. The project you are in SURVIVES and keeps its CRM number; the other
+   is merged into it and removed from every list. A note in the survivor's
+   history records the merge, who did it, and which side each history came
+   from. The page reloads on the survivor.
+Anyone with the CRM can merge. It cannot be undone.
 
-LABOUR RATES
-Pick a project. The schedule lists:
-  - every ABOVE-THE-LINE contracted item (with its headings) - the contract;
-    below-the-line items are not in it until instructed as a variation
-  - every INSTRUCTED variation: one line per Variation Builder item (labour
-    per unit = the item's labour total / its quantity), or one line at its
-    labour lump sum for a variation not built in the builder
-Struck lines are left out.
+FROM BOTH, INTO THE SURVIVOR
+  notes, comments, calls and other history; activities (open ones on the
+  activity list); filed emails; the email-thread links that file replies;
+  email-review suggestions; milestones (earlier dates kept - the project is
+  counted ONCE in Deals Researched); and for a negotiated project, its
+  contracted rates, cash flow and planning (moved; planning days combined; if
+  both had rates or cash flow, the survivor's are kept and the result says so)
+Hand-entered value changes: only the kept value history's survive.
 
-Columns:
-  tick | Ref | Description | Qty | Unit |
-  RATE (type the subbie rate) | TOTAL (rate x qty) | Match |
-  LABOUR RATE | LABOUR TOTAL   (ours, from the contracted rates / variation)
-  SAVING / (OVERSPEND)         (our labour total - their total; red when over)
-Totals at the top: labour budget, subcontract rates entered, and the saving or
-overspend on the items that have a rate.
+NOTHING LEFT POINTING AT THE OLD PROJECT
+  - Links to it (mention emails, bookmarks: /crm?deal=<old>) open the survivor.
+  - Emails tagged [CRM-<old number>] file to the survivor.
+  - A browser tab opened BEFORE the merge cannot undo it: the server refuses to
+    recreate the merged project, and refuses an older copy of the survivor that
+    would wipe the merged history. The tab is told to reload.
+  - Merge is disabled while the page is still saving your last change, so it
+    always works from what is saved.
 
-  Match            copies our labour rate into the rate box (per line, or
-                   "Match ticked" for every ticked line)
-  Save rates       keeps typed rates on the project
-  Create schedule  tick the items for ONE subbie, name it (e.g. the company),
-                   Create - it appears in the Schedules list on the left
-
-SCHEDULES (left)
-"All labour items" shows how many are left to send. Each named schedule shows
-its items and total; open it for the lines at the rates they were sent at,
-our budget beside them, and:
-  Download Excel / Download PDF   - ref, description, qty, unit, rate, total,
-                                    grand total, company, project, schedule
-                                    name and date. NEVER our labour rates or
-                                    budget.
-  Delete schedule                 - its items go back to "not sent"
-
-Items in a schedule are GREYED on the main list, labelled "Sent: <name>", and
-cannot be ticked or re-rated - so what is left to send out is clear. An item
-can be in one schedule at a time; the server refuses a second.
-
-STORAGE
-On the project record (project.labourSchedules) - rates typed, and each
-schedule as a SNAPSHOT of its lines at the rates sent. Works for negotiated
-projects too: the load/save rule moved into lib/projectStore.js and the
-contracted-rates route now uses the same file.
-
-Checked:
-  - the schedule lines: above-the-line items and headings in; struck and
-    below-the-line out; a lump-sum variation as one line; a built variation as
-    one line per item with labour per unit (600 / 40 m = 15/m); a
-    not-instructed variation out
-  - the route: rates saved; a schedule created (500 x 11 = 5,500; 1 x 400 =
-    400); an item refused for a second schedule; a nameless schedule refused;
-    delete
-  - BOTH DOWNLOADS opened and read: the schedule, the 5,900 total, wrapped
-    descriptions in the PDF - and NO budget figure in either file
-  - the tab run in a simulated browser: totals (budget 7,660, entered 5,900,
-    saving 800 = 750 + 50); the sent line greyed with its tick and rate locked;
-    Match setting 8.00 and the saving to 0; ticking and creating "Jones
-    Installers" sending the right name, item and rates
-  - the page and both routes bundle; all 158 pages pass the browser check
+Checked - a full merge through the real CRM route against a store holding
+everything a project can own:
+  survivor has the chosen name, value, status, organisation and Glenigan id,
+  the earlier received date; history = the kept value entry only, the won entry
+  from the chosen status, notes from both, the merge note; activities, notes,
+  emails, thread link and queue suggestion all moved to the survivor (finished
+  activities off the open list; another project untouched); milestones with the
+  earlier dates; only the kept side's value change; negotiated rates moved and
+  planning days combined; the merged map recorded and returned to the page
+Plus:
+  a stale-tab save could not recreate the merged project or overwrite the
+  survivor, while an unrelated project's edit in the same save went through;
+  merging a project with itself refused; an email tagged [CRM-<old>] matched to
+  the survivor; the CRM page, routes and email sync bundle; all 158 pages pass
+  the browser check.
 
 SMOKE TEST
-1. Contracted Rates -> Labour Rates -> pick a project with locked rates.
-2. Type a rate; Match another; the totals and savings move. Save rates.
-3. Tick a few items -> Create schedule -> name it -> Create. It opens on the
-   left; back on "All labour items" those items are greyed.
-4. Download Excel and PDF - no labour rates or budget in either.
-5. Create a second schedule from other items for another subbie.
+1. Open a project -> Merge -> type part of a duplicate's name -> pick it.
+2. Choose the value, stage and fields to keep -> Merge.
+3. The page reloads on the survivor: both projects' notes, activities and
+   emails are there; the duplicate is gone from the board and lists.
+4. Open /crm?deal=<the old number> - it lands on the survivor.

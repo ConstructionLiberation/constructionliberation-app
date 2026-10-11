@@ -11,6 +11,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import MergeDealModal from '../components/MergeDealModal';
 import { useFormat } from '../components/TenantProvider';
 import BrandLogo from '../components/BrandLogo';
 import * as XLSX from 'xlsx';
@@ -2073,7 +2074,7 @@ function DealSearch({ deals, currentId, onOpenDeal }) {
   );
 }
 
-function DealView({ deal, allDeals, orgsData = [], contactsData = [], today, schema, me, users, onSetLostReason, onBack, onOpenDeal, onMove, onSetStatus, onAddNote, onCommentNote, onEditComment, onDeleteComment, onEditHistory, onEditHistoryActivity, onDeleteHistory, onPinHistory, onRenameDeal, onReopenActivity, onAddActivity, onEditActivity, onCompleteActivity, onDeleteActivity, onEditField, onClearContactField, onManageFields, onDeleteDeal }) {
+function DealView({ deal, allDeals, orgsData = [], contactsData = [], today, schema, me, users, onSetLostReason, onBack, onOpenDeal, onMove, onSetStatus, onAddNote, onCommentNote, onEditComment, onDeleteComment, onEditHistory, onEditHistoryActivity, onDeleteHistory, onPinHistory, onRenameDeal, onReopenActivity, onAddActivity, onEditActivity, onCompleteActivity, onDeleteActivity, onEditField, onClearContactField, onManageFields, onDeleteDeal, onMergeDeal }) {
   const [mapFor, setMapFor] = useState('');
   const [orgHistoryFor, setOrgHistoryFor] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -2282,6 +2283,12 @@ function DealView({ deal, allDeals, orgsData = [], contactsData = [], today, sch
             style={{ background: 'transparent', border: '1px solid #444', color: '#aaa', fontSize: 11, fontFamily: 'ui-monospace, Menlo, monospace', padding: '4px 8px', borderRadius: 6, marginLeft: 4, display: 'flex', alignItems: 'center' }}>
             [CRM-{deal.id}]
           </CopyButton>
+          {/* MERGE (1075) - to the left of Delete. Combines another project into
+              this one; see components/MergeDealModal.js. */}
+          {onMergeDeal && <button onClick={() => onMergeDeal(deal.id)} title="Merge another project into this one"
+            style={{ background: 'none', border: 'none', color: '#93c5fd', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: '0 2px', marginLeft: 6 }}>
+            Merge
+          </button>}
           <button onClick={() => onDeleteDeal(deal.id)} title="Delete this project permanently"
             style={{ background: 'none', border: 'none', color: '#ff6b6b', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: '0 2px', marginLeft: 2 }}>
             Delete
@@ -2855,6 +2862,10 @@ function CRMPageInner() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openId, setOpenId] = useState(null);
+  // Merge (1075): the deal the merge window is open on, and the map of deals
+  // merged away -> the deal each became (from the server).
+  const [mergeFor, setMergeFor] = useState(null);
+  const [mergedMap, setMergedMap] = useState({});
   const [view, setView] = useState('pipeline'); // pipeline | list | companies | contacts
   const [query, setQuery] = useState('');
   const [showSuggest, setShowSuggest] = useState(false);
@@ -3009,6 +3020,19 @@ function CRMPageInner() {
     loadDealSubs(id);
   }, [router.isReady, router.query.deal]);
 
+  // A link to a project that has since been MERGED opens the project it
+  // became (1075) - links in mention emails and bookmarks keep working.
+  useEffect(() => {
+    if (openId == null || !deals.length || deals.some((x) => String(x.id) === String(openId))) return;
+    let target = String(openId), hops = 0;
+    while (mergedMap[target] != null && hops++ < 20) target = String(mergedMap[target]);
+    if (target !== String(openId) && deals.some((x) => String(x.id) === target)) {
+      const id = dealKey(target);
+      setOpenId(id); loadDealSubs(id);
+      router.replace({ pathname: '/crm', query: { deal: id } }, undefined, { shallow: true });
+    }
+  }, [openId, deals, mergedMap]);
+
   // Keep the id counter above everything that exists. Runs whenever the list changes, so
   // a project created by somebody else between loads cannot be collided with either.
   useEffect(() => {
@@ -3031,6 +3055,7 @@ function CRMPageInner() {
           setOpenActivities(Array.isArray(d.openActivities) ? d.openActivities : []);
           setActivitySummary(d.activitySummary || {});
           setDealsAreSeed(!!d.dealsAreSeed);
+          setMergedMap(d.merged || {});
           if (d.me) setMe(d.me);
           if (Array.isArray(d.users)) setUsers(d.users);
           setDeletedOrgs(d.deletedOrgs || []);
@@ -4364,7 +4389,10 @@ function CRMPageInner() {
         <FontLoader />
         {confetti && <Confetti onDone={() => setConfetti(false)} />}
         {showFieldMgr && <FieldManager schema={schema} onClose={() => setShowFieldMgr(false)} onAdd={addField} onRemove={removeField} />}
-        <DealView deal={live} allDeals={deals} orgsData={orgsData} contactsData={contactsData} onSetLostReason={setLostReason} today={today} schema={schema} me={me} users={users} onBack={closeDeal} onOpenDeal={openDealById} onMove={moveDeal} onSetStatus={setStatus} onAddNote={addNote} onCommentNote={commentNote} onEditComment={editComment} onDeleteComment={deleteComment} onEditHistory={editHistory} onEditHistoryActivity={editHistoryActivity} onDeleteHistory={deleteHistory} onPinHistory={pinHistory} onRenameDeal={renameDeal} onReopenActivity={reopenActivity} onAddActivity={addActivity} onEditActivity={editActivity} onCompleteActivity={completeActivity} onDeleteActivity={deleteActivity} onEditField={editField} onClearContactField={clearContactField} onManageFields={() => setShowFieldMgr(true)} onDeleteDeal={deleteDeal} />
+        <DealView deal={live} allDeals={deals} orgsData={orgsData} contactsData={contactsData} onSetLostReason={setLostReason} today={today} schema={schema} me={me} users={users} onBack={closeDeal} onOpenDeal={openDealById} onMove={moveDeal} onSetStatus={setStatus} onAddNote={addNote} onCommentNote={commentNote} onEditComment={editComment} onDeleteComment={deleteComment} onEditHistory={editHistory} onEditHistoryActivity={editHistoryActivity} onDeleteHistory={deleteHistory} onPinHistory={pinHistory} onRenameDeal={renameDeal} onReopenActivity={reopenActivity} onAddActivity={addActivity} onEditActivity={editActivity} onCompleteActivity={completeActivity} onDeleteActivity={deleteActivity} onEditField={editField} onClearContactField={clearContactField} onManageFields={() => setShowFieldMgr(true)} onDeleteDeal={deleteDeal} onMergeDeal={(id) => setMergeFor(id)} />
+        {mergeFor != null && live && String(live.id) === String(mergeFor) && (
+          <MergeDealModal deal={live} allDeals={deals} schema={schema} saving={saving} onClose={() => setMergeFor(null)} />
+        )}
       </div>
     );
   }

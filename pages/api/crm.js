@@ -6,6 +6,7 @@ import { fetchMessageBody } from '../../lib/msGraph'
 import { sendMentionEmails, getMentionableUsers, diagnoseMentions, sendTestMention } from '../../lib/crmMentions'
 import { getDealEmails, getUnallocated, allocateEmail, dismissEmail, unfileEmail, allowEmailAgain, moveEmail, dismissEmails, allocateEmails } from '../../lib/crmEmailSync'
 import withTenant from '../../lib/withTenant'
+import { mergeDeal, unionById, resolveMerged } from '../../lib/crmMerge'
 
 // Persistence for the CRM. Shared across all pre-contract staff.
 //   GET                    -> { deals, schema }
@@ -33,6 +34,9 @@ const SUB_SUMMARY = (kind) => `crm:${kind}:summary`
 // show a single to-do table without reading 5,000+ per-deal keys. Only open ones, so it
 // stays small (about 1,000 rows) rather than the 32k of completed history.
 const OPEN_ACTIVITIES = 'crm:activities:open'
+// Merged deals (1075): { [mergedAwayId]: survivingId }. Kept so links, tags and
+// stale tabs pointing at a merged deal reach the deal it became.
+const MERGED_KEY = 'crm:merged'
 // Names deliberately removed. Needed because the Companies / Contacts pages also list
 // anyone found on a deal - without this, deleting a company that appears on any project
 // would simply reappear on the next load.
@@ -156,13 +160,14 @@ async function handler(req, res) {
   if (!acc.ok) return res.status(acc.code).json({ error: acc.code === 401 ? 'Not logged in' : 'No access' })
 
   if (req.method === 'GET') {
-    const [deals, schema, orgs, contacts, actSum, noteSum, openActs, delOrgs, delContacts, portal] = await Promise.all([
+    const [deals, schema, orgs, contacts, actSum, noteSum, openActs, delOrgs, delContacts, portal, mergedMap] = await Promise.all([
       loadDeals(), loadSchema(), get(ORGS_KEY), get(CONTACTS_KEY),
       get(SUB_SUMMARY('activities')), get(SUB_SUMMARY('notes')), get(OPEN_ACTIVITIES),
-      get(DELETED_KEY('orgs')), get(DELETED_KEY('contacts')), getPortalUsers(),
+      get(DELETED_KEY('orgs')), get(DELETED_KEY('contacts')), getPortalUsers(), get(MERGED_KEY),
     ])
     return res.json({
       deals, schema,
+      merged: mergedMap || {},
       orgs: Array.isArray(orgs) ? orgs : [],
       contacts: Array.isArray(contacts) ? contacts : [],
       // Counts only - the full activity/note lists load per deal when one is opened.
@@ -641,6 +646,122 @@ async function handler(req, res) {
     // the CRM held a few hundred sample deals.
     // Delete a project and everything filed against it. Its activities and notes live in
     // their own keys, so removing only the deal would leave those behind for good.
+    // MERGE TWO DEALS (1075). keepId survives; mergeId is retired into it.
+    // picks: { [field|'title'|'__value'|'__outcome']: 'keep'|'other' } - see
+    // lib/crmMerge.js. Works from the STORED records, not the page's copies.
+    // Everything the merged deal owns moves to the survivor: activities, notes,
+    // filed email and its thread links, review-queue suggestions, milestones,
+    // hand-entered value changes (only from the deal whose value history is
+    // kept), and - for negotiated projects - planning, cash flow and
+    // contracted rates.
+    if (body.action === 'merge-deals') {
+      const keepId = String(body.keepId || ''), mergeId = String(body.mergeId || '')
+      if (!keepId || !mergeId) return res.status(400).json({ error: 'Choose the two projects to merge.' })
+      if (keepId === mergeId) return res.status(400).json({ error: 'A project cannot be merged with itself.' })
+      const list = Array.isArray(await get(DEALS_KEY)) ? await get(DEALS_KEY) : []
+      const keep = list.find(d => String(d.id) === keepId), other = list.find(d => String(d.id) === mergeId)
+      if (!keep || !other) return res.status(404).json({ error: 'One of those projects no longer exists - reload and try again.' })
+      if (list.filter(d => String(d.id) === keepId || String(d.id) === mergeId).length !== 2) {
+        return res.status(409).json({ error: 'Another project shares one of these ids. Fix duplicate ids first.' })
+      }
+      const by = [acc.user?.firstName, acc.user?.lastName].filter(Boolean).join(' ') || acc.user?.name || acc.user?.username || ''
+      const picks = body.picks || {}
+      const survivor = mergeDeal(keep, other, picks, { by })
+      const valueFromOther = picks.__value === 'other'
+      const moved = {}
+
+      // 1. The deal list: survivor replaces keep, the other is removed.
+      await set(DEALS_KEY, list.filter(d => String(d.id) !== mergeId).map(d => String(d.id) === keepId ? survivor : d))
+      const mergedMap = (await get(MERGED_KEY)) || {}
+      for (const k of Object.keys(mergedMap)) if (String(mergedMap[k]) === mergeId) mergedMap[k] = keep.id   // earlier merges into it
+      mergedMap[mergeId] = keep.id
+      await set(MERGED_KEY, mergedMap)
+
+      // 2. Activities and notes: both, into the survivor.
+      for (const kind of ['activities', 'notes']) {
+        const a = (await get(SUB_KEY(kind, keepId))) || [], b = (await get(SUB_KEY(kind, mergeId))) || []
+        const all = unionById(a, b.map(x => kind === 'activities' ? { ...x, dealId: keep.id } : x))
+        moved[kind] = all.length - a.length
+        await set(SUB_KEY(kind, keepId), all)
+        await set(SUB_KEY(kind, mergeId), [])
+        const idx = ((await get(SUB_INDEX(kind))) || []).filter(id => String(id) !== mergeId)
+        if (all.length && !idx.map(String).includes(keepId)) idx.push(keepId)
+        await set(SUB_INDEX(kind), idx)
+        const sum = (await get(SUB_SUMMARY(kind))) || {}
+        delete sum[mergeId]; sum[keepId] = summarise(kind, all)
+        await set(SUB_SUMMARY(kind), sum)
+        if (kind === 'activities') {
+          const open = (await get(OPEN_ACTIVITIES)) || []
+          await set(OPEN_ACTIVITIES, [
+            ...open.filter(x => String(x.dealId) !== keepId && String(x.dealId) !== mergeId),
+            ...all.filter(x => !x.done).map(x => ({ id: x.id, dealId: keep.id, text: x.subject || x.text || 'Activity', due: x.dueDate || x.due || '', assignee: x.assignee || '' })),
+          ])
+        }
+      }
+
+      // 3. Filed email, thread links, review-queue suggestions.
+      const ea = (await get(`crm:emails:${keepId}`)) || [], eb = (await get(`crm:emails:${mergeId}`)) || []
+      const emails = unionById(ea, eb).sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')))
+      moved.emails = emails.length - ea.length
+      await set(`crm:emails:${keepId}`, emails)
+      await set(`crm:emails:${mergeId}`, [])
+      const threads = (await get('crm:emails:threads')) || []
+      let threadLinks = 0
+      const newThreads = threads.map(t => (t && String(t.d) === mergeId) ? (threadLinks++, { ...t, d: keep.id }) : t)
+      if (threadLinks) await set('crm:emails:threads', newThreads)
+      moved.threadLinks = threadLinks
+      const queue = (await get('crm:emails:unallocated')) || []
+      let sugg = 0
+      const newQueue = queue.map(e => (e && String(e.suggestDealId) === mergeId) ? (sugg++, { ...e, suggestDealId: keep.id, suggestTitle: survivor.title }) : e)
+      if (sugg) await set('crm:emails:unallocated', newQueue)
+
+      // 4. Milestones: the earlier dates (the project was in hand from the
+      //    first copy), keep's score unless it has none. One project counted once.
+      const ms = (await get('crm:deal-milestones')) || {}
+      if (ms[mergeId] || ms[keepId]) {
+        const a = ms[keepId] || {}, b = ms[mergeId] || {}, out = { ...b, ...a }
+        for (const k of Object.keys({ ...a, ...b })) {
+          const va = a[k], vb = b[k]
+          if (/date|time|^received|^projectIn|At$/i.test(k) && typeof (va ?? vb) === 'string') out[k] = !va ? vb : !vb ? va : (String(va) <= String(vb) ? va : vb)
+          else out[k] = va ?? vb
+        }
+        ms[keepId] = out; delete ms[mergeId]
+        await set('crm:deal-milestones', ms)
+      }
+
+      // 5. Hand-entered value changes: ONLY the kept value history survives.
+      const vc = (await get('crm:value-changes')) || []
+      const newVc = vc.filter(v => valueFromOther ? String(v.dealId) !== keepId : String(v.dealId) !== mergeId)
+        .map(v => String(v.dealId) === mergeId ? { ...v, dealId: keep.id } : v)
+      if (newVc.length !== vc.length || newVc.some((v, i) => v !== vc[i])) await set('crm:value-changes', newVc)
+
+      // 6. Negotiated-project records keyed by deal id: moved when the
+      //    survivor has none; when both have them, the survivor's are kept and
+      //    the merged deal's left where they are (reported, never thrown away).
+      const kept = []
+      const moveIfFree = async (fromKey, toKey, label) => {
+        const from = await get(fromKey); if (from == null) return
+        const to = await get(toKey)
+        if (to == null) { await set(toKey, from); kept.push(`${label}: moved`) } else kept.push(`${label}: both had one - this deal's kept`)
+      }
+      await moveIfFree(`crates:negotiated:${mergeId}`, `crates:negotiated:${keepId}`, 'Contracted rates')
+      await moveIfFree(`cashflow:hyp-apps:N:${mergeId}`, `cashflow:hyp-apps:N:${keepId}`, 'Cash flow')
+      const alloc = (await get('ops:planning-allocations')) || {}
+      if (alloc[`N:${mergeId}`]) {
+        const to = alloc[`N:${keepId}`] || {}
+        for (const [day, entries] of Object.entries(alloc[`N:${mergeId}`])) {
+          const cur = to[day] || [], ops = new Set(cur.map(e => e.opId))
+          to[day] = [...cur, ...(entries || []).filter(e => !ops.has(e.opId))]
+        }
+        alloc[`N:${keepId}`] = to; delete alloc[`N:${mergeId}`]
+        await set('ops:planning-allocations', alloc); kept.push('Planning allocations: combined')
+      }
+      const meta = (await get('ops:planning-meta')) || {}
+      if (meta[`N:${mergeId}`] && !meta[`N:${keepId}`]) { meta[`N:${keepId}`] = meta[`N:${mergeId}`]; delete meta[`N:${mergeId}`]; await set('ops:planning-meta', meta); kept.push('Planning details: moved') }
+
+      return res.json({ ok: true, deal: survivor, moved, kept })
+    }
+
     if (body.action === 'delete-deal') {
       const dealId = String(body.dealId || '')
       if (!dealId) return res.status(400).json({ error: 'dealId required' })
@@ -868,6 +989,20 @@ async function handler(req, res) {
       const list = Array.isArray(await get(DEALS_KEY)) ? await get(DEALS_KEY) : []
       const byId = new Map(list.map(d => [String(d.id), d]))
 
+      // MERGE GUARDS (1075). A tab opened before a merge must not undo it:
+      //   - a deal that has been merged away is never written back
+      //   - a surviving deal is only accepted if the save carries the merge it
+      //     absorbed (mergedFrom) - an older copy would wipe the merged history
+      const mergedMap = (await get(MERGED_KEY)) || {}
+      const stale = []
+      for (let i = changed.length - 1; i >= 0; i--) {
+        const d = changed[i]; if (!d || d.id == null) continue
+        const id = String(d.id), stored = byId.get(id)
+        if (mergedMap[id] != null || (stored && (stored.mergedFrom || []).length > (d.mergedFrom || []).length)) {
+          stale.push(id); changed.splice(i, 1)
+        }
+      }
+
       // Activities and notes travel WITH the deal, in this one request, and the server
       // files them. Doing it as a separate call was the mistake: the deal could be stored
       // without them if that second call failed, and the cross-project list could drift
@@ -912,7 +1047,7 @@ async function handler(req, res) {
 
       await set(DEALS_KEY, Array.from(byId.values()))
       if (Array.isArray(body.schema) && body.schema.length) await set(SCHEMA_KEY, body.schema)
-      return res.json({ ok: true, saved: changed.length, removed: removed.size })
+      return res.json({ ok: true, saved: changed.length, removed: removed.size, ...(stale.length ? { staleMerged: stale, note: 'Some changes were to a project that has since been merged - reload to see it.' } : {}) })
     }
 
     if (body.action === 'save') {
