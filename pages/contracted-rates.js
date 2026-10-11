@@ -9,6 +9,7 @@ import ProjectSearchSelect from '../components/ProjectSearchSelect'
 // The send window and the standard clarifications, shared with the Variation Builder so a
 // variation raised from the rate schedule goes out identically to one built by hand.
 import { SendVariationModal, BASE_CLARIFICATIONS } from '../components/VariationBuilder'
+import LabourRates from '../components/LabourRates'
 import { computeRateTotals, sumItems, lineRateTotal, lineMatTotal, lineLabTotal } from '../lib/contractRatesParser'
 
 const fmt = (n) => '£' + (Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -18,6 +19,9 @@ export default function ContractedRatesPage() {
   const { companyName } = useFormat()
   const [projects, setProjects] = useState([])
   const [projectId, setProjectId] = useState('')
+  // Two sub-tabs (1073): the contracted rates as they always were, and the
+  // labour rates schedule for subcontract installers. One project picker.
+  const [subTab, setSubTab] = useState('rates')
   const [me, setMe] = useState(null)
   const [loading, setLoading] = useState(false)
   const [cr, setCr] = useState(null)          // { items, locked, fileName, sourceTotal }
@@ -623,9 +627,21 @@ export default function ContractedRatesPage() {
       <div style={{ minHeight: '100vh', background: '#f5f6f8' }}>
         <CommercialNav active="/contracted-rates" />
 
-        <div style={{ padding: 24, maxWidth: 1280, margin: '0 auto' }}>
-          {/* Projects without contracted rates locked */}
-          {(() => {
+        <div style={{ padding: 24, maxWidth: subTab === 'labour' ? 1480 : 1280, margin: '0 auto' }}>
+          {/* Sub-tabs (1073), styled as on Variations. */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+            {[['rates', 'Contracted Rates'], ['labour', 'Labour Rates']].map(([id, label]) => (
+              <button key={id} onClick={() => setSubTab(id)}
+                style={{
+                  background: subTab === id ? '#1a1a2e' : '#fff', color: subTab === id ? '#fff' : '#555',
+                  border: `1px solid ${subTab === id ? '#1a1a2e' : '#ddd'}`, borderRadius: 8,
+                  padding: '8px 18px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                }}>{label}</button>
+            ))}
+          </div>
+
+          {/* Projects without contracted rates locked - Contracted Rates tab only */}
+          {subTab === 'rates' && (() => {
             const unlocked = projects.filter(p => !p.neg && !p.locked && !p.hidden && (p.retStatus || 'live') === 'live')
             if (unlocked.length === 0) {
               return (
@@ -668,6 +684,9 @@ export default function ContractedRatesPage() {
             <div style={{ background: '#fff', borderRadius: 12, padding: 48, textAlign: 'center', color: '#888', fontSize: 14 }}>Select a project to view or upload its contracted rates.</div>
           ) : loading ? (
             <div style={{ background: '#fff', borderRadius: 12, padding: 48, textAlign: 'center', color: '#888' }}>Loading…</div>
+          ) : subTab === 'labour' ? (
+            // The SAVED contracted rates, not unsaved edits on the other tab.
+            <LabourRates projectId={projectId} crItems={cr?.items || []} variations={variations || []} />
           ) : (
             <>
               {/* Toolbar */}

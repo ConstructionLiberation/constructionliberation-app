@@ -1,26 +1,10 @@
 import { requireArea } from '../../lib/portalAuth'
 import { invalidateDashboardCache } from '../../lib/dashboardCache'
-import { getProject, saveProject, getClient } from '../../lib/db'
+import { getClient } from '../../lib/db'
+import { loadProject, persistProject } from '../../lib/projectStore'
 
-// Negotiated projects (Pipedrive deals, id like "N:123") aren't in getProject, so
-// their contracted rates live in a dedicated Redis key. We wrap them in the same
-// shape { contractedRates, variations } the rest of this handler expects, so live and
-// negotiated projects share one code path.
-const isNegotiated = (id) => typeof id === 'string' && id.startsWith('N:')
-async function getNegProject(id) {
-  const r = await getClient()
-  const dealId = id.slice(2)
-  return (await r.get(`crates:negotiated:${dealId}`)) || {}
-}
-async function saveNegProject(id, project) {
-  const r = await getClient()
-  const dealId = id.slice(2)
-  await r.set(`crates:negotiated:${dealId}`, project)
-}
-// Route get/save to the right store based on the project id.
-const loadProject = async (id) => isNegotiated(id) ? (await getNegProject(id)) : ((await getProject(id)) || {})
-const persistProject = async (id, project) => isNegotiated(id) ? saveNegProject(id, project) : saveProject(id, project)
-
+// Project load/save (live or negotiated) - lib/projectStore.js, shared with the
+// labour schedules (1073).
 // Drop the dashboard snapshot so Project Financials (Budget Tracker + EOM) rebuild
 // from fresh project data. Called after CR-lock updates the project's budgets — the
 // dashboard caches for 4h, so without this the tables show stale numbers.

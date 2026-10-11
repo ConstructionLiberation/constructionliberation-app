@@ -1,29 +1,83 @@
-PACKAGE 1072 - Application PDF: summary headings no longer overlap
+PACKAGE 1073 - Contracted Rates: Labour Rates tab and subcontractor schedules
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1071.
+Six files: two complete replacements, four NEW. No re-seed. No env changes.
+Built on 1072.
 
-  lib/applicationPdf.js
+  NEW       lib/labourSchedule.js          (what goes in the schedule - shared)
+            lib/projectStore.js            (project load/save, moved out of the rates route)
+            pages/api/labour-schedules.js  (save, schedules, Excel/PDF download)
+            components/LabourRates.js      (the tab)
+  REPLACED  pages/contracted-rates.js      (the two tabs)
+            pages/api/contracted-rates.js  (now uses lib/projectStore - behaviour unchanged)
 
-THE FAULT
-The Summary table's column headings were drawn on one line, right-aligned to
-columns 108pt wide. "Application for Payment Total" needs about 125pt, so it
-ran left into "Contract Sum" ("Contract SumApplication for Payment Total").
+TWO TABS on Contracted Rates, styled as on Variations:
+  Contracted Rates   exactly as before
+  Labour Rates       new
+The project picker is shared - pick once, both tabs follow.
 
-THE FIX
-A heading too wide for its column wraps onto a second line, right-aligned,
-and the grey heading band grows to fit:
+LABOUR RATES
+Pick a project. The schedule lists:
+  - every ABOVE-THE-LINE contracted item (with its headings) - the contract;
+    below-the-line items are not in it until instructed as a variation
+  - every INSTRUCTED variation: one line per Variation Builder item (labour
+    per unit = the item's labour total / its quantity), or one line at its
+    labour lump sum for a variation not built in the builder
+Struck lines are left out.
 
-              Contract Sum   Application for Payment    Proj. Final Account
-                                               Total
+Columns:
+  tick | Ref | Description | Qty | Unit |
+  RATE (type the subbie rate) | TOTAL (rate x qty) | Match |
+  LABOUR RATE | LABOUR TOTAL   (ours, from the contracted rates / variation)
+  SAVING / (OVERSPEND)         (our labour total - their total; red when over)
+Totals at the top: labour budget, subcontract rates entered, and the saving or
+overspend on the items that have a rate.
 
-It fits whatever the heading says - the claim name follows the company's
-terms (e.g. "Payment Claim Total" in New Zealand), so no fixed width would do.
+  Match            copies our labour rate into the rate box (per line, or
+                   "Match ticked" for every ticked line)
+  Save rates       keeps typed rates on the project
+  Create schedule  tick the items for ONE subbie, name it (e.g. the company),
+                   Create - it appears in the Schedules list on the left
 
-Used by both Download PDF and the PDF attached when an application is sent.
+SCHEDULES (left)
+"All labour items" shows how many are left to send. Each named schedule shows
+its items and total; open it for the lines at the rates they were sent at,
+our budget beside them, and:
+  Download Excel / Download PDF   - ref, description, qty, unit, rate, total,
+                                    grand total, company, project, schedule
+                                    name and date. NEVER our labour rates or
+                                    budget.
+  Delete schedule                 - its items go back to "not sent"
 
-Checked: a real application PDF generated and read back - every heading word
-in its own space, "Contract Sum" ending at 327pt and "Application for Payment"
-starting at 342pt, "Total" on the second line, nothing overlapping or run
-together, divider lines drawn. (The test also caught and fixed a clash in my
-first version: a name I used was already the divider-line colour.) Both PDF
-routes bundle; all 158 pages pass the browser check.
+Items in a schedule are GREYED on the main list, labelled "Sent: <name>", and
+cannot be ticked or re-rated - so what is left to send out is clear. An item
+can be in one schedule at a time; the server refuses a second.
+
+STORAGE
+On the project record (project.labourSchedules) - rates typed, and each
+schedule as a SNAPSHOT of its lines at the rates sent. Works for negotiated
+projects too: the load/save rule moved into lib/projectStore.js and the
+contracted-rates route now uses the same file.
+
+Checked:
+  - the schedule lines: above-the-line items and headings in; struck and
+    below-the-line out; a lump-sum variation as one line; a built variation as
+    one line per item with labour per unit (600 / 40 m = 15/m); a
+    not-instructed variation out
+  - the route: rates saved; a schedule created (500 x 11 = 5,500; 1 x 400 =
+    400); an item refused for a second schedule; a nameless schedule refused;
+    delete
+  - BOTH DOWNLOADS opened and read: the schedule, the 5,900 total, wrapped
+    descriptions in the PDF - and NO budget figure in either file
+  - the tab run in a simulated browser: totals (budget 7,660, entered 5,900,
+    saving 800 = 750 + 50); the sent line greyed with its tick and rate locked;
+    Match setting 8.00 and the saving to 0; ticking and creating "Jones
+    Installers" sending the right name, item and rates
+  - the page and both routes bundle; all 158 pages pass the browser check
+
+SMOKE TEST
+1. Contracted Rates -> Labour Rates -> pick a project with locked rates.
+2. Type a rate; Match another; the totals and savings move. Save rates.
+3. Tick a few items -> Create schedule -> name it -> Create. It opens on the
+   left; back on "All labour items" those items are greyed.
+4. Download Excel and PDF - no labour rates or budget in either.
+5. Create a second schedule from other items for another subbie.
