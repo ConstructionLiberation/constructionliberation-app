@@ -387,7 +387,7 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
       <PhotoAdder photos={f.manualPhotos || []} onChange={(list) => set({ manualPhotos: list })} />
 
       {/* WEATHER (1067) - after the photos, before approval. */}
-      <L>Weather <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(automatic, for the project's postcode and this report's week)</span></L>
+      <L>Weather <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(automatic, for the project's postcode - the 14 days to this report's date)</span></L>
       {f.weather ? <ReportWeather weather={f.weather} /> : <div style={{ fontSize: 12.5, color: '#999' }}>{weatherBusy ? 'Loading the weather…' : (weatherMsg || (f.projectAddress ? 'No weather yet.' : 'Choose a project to show the weather.'))}</div>}
       {f.weather && weatherMsg && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>{weatherMsg}</div>}
       {f.status !== 'complete' && f.projectAddress && (

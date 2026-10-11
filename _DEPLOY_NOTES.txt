@@ -1,31 +1,23 @@
-PACKAGE 1068 - Report weather: postcodes not in the national file
+PACKAGE 1069 - Report weather: the 14 days before the report
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1067.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1068.
 
   lib/siteWeather.js
-  components/ReportWeather.js
+  pages/operations/project-management/report.js   (section label)
+  lib/projectReportPdf.js                          (PDF heading)
 
-THE FAULT
-"Postcode ... was not recognised." The lookup only knew CURRENT postcodes.
-Building sites are exactly where a postcode is too new to be in the national
-file yet, or has been retired.
+The weather on a Project Report now always covers the 14 DAYS UP TO AND
+INCLUDING THE REPORT DATE, whenever the previous report was (1067 used the
+days since the previous report).
 
-THE FIX - three tries, in order
-  1. the postcode itself
-  2. the retired-postcodes list, which keeps their location
-  3. the postcode DISTRICT (TF9 3SP -> TF9) and its centre
-The weather grid is about 2 km square, so a district centre gives effectively
-the same week's weather. When the district is used, the note under the table
-says so: "not yet in the postcode file - the centre of TF9 was used".
+Finished days only: a report dated today shows the 13 days to yesterday and
+fills in the 14th when reopened. Labelled "the 14 days to this report's date"
+on the report, and "Weather - 14 days to report date" in the PDF.
 
-Only if even the district is unknown does the report refuse, and then it says
-the postcode itself looks wrong: "Postcode ... could not be found, not even its
-district (...). Check the postcode in the project's address."
+Draft reports pick this up when reopened or with Refresh weather. COMPLETED
+reports keep the weather they were issued with, by design.
 
-Draft reports pick this up the next time they are opened, or with Refresh
-weather.
-
-Checked: a current postcode (found directly); a retired one (found on the
-retired list); a new-build not yet listed (found by its district, noted); a
-nonsense one (refused with the new message). The report page and route
+Checked: the window for a report on 9 Oct (26 Sep - 9 Oct, 14 days, whatever
+the last report date), dated today (13 finished days), an older report (14
+days); a PDF regenerated with the new heading; the report page and routes
 bundle; all 158 pages pass the browser check.
