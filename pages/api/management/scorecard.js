@@ -192,15 +192,18 @@ async function handler(req, res) {
     }
     const upTo = fullMonths
     const span = upTo.length ? `${label(upTo[0])} – ${label(upTo[upTo.length - 1])}` : 'No finished months yet'
-    // 1063: the LATEST FULL MONTH, against a MONTHLY target; the period's total
-    // shown underneath for reference.
-    if (upTo.length) {
+    // THE LATEST FULL MONTH, against a MONTHLY target, with the period's total
+    // underneath for reference (1063 value priced; 1064 the other three). One
+    // rule for all four cards.
+    const monthHeadline = (key, total) => {
+      if (!upTo.length) return { value: null, label: rangeLabel, sub: span }
       const last = upTo[upTo.length - 1]
-      headlines.valuePriced = { value: series.find(r => r.month === last)?.valuePriced ?? null, label: label(last), sub: `${span}`, periodTotal: priced, periodLabel: rangeLabel }
-    } else headlines.valuePriced = { value: null, label: rangeLabel, sub: span }
-    headlines.valueSecured = { value: upTo.length ? secured : null, label: rangeLabel, sub: span }
-    headlines.valuePricedExisting = { value: upTo.length ? pricedEx : null, label: rangeLabel, sub: span }
-    headlines.valueSecuredExisting = { value: upTo.length ? securedEx : null, label: rangeLabel, sub: span }
+      return { value: series.find(r => r.month === last)?.[key] ?? null, label: label(last), sub: span, periodTotal: total, periodLabel: rangeLabel }
+    }
+    headlines.valuePriced = monthHeadline('valuePriced', priced)
+    headlines.valueSecured = monthHeadline('valueSecured', secured)
+    headlines.valuePricedExisting = monthHeadline('valuePricedExisting', pricedEx)
+    headlines.valueSecuredExisting = monthHeadline('valueSecuredExisting', securedEx)
 
     // Average value of a secured project (1041): won from Negotiating. A month
     // with none has no average - blank, not 0.

@@ -1,27 +1,29 @@
-PACKAGE 1063 - Value of work priced: latest full month, monthly target
+PACKAGE 1064 - Value priced (existing), value secured (all and existing):
+               latest full month, monthly target
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1062.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1063.
 
   lib/businessScorecard.js
   pages/api/management/scorecard.js
-  pages/management/scorecard.js
 
-VALUE OF WORK PRICED - BUSINESS SCORECARD
-  Big number   the LATEST FULL MONTH's value priced (e.g. "Sep 26"), not the
-               total for the period
-  Target       per MONTH - the coloured dot compares that month with it, as
-               the monthly figures in the trend table already were
-  Underneath   the period's total for reference, e.g. "375,000 total, FY2026
-               to date"
-Graph, trend table and pop-outs unchanged.
+The same as 1063 did for Value of work priced, now on:
+  Value of work priced - existing customers
+  Value of work secured
+  Value of work secured - existing customers
 
-RE-ENTER THE TARGET IF IT WAS SET FOR THE YEAR. The card now treats the
-target as a monthly figure; an annual figure left in place would make every
-month read red.
+Each card:
+  Big number   the LATEST FULL MONTH (e.g. "Sep 26")
+  Target       per MONTH, compared with that month
+  Underneath   the period's total, e.g. "380,000 total, FY2026 to date"
 
-"Value of work priced - existing customers" is unchanged (still the period
-total). Same change available if wanted.
+All four value cards now use one rule (monthHeadline in the route), so they
+behave the same. Graphs, the trend table and the pop-outs are unchanged.
 
-Checked: the route with pricing in August, September (two changes) and part of
-October - card 175,000 for Sep 26, total 375,000, October excluded; the page
-bundles; all 158 pages pass the browser check.
+RE-ENTER ANY OF THESE TARGETS THAT WERE SET FOR THE YEAR as monthly figures,
+or every month will read red.
+
+Checked: all four through the route with pricing and wins in July, August,
+September and part of October - each card shows September's figure with the
+right period total, October excluded; existing-customer split correct; pop-out
+totals unchanged (80 metric-months, 0 mismatches); all 158 pages pass the
+browser check.
