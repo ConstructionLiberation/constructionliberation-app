@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import OperationsShell, { PageHeading } from '../../../components/OperationsShell'
 import { INK, GOLD, th, td, Loading, EmptyCard, primaryBtn, ghostBtn, linkBtn } from '../../../components/opsUI'
 import { sectionsFor, newSectionKey, SECTION_TYPES, BUILT_IN_SECTIONS, CUSTOM_AFTER } from '../../../lib/projectReportTemplate'
+import ReportWeather from '../../../components/ReportWeather'
 import { autofillReport } from '../../../lib/projectReportAutofill'
 
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -192,6 +193,28 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
   const [err, setErr] = useState('')
   const set = (patch) => setF(prev => ({ ...prev, ...patch }))
 
+  // WEATHER FOR THE REPORT'S WEEK (1067). Fetched for the project's postcode
+  // and the report's days whenever the project or date changes, or a draft is
+  // reopened. Stored on the report (f.weather). Once the report is COMPLETE it
+  // is frozen - a report that has gone to a client keeps the weather it was
+  // issued with.
+  const [weatherMsg, setWeatherMsg] = useState('')
+  const [weatherBusy, setWeatherBusy] = useState(false)
+  async function loadWeather(cur = f) {
+    if (cur.status === 'complete' || !cur.date || !cur.projectAddress) return
+    setWeatherBusy(true); setWeatherMsg('')
+    try {
+      const q = new URLSearchParams({ address: cur.projectAddress, date: cur.date, last: cur.lastReportDate || '' })
+      const r = await fetch(`/api/project-report-weather?${q}`)
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || `Weather unavailable (${r.status})`)
+      if (d.weather) set({ weather: d.weather })
+      if (d.note) setWeatherMsg(d.note)
+    } catch (e) { setWeatherMsg(`Weather not loaded: ${e.message}`) }
+    setWeatherBusy(false)
+  }
+  useEffect(() => { if (loaded && f.status !== 'complete') loadWeather() }, [loaded, f.projectNo, f.date, f.projectAddress, f.lastReportDate])
+
   // Load existing report
   useEffect(() => {
     if (!id) { if (!f.completedBy && meName) set({ completedBy: meName }); return }
@@ -363,6 +386,17 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
       <L>Additional photos <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(added manually)</span></L>
       <PhotoAdder photos={f.manualPhotos || []} onChange={(list) => set({ manualPhotos: list })} />
 
+      {/* WEATHER (1067) - after the photos, before approval. */}
+      <L>Weather <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(automatic, for the project's postcode and this report's week)</span></L>
+      {f.weather ? <ReportWeather weather={f.weather} /> : <div style={{ fontSize: 12.5, color: '#999' }}>{weatherBusy ? 'Loading the weather…' : (weatherMsg || (f.projectAddress ? 'No weather yet.' : 'Choose a project to show the weather.'))}</div>}
+      {f.weather && weatherMsg && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>{weatherMsg}</div>}
+      {f.status !== 'complete' && f.projectAddress && (
+        <button type="button" onClick={() => loadWeather()} disabled={weatherBusy} style={{ marginTop: 6, fontSize: 12, padding: '4px 10px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', cursor: 'pointer' }}>
+          {weatherBusy ? 'Loading…' : 'Refresh weather'}
+        </button>
+      )}
+      {f.status === 'complete' && f.weather && <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Fixed at the weather recorded when this report was completed.</div>}
+
       <div style={{ marginTop: 22, padding: '16px 18px', background: '#faf9f7', borderRadius: 10 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: GOLD, marginBottom: 8 }}>APPROVAL</div>
         <div style={{ fontSize: 12.5, color: '#555', marginBottom: 12 }}>I can confirm that the information I have provided is true and that I have completed all sections accurately and diligently.</div>
@@ -433,6 +467,7 @@ function ViewModal({ id, onClose, onEdit }) {
       {(r.manualPhotos || []).length > 0 && <Row label={`Additional photos (${r.manualPhotos.length})`}><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{r.manualPhotos.map((p, i) => <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} /></a>)}</div></Row>}
 
       {(r.photos || []).length > 0 && <Row label={`Photos (${r.photos.length})`}><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{r.photos.map((p, i) => <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} /></a>)}</div></Row>}
+      {r.weather?.days?.length > 0 && <Row label="Weather"><ReportWeather weather={r.weather} /></Row>}
       <Row label="Approval">{r.approvalName || '—'} · {fmtDMY(r.approvalDate)}</Row>
       {r.revisions?.length > 0 && <Row label="Revision history">{r.revisions.map(v => `Rev ${v.rev} — ${new Date(v.at).toLocaleString('en-GB')} by ${v.by || '—'}`).join('\n')}</Row>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20, borderTop: '1px solid #eee', paddingTop: 18 }}>

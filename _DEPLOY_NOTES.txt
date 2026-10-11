@@ -1,23 +1,72 @@
-PACKAGE 1066 - WIP complete email: Accounts users only
+PACKAGE 1067 - Project Report: the week's weather, automatically
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1065.
+Five files: two complete replacements, three NEW. No re-seed. Built on 1066.
 
-  pages/api/wip-lock.js
+  NEW       lib/siteWeather.js                    (the lookup - server only)
+            pages/api/project-report-weather.js
+            components/ReportWeather.js           (the table, editor + view)
+  REPLACED  pages/operations/project-management/report.js
+            lib/projectReportPdf.js               (weather in the PDF)
 
-When the WIP is marked complete, the email now goes to ACTIVE users whose
-access role is ACCOUNTS - nobody else.
+OPTIONAL ENV: OPEN_METEO_API_KEY  - see "Licence" below. Works without it.
 
-  Before   everyone with Bookkeeping access: Accounts, Management and Admin,
-           including DEACTIVATED users who still had an email on record
-  Now      Accounts users only, and only if active
+WHAT IT DOES
+A "Weather" section on the Project Report, after Additional photos and before
+Approval - in the editor, the read-only view and the PDF. One row per day:
 
-To add or remove someone: change their access role in Admin > Users. The
-pop-up after marking complete still lists exactly who was sent it.
+  Day | Conditions | High / low | Rain (mm) | Wind / gusts (mph) | Flags
 
-If nobody has the Accounts role, the WIP still locks but no email is sent -
-the pop-up says nobody was notified.
+Flags: Rain (1 mm+), Heavy rain (10 mm+), High wind (gusts 30 mph+), Frost
+(0 C or below). Indicative thresholds, printed under the table.
 
-Checked: the route run with a mix of users - an active Accounts user emailed;
-a deactivated Accounts user, a director, an admin, a deactivated leaver, a
-post-contract user and an Accounts user with no email address all left out;
-the pop-up lists the same one recipient. The route bundles.
+HOW
+  1. The project's address -> its UK postcode (e.g. TF9 3SP).
+  2. Postcode -> location: postcodes.io (free, no key).
+  3. That location, the report's days -> daily weather: Open-Meteo, whose UK
+     data comes from the Met Office's high-resolution model (~2 km grid).
+
+WHICH DAYS
+The same window the report's photos use: the day after the previous report for
+the project, up to this report's date. A first report, or a gap of more than
+two weeks, covers the 7 days to the report date. FINISHED DAYS ONLY - a report
+dated today shows up to yesterday and fills in when reopened.
+
+WHEN IT CHANGES
+  Draft       fetched when the project or date is chosen and when the draft is
+              reopened; "Refresh weather" to fetch again
+  Complete    FROZEN at the weather recorded - a report that has gone to a
+              client keeps the figures it was issued with
+Saved on the report itself (report.weather). Editing a report from the Site
+App keeps it (the save merges), though the Site App does not show it.
+
+NO POSTCODE -> NO GUESS
+If the project's address has no UK postcode the section says "No UK postcode
+in the project address - add one to show the weather." A postcode the lookup
+does not recognise says so too.
+
+LICENCE
+Open-Meteo's free service is for NON-COMMERCIAL use. For business use, take
+an Open-Meteo paid plan and set its key as OPEN_METEO_API_KEY in Vercel; the
+same calls then go to its customer service. Nothing else changes.
+
+NOT YET
+UK postcodes only (the lookup is postcodes.io). A non-UK customer would need a
+different address lookup - noted for the multi-tenant work.
+
+Checked: postcode finding (anywhere in an address, any case; none -> refused);
+the window rules (last report to this one; 7-day fallback for a first report
+or a long gap; never today; empty when nothing has finished); the lookup with
+the weather service stood in - right dates, mph, descriptions and flags; a real
+PDF generated and read back - the weather table sits between the photos and
+Approval with every day and flag; the report page, the routes and the Site App
+report page bundle; all 158 pages pass the browser check. Not checked here: the
+live call to postcodes.io and Open-Meteo, which this environment cannot reach -
+that is smoke step 1.
+
+SMOKE TEST
+1. Project Management -> Project Report -> new report for a live project with a
+   postcode in its address. After Additional photos: the week's weather.
+2. Change the report date - the weather follows.
+3. Mark it complete, reopen it - "Fixed at the weather recorded".
+4. Download the PDF - Weather sits before Approval.
+5. A project with no postcode in its address - the message, not a guess.
