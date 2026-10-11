@@ -70,21 +70,51 @@ const revLetter = (n) => {
 const tsLink = (no, id) => `${APP_URL()}/design/${encodeURIComponent(no)}/tech-sub?open=${encodeURIComponent(id)}`
 const rid = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
-// Email the assigned customer approver that a Tech Sub needs their review/approval.
-async function notifyApprover(no, doc) {
-  try {
-    if (!doc.approverId) return
-    const people = await peopleFor(no)
-    const approver = people.find(p => p.id === doc.approverId)
-    if (!approver || !approver.email) return
-    const pname = await projectDisplayName(no)
-    await sendRfiCommentNotice({
-      to: approver.email, recipientName: approver.name, projectNo: no, projectName: pname,
-      rfiNumber: `${doc.title} (Rev ${doc.revision})`, authorName: doc.uploadedBy,
-      commentHtml: `A Tech Sub has been uploaded and needs your review. Please <strong>review, comment or approve</strong> it.`,
-      rfiLink: tsLink(no, doc.id), mentioned: false, cta: 'Review the Tech Sub',
-    })
-  } catch (e) { /* ignore */ }
+// APPROVERS (1077): a Tech Sub can go to SEVERAL customer contacts. Stored as
+// approverIds; approverId (the first) is kept for anything older that reads it.
+// Any one of them can approve.
+const approversOf = (doc) => Array.isArray(doc.approverIds) && doc.approverIds.length ? doc.approverIds : (doc.approverId ? [doc.approverId] : [])
+const cleanIds = (body, fallback = []) => {
+  const raw = Array.isArray(body.approverIds) ? body.approverIds : (body.approverId ? [body.approverId] : fallback)
+  return [...new Set(raw.map(String).filter(Boolean))].slice(0, 20)
+}
+
+// EMAIL THE APPROVERS, AND RECORD WHAT HAPPENED (1077). This used to swallow
+// every failure - a customer with no email address, or a send that bounced,
+// looked exactly like a customer who had been told. Now each attempt is
+// recorded on the Tech Sub (doc.notifications) and returned to the page:
+//   { at, by, results: [{ id, name, email, ok, reason }] }
+async function notifyApprovers(no, doc, by, ids = approversOf(doc)) {
+  const entry = { at: Date.now(), by: by || '', results: [] }
+  if (!ids.length) return entry
+  let people = [], pname = ''
+  try { people = await peopleFor(no); pname = await projectDisplayName(no) } catch (e) { /* recorded per person below */ }
+  for (const id of ids) {
+    const p = people.find(x => x.id === id)
+    if (!p) { entry.results.push({ id, name: '', email: '', ok: false, reason: 'No longer a user on this project' }); continue }
+    if (!p.email) { entry.results.push({ id, name: p.name, email: '', ok: false, reason: 'No email address on their user' }); continue }
+    try {
+      const r = await sendRfiCommentNotice({
+        to: p.email, recipientName: p.name, projectNo: no, projectName: pname,
+        rfiNumber: `${doc.title} (Rev ${doc.revision})`, authorName: by || doc.uploadedBy,
+        commentHtml: `A Tech Sub has been uploaded and needs your review. Please <strong>review, comment or approve</strong> it.`,
+        rfiLink: tsLink(no, doc.id), mentioned: false, cta: 'Review the Tech Sub',
+      })
+      entry.results.push({ id, name: p.name, email: p.email, ok: !!(r && r.sent), reason: r && r.sent ? '' : ((r && r.error) || 'Not sent') })
+    } catch (e) { entry.results.push({ id, name: p.name, email: p.email, ok: false, reason: e.message || 'Send failed' }) }
+  }
+  return entry
+}
+// Send, then record the result on the document and save.
+async function notifyAndRecord(no, docs, docId, by, ids) {
+  const i = docs.findIndex(d => d.id === docId)
+  if (i < 0) return { docs, entry: null }
+  const entry = await notifyApprovers(no, docs[i], by, ids)
+  if (entry.results.length) {
+    docs[i] = { ...docs[i], notifications: [...(docs[i].notifications || []), entry].slice(-20) }
+    await set(tsKey(no), docs)
+  }
+  return { docs, entry }
 }
 
 async function handler(req, res) {
@@ -166,7 +196,7 @@ async function handler(req, res) {
     const i = idx(body.id)
     if (i < 0) return res.status(404).json({ error: 'Tech Sub not found' })
     if (!acc.external) return res.status(403).json({ error: 'Only the customer can approve a Tech Sub.' })
-    if (docs[i].approverId && docs[i].approverId !== acc.user.id) return res.status(403).json({ error: 'Only the assigned approver can approve this Tech Sub.' })
+    if (approversOf(docs[i]).length && !approversOf(docs[i]).includes(acc.user.id)) return res.status(403).json({ error: 'Only an assigned approver can approve this Tech Sub.' })
     if (docs[i].superseded) return res.status(400).json({ error: 'This revision has been superseded and can no longer be approved.' })
     if (docs[i].approvalStatus === 'approved') return res.json({ ok: true, doc: docs[i] })
 
@@ -236,13 +266,13 @@ async function handler(req, res) {
       name: f.name || 'Tech Sub', url: f.url, contentType: f.contentType || '', size: f.size || 0,
       uploadedBy: acc.user.name || 'User', uploadedAt: Date.now(),
       superseded: false, markup: null, comments: [],
-      approverId: body.approverId || '', approvalStatus: 'pending', approvedAt: 0, approvedBy: '',
+      approverIds: cleanIds(body), approverId: cleanIds(body)[0] || '', approvalStatus: 'pending', approvedAt: 0, approvedBy: '',
     }
     docs = [doc, ...docs]
     await set(tsKey(no), docs)
-    await notifyApprover(no, doc)
+    const { docs: after, entry } = await notifyAndRecord(no, docs, doc.id, acc.user.name)
     try { await tsRecordPendingDoc(no) } catch {}
-    return res.json({ ok: true, docs })
+    return res.json({ ok: true, docs: after, notified: entry })
   }
 
   // Add a NEW REVISION of an existing tech sub family. The current newest in that family
@@ -264,13 +294,27 @@ async function handler(req, res) {
       name: f.name || base.title, url: f.url, contentType: f.contentType || '', size: f.size || 0,
       uploadedBy: acc.user.name || 'User', uploadedAt: Date.now(),
       superseded: false, markup: null, comments: [],
-      approverId: body.approverId || base.approverId || '', approvalStatus: 'pending', approvedAt: 0, approvedBy: '',
+      approverIds: cleanIds(body, approversOf(base)), approverId: cleanIds(body, approversOf(base))[0] || '', approvalStatus: 'pending', approvedAt: 0, approvedBy: '',
     }
     docs = [doc, ...docs]
     await set(tsKey(no), docs)
-    await notifyApprover(no, doc)
+    const { docs: after, entry } = await notifyAndRecord(no, docs, doc.id, acc.user.name)
     try { await tsRecordPendingDoc(no) } catch {}
-    return res.json({ ok: true, docs })
+    return res.json({ ok: true, docs: after, notified: entry })
+  }
+
+  // NOTIFY AGAIN (1077) - re-send to the Tech Sub's approvers, or to the
+  // approvers given (which also become its approvers). Recorded like the first.
+  if (body.action === 'notify') {
+    const i = idx(body.id)
+    if (i < 0) return res.status(404).json({ error: 'Tech Sub not found' })
+    if (docs[i].superseded) return res.status(400).json({ error: 'This revision has been superseded.' })
+    const ids = cleanIds(body, approversOf(docs[i]))
+    if (!ids.length) return res.status(400).json({ error: 'Choose at least one customer to notify.' })
+    docs[i] = { ...docs[i], approverIds: ids, approverId: ids[0] }
+    await set(tsKey(no), docs)
+    const { docs: after, entry } = await notifyAndRecord(no, docs, docs[i].id, acc.user.name, ids)
+    return res.json({ ok: true, docs: after, doc: after.find(d => d.id === body.id), notified: entry })
   }
 
   if (body.action === 'delete') {

@@ -29,7 +29,9 @@ export default function TechSubPage() {
   const addRef = useRef()
   const revRef = useRef()
   const revForId = useRef(null)
-  const pendingApprover = useRef('')
+  const pendingApprover = useRef([])   // approver ids for the upload about to happen (1077: several)
+  // What the last send did (1077): { title, results } - shown until dismissed.
+  const [notifyReport, setNotifyReport] = useState(null)
 
   useEffect(() => { if (auth.ready && projectNo) load() }, [auth.ready, projectNo])
   useEffect(() => {
@@ -63,11 +65,15 @@ export default function TechSubPage() {
     try {
       for (const file of Array.from(list)) {
         const blob = await uploadOne(file)
-        await fetch('/api/design-techsubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectNo, action: 'add', title: file.name.replace(/\.[^.]+$/, ''), approverId: pendingApprover.current || '', file: { name: file.name, url: blob.url, contentType: file.type || '', size: file.size } }) })
+        // The reply is READ (1077) - it was ignored, so a failed save or send looked like success.
+        const r = await fetch('/api/design-techsubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectNo, action: 'add', title: file.name.replace(/\.[^.]+$/, ''), approverIds: pendingApprover.current, file: { name: file.name, url: blob.url, contentType: file.type || '', size: file.size } }) })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.error || `Could not add ${file.name}`)
+        if (d.notified) setNotifyReport({ title: file.name.replace(/\.[^.]+$/, ''), results: d.notified.results })
       }
     } catch (e) { setErr(e && e.message ? e.message : 'Upload failed') }
     if (addRef.current) addRef.current.value = ''
-    pendingApprover.current = ''
+    pendingApprover.current = []
     setUploading(false); load()
   }
   async function addRevision(list) {
@@ -77,18 +83,33 @@ export default function TechSubPage() {
     try {
       const file = list[0]
       const blob = await uploadOne(file)
-      await fetch('/api/design-techsubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectNo, action: 'add-revision', id: forId, approverId: pendingApprover.current || '', file: { name: file.name, url: blob.url, contentType: file.type || '', size: file.size } }) })
+      const r = await fetch('/api/design-techsubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectNo, action: 'add-revision', id: forId, approverIds: pendingApprover.current, file: { name: file.name, url: blob.url, contentType: file.type || '', size: file.size } }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Could not add the revision')
+      if (d.notified) setNotifyReport({ title: `${docFor(forId)?.title || 'Tech Sub'} - new revision`, results: d.notified.results })
     } catch (e) { setErr(e && e.message ? e.message : 'Upload failed') }
     if (revRef.current) revRef.current.value = ''
-    revForId.current = null; pendingApprover.current = ''
+    revForId.current = null; pendingApprover.current = []
     setUploading(false); load()
   }
   // Approver must be chosen before the file picker opens.
-  function startAdd() { setApproverPick({ mode: 'add', approverId: '' }) }
-  function startRevision(id) { setApproverPick({ mode: 'revision', id, approverId: docFor(id)?.approverId || '' }) }
-  function confirmApprover() {
+  // Approvers (1077): several customers can be chosen; a revision starts with
+  // the previous revision's approvers ticked.
+  const approversOf = (d) => (d && Array.isArray(d.approverIds) && d.approverIds.length) ? d.approverIds : (d && d.approverId ? [d.approverId] : [])
+  function startAdd() { setApproverPick({ mode: 'add', approverIds: [] }) }
+  function startRevision(id) { setApproverPick({ mode: 'revision', id, approverIds: approversOf(docFor(id)) }) }
+  function startNotify(id) { setApproverPick({ mode: 'notify', id, approverIds: approversOf(docFor(id)) }) }
+  async function confirmApprover() {
     const p = approverPick; if (!p) return
-    pendingApprover.current = p.approverId || ''
+    if (p.mode === 'notify') {
+      setApproverPick(null)
+      const r = await fetch('/api/design-techsubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectNo, action: 'notify', id: p.id, approverIds: p.approverIds }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setErr(d.error || 'Could not send'); return }
+      setNotifyReport({ title: docFor(p.id)?.title || 'Tech Sub', results: d.notified?.results || [] })
+      load(); return
+    }
+    pendingApprover.current = p.approverIds || []
     setApproverPick(null)
     if (p.mode === 'add') { if (addRef.current) addRef.current.click() }
     else { revForId.current = p.id; if (revRef.current) revRef.current.click() }
@@ -128,7 +149,7 @@ export default function TechSubPage() {
   const canApprove = (d) => {
     if (!d || d.approvalStatus === 'approved' || d.superseded) return false
     if (!isExternal) return false
-    return d.approverId === meId
+    return approversOf(d).includes(meId)
   }
   // Approval banner: over current (non-superseded) tech subs only.
   const currentDocs = docs.filter(d => !d.superseded)
@@ -151,6 +172,21 @@ export default function TechSubPage() {
         {currentDocs.length > 0 && (anyNeedApproval
           ? <div style={{ background: '#fee2e2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, padding: '11px 14px', fontSize: 15, fontWeight: 800, letterSpacing: 0.5, marginBottom: 12 }}>APPROVALS NEEDED<div style={{ fontWeight: 600, fontSize: 12.5, letterSpacing: 0, marginTop: 4 }}>Delays to drawing/document approvals may lead to delayed start dates.</div></div>
           : <div style={{ background: '#dcfce7', border: '1px solid #bbf7d0', color: '#16a34a', borderRadius: 8, padding: '11px 14px', fontSize: 15, fontWeight: 800, letterSpacing: 0.5, marginBottom: 12 }}>APPROVED</div>)}
+        {/* WHAT THE LAST SEND DID (1077) - who was emailed, and anyone who was not, with why. */}
+        {notifyReport && (() => {
+          const ok = notifyReport.results.filter(x => x.ok), bad = notifyReport.results.filter(x => !x.ok)
+          return (
+            <div style={{ background: bad.length ? '#fffbeb' : '#f0fdf4', border: `1px solid ${bad.length ? '#fde68a' : '#bbf7d0'}`, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <strong>{notifyReport.title}</strong>
+                {!notifyReport.results.length && <span> - no customer was chosen, so nobody was emailed.</span>}
+                {ok.length > 0 && <div style={{ color: '#15803d' }}>&#10003; Emailed {ok.map(x => x.name).join(', ')}</div>}
+                {bad.map(x => <div key={x.id} style={{ color: '#b45309' }}>&#10007; Not sent to {x.name || 'a removed user'}: {x.reason}</div>)}
+              </div>
+              <button onClick={() => setNotifyReport(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#888', fontSize: 16 }}>&times;</button>
+            </div>
+          )
+        })()}
         {err && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{err}</div>}
 
         {loading ? <div style={{ color: '#999', padding: 20 }}>Loading...</div> : (
@@ -176,7 +212,21 @@ export default function TechSubPage() {
                         ? <span style={{ color: '#15803d', background: '#dcfce7', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>&#10003; Approved</span>
                         : d.superseded
                           ? <span style={{ color: '#9ca3af', background: '#f3f4f6', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>N/A</span>
-                          : <span style={{ color: '#9a3412', background: '#ffedd5', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>To Be Approved</span>}</td>
+                          : <span style={{ color: '#9a3412', background: '#ffedd5', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>To Be Approved</span>}
+                        {/* Who it went to, and whether they were told (1077). */}
+                        {approversOf(d).length > 0 && <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 4 }}>Approvers: {approversOf(d).map(personName).filter(Boolean).join(', ') || '-'}</div>}
+                        {(() => {
+                          const last = (d.notifications || [])[(d.notifications || []).length - 1]
+                          if (!last) return !d.superseded && approversOf(d).length ? <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 2 }}>No notification on record</div> : null
+                          const when = new Date(last.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                          const okN = last.results.filter(x => x.ok).length, bad = last.results.filter(x => !x.ok)
+                          return (
+                            <div style={{ fontSize: 11.5, marginTop: 2 }} title={last.results.map(x => `${x.name || x.id}: ${x.ok ? 'emailed' : x.reason}`).join('\n')}>
+                              {okN > 0 && <span style={{ color: '#15803d' }}>&#10003; Notified {okN} &middot; {when}</span>}
+                              {bad.length > 0 && <span style={{ color: '#b45309', marginLeft: okN ? 6 : 0 }}>&#10007; {bad.length} not sent</span>}
+                            </div>
+                          )
+                        })()}</td>
                       <td style={{ ...td, whiteSpace: 'nowrap' }}>{d.uploadedBy || '-'}</td>
                       <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmtDate(d.uploadedAt)}</td>
                       <td style={td}>{(d.comments || []).length ? <span style={{ fontWeight: isUnread ? 700 : 400, color: isUnread ? '#c2410c' : undefined }}>{(d.comments || []).length}{isUnread ? ' new' : ''}</span> : '-'}</td>
@@ -184,6 +234,7 @@ export default function TechSubPage() {
                         <button onClick={() => openDoc(d.id)} style={btnOpen}>Open</button>
                         {d.approvalStatus !== 'approved' && (canApprove(d)) && <button onClick={() => approve(d.id)} style={{ ...btnApproveBig, marginLeft: 8, padding: '8px 18px', fontSize: 14 }}>&#10003; Approve</button>}
                         {d.approvalStatus !== 'approved' && !d.superseded && !isExternal && <span style={{ fontSize: 11.5, color: '#9a3412', marginLeft: 8 }}>Awaiting customer approval</span>}
+                        {canEdit && !d.superseded && d.approvalStatus !== 'approved' && <button onClick={() => startNotify(d.id)} style={linkBtn}>Notify again</button>}
                         {canEdit && !d.superseded && <button onClick={() => startRevision(d.id)} style={linkBtn}>Add New Revision</button>}
                         {canEdit && <button onClick={() => del(d.id)} style={{ ...linkBtn, color: '#dc2626' }}>Delete</button>}
                       </td>
@@ -198,22 +249,29 @@ export default function TechSubPage() {
       </div>
 
       {openDocObj && <TechSubViewer doc={openDocObj} people={people} personName={personName} onClose={() => setOpenId(null)} onComment={addComment} onMarkup={saveMarkup}
-        canApprove={canApprove(openDocObj)} onApprove={() => approve(openDocObj.id)} approverName={personName(openDocObj.approverId)} />}
+        canApprove={canApprove(openDocObj)} onApprove={() => approve(openDocObj.id)} approverName={approversOf(openDocObj).map(personName).filter(Boolean).join(', ')} />}
 
       {approverPick && (
         <div onClick={() => setApproverPick(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 440, maxWidth: '92vw' }}>
-            <h3 style={{ margin: '0 0 4px', fontSize: 17, color: INK }}>{approverPick.mode === 'add' ? 'Add Tech Sub' : 'Add New Revision'}</h3>
-            <p style={{ fontSize: 13, color: '#8a857c', marginTop: 0 }}>Choose the customer who needs to review and approve this Tech Sub. They'll be emailed to review, comment or approve it.</p>
-            <label style={{ fontSize: 12, color: '#888', fontWeight: 600 }}>Approver (customer)</label>
-            <select value={approverPick.approverId} onChange={e => setApproverPick({ ...approverPick, approverId: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '9px 11px', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, marginTop: 4 }}>
-              <option value="">Select a customer...</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <h3 style={{ margin: '0 0 4px', fontSize: 17, color: INK }}>{approverPick.mode === 'add' ? 'Add Tech Sub' : approverPick.mode === 'notify' ? 'Notify customers' : 'Add New Revision'}</h3>
+            <p style={{ fontSize: 13, color: '#8a857c', marginTop: 0 }}>Tick the customers who need to review and approve this Tech Sub. Each is emailed a link to review, comment or approve it; any one of them can approve.</p>
+            <label style={{ fontSize: 12, color: '#888', fontWeight: 600 }}>Approvers (customers)</label>
+            <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid #e5e5e5', borderRadius: 8, padding: 6, marginTop: 4 }}>
+              {customers.map(c => {
+                const on = (approverPick.approverIds || []).includes(c.id)
+                return (
+                  <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 6px', cursor: 'pointer', borderRadius: 6, background: on ? '#f0fdf4' : undefined }}>
+                    <input type="checkbox" checked={on} onChange={() => setApproverPick(p => ({ ...p, approverIds: on ? p.approverIds.filter(x => x !== c.id) : [...(p.approverIds || []), c.id] }))} />
+                    <span style={{ fontSize: 13.5 }}>{c.name}{c.company ? <span style={{ color: '#999' }}> ({c.company})</span> : null}{!c.email && <span style={{ color: '#b45309', fontSize: 11.5 }}> - no email address</span>}</span>
+                  </label>
+                )
+              })}
+            </div>
             {customers.length === 0 && <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>No customer users are assigned to this project yet. Add one in Admin, or continue without an approver.</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button onClick={() => setApproverPick(null)} style={btnGhost}>Cancel</button>
-              <button onClick={confirmApprover} style={btnPrimary}>Choose file...</button>
+              <button onClick={confirmApprover} disabled={approverPick.mode === 'notify' && !(approverPick.approverIds || []).length} style={btnPrimary}>{approverPick.mode === 'notify' ? 'Send' : 'Choose file...'}</button>
             </div>
           </div>
         </div>

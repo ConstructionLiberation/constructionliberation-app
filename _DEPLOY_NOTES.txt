@@ -1,20 +1,50 @@
-PACKAGE 1076 - Procurement schedule: comments no longer required
+PACKAGE 1077 - Tech Subs: several customer approvers, and proof they were told
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1075.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1076.
 
-  pages/operations/project-management/procurement.js
+  pages/api/design-techsubs.js
+  pages/design/[project]/tech-sub.js
 
-To mark an order as PLACED, only these are now required:
-  Budget Total
-  Buying Total
-- the two figures the saving / overspend is worked from.
+YOUR QUESTION: does issuing a Tech Sub notify the customer?
+YES - adding a Tech Sub, or a new revision, has always emailed the chosen
+customer automatically (there is no separate button, unlike drawings). But
+before this package there was NO RECORD of it, and a failed send - or a
+customer with no email address on their user - was silently swallowed, so it
+looked exactly like a customer who had been told. That is fixed below.
 
-Budget Comments and Buying Comments are OPTIONAL. The columns and boxes stay
-on the schedule for anyone who wants to use them.
+1. SEVERAL CUSTOMERS
+The approver window is now a tick list - tick as many customer contacts as
+needed. Each is emailed; ANY ONE of them can approve. A new revision starts
+with the previous revision's approvers ticked. A customer with no email
+address is marked as such in the list.
 
-Applies in both places an order can be marked placed: the schedule table and
-the item's edit form. The warnings now read "Budget Total and Buying Total".
+2. HOW YOU KNOW THEY WERE NOTIFIED
+  - Straight after adding: a box at the top says who was emailed and anyone
+    who was not, with why ("No email address on their user", a send failure).
+  - On every Tech Sub, under Approval: the approvers' names, and
+    "Notified 2 · 11 Oct 14:05" - hover for each person's result - or
+    "1 not sent" in amber.
+  - Every send is recorded on the Tech Sub (who, when, each result).
 
-Checked: the rule - both totals and no comments -> can be placed; a total
-missing -> still blocked, even with comments; a buying total of 0 counts as
-entered. The page bundles; all 158 pages pass the browser check.
+3. NOTIFY AGAIN
+On any current Tech Sub not yet approved: "Notify again" - tick the customers,
+Send. Re-sends, records the result, and those ticked become its approvers.
+
+Also fixed: adding a Tech Sub or revision now checks the server's reply - it
+was ignored, so a failed save looked like success.
+
+Older Tech Subs with a single approver keep working.
+
+Checked through the real route: a Tech Sub added for two customers - one
+emailed, the other reported "No email address on their user", recorded, and
+only the real address sent to; a non-approver refused, the SECOND approver able
+to approve; Notify again to two customers - both emailed, approvers updated, a
+second record; notify with nobody refused; an older single-approver Tech Sub
+approved by its approver. Both files bundle; all 158 pages pass the browser
+check.
+
+SMOKE TEST
+1. Design -> a project -> Tech Sub -> Add -> tick two customers -> choose a
+   file. The box at the top lists who was emailed.
+2. The row shows the approvers and "Notified 2 · <time>".
+3. Notify again -> Send - a new time.
