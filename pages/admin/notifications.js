@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import AdminShell from '../../components/AdminShell'
+import { EmailRegisterTab, EmailSentLogTab } from '../../components/EmailAdminTabs'
 
 const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const blank = () => ({
@@ -13,6 +14,9 @@ export default function NotificationsBuilder() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)   // notification being edited
+  // Three tabs (1080): the reminders set up here, the register of every
+  // automatic email, and the log of emails sent.
+  const [tab, setTab] = useState('rules')
   const [msg, setMsg] = useState('')
   const [emailInput, setEmailInput] = useState('')
   const [testTo, setTestTo] = useState('')
@@ -75,6 +79,15 @@ export default function NotificationsBuilder() {
   return (
     <AdminShell active="/admin/notifications" title="Email Notifications">
       <>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+          {[['rules', 'Task reminders'], ['register', 'Register'], ['log', 'Sent log']].map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)}
+              style={{ background: tab === id ? '#1a1a2e' : '#fff', color: tab === id ? '#fff' : '#555', border: `1px solid ${tab === id ? '#1a1a2e' : '#ddd'}`, borderRadius: 8, padding: '8px 18px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+          ))}
+        </div>
+        {tab === 'register' && <EmailRegisterTab />}
+        {tab === 'log' && <EmailSentLogTab />}
+        {tab === 'rules' && (
         <div style={{ display: 'grid', gridTemplateColumns: editing ? '1fr 1.3fr' : '1fr', gap: 20 }}>
           {/* List */}
           <div>
@@ -204,6 +217,7 @@ export default function NotificationsBuilder() {
             </div>
           )}
         </div>
+        )}
       </>
     </AdminShell>
   )

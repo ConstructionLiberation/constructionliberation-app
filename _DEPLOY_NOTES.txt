@@ -1,32 +1,72 @@
-PACKAGE 1079 - Retention tracker: Export to Excel, choosing the columns
+PACKAGE 1080 - Email Notifications: Register and Sent log tabs
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1078.
+Nine files: five complete replacements, four NEW. No re-seed. No env changes.
+Built on 1079.
 
-  pages/retention.js
+  NEW       lib/emailLog.js              (records every email sent)
+            lib/emailRegister.js         (the register of automatic emails)
+            components/EmailAdminTabs.js (the two new tabs)
+            pages/api/email-admin.js
+  REPLACED  pages/admin/notifications.js (three tabs)
+            lib/withTenant.js            (installs the recorder; passes the route)
+            lib/forEachTenant.js         (passes each scheduled job's name)
+            lib/tenantContext.js         (carries the route/job running)
+            lib/db.js                    (list operations for the log)
 
-"Export to Excel" sits beside Import spreadsheet. It opens a window:
+Admin > Email Notifications now has three tabs (admin only, as before):
 
-  ROWS      As shown (your status filters) - or every project on the register
-  COLUMNS   every tracker column, in the table's order, each with a tick box;
-            Select all / Clear. Three EXTRA columns are offered that the screen
-            only shows as colour: Status, 1st Released?, 2nd Released?
-            Your choice is remembered in this browser for next time.
-  Download  -> Retention-tracker-<date>.xlsx
+1. TASK REMINDERS - the reminders set up here. Unchanged.
 
-The figures are worked out with the SAME functions as the table cells (final
-account, account remaining, retention owed, release values, VAT, totals, the
-two match columns as Yes/No and Ties/Deducted out/Released out/Both out), so
-the spreadsheet always matches the screen. Money columns are real numbers
-formatted #,##0.00, so they can be summed. 0%-retention release cells and the
-reconciliation for projects with no 612 lines are left blank, as on screen.
+2. REGISTER - every email the portal sends automatically (37), in two groups,
+   Scheduled (12) and When something happens (25). Each row: what it is for,
+   when / how often, who receives it, and when it was last sent. Where the
+   recipients are set by role or job title, the people it reaches TODAY are
+   listed (e.g. WIP complete -> the active Accounts users); if nobody matches,
+   it says so in amber - that email goes to no one.
 
-On the full Retention page only - the read-only copy inside Bookkeeping has no
-buttons, as before.
+3. SENT LOG - every email actually sent, newest first: when, to (and cc),
+   subject, what it was for, and Sent / Failed with the reason. Search by
+   recipient or subject; filter sent / failed; last 24 hours to everything
+   kept. The most recent 3,000 are kept. It starts recording from this deploy.
 
-Checked: a workbook built from two sample projects with the page's OWN
-calculation code and read back - every figure verified by hand (Account
-Remaining 10,493.22 = Final Account - Applied for; Retention Owed 7,230.52 =
-3% of invoiced, reconciliation "Ties"; 1st Value 4,112.07; VAT 0 on reverse
-charge and 19,500 at 20%; Total Remaining 44,138.21 and 17,000), money
-formatted as numbers, 0%-retention and no-612 cells blank. The tracker and the
-Bookkeeping page bundle; all 158 pages pass the browser check.
+HOW THE LOG WORKS
+Every portal email goes to one address, the email service. The server's
+request function is wrapped once: any call to that address is passed through
+UNTOUCHED and its result recorded in the company's own database, with the route
+or scheduled job that sent it. So every email is logged - including any added
+later - without changing 30-odd senders. Recording can never stop an email:
+every step is guarded, and the response is cloned so the sender still reads it.
+"Sent" means the email service accepted it, not that it was opened.
+
+WHEN AN EMAIL IS ADDED TO THE PORTAL, ADD IT TO lib/emailRegister.js. The log
+records it regardless.
+
+FOUND WHILE CHECKING - NOT CHANGED HERE
+Compiling every server route found 8 that import functions which do not exist
+(present in the original repo too - not caused by this package). Next.js builds
+them, and they fail only when that line runs:
+  upload-bills, xero/sync, xero/backfill-labour  -> extractJobNoFromDescription
+                                                    (xero/sync: fetchAllCostBills)
+  sync, deals, fieldmap, webhook, cron/pipedrive-sync -> old Pipedrive storage
+                                                    functions
+Upload Bills is on the weekly commercial checklist - worth checking it works.
+
+Checked:
+  - the recorder: a send recorded with to/cc/subject/attachments/source; a
+    rejection recorded with the service's reason; a network failure recorded and
+    still thrown to the sender; a batch send recorded as two; other requests
+    untouched; the sender still reads its own response; installing twice does
+    not double-wrap; nothing kept outside a company context
+  - the register: every route and job it names exists; every route that sends
+    email directly is in it (one missed during checking - Design customer login
+    - added)
+  - the admin route: today's recipients resolve from real users (deactivated
+    excluded; by role and by job title); the log returned and matched to its
+    register entry; non-admin refused
+  - all 202 other server routes compile; all 158 pages pass the browser check
+
+SMOKE TEST
+1. Admin > Email Notifications: three tabs; Task reminders as before.
+2. Register: the lists, with today's recipients on the role-based rows.
+3. Send something (e.g. Send test on Task reminders) -> Sent log: it is there,
+   with Sent.
