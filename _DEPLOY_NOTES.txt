@@ -1,72 +1,31 @@
-PACKAGE 1067 - Project Report: the week's weather, automatically
+PACKAGE 1068 - Report weather: postcodes not in the national file
 
-Five files: two complete replacements, three NEW. No re-seed. Built on 1066.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1067.
 
-  NEW       lib/siteWeather.js                    (the lookup - server only)
-            pages/api/project-report-weather.js
-            components/ReportWeather.js           (the table, editor + view)
-  REPLACED  pages/operations/project-management/report.js
-            lib/projectReportPdf.js               (weather in the PDF)
+  lib/siteWeather.js
+  components/ReportWeather.js
 
-OPTIONAL ENV: OPEN_METEO_API_KEY  - see "Licence" below. Works without it.
+THE FAULT
+"Postcode ... was not recognised." The lookup only knew CURRENT postcodes.
+Building sites are exactly where a postcode is too new to be in the national
+file yet, or has been retired.
 
-WHAT IT DOES
-A "Weather" section on the Project Report, after Additional photos and before
-Approval - in the editor, the read-only view and the PDF. One row per day:
+THE FIX - three tries, in order
+  1. the postcode itself
+  2. the retired-postcodes list, which keeps their location
+  3. the postcode DISTRICT (TF9 3SP -> TF9) and its centre
+The weather grid is about 2 km square, so a district centre gives effectively
+the same week's weather. When the district is used, the note under the table
+says so: "not yet in the postcode file - the centre of TF9 was used".
 
-  Day | Conditions | High / low | Rain (mm) | Wind / gusts (mph) | Flags
+Only if even the district is unknown does the report refuse, and then it says
+the postcode itself looks wrong: "Postcode ... could not be found, not even its
+district (...). Check the postcode in the project's address."
 
-Flags: Rain (1 mm+), Heavy rain (10 mm+), High wind (gusts 30 mph+), Frost
-(0 C or below). Indicative thresholds, printed under the table.
+Draft reports pick this up the next time they are opened, or with Refresh
+weather.
 
-HOW
-  1. The project's address -> its UK postcode (e.g. TF9 3SP).
-  2. Postcode -> location: postcodes.io (free, no key).
-  3. That location, the report's days -> daily weather: Open-Meteo, whose UK
-     data comes from the Met Office's high-resolution model (~2 km grid).
-
-WHICH DAYS
-The same window the report's photos use: the day after the previous report for
-the project, up to this report's date. A first report, or a gap of more than
-two weeks, covers the 7 days to the report date. FINISHED DAYS ONLY - a report
-dated today shows up to yesterday and fills in when reopened.
-
-WHEN IT CHANGES
-  Draft       fetched when the project or date is chosen and when the draft is
-              reopened; "Refresh weather" to fetch again
-  Complete    FROZEN at the weather recorded - a report that has gone to a
-              client keeps the figures it was issued with
-Saved on the report itself (report.weather). Editing a report from the Site
-App keeps it (the save merges), though the Site App does not show it.
-
-NO POSTCODE -> NO GUESS
-If the project's address has no UK postcode the section says "No UK postcode
-in the project address - add one to show the weather." A postcode the lookup
-does not recognise says so too.
-
-LICENCE
-Open-Meteo's free service is for NON-COMMERCIAL use. For business use, take
-an Open-Meteo paid plan and set its key as OPEN_METEO_API_KEY in Vercel; the
-same calls then go to its customer service. Nothing else changes.
-
-NOT YET
-UK postcodes only (the lookup is postcodes.io). A non-UK customer would need a
-different address lookup - noted for the multi-tenant work.
-
-Checked: postcode finding (anywhere in an address, any case; none -> refused);
-the window rules (last report to this one; 7-day fallback for a first report
-or a long gap; never today; empty when nothing has finished); the lookup with
-the weather service stood in - right dates, mph, descriptions and flags; a real
-PDF generated and read back - the weather table sits between the photos and
-Approval with every day and flag; the report page, the routes and the Site App
-report page bundle; all 158 pages pass the browser check. Not checked here: the
-live call to postcodes.io and Open-Meteo, which this environment cannot reach -
-that is smoke step 1.
-
-SMOKE TEST
-1. Project Management -> Project Report -> new report for a live project with a
-   postcode in its address. After Additional photos: the week's weather.
-2. Change the report date - the weather follows.
-3. Mark it complete, reopen it - "Fixed at the weather recorded".
-4. Download the PDF - Weather sits before Approval.
-5. A project with no postcode in its address - the message, not a guess.
+Checked: a current postcode (found directly); a retired one (found on the
+retired list); a new-build not yet listed (found by its district, noted); a
+nonsense one (refused with the new message). The report page and route
+bundle; all 158 pages pass the browser check.

@@ -32,7 +32,7 @@ export default function ReportWeather({ weather }) {
         </table>
       </div>
       <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>
-        Postcode {weather.postcode} · {weather.source}. Flags: rain 1 mm+, heavy rain 10 mm+, high wind gusts 30 mph+, frost 0°C or below.
+        Postcode {weather.postcode}{weather.precision === 'district' ? ` (not yet in the postcode file - the centre of ${String(weather.postcode).split(' ')[0]} was used)` : ''} · {weather.source}. Flags: rain 1 mm+, heavy rain 10 mm+, high wind gusts 30 mph+, frost 0°C or below.
       </div>
     </div>
   )
