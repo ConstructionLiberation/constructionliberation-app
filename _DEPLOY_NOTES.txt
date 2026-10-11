@@ -1,37 +1,23 @@
-PACKAGE 1065 - Project page: live figures, valuation date only where it belongs
+PACKAGE 1066 - WIP complete email: Accounts users only
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1064.
+One file. Complete replacement. No re-seed. No env changes. Built on 1065.
 
-  pages/project/[id].js        (a project's page, opened from Project Financials)
+  pages/api/wip-lock.js
 
-THE VALUATION DATE NOW DRIVES ONLY FOUR FIGURES
-  AFA
-  Application total inc. retention   (top card and the Income tab)
-  Current Margin                     (and the Margin Trend, by valuation date)
-  Remaining to apply for
+When the WIP is marked complete, the email now goes to ACTIVE users whose
+access role is ACCOUNTS - nobody else.
 
-EVERYTHING ELSE IS LIVE - every cost and invoice to date, as the Budget Tracker:
-  Total Spent, Total Budget                      (top cards)
-  Overview: Budget vs Spend, Cost Breakdown
-  Costs tab: its spend and budget figures
-  Income tab: Total Invoiced, Retention Held
-  Retention tab
-(The Monthly Costs vs Income chart already showed every month.)
+  Before   everyone with Bookkeeping access: Accounts, Management and Admin,
+           including DEACTIVATED users who still had an email on record
+  Now      Accounts users only, and only if active
 
-The picker now reads "Valuation date" with a line beside it: "Applies to AFA,
-Application total, Current Margin and Remaining to apply for. Everything else
-is live." - so nobody reads a live figure as a valuation one.
+To add or remove someone: change their access role in Admin > Users. The
+pop-up after marking complete still lists exactly who was sent it.
 
-The WIP tab is unchanged: it has its own valuation-date logic, which is right
-for a WIP.
+If nobody has the Accounts role, the WIP still locks but no email is sent -
+the pop-up says nobody was notified.
 
-Checked: an audit of every use of the as-at figures - outside the tabs only
-the four valuation figures remain; the Overview, Costs and Retention tabs
-receive the live set; the Income tab splits as above. The page bundles; all
-158 pages pass the browser check.
-
-SMOKE TEST
-Open a project with costs after its last valuation date. Total Spent and
-Budget vs Spend include them (and match the Budget Tracker); AFA, Application
-total, Current Margin and Remaining to apply for are unchanged. Change the
-valuation date - only those four move.
+Checked: the route run with a mix of users - an active Accounts user emailed;
+a deactivated Accounts user, a director, an admin, a deactivated leaver, a
+post-contract user and an Accounts user with no email address all left out;
+the pop-up lists the same one recipient. The route bundles.

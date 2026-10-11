@@ -1,7 +1,7 @@
 import { fromEmail } from '../../lib/tenantSettings'
 import { requireArea } from '../../lib/portalAuth'
 import { getPortalUsers, getClient } from '../../lib/db'
-import { canAccessArea } from '../../lib/roles'
+import { normRole } from '../../lib/roles'
 import withTenant from '../../lib/withTenant'
 
 // Locking a month's WIP.
@@ -28,16 +28,17 @@ async function handler(req, res) {
   const lock = { month, lockedAt: Date.now(), lockedBy: by || '', totalWip: Number(totalWip) || 0 }
   await redis.set(KEY, lock)
 
-  // Tell everyone who works from these figures. Anyone with bookkeeping access - that is
-  // who is waiting on it, and the whole point of the button is that they stop asking.
+  // Tell the bookkeeper(s): ACCOUNTS users only (1066, by decision). They post the
+  // WIP journals, so they are who is waiting on this. Until 1066 it went to
+  // everyone with Bookkeeping access - accounts, management and admin.
   let notified = []
   let notifyError = null
   try {
     const users = await getPortalUsers()
     const to = (users || [])
-      // The real access map, not a guess. canAccessArea('bookkeeping') is accounts,
-      // management and admin - exactly the people who work from these figures.
-      .filter(u => u.email && canAccessArea(u.role, 'bookkeeping'))
+      // Active users only - a deactivated user keeps their email on record, and a
+      // leaver must not keep receiving the company's month-end figures.
+      .filter(u => u.email && u.active !== false && normRole(u.role) === 'accounts')
       .map(u => u.email)
     if (to.length && process.env.RESEND_API_KEY) {
       const FROM = fromEmail('notify')
