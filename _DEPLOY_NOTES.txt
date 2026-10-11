@@ -1,23 +1,28 @@
-PACKAGE 1069 - Report weather: the 14 days before the report
+PACKAGE 1070 - Report weather: the source in the bracket after "Weather"
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1068.
+Four files: three complete replacements, one NEW. No re-seed. No env changes.
+Built on 1069.
 
-  lib/siteWeather.js
-  pages/operations/project-management/report.js   (section label)
-  lib/projectReportPdf.js                          (PDF heading)
+  NEW       lib/siteWeatherLabel.js
+  REPLACED  lib/siteWeather.js
+            lib/projectReportPdf.js
+            pages/operations/project-management/report.js
 
-The weather on a Project Report now always covers the 14 DAYS UP TO AND
-INCLUDING THE REPORT DATE, whenever the previous report was (1067 used the
-days since the previous report).
+The bracket after "Weather" now says where the weather came from:
 
-Finished days only: a report dated today shows the 13 days to yesterday and
-fills in the 14th when reopened. Labelled "the 14 days to this report's date"
-on the report, and "Weather - 14 days to report date" in the PDF.
+  Editor   Weather (Source: Open-Meteo, Met Office UK model)
+           with "the 14 days to this report's date" beside it
+  View     Weather (Source: Open-Meteo, Met Office UK model)
+  PDF      WEATHER (SOURCE: OPEN-METEO, MET OFFICE UK MODEL)
+           "The 14 days to the report date." underneath
 
-Draft reports pick this up when reopened or with Refresh weather. COMPLETED
-reports keep the weather they were issued with, by design.
+Weeks older than about three months come from Open-Meteo's archive and read
+"(Source: Open-Meteo historical archive)".
 
-Checked: the window for a report on 9 Oct (26 Sep - 9 Oct, 14 days, whatever
-the last report date), dated today (13 finished days), an older report (14
-days); a PDF regenerated with the new heading; the report page and routes
-bundle; all 158 pages pass the browser check.
+Reports saved before this package stored the source as "Open-Meteo (Met
+Office UK model)"; they read the same as new ones - no brackets inside
+brackets.
+
+Checked: the label for new, older-wording, archive and missing sources; a PDF
+regenerated and read back; the report page and routes bundle; all 158 pages
+pass the browser check.

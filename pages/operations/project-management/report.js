@@ -3,6 +3,7 @@ import OperationsShell, { PageHeading } from '../../../components/OperationsShel
 import { INK, GOLD, th, td, Loading, EmptyCard, primaryBtn, ghostBtn, linkBtn } from '../../../components/opsUI'
 import { sectionsFor, newSectionKey, SECTION_TYPES, BUILT_IN_SECTIONS, CUSTOM_AFTER } from '../../../lib/projectReportTemplate'
 import ReportWeather from '../../../components/ReportWeather'
+import { sourceLabel } from '../../../lib/siteWeatherLabel'
 import { autofillReport } from '../../../lib/projectReportAutofill'
 
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -387,7 +388,7 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
       <PhotoAdder photos={f.manualPhotos || []} onChange={(list) => set({ manualPhotos: list })} />
 
       {/* WEATHER (1067) - after the photos, before approval. */}
-      <L>Weather <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(automatic, for the project's postcode - the 14 days to this report's date)</span></L>
+      <L>Weather <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(Source: {sourceLabel(f.weather)})</span> <span style={{ fontWeight: 400, color: '#bbb', fontSize: 11.5 }}>the 14 days to this report's date</span></L>
       {f.weather ? <ReportWeather weather={f.weather} /> : <div style={{ fontSize: 12.5, color: '#999' }}>{weatherBusy ? 'Loading the weather…' : (weatherMsg || (f.projectAddress ? 'No weather yet.' : 'Choose a project to show the weather.'))}</div>}
       {f.weather && weatherMsg && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>{weatherMsg}</div>}
       {f.status !== 'complete' && f.projectAddress && (
@@ -467,7 +468,7 @@ function ViewModal({ id, onClose, onEdit }) {
       {(r.manualPhotos || []).length > 0 && <Row label={`Additional photos (${r.manualPhotos.length})`}><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{r.manualPhotos.map((p, i) => <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} /></a>)}</div></Row>}
 
       {(r.photos || []).length > 0 && <Row label={`Photos (${r.photos.length})`}><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{r.photos.map((p, i) => <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee' }} /></a>)}</div></Row>}
-      {r.weather?.days?.length > 0 && <Row label="Weather"><ReportWeather weather={r.weather} /></Row>}
+      {r.weather?.days?.length > 0 && <Row label={`Weather (Source: ${sourceLabel(r.weather)})`}><ReportWeather weather={r.weather} /></Row>}
       <Row label="Approval">{r.approvalName || '—'} · {fmtDMY(r.approvalDate)}</Row>
       {r.revisions?.length > 0 && <Row label="Revision history">{r.revisions.map(v => `Rev ${v.rev} — ${new Date(v.at).toLocaleString('en-GB')} by ${v.by || '—'}`).join('\n')}</Row>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20, borderTop: '1px solid #eee', paddingTop: 18 }}>
