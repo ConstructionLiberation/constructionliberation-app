@@ -1,23 +1,29 @@
-PACKAGE 1071 - Lessons Learnt: no person responsible on lessons
+PACKAGE 1072 - Application PDF: summary headings no longer overlap
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1070.
+One file. Complete replacement. No re-seed. No env changes. Built on 1071.
 
-  pages/lessons-learnt.js
-  pages/api/lessons-learnt.js
+  lib/applicationPdf.js
 
-The "Person responsible" field is removed from LESSONS:
-  - gone from the lesson form in the monthly minutes
-  - the "Responsible" column is gone from the Lessons Learnt table
-  - no longer required: completing a meeting no longer stops with "Lesson n:
-    no person responsible" - checked on the page AND on the server, so it
-    cannot be demanded by one and not the other
-A lesson still needs its item, its detail and who it's for.
+THE FAULT
+The Summary table's column headings were drawn on one line, right-aligned to
+columns 108pt wide. "Application for Payment Total" needs about 125pt, so it
+ran left into "Contract Sum" ("Contract SumApplication for Payment Total").
 
-UNCHANGED - meeting ACTIONS keep their person responsible. They are pushed to
-the live task list on "Meeting complete", and a task needs an owner.
+THE FIX
+A heading too wide for its column wraps onto a second line, right-aligned,
+and the grey heading band grows to fit:
 
-Lessons already saved keep whatever person they had in the data; it is simply
-no longer shown.
+              Contract Sum   Application for Payment    Proj. Final Account
+                                               Total
 
-Checked: no remaining lesson-level person in the form, table or either check;
-both files bundle; all 158 pages pass the browser check.
+It fits whatever the heading says - the claim name follows the company's
+terms (e.g. "Payment Claim Total" in New Zealand), so no fixed width would do.
+
+Used by both Download PDF and the PDF attached when an application is sent.
+
+Checked: a real application PDF generated and read back - every heading word
+in its own space, "Contract Sum" ending at 327pt and "Application for Payment"
+starting at 342pt, "Total" on the second line, nothing overlapping or run
+together, divider lines drawn. (The test also caught and fixed a clash in my
+first version: a name I used was already the divider-line colour.) Both PDF
+routes bundle; all 158 pages pass the browser check.
