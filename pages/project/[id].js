@@ -329,6 +329,13 @@ export default function ProjectPage() {
 
   const p = { ...project, ...(project.calculated || {}) }
   const atDate = selectedVDate ? calcAtDate(costLines, invoiceLines, selectedVDate, settings || {}) : calcAtDate(costLines, invoiceLines, null, settings || {})
+  // LIVE FIGURES (1065): every cost and invoice to date, whatever valuation date
+  // is picked - the Budget Tracker's view. Only FOUR figures follow the
+  // valuation date: AFA, Application total inc. retention, Current Margin and
+  // Remaining to apply for. Everything else on this page - Total Spent, Total
+  // Budget, Budget vs Spend, Cost Breakdown, the Costs tab, Total Invoiced and
+  // Retention Held - reads these.
+  const live = calcAtDate(costLines, invoiceLines, null, settings || {})
   const trendData = pastVDates.slice(0, 6).reverse().map(d => {
     const calc = calcAtDate(costLines, invoiceLines, d, settings || {})
     return { label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), margin: calc.margin, invoiced: calc.invoicedToDate, costs: calc.costsToDate }
@@ -364,13 +371,14 @@ export default function ProjectPage() {
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: 24 }}>
           {pastVDates.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, background: '#fff', borderRadius: 10, padding: '12px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <span style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>Figures as at valuation date:</span>
+              <span style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>Valuation date:</span>
               <select value={selectedVDate ? selectedVDate.toISOString() : ''} onChange={e => setSelectedVDate(e.target.value ? new Date(e.target.value) : null)} style={{ padding: '6px 12px', border: '1px solid #e5e5e5', borderRadius: 6, fontSize: 13, background: '#fff' }}>
                 {pastVDates.map(d => (
                   <option key={d.toISOString()} value={d.toISOString()}>{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</option>
                 ))}
               </select>
               <span style={{ fontSize: 12, color: '#aaa' }}>{settings?.valuationDay ? `Valuation day: ${settings.valuationDay}th of each month` : 'Valuation day: using monthly dates'}</span>
+              <span style={{ fontSize: 12, color: '#888' }}>Applies to AFA, Application total, Current Margin and Remaining to apply for. Everything else is live.</span>
             </div>
           )}
 
@@ -378,8 +386,8 @@ export default function ProjectPage() {
             {[
               { label: 'AFA', value: fmt(atDate.afa), sub: atDate.afaSource ? `${atDate.afaSource} · CV: ${fmt(parseFloat(settings?.contractValue || 0))}` : `CV: ${fmt(parseFloat(settings?.contractValue || 0))}` },
               { label: 'Application total inc. retention', value: fmt(atDate.appliedForGross), sub: atDate.afa > 0 ? `${((atDate.appliedForGross / atDate.afa) * 100).toFixed(0)}% of AFA` : `as at ${vDateLabel}` },
-              { label: 'Total Spent', value: fmt(atDate.costsToDate), sub: atDate.totalBudget > 0 ? `${((atDate.costsToDate / atDate.totalBudget) * 100).toFixed(0)}% of budget` : `as at ${vDateLabel}` },
-              { label: 'Total Budget', value: fmt(atDate.totalBudget), sub: atDate.totalBudget > 0 ? `${((atDate.costsToDate / atDate.totalBudget) * 100).toFixed(0)}% used` : '⚠ Set budget' },
+              { label: 'Total Spent', value: fmt(live.costsToDate), sub: live.totalBudget > 0 ? `${((live.costsToDate / live.totalBudget) * 100).toFixed(0)}% of budget` : `as at ${vDateLabel}` },
+              { label: 'Total Budget', value: fmt(live.totalBudget), sub: live.totalBudget > 0 ? `${((live.costsToDate / live.totalBudget) * 100).toFixed(0)}% used` : '⚠ Set budget' },
               { label: 'Current Margin', value: atDate.margin != null ? (atDate.margin * 100).toFixed(1) + '%' : '—', sub: `as at ${vDateLabel}`, color: marginColor(atDate.margin), bg: marginBg(atDate.margin), showKey: true },
               { label: 'Remaining to apply for', value: fmt(atDate.remainingToApply), sub: 'gross, AFA less applied for', color: atDate.remainingToApply > 0 ? '#2563eb' : '#e63946' },
             ].map(card => (
@@ -405,11 +413,11 @@ export default function ProjectPage() {
                   <button key={t} onClick={() => setTab(t)} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: tab === t ? '#1a1a2e' : 'transparent', color: tab === t ? '#fff' : '#555', cursor: 'pointer', fontSize: 13, textTransform: 'capitalize' }}>{t}</button>
                 ))}
               </div>
-              {tab === 'overview' && <OverviewTab p={p} settings={settings || {}} atDate={atDate} trendData={trendData} vDateLabel={vDateLabel} costLines={costLines} invoiceLines={invoiceLines} />}
-              {tab === 'costs' && <CostsTab costLines={costLines} atDate={atDate} settings={settings || {}} projectId={id} projectLabel={[p.jobNo, p.name].filter(Boolean).join(' - ')} />}
-              {tab === 'income' && <IncomeTab invoiceLines={invoiceLines} atDate={atDate} />}
+              {tab === 'overview' && <OverviewTab p={p} settings={settings || {}} atDate={live} trendData={trendData} vDateLabel={vDateLabel} costLines={costLines} invoiceLines={invoiceLines} />}
+              {tab === 'costs' && <CostsTab costLines={costLines} atDate={live} settings={settings || {}} projectId={id} projectLabel={[p.jobNo, p.name].filter(Boolean).join(' - ')} />}
+              {tab === 'income' && <IncomeTab invoiceLines={invoiceLines} atDate={atDate} live={live} />}
               {tab === 'wip' && <WipTab costLines={costLines} invoiceLines={invoiceLines} settings={settings || {}} pastVDates={pastVDates} selectedVDate={selectedVDate} id={id} onSettingsSaved={load} />}
-              {tab === 'retention' && <RetentionTab p={p} settings={settings || {}} atDate={atDate} />}
+              {tab === 'retention' && <RetentionTab p={p} settings={settings || {}} atDate={live} />}
             </div>
 
             {editMode && (
@@ -1166,7 +1174,7 @@ function CostsTab({ costLines, atDate, settings, projectId, projectLabel }) {
   )
 }
 
-function IncomeTab({ invoiceLines, atDate }) {
+function IncomeTab({ invoiceLines, atDate, live }) {
   const { money } = useFormat()
   const fmtC = (n) => money(n || 0)
   const twoYearsAgo = new Date()
@@ -1267,8 +1275,9 @@ function IncomeTab({ invoiceLines, atDate }) {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
-            { label: 'Total Invoiced', value: atDate.invoicedToDate, color: '#16a34a' },
-            { label: 'Retention Held', value: atDate.retention, color: '#ca8a04' },
+            // Live (1065); Application total below stays at the valuation date.
+            { label: 'Total Invoiced', value: (live || atDate).invoicedToDate, color: '#16a34a' },
+            { label: 'Retention Held', value: (live || atDate).retention, color: '#ca8a04' },
             { label: 'Application total inc. retention', value: atDate.appliedForGross, color: '#1a1a2e' },
           ].map(card => (
             <div key={card.label} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', flex: 1 }}>

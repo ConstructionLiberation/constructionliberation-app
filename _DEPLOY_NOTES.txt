@@ -1,29 +1,37 @@
-PACKAGE 1064 - Value priced (existing), value secured (all and existing):
-               latest full month, monthly target
+PACKAGE 1065 - Project page: live figures, valuation date only where it belongs
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1063.
+One file. Complete replacement. No re-seed. No env changes. Built on 1064.
 
-  lib/businessScorecard.js
-  pages/api/management/scorecard.js
+  pages/project/[id].js        (a project's page, opened from Project Financials)
 
-The same as 1063 did for Value of work priced, now on:
-  Value of work priced - existing customers
-  Value of work secured
-  Value of work secured - existing customers
+THE VALUATION DATE NOW DRIVES ONLY FOUR FIGURES
+  AFA
+  Application total inc. retention   (top card and the Income tab)
+  Current Margin                     (and the Margin Trend, by valuation date)
+  Remaining to apply for
 
-Each card:
-  Big number   the LATEST FULL MONTH (e.g. "Sep 26")
-  Target       per MONTH, compared with that month
-  Underneath   the period's total, e.g. "380,000 total, FY2026 to date"
+EVERYTHING ELSE IS LIVE - every cost and invoice to date, as the Budget Tracker:
+  Total Spent, Total Budget                      (top cards)
+  Overview: Budget vs Spend, Cost Breakdown
+  Costs tab: its spend and budget figures
+  Income tab: Total Invoiced, Retention Held
+  Retention tab
+(The Monthly Costs vs Income chart already showed every month.)
 
-All four value cards now use one rule (monthHeadline in the route), so they
-behave the same. Graphs, the trend table and the pop-outs are unchanged.
+The picker now reads "Valuation date" with a line beside it: "Applies to AFA,
+Application total, Current Margin and Remaining to apply for. Everything else
+is live." - so nobody reads a live figure as a valuation one.
 
-RE-ENTER ANY OF THESE TARGETS THAT WERE SET FOR THE YEAR as monthly figures,
-or every month will read red.
+The WIP tab is unchanged: it has its own valuation-date logic, which is right
+for a WIP.
 
-Checked: all four through the route with pricing and wins in July, August,
-September and part of October - each card shows September's figure with the
-right period total, October excluded; existing-customer split correct; pop-out
-totals unchanged (80 metric-months, 0 mismatches); all 158 pages pass the
-browser check.
+Checked: an audit of every use of the as-at figures - outside the tabs only
+the four valuation figures remain; the Overview, Costs and Retention tabs
+receive the live set; the Income tab splits as above. The page bundles; all
+158 pages pass the browser check.
+
+SMOKE TEST
+Open a project with costs after its last valuation date. Total Spent and
+Budget vs Spend include them (and match the Budget Tracker); AFA, Application
+total, Current Margin and Remaining to apply for are unchanged. Change the
+valuation date - only those four move.
