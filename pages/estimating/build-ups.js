@@ -5,7 +5,7 @@ import { useFormat } from '../../components/TenantProvider'
 import { CheckPanel, SecBtn, th, td, tdR, inp, btn } from '../../components/LibraryParts'
 import BuildupEditor from '../../components/BuildupEditor'
 import DocumentsPanel from '../../components/DocumentsPanel'
-import { LINE_TYPES, BU_UNITS, BU_UNIT_LABEL, COST_CATEGORIES, LINE_COLUMNS, SIZE_COLUMNS, RULE_COLUMNS, rateFor, evalQty, qtyProblem } from '../../lib/buildups'
+import { LINE_TYPES, BU_UNITS, BU_UNIT_LABEL, COST_CATEGORIES, LINE_COLUMNS, SIZE_COLUMNS, RULE_COLUMNS, DESC_COLUMNS, varText, rateFor, evalQty, qtyProblem } from '../../lib/buildups'
 
 // ESTIMATING > RATE BUILD-UPS (1087). Categories down the left; a build-up
 // opens in the editor: name, category, unit, sizes, lines (products picked from
@@ -58,7 +58,7 @@ export default function BuildUpsPage() {
     try {
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
       const sh = (n) => wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null }) : []
-      const sheets = { lines: sh('Build-ups'), sizes: sh('Sizes'), rules: sh('Product rules') }
+      const sheets = { lines: sh('Build-ups'), sizes: sh('Sizes'), rules: sh('Product rules'), descriptions: sh('Descriptions') }
       const d = await estApi(API, { action: 'check', sheets, fileName: file.name })
       setCheck({ summary: d.summary, sheets, fileName: file.name })
     } catch (e) { setErr(e.message) }
@@ -73,9 +73,12 @@ export default function BuildUpsPage() {
   function workbook(list) {
     const wb = XLSX.utils.book_new()
     const add = (name, cols, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cols.map(([, l]) => l), ...rows]), name)
-    add('Build-ups', LINE_COLUMNS, list.flatMap(t => t.lines.map(l => [t.section, t.description, t.unit, l.id.replace(/^L/, ''), l.type, l.label, (l.offers || []).join(';'), l.default || '', l.amount ?? '', l.qty || '', l.waste ?? '', l.increase ?? '', l.cost || '', l.comment || ''])))
+    // Every setting a line has goes out - an own item's rate, Apply size, in the
+    // description, variable cells (1098) - so a download uploads back unchanged.
+    add('Build-ups', LINE_COLUMNS, list.flatMap(t => t.lines.map(l => [t.section, t.description, t.unit, l.id.replace(/^L/, ''), l.type, l.label, (l.offers || []).join(';'), l.default || '', l.amount ?? '', l.qty || '', l.waste ?? '', l.increase ?? '', l.cost || '', l.comment || '', l.override ?? '', l.applySize ? 'yes' : '', l.inDescription ? 'yes' : '', varText(l)])))
     add('Sizes', SIZE_COLUMNS, list.flatMap(t => (t.sizes || []).map(z => [t.section, t.description, z.name, z.value ?? '', z.comment || ''])))
-    add('Product rules', RULE_COLUMNS, list.flatMap(t => (t.rules || []).map(r => [t.section, t.description, (t.lines.find(l => l.id === r.line) || {}).label || r.line, r.ref, r.waste])))
+    add('Product rules', RULE_COLUMNS, [])   // product rules are gone (1098) - waste lives on each line
+    add('Descriptions', DESC_COLUMNS, list.filter(t => (t.descText || '').trim()).map(t => [t.section, t.description, t.descText]))
     return wb
   }
   const download = () => XLSX.writeFile(workbook(templates), `Build-ups-${new Date().toISOString().slice(0, 10)}.xlsx`)

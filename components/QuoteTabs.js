@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import BrandLogo from './BrandLogo'
 import DocumentsPanel from './DocumentsPanel'
 import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders } from '../lib/quoteDocs'
-import { BU_UNIT_LABEL } from '../lib/buildups'
+import { BU_UNIT_LABEL, descriptionText } from '../lib/buildups'
 
 // THE ESTIMATE'S QUOTE TABS (1092): Letter, Clarifications, Documents, Quote.
 // The take-off is the other tab (pages/estimating/estimate/[id].js).
@@ -84,7 +84,9 @@ export function DocumentsTab({ est, readOnly }) {
 
 // THE QUOTE as the customer sees it. Prints to PDF (the browser's Print ->
 // Save as PDF) with only the quote on the page.
-export function QuotePreview({ est, values, priced, totals, templates, money, companyName, termsOverride }) {
+export function QuotePreview({ est, values, priced, totals, templates, money, companyName, termsOverride, lib, draft, actions }) {
+  // An item's quote line: its build-up DESCRIPTION when written, else its name (1098).
+  const lineText = (r) => (lib && r.buildup && descriptionText(r.buildup, lib)) || r.description
   const m2 = (v) => v == null ? '' : money(v, { dp: 2 })
   const s = est.settings || {}
   const terms = termsOverride || currentTerms(templates)
@@ -104,7 +106,8 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
     <div>
       <style>{`@media print { body * { visibility: hidden !important; } .quote-doc, .quote-doc * { visibility: visible !important; } .quote-doc { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; border: none !important; } .no-print { display: none !important; } }`}</style>
       <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-        <button onClick={() => window.print()} style={{ ...small, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>Print / save as PDF</button>
+        {actions}
+        <button onClick={() => window.print()} style={small}>Print draft</button>
         <span style={{ fontSize: 12, color: '#888' }}>Choose "Save as PDF" in the print window.</span>
       </div>
       <div className="quote-doc" style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 4, padding: '36px 44px', maxWidth: 860, margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', color: '#1a1a19' }}>
@@ -114,6 +117,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
             <div style={{ fontSize: 18, fontWeight: 700 }}>Quotation</div>
             {est.quoteRef && <div>Ref {est.quoteRef} · Rev {est.revision}</div>}
             {values.date && <div>{values.date}</div>}
+            {draft && <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', letterSpacing: 1 }}>DRAFT - not yet sent</div>}
           </div>
         </div>
         {(est.letter?.body || '').trim() && <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, marginBottom: 28 }}>{fillPlaceholders(est.letter.body, values)}</div>}
@@ -123,8 +127,8 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
           <thead><tr><th style={th}>Description</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Unit</th><th style={{ ...th, textAlign: 'right' }}>Rate</th><th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
           <tbody>
             {shown.map(r => r.kind === 'section'
-              ? <tr key={r.id}><td colSpan={5} style={{ ...td, fontWeight: 700, background: '#f6f6f4', paddingTop: 10 }}>{r.title}</td></tr>
-              : <tr key={r.id}><td style={td}>{r.description}</td><td style={num}>{r.qty ?? ''}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={num}>{m2(priced[r.id]?.total)}</td></tr>)}
+              ? <tr key={r.id}><td colSpan={5} style={{ ...td, fontWeight: 700, textDecoration: 'underline', background: '#f6f6f4', paddingTop: 10 }}>{r.title}</td></tr>
+              : <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{r.qty ?? ''}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={num}>{m2(priced[r.id]?.total)}</td></tr>)}
             <tr><td colSpan={4} style={{ ...td, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>Total</td><td style={{ ...num, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>{m2(totals.total)}</td></tr>
           </tbody>
         </table>
@@ -133,7 +137,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
         {below.length > 0 && <>
           <h3 style={{ fontSize: 14, margin: '22px 0 6px' }}>Rate-only items <span style={{ fontWeight: 400, fontSize: 12, color: '#666' }}>(below the line - quantities to be confirmed, not included in the total)</span></h3>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <tbody>{below.map(r => <tr key={r.id}><td style={td}>{r.description}</td><td style={num}>TBC</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={{ ...num, color: '#666' }}>Rate only</td></tr>)}</tbody>
+            <tbody>{below.map(r => <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>TBC</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={{ ...num, color: '#666' }}>Rate only</td></tr>)}</tbody>
           </table>
         </>}
 

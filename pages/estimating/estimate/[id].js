@@ -73,6 +73,7 @@ export default function EstimatePage() {
   const [quoteDocs, setQuoteDocs] = useState(null)   // the company letter, clarifications library, T&Cs
   const [lastRev, setLastRev] = useState(null)    // the last ISSUED revision's estimate - for 'changes since'
   const [issueMsg, setIssueMsg] = useState('')
+  const [sentView, setSentView] = useState(null)    // the quote just marked as sent: { revision, at, est } - printed as issued
 
   useEffect(() => {
     if (!id) return
@@ -104,19 +105,29 @@ export default function EstimatePage() {
   const values = useMemo(() => {
     if (!est) return {}
     const d = detailsFor(est, crm)
-    const dt = d.date ? new Date(d.date) : null
-    return placeholderValues({ est, details: d, total: totals.total, companyName, money, dateText: dt && !isNaN(dt) ? dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '' })
-  }, [est, crm, totals, companyName])
+    // The quote DATE (1098): never typed - today on a draft; the day it was marked
+    // as sent on the copy printed then.
+    const dt = sentView ? new Date(sentView.at) : new Date()
+    return placeholderValues({ est: sentView ? { ...est, ...sentView.est, revision: sentView.revision } : est, details: d, total: totals.total, companyName, money, dateText: dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })
+  }, [est, crm, totals, companyName, sentView])
   const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
 
-  async function issue() {
-    const note = window.prompt(`Issue Rev ${est.revision}? This freezes the quote as it stands${est.dealId ? ' and sets the CRM deal value to its total' : ''}. Optional note:`, '')
+  async function issue(andPrint) {
+    const note = window.prompt(andPrint
+      ? `Mark Rev ${est.revision} as SENT? It is issued - frozen as it stands, dated today${est.dealId ? ', the CRM deal value set to its total' : ''} - then the print window opens to save it as a PDF. Optional note:`
+      : `Issue Rev ${est.revision}? This freezes the quote as it stands${est.dealId ? ' and sets the CRM deal value to its total' : ''}. Optional note:`, andPrint ? 'Sent' : '')
     if (note === null) return
+    const asSent = JSON.parse(JSON.stringify(est))
     setBusy(true); setErr(''); setIssueMsg('')
     try {
       const d = await estApi(API, { action: 'issue', id: est.id, note, baseUpdatedAt: base })
       setLastRev({ revision: d.issued, total: d.total, estimate: JSON.parse(JSON.stringify(est)) })
       setEst(d.estimate); setBase(d.estimate.updatedAt)
+      if (andPrint) {
+        // Print the quote AS ISSUED (that revision, today's date) - then back to the draft.
+        setSentView({ revision: d.issued, at: new Date().toISOString(), est: asSent })
+        setTimeout(() => { window.print(); setTimeout(() => setSentView(null), 500) }, 300)
+      }
       setIssueMsg(`Rev ${d.issued} issued at ${money(d.total, { dp: 2 })}.${d.crm ? (d.crm.updated ? ` CRM deal value ${money(d.crm.from, { dp: 2 })} → ${money(d.crm.to, { dp: 2 })}.` : d.crm.error ? ` ${d.crm.error}` : ` ${d.crm.note}`) : ''} Now working on Rev ${d.estimate.revision}.`)
     } catch (e) { setErr(e.message) }
     setBusy(false)
@@ -169,7 +180,11 @@ export default function EstimatePage() {
         ))}
       </div>
       {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived} />}
-      {tab === 'quote' && <QuotePreview est={est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} />}
+      {tab === 'quote' && <QuotePreview est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView}
+        actions={<>
+          <button onClick={() => issue(true)} disabled={busy || dirty || s.profit == null || !!crm?.archived} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ fontSize: 12.5, padding: '6px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: busy || dirty || s.profit == null || crm?.archived ? 0.5 : 1 }}>Download and mark as sent (Rev {est.revision})</button>
+          {dirty && <span style={{ fontSize: 12, color: '#b45309' }}>Save first</span>}
+        </>} />}
       {(tab === 'letter' || tab === 'clar' || tab === 'docs') && (
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {tab === 'letter' && <LetterTab est={est} change={change} templates={quoteDocs} values={values} />}
@@ -267,8 +282,8 @@ export default function EstimatePage() {
                 {est.rows.map((r, i) => r.kind === 'section' ? (
                   <tr key={r.id} style={{ background: '#f4f4f2' }}>
                     <td style={td}><Arrows i={i} move={move} /></td>
-                    <td style={td} colSpan={4}><input value={r.title} onChange={e => setRow(r.id, { title: e.target.value })} style={{ ...cellInp, fontWeight: 700, width: '100%', background: 'transparent', border: 'none' }} /></td>
-                    <td style={{ ...tdR, fontWeight: 700 }}>{m2(secTot[r.id])}</td>
+                    <td style={td} colSpan={4}><input value={r.title} onChange={e => setRow(r.id, { title: e.target.value })} style={{ ...cellInp, fontWeight: 700, textDecoration: 'underline', width: '100%', background: 'transparent', border: 'none' }} /></td>
+                    <td style={td} />
                     {cells > 0 && <td style={td} colSpan={cells} />}
                     <td style={td}><button onClick={() => change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) }))} style={iconBtn} title="Remove section header">✕</button></td>
                   </tr>

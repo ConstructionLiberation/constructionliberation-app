@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing } from '../lib/buildups'
+import { LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -21,6 +21,8 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
   // Older lines (fixed rate) become material lines with their rate, once, on
   // opening - priced exactly as before (1097).
   useEffect(() => { if (needsNormalizing(value)) onChange(x => normalizeTemplate(x)) }, [])
+  const [editList, setEditList] = useState(null)   // a line id: edit its list of products (1098)
+  const [descMenu, setDescMenu] = useState(false)
   const [showAll, setShowAll] = useState({})     // lineId -> true: pick from the whole price list / labour rates
   const set = (patch) => setT(x => ({ ...x, ...patch }))
   const setLine = (id, patch) => setT(x => ({ ...x, lines: x.lines.map(l => l.id === id ? { ...l, ...patch } : l) }))
@@ -37,7 +39,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
 
   return (
     <>
-      <Block title="Sizes" hint="Quantities can use these, e.g. Size1*1.1. Rename them (Girth, Height...) - and the quantities that use them.">
+      <Block title="Size" hint="One size for this build-up (e.g. Girth 0.6). Lines with Apply size ticked are multiplied by it. Name it to suit.">
         {(t.sizes || []).map((z, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
             <input value={z.name} onChange={e => {
@@ -50,13 +52,13 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
             <button onClick={() => setT(x => ({ ...x, sizes: x.sizes.filter((_, j) => j !== i) }))} style={iconBtn} title="Remove size">✕</button>
           </div>
         ))}
-        <button onClick={() => setT(x => ({ ...x, sizes: [...(x.sizes || []), { name: `Size${(x.sizes || []).length + 1}`, value: null, comment: '' }] }))} style={smallBtn}>+ Size</button>
+        {!(t.sizes || []).length && <button onClick={() => setT(x => ({ ...x, sizes: [{ name: 'Girth', value: null, comment: '' }] }))} style={smallBtn}>+ Size</button>}
       </Block>
 
       <Block title="Lines">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
-            <thead><tr>{['', 'Type', 'Label', 'Item', 'Rate', 'Qty', 'Waste %', 'Incr %', 'Cost cat.', 'Line cost', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 9 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['', 'Type', 'Label', 'Item', 'Apply size', 'Rate', 'Qty', 'Waste %', 'Incr %', 'Cost cat.', 'Line cost', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 10 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
             <tbody>
               {t.lines.map((l, i) => {
                 const lc = lineCost[l.id] || {}
@@ -70,9 +72,11 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                     <td style={td}><input value={l.label} onChange={e => setLine(l.id, { label: e.target.value })} style={{ ...cellInp, width: 140 }} /></td>
                     <td style={{ ...td, minWidth: 260 }}>
                       {isProd && <>
-                        <ItemSearch kind={l.type} value={l.default || ''} choices={choices} label={label} findText={findText}
+                        <ItemSearch red={isVariable(l, 'item')} kind={l.type} value={l.default || ''} choices={choices} label={label} findText={findText}
                           onPick={(v) => setLine(l.id, { default: v, override: v ? null : l.override, offers: v && !(l.offers || []).includes(v) ? [...(l.offers || []), v] : l.offers })} />
                         <label style={{ fontSize: 10.5, color: '#888', display: 'flex', gap: 4, marginTop: 2, alignItems: 'center' }}>
+                          <VarFlag l={l} cell="item" setLine={setLine} />
+                          <button onClick={() => setEditList(l.id)} title="Edit this line's list of products" style={{ ...iconBtn, fontSize: 11, padding: '0 3px' }}>⚙ list</button>
                           <input type="checkbox" checked={!!showAll[l.id]} onChange={e => setShowAll(s => ({ ...s, [l.id]: e.target.checked }))} />
                           any {l.type === 'labour' ? 'labour item' : 'product'} ({(l.offers || []).length} on this line's list)
                         </label>
@@ -81,19 +85,21 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                       {l.type !== 'comment' && l.comment && <div style={{ fontSize: 10.5, color: '#999', marginTop: 2 }}>{l.comment}</div>}
                     </td>
+                    <td style={{ ...td, textAlign: 'center' }}>{isProd && <input type="checkbox" checked={!!l.applySize} onChange={e => setLine(l.id, { applySize: e.target.checked })} title={(t.sizes || [])[0] ? `Multiply this line by the ${(t.sizes || [])[0].name}` : 'Add a size first'} disabled={!(t.sizes || []).length} />}</td>
                     <td style={td}>
                       {isProd && <>
                         {/* With a product: its rate, which can be typed over (CHANGED / Revert).
                             With none: an OWN item - this is its rate (1097). */}
                         <input value={l.override ?? ''} onChange={e => setLine(l.id, { override: e.target.value === '' ? null : parseFloat(e.target.value) })}
                           placeholder={l.default ? (lc.libRate != null ? (+lc.libRate.toFixed(4)).toString() : '') : 'rate'} inputMode="decimal"
-                          style={{ ...cellInp, width: 70, borderColor: l.default && l.override != null ? '#f59e0b' : undefined }} title={l.default ? 'The price-list rate - type over it to change it on this build-up' : 'Your own item: type its rate'} />
+                          style={{ ...cellInp, width: 70, borderColor: l.default && l.override != null ? '#f59e0b' : undefined, background: isVariable(l, 'rate') ? RED : undefined }} title={l.default ? 'The price-list rate - type over it to change it on this build-up' : 'Your own item: type its rate'} />
+                        <VarFlag l={l} cell="rate" setLine={setLine} />
                         {l.default && l.override != null && <div><span style={{ fontSize: 10, fontWeight: 700, color: '#b45309' }}>CHANGED</span> <button onClick={() => setLine(l.id, { override: null })} style={{ ...iconBtn, fontSize: 10.5, color: '#2563eb' }}>Revert to {l.type === 'labour' ? 'labour rate' : 'price list'}</button></div>}
                         {!l.default && <div style={{ fontSize: 10, color: '#888' }}>own item</div>}
                       </>}
                     </td>
                     <td style={td}>{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per job" style={{ ...cellInp, width: 80, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}</td>
-                    <td style={td}>{l.type === 'material' && <input value={pct(l.waste)} onChange={e => setLine(l.id, { waste: fromPct(e.target.value) })} style={{ ...cellInp, width: 52 }} />}{lc.ruleApplied && <div style={{ fontSize: 10, color: '#0f766e' }}>rule</div>}</td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type === 'material' && <><input value={pct(l.waste)} onChange={e => setLine(l.id, { waste: fromPct(e.target.value) })} style={{ ...cellInp, width: 52, background: isVariable(l, 'waste') ? RED : undefined }} /><VarFlag l={l} cell="waste" setLine={setLine} /></>}</td>
                     <td style={td}>{l.type === 'material' && <input value={pct(l.increase)} onChange={e => setLine(l.id, { increase: fromPct(e.target.value) })} style={{ ...cellInp, width: 52 }} />}</td>
                     <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} style={{ ...cellInp, width: 98 }}><option value="">—</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
                     <td style={{ ...tdR, fontWeight: 600 }}>{lc.cost != null ? money(lc.cost, { dp: 2 }) : ''}</td>
@@ -106,24 +112,27 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           {LINE_TYPES.map(x => <button key={x} onClick={() => addLine(x)} style={smallBtn}>+ {LINE_TYPE_LABEL[x]}</button>)}
-          <button onClick={() => addLine('labour') || setT(x => ({ ...x, lines: x.lines.map((l, i, a) => i === a.length - 1 ? { ...l, label: 'Management', cost: 'Management' } : l) }))} style={smallBtn} title="Management is not in build-ups by default - add it where needed">+ management</button>
         </div>
       </Block>
 
-      <Block title="Product rules" hint="When this product is chosen on this line, its waste is this %.">
-        {(t.rules || []).map((rr, i) => {
-          const ln = t.lines.find(l => l.id === rr.line)
-          return (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-              <select value={rr.line} onChange={e => setT(x => ({ ...x, rules: x.rules.map((y, j) => j === i ? { ...y, line: e.target.value } : y) }))} style={{ ...inp, width: 170 }}>{t.lines.filter(l => l.type === 'material').map(l => <option key={l.id} value={l.id}>{l.label || l.id}</option>)}</select>
-              <select value={rr.ref} onChange={e => setT(x => ({ ...x, rules: x.rules.map((y, j) => j === i ? { ...y, ref: e.target.value } : y) }))} style={{ ...inp, flex: 1 }}>
-                <option value="">— product —</option>{(ln?.offers || []).map(ref => <option key={ref} value={ref}>{label(ref, 'material')}</option>)}</select>
-              <input value={pct(rr.waste)} onChange={e => setT(x => ({ ...x, rules: x.rules.map((y, j) => j === i ? { ...y, waste: fromPct(e.target.value) } : y) }))} style={{ ...inp, width: 70 }} /><span style={{ fontSize: 12 }}>%</span>
-              <button onClick={() => setT(x => ({ ...x, rules: x.rules.filter((_, j) => j !== i) }))} style={iconBtn}>✕</button>
-            </div>
-          )
-        })}
-        <button onClick={() => { const first = t.lines.find(l => l.type === 'material'); if (first) setT(x => ({ ...x, rules: [...(x.rules || []), { line: first.id, ref: '', waste: 0 }] })) }} style={smallBtn}>+ Product rule</button>
+      <Block title="Description" hint="Blank to start. Write it for this build-up; {products} becomes the products ticked under ⚙, in build-up order: A, B and C.">
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+          <button onClick={() => setT(x => ({ ...x, descText: `${x.descText || ''}${x.descText && !/\s$/.test(x.descText) ? ' ' : ''}{products}` }))} style={smallBtn}>Insert {'{products}'}</button>
+          <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which products go into the description">⚙ Products in the description ({t.lines.filter(l => l.type === 'material' && l.inDescription).length})</button>
+        </div>
+        {descMenu && (
+          <div style={{ border: '1px solid #e8e7e3', borderRadius: 8, padding: 8, marginBottom: 6, maxWidth: 520 }}>
+            {t.lines.filter(l => l.type === 'material').map(l => (
+              <label key={l.id} style={{ display: 'flex', gap: 8, fontSize: 12.5, padding: '2px 0', cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!l.inDescription} onChange={e => setLine(l.id, { inDescription: e.target.checked })} />
+                <span>{l.label}{l.default ? <span style={{ color: '#888' }}> - {label(l.default, 'material')}</span> : <span style={{ color: '#888' }}> - own item</span>}</span>
+              </label>
+            ))}
+            {!t.lines.some(l => l.type === 'material') && <div style={{ fontSize: 12, color: '#aaa' }}>No material lines yet.</div>}
+          </div>
+        )}
+        <textarea value={t.descText || ''} onChange={e => setT(x => ({ ...x, descText: e.target.value }))} rows={3} placeholder="e.g. Single ply membrane roof system comprising: {products}." style={{ ...inp, fontFamily: 'inherit' }} />
+        {(t.descText || '').trim() && <div style={{ fontSize: 12.5, color: '#444', marginTop: 6, background: '#fafaf9', borderRadius: 6, padding: '6px 8px' }}><span style={{ color: '#999', fontSize: 11 }}>Reads: </span>{descriptionText(t, lib)}</div>}
       </Block>
 
       <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: 12, marginTop: 12 }}>
@@ -133,6 +142,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
           <span>Profit {money(r.profit, { dp: 2 })}</span><span>MCD {money(r.mcd, { dp: 2 })}</span>
           <strong style={{ fontSize: 15, color: '#0f766e' }}>{rateTitle} {money(r.rate, { dp: 2 })}{t.unit ? ` per ${UNIT_LABEL[t.unit]}` : ''}</strong>
         </div>
+        {editList && (() => { const ln = t.lines.find(x => x.id === editList); return ln ? <ListEditor ln={ln} lib={lib} label={label} findText={findText} onClose={() => setEditList(null)} onChange={(offers) => setLine(ln.id, { offers })} /> : null })()}
         {r.missing.length > 0 && <div style={{ fontSize: 12, color: '#92400e', marginTop: 6 }}>Not yet in the rate: {r.missing.slice(0, 8).join(' · ')}{r.missing.length > 8 ? ` … and ${r.missing.length - 8} more` : ''}</div>}
       </div>
     </>
@@ -154,7 +164,7 @@ const smallBtn = { fontSize: 12, padding: '5px 10px', border: '1px solid #d4d4d0
 // THE ITEM SEARCH (1097): type any part of a product's description, code, Ref
 // or supplier (or a labour item's description) and pick from what matches.
 // "Own item" leaves the line without a product - its rate is typed instead.
-function ItemSearch({ kind, value, choices, label, findText, onPick }) {
+function ItemSearch({ kind, value, choices, label, findText, onPick, red }) {
   const [q, setQ] = useState(null)        // null = not searching: show the chosen item
   const [open, setOpen] = useState(false)
   const box = useRef(null)
@@ -170,7 +180,7 @@ function ItemSearch({ kind, value, choices, label, findText, onPick }) {
     <div ref={box} style={{ position: 'relative' }}>
       <input value={q != null ? q : (value ? label(value, kind) : '')} placeholder={`Search ${kind === 'labour' ? 'labour' : 'products'}… or own item`}
         onFocus={() => { setOpen(true); setQ('') }} onChange={e => { setQ(e.target.value); setOpen(true) }}
-        style={{ ...cellInp, width: '100%' }} />
+        style={{ ...cellInp, width: '100%', background: red ? RED : undefined }} />
       {open && (
         <div style={{ position: 'absolute', zIndex: 30, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', maxHeight: 260, overflowY: 'auto' }}>
           <div onMouseDown={(e) => { e.preventDefault(); pick('') }} style={{ padding: '6px 9px', fontSize: 12, color: '#555', cursor: 'pointer', borderBottom: '1px solid #f0efec', background: !value ? '#f0fdfa' : undefined }}>Own item (no product) - type its rate</div>
@@ -182,6 +192,51 @@ function ItemSearch({ kind, value, choices, label, findText, onPick }) {
           {!matches.length && <div style={{ padding: '8px 9px', fontSize: 12, color: '#aaa' }}>Nothing matches{choices.length < 200 ? ' on this line\'s list - tick "any" to search everything' : ''}.</div>}
         </div>
       )}
+    </div>
+  )
+}
+
+// VARIABLE (1098): a cell the estimator must review on every quote - the item,
+// its rate or its waste. Toggled here; the cell shows light red.
+const RED = '#fde2e2'
+function VarFlag({ l, cell, setLine }) {
+  const on = isVariable(l, cell)
+  return <button onClick={() => setLine(l.id, { variable: { ...(l.variable || {}), [cell]: !on } })} title={on ? `${cell} is VARIABLE - review it on every quote (click to clear)` : `Mark the ${cell} as variable - to review on every quote`}
+    style={{ border: `1px solid ${on ? '#ef4444' : '#d4d4d0'}`, background: on ? '#fde2e2' : '#fff', color: on ? '#b91c1c' : '#999', borderRadius: 4, fontSize: 10, fontWeight: 700, padding: '0 4px', marginLeft: 3, cursor: 'pointer', lineHeight: '16px' }}>V</button>
+}
+
+// THIS LINE'S LIST OF PRODUCTS (1098): the products its search offers. Remove
+// those that do not apply to this build-up; add any from the whole price list.
+function ListEditor({ ln, lib, label, findText, onClose, onChange }) {
+  const [q, setQ] = useState('')
+  const kind = ln.type
+  const offers = ln.offers || []
+  const all = kind === 'labour' ? lib.labourItems.map(x => x.ref) : lib.products.map(x => x.ref)
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  const found = words.length ? all.filter(ref => !offers.includes(ref) && words.every(w => findText(ref, kind).includes(w))).slice(0, 40) : []
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+          <strong>{ln.label || 'Line'} - its list of {kind === 'labour' ? 'labour items' : 'products'} ({offers.length})</strong>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1, borderTop: '1px solid #f0efec', paddingTop: 6 }}>
+          {offers.map(ref => (
+            <div key={ref} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12.5, padding: '4px 0', borderBottom: '1px solid #f8f7f5' }}>
+              <span>{label(ref, kind)} <span style={{ color: '#aaa', fontSize: 11 }}>{ref}</span>{ref === ln.default && <span style={{ color: '#0f766e', fontSize: 11 }}> · chosen</span>}</span>
+              <button onClick={() => onChange(offers.filter(x => x !== ref))} disabled={ref === ln.default} title={ref === ln.default ? 'The chosen product - choose another first' : 'Remove from this list'} style={{ border: 'none', background: 'none', color: ref === ln.default ? '#ccc' : '#b42318', cursor: 'pointer', fontSize: 12 }}>Remove</button>
+            </div>
+          ))}
+          {!offers.length && <div style={{ fontSize: 12.5, color: '#aaa' }}>Empty - add from the price list below.</div>}
+        </div>
+        <div style={{ borderTop: '1px solid #f0efec', marginTop: 8, paddingTop: 8 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={`Add from the whole ${kind === 'labour' ? 'labour rates' : 'price list'} - search…`} style={{ ...cellInp, width: '100%' }} />
+          <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 4 }}>
+            {found.map(ref => <div key={ref} onClick={() => onChange([...offers, ref])} style={{ fontSize: 12.5, padding: '4px 6px', cursor: 'pointer', borderBottom: '1px solid #f8f7f5' }}>+ {label(ref, kind)} <span style={{ color: '#aaa', fontSize: 11 }}>{ref}</span></div>)}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
