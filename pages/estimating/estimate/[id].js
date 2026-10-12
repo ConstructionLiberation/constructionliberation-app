@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import EstimatingShell, { ErrorBar, estApi } from '../../../components/EstimatingShell'
 import { useFormat } from '../../../components/TenantProvider'
@@ -31,6 +31,14 @@ export default function EstimatePage() {
   const [est, setEst] = useState(null)
   const [base, setBase] = useState(null)        // updatedAt when opened - a stale save is refused
   const [dirty, setDirty] = useState(false)
+  // AUTOSAVE (1100). A change is saved ~1.5 s after the last one. A save that
+  // lands never replaces what was typed meanwhile (only its save details are
+  // taken); those edits go in the next save. Someone else's save in between ->
+  // autosave STOPS rather than overwrite their work. A lost connection -> retry.
+  const AUTOSAVE_MS = 1500
+  const [saveState, setSaveState] = useState({ kind: 'idle' })   // idle | saving | saved {at} | retry {msg} | conflict {msg}
+  const estRef = useRef(null), baseRef = useRef(null), seqRef = useRef(0), savingRef = useRef(false)
+  const timerRef = useRef(null), stoppedRef = useRef(false), retryRef = useRef(0), waitersRef = useRef([])
   const [lib, setLib] = useState({ product: {}, labour: {}, products: [], labourItems: [] })
   const [templates, setTemplates] = useState([])
   const [err, setErr] = useState('')
@@ -89,12 +97,53 @@ export default function EstimatePage() {
       }).catch(e => setErr(e.message))
   }, [id])
   useEffect(() => {
-    const warn = (e) => { if (dirty) { e.preventDefault(); e.returnValue = '' } }
+    const warn = (e) => { if (dirty || savingRef.current) { e.preventDefault(); e.returnValue = '' } }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
-  const change = (fn) => { setEst(e => fn(e)); setDirty(true) }
+  useEffect(() => { estRef.current = est }, [est])
+  useEffect(() => { baseRef.current = base }, [base])
+  const change = (fn) => { setEst(e => fn(e)); setDirty(true); seqRef.current++; schedule() }
+  function schedule(ms = AUTOSAVE_MS) {
+    clearTimeout(timerRef.current)
+    if (stoppedRef.current) return
+    timerRef.current = setTimeout(runSave, ms)
+  }
+  async function runSave() {
+    if (savingRef.current) { schedule(400); return }
+    if (stoppedRef.current || !estRef.current) return
+    const seq = seqRef.current
+    savingRef.current = true
+    setSaveState({ kind: 'saving' })
+    try {
+      const d = await estApi(API, { action: 'save', estimate: estRef.current, baseUpdatedAt: baseRef.current })
+      baseRef.current = d.estimate.updatedAt
+      setBase(d.estimate.updatedAt)
+      // Only the save details - never the content, which may have moved on.
+      setEst(e => ({ ...e, updatedAt: d.estimate.updatedAt, updatedBy: d.estimate.updatedBy }))
+      retryRef.current = 0
+      if (seqRef.current === seq) { setDirty(false); setSaveState({ kind: 'saved', at: d.estimate.updatedAt }); waitersRef.current.splice(0).forEach(f => f(true)) }
+      else schedule(300)          // edited during the save: save again
+    } catch (e) {
+      if (e.status === 409) {
+        stoppedRef.current = true
+        setSaveState({ kind: 'conflict', msg: e.message })
+        waitersRef.current.splice(0).forEach(f => f(false))
+      } else {
+        retryRef.current = Math.min(retryRef.current + 1, 6)
+        setSaveState({ kind: 'retry', msg: e.message })
+        schedule(Math.min(30000, 2500 * retryRef.current))
+      }
+    } finally { savingRef.current = false }
+  }
+  // Save NOW and wait for it (Issue / Mark as sent need the estimate saved).
+  function flushSave() {
+    if (!dirty) return Promise.resolve(true)
+    if (stoppedRef.current) return Promise.resolve(false)
+    return new Promise(res => { waitersRef.current.push(res); clearTimeout(timerRef.current); runSave() })
+  }
+  useEffect(() => () => clearTimeout(timerRef.current), [])
   const setRow = (rid, patch) => change(e => ({ ...e, rows: e.rows.map(r => r.id === rid ? { ...r, ...(typeof patch === 'function' ? patch(r) : patch) } : r) }))
   const setSetting = (k, v) => change(e => ({ ...e, settings: { ...e.settings, [k]: v } }))
   const move = (i, d) => change(e => { const rs = [...e.rows]; const j = i + d; if (j < 0 || j >= rs.length) return e; [rs[i], rs[j]] = [rs[j], rs[i]]; return { ...e, rows: rs } })
@@ -114,6 +163,7 @@ export default function EstimatePage() {
   const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
 
   async function issue(andPrint) {
+    if (dirty && !(await flushSave())) { setErr('The estimate could not be saved, so it was not issued'); return }
     const note = window.prompt(andPrint
       ? `Mark Rev ${est.revision} as SENT? It is issued - frozen as it stands, dated today${est.dealId ? ', the CRM deal value set to its total' : ''} - then the print window opens to save it as a PDF. Optional note:`
       : `Issue Rev ${est.revision}? This freezes the quote as it stands${est.dealId ? ' and sets the CRM deal value to its total' : ''}. Optional note:`, andPrint ? 'Sent' : '')
@@ -134,14 +184,7 @@ export default function EstimatePage() {
     setBusy(false)
   }
 
-  async function save() {
-    setBusy(true); setErr('')
-    try {
-      const d = await estApi(API, { action: 'save', estimate: est, baseUpdatedAt: base })
-      setEst(d.estimate); setBase(d.estimate.updatedAt); setDirty(false)
-    } catch (e) { setErr(e.message) }
-    setBusy(false)
-  }
+  async function save() { await flushSave() }
 
   async function del() {
     if (!window.confirm(`Delete the estimate "${est.title}"${(est.revisions || []).length ? ' and its issued revisions' : ''}? This cannot be undone.`)) return
@@ -165,8 +208,10 @@ export default function EstimatePage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {who.canDelete ? <button onClick={del} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>
             : <span style={{ fontSize: 11.5, color: '#999', maxWidth: 220, textAlign: 'right' }}>Only an admin can delete an estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}
-          {dirty && <span style={{ fontSize: 12.5, color: '#b45309', fontWeight: 600 }}>Unsaved changes</span>}
-          <button onClick={save} disabled={busy || !dirty || !!crm?.archived} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', opacity: busy || !dirty ? 0.5 : 1 }}>{busy ? 'Saving…' : 'Save'}</button>
+          <SaveStatus state={saveState} dirty={dirty} archived={!!crm?.archived} />
+          {saveState.kind === 'conflict'
+            ? <button onClick={() => window.location.reload()} style={{ ...btn, background: '#b42318', color: '#fff', borderColor: '#b42318' }}>Reload</button>
+            : <button onClick={save} disabled={!dirty || !!crm?.archived || saveState.kind === 'saving'} title="It saves itself - this saves straight away" style={{ ...btn, opacity: !dirty || crm?.archived ? 0.45 : 1 }}>Save now</button>}
         </div>
       </div>
       <ErrorBar error={err} onClose={() => setErr('')} />
@@ -549,4 +594,16 @@ function QuoteAdjustments({ est, change, suppliers }) {
       </div>
     </div>
   )
+}
+
+// THE SAVE STATUS (1100) beside the title.
+function SaveStatus({ state, dirty, archived }) {
+  if (archived) return <span style={{ fontSize: 12.5, color: '#888' }}>Archived - read-only</span>
+  const t = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  if (state.kind === 'conflict') return <span style={{ fontSize: 12.5, color: '#b42318', fontWeight: 600, maxWidth: 380 }} title={state.msg}>Not saved - someone else saved this estimate since you opened it. Reload to see their changes; autosave has stopped so nothing of theirs is overwritten.</span>
+  if (state.kind === 'retry') return <span style={{ fontSize: 12.5, color: '#b45309', fontWeight: 600 }} title={state.msg}>Not saved - retrying…</span>
+  if (state.kind === 'saving') return <span style={{ fontSize: 12.5, color: '#888' }}>Saving…</span>
+  if (dirty) return <span style={{ fontSize: 12.5, color: '#888' }}>Unsaved changes…</span>
+  if (state.kind === 'saved') return <span style={{ fontSize: 12.5, color: '#15803d' }}>All changes saved {t(state.at)}</span>
+  return <span style={{ fontSize: 12.5, color: '#aaa' }}>Saves automatically</span>
 }

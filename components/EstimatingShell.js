@@ -84,7 +84,7 @@ export function ErrorBar({ error, onClose }) {
 export async function estApi(path, body) {
   const r = await fetch(path, body === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const d = await r.json().catch(() => ({}))
-  if (!r.ok) { const e = new Error(d.error || `Request failed (${r.status})`); e.data = d; throw e }
+  if (!r.ok) { const e = new Error(d.error || `Request failed (${r.status})`); e.data = d; e.status = r.status; throw e }   // status: 1100
   return d
 }
 

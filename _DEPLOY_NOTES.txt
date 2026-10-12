@@ -1,22 +1,27 @@
-PACKAGE 1099 - Take-off: Rate and Total lead; the column menu shows every supplier
+PACKAGE 1100 - Estimates save automatically
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1098.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1099.
 
   pages/estimating/estimate/[id].js     (folder literally named [id])
+  components/EstimatingShell.js         (its request helper reports the status code)
 
-RATE AND TOTAL LEAD: larger, bold and dark (and the totals-row total). The
-materials, labour, profit and supplier columns recede - smaller and grey -
-there for reference.
+AUTOSAVE on every estimate - the take-off, the pop-out, settings, letter,
+clarifications, materials: a change is saved about 1.5 seconds after the last
+one. Beside the title:
+  "Unsaved changes…" -> "Saving…" -> "All changes saved 22:59"
+  "Not saved - retrying…"  (connection lost - it keeps trying, backing off)
+  "Not saved - someone else saved this estimate since you opened it…"
+     autosave STOPS - nothing of theirs is overwritten; Reload to see it
+"Save now" saves straight away. Leaving with an unsaved change still warns.
+  - Typing while a save is in flight is never lost: a save that lands keeps
+    what is on screen and the newer edits go in the next save.
+  - Issue / Download and mark as sent wait until the latest change is saved.
+  - Archived estimates do not autosave (read-only).
 
-THE ⚙ COLUMNS MENU now shows every supplier. It sat inside the table's
-scrolling box, so a real browser clipped it at the bottom of a short table and
-the suppliers - at the end of the menu - could not be seen. It now opens just
-below the button as a panel pinned to the screen, sized to fit the window and
-scrolling inside if the list is long. With no supplier budgets yet it says so.
-
-Checked in a REAL browser (Chromium) with a real estimate: Rate and Total stand
-out, the rest are grey; opening the menu, every entry passes a hit test -
-Renolit, Sika-Trocal and Valro all visible and clickable; ticking Renolit adds
-"Renolit rate" and "Renolit total" (11.08 x 1,000 = 11,081.00 - the membrane
-and the Alkorplus VCL, both Renolit), blank on the line with no Renolit, and
-the totals row shows 11,081.00. All 165 pages pass the browser check.
+Checked against the real routes with a deliberately slowed server: an edit
+saved itself (250 stored); a description typed WHILE a 1.5-second save was in
+flight stayed on screen and was stored by the next save (with qty 300); a
+dropped connection showed "retrying" then saved (320); after someone else
+saved, autosave stopped with the message, made no further attempts and their
+change stayed; issuing straight after an edit waited for the save and Rev A
+held the edit (777). All 165 pages pass the browser check.
