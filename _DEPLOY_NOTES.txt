@@ -1,47 +1,48 @@
-PACKAGE 1101 - Lump sum lines; weeks and days; Width / Height; variable descriptions
+PACKAGE 1102 - Own items save; V on quantity; comments cleared
 
-Seven files. Complete replacements. No re-seed. No env changes. Built on 1100.
+Seven files. Complete replacements. No re-seed. No env changes. Built on 1101.
 
-  lib/buildups.js, lib/materials.js, lib/estimate.js, lib/priceList.js, lib/labourRates.js
-  components/BuildupEditor.js        (Build-ups page AND the take-off pop-out)
+  lib/buildups.js, lib/estimate.js, lib/materials.js
+  components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
   pages/estimating/build-ups.js
+  pages/api/estimating/build-ups.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-LUMP SUM - a new line type: an amount x the line's quantity, NOT divided by the
-item's quantity; no product; ANY cost category (Plant, Subcontract,
-Attendances...; a Labour lump sum counts as labour). E.g. Scaffold hire 350
-on a per-week item. Listed on the Materials tab under "not from the price
-list". (Lump SPREAD is unchanged - an amount per job spread over the qty.)
-In the build-ups FILE the new type is written "lump"; "lump sum" / "lump
-spread" in a file mean the spread, as in your existing file.
+OWN ITEMS NOW SAVE: type a name in the Item box and press Enter, or click away
+- it stays as "Own item: Risk allowance"; then type its rate. (Before, the box
+only searched, and what was typed was dropped.) The description uses the name;
+the build-ups file has an "Own item" column.
 
-UNITS: weeks and days - for build-ups and items, labour rates and the price
-list (e.g. plant hire per week). "weeks" / "days" in a file are read too.
+V ON THE QUANTITY too (item, rate, quantity, waste) - light red when set.
 
-SIZES: WIDTH and HEIGHT for each build-up. "Apply size" on a line is now a
-choice: - / Width / Height - the line is multiplied by that one. Girth belongs
-in the line rates. Sizes from the spreadsheet stay listed so quantities
-written as sums still work; a line set in 1098 keeps applying its size.
+COMMENTS: lines no longer carry notes - a comment is its own line, added with
+"+ comment" underneath. ONCE:
+  - the library is cleaned on the server the first time the Build-ups page
+    loads after this deploy - every note and every old comment line removed;
+    the library's history shows "Portal - comments cleared (1102)"; it does not
+    run again
+  - an estimate's items are cleaned when it is opened (saved with the next change)
+  - the converter's upload file is read without its comments
+Comment lines added afterwards are kept - including through a download and
+re-upload of the app's own file.
 
-VARIABLE DESCRIPTIONS: "Insert variable" asks for a name (e.g. Warranty
-period), puts {Warranty period} in the description and lists it with a value
-box - LIGHT RED until filled in. The description reads with the value; an
-empty one shows [Warranty period]. Each build-up, and each estimate item, has
-its own values. The file's Descriptions sheet carries them
-("Warranty period=20 year; Colour=Grey").
+ALSO - found and put right: the build-ups CONVERTER script (outside the app)
+had been changed by someone other than me since I last ran it - it would have
+turned every lump spread into a material line and its Read me described types
+it does not write. Restored; it now reproduces the upload file you used EXACTLY
+(all 1,851 rows). The file itself was never affected.
 
 Checked:
-  - rules: Scaffold 350 + Supervisor 900 per week -> 1,250 a week, not divided
-    (x 4 weeks = 5,000); plant counted as fixed, labour as labour; Width 1.2 /
-    Height 0.45 each scale only their own lines; "set the height" when missing;
-    a 1098 line still 10 x 0.6; the description "...with a 20 year warranty in
-    [Colour]"; weeks/days in all three lists, "Weeks" read as week
-  - the file: a weekly build-up with a lump sum, Width/Height and two variables
-    downloads and uploads back unchanged; your files: 1,499 products, 167
-    build-ups, 0 errors, the 44 lump spreads still spreads, Mech Fixed SP 32.04
-  - in a REAL browser (Chromium): Sizes shows Width 1.2 "used by VCL" and
-    Height 0.45; Apply size Width on the VCL; a lump sum Scaffold hire 350 costs
-    350.00 and is in the rate; Insert variable adds Warranty period - light red
-    while empty, white once filled; the description reads "20 year"
+  - the converter's file: 167 build-ups, 0 errors, none of its 619 comment rows
+    or any notes come in; Mech Fixed SP still 32.04
+  - an app-downloaded file keeps its comment line, drops a note, keeps an own
+    item's name and a variable quantity; a comment added later survives
+  - the server clean-up removes every comment line and note, is recorded in the
+    history, and does not rewrite the library on the next load; a build-up
+    added to an estimate comes in clean
+  - in a REAL browser (Chromium): no notes or comment lines; "Risk allowance" +
+    Enter -> "Own item: Risk allowance"; "Contingency" + click away -> "Own item:
+    Contingency"; picking a product still works; V on a quantity -> light red
   - all server routes compile; all 165 pages pass the browser check
-  - built from your deployed packages (1022-1100, verified against their zips);
+  - built from your deployed packages (1022-1101, verified against their zips);
     each file checked identical to the tested version before zipping

@@ -83,7 +83,8 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                     <td style={{ ...td, minWidth: 260 }}>
                       {isProd && <>
                         <ItemSearch red={isVariable(l, 'item')} kind={l.type} value={l.default || ''} choices={choices} label={label} findText={findText}
-                          onPick={(v) => setLine(l.id, { default: v, override: v ? null : l.override, offers: v && !(l.offers || []).includes(v) ? [...(l.offers || []), v] : l.offers })} />
+                          onPick={(v) => setLine(l.id, { default: v, ownName: v ? undefined : l.ownName, override: v ? null : l.override, offers: v && !(l.offers || []).includes(v) ? [...(l.offers || []), v] : l.offers })}
+                          ownName={l.ownName} onOwn={(name) => setLine(l.id, { default: '', ownName: name })} />
                         <label style={{ fontSize: 10.5, color: '#888', display: 'flex', gap: 4, marginTop: 2, alignItems: 'center' }}>
                           <VarFlag l={l} cell="item" setLine={setLine} />
                           <button onClick={() => setEditList(l.id)} title="Edit this line's list of products" style={{ ...iconBtn, fontSize: 11, padding: '0 3px' }}>⚙ list</button>
@@ -94,7 +95,6 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                       {l.type === 'lump' && <><input value={l.amount ?? ''} onChange={e => setLine(l.id, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })} placeholder="amount (x the line's qty)" inputMode="decimal" style={{ ...cellInp, width: '100%' }} /><div style={{ fontSize: 10, color: '#888' }}>lump sum - not divided by the item's quantity; set its cost category</div></>}
                       {l.type === 'lump sum' && <input value={l.amount ?? ''} onChange={e => setLine(l.id, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })} placeholder={l.type === 'lump sum' ? 'amount per job (on the estimate)' : 'amount per unit'} inputMode="decimal" style={{ ...cellInp, width: '100%' }} />}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
-                      {l.type !== 'comment' && l.comment && <div style={{ fontSize: 10.5, color: '#999', marginTop: 2 }}>{l.comment}</div>}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => setLine(l.id, { applySize: e.target.value || undefined })} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
                     <td style={td}>
@@ -109,7 +109,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                         {!l.default && <div style={{ fontSize: 10, color: '#888' }}>own item</div>}
                       </>}
                     </td>
-                    <td style={td}>{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per job" style={{ ...cellInp, width: 80, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}</td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per job" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 80, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}</td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type === 'material' && <><input value={pct(l.waste)} onChange={e => setLine(l.id, { waste: fromPct(e.target.value) })} style={{ ...cellInp, width: 52, background: isVariable(l, 'waste') ? RED : undefined }} /><VarFlag l={l} cell="waste" setLine={setLine} /></>}</td>
                     <td style={td}>{l.type === 'material' && <input value={pct(l.increase)} onChange={e => setLine(l.id, { increase: fromPct(e.target.value) })} style={{ ...cellInp, width: 52 }} />}</td>
                     <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} style={{ ...cellInp, width: 98 }}><option value="">—</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
@@ -192,26 +192,30 @@ const smallBtn = { fontSize: 12, padding: '5px 10px', border: '1px solid #d4d4d0
 // THE ITEM SEARCH (1097): type any part of a product's description, code, Ref
 // or supplier (or a labour item's description) and pick from what matches.
 // "Own item" leaves the line without a product - its rate is typed instead.
-function ItemSearch({ kind, value, choices, label, findText, onPick, red }) {
+function ItemSearch({ kind, value, choices, label, findText, onPick, red, ownName, onOwn }) {
   const [q, setQ] = useState(null)        // null = not searching: show the chosen item
   const [open, setOpen] = useState(false)
   const box = useRef(null)
+  // Typed a name and did not pick a product? That name is the OWN ITEM (1102).
+  const qRef = useRef(null); qRef.current = q
+  const keepTyped = () => { const t = (qRef.current || '').trim(); if (t && onOwn) onOwn(t) }
   useEffect(() => {
-    const close = (e) => { if (box.current && !box.current.contains(e.target)) { setOpen(false); setQ(null) } }
+    const close = (e) => { if (box.current && !box.current.contains(e.target)) { if (qRef.current != null) keepTyped(); setOpen(false); setQ(null) } }
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [])
   const words = (q || '').toLowerCase().split(/\s+/).filter(Boolean)
   const matches = choices.filter(ref => { const t = findText(ref, kind); return words.every(w => t.includes(w)) }).slice(0, 60)
-  const pick = (v) => { onPick(v); setOpen(false); setQ(null) }
+  const pick = (v) => { qRef.current = null; onPick(v); setOpen(false); setQ(null) }
   return (
     <div ref={box} style={{ position: 'relative' }}>
-      <input value={q != null ? q : (value ? label(value, kind) : '')} placeholder={`Search ${kind === 'labour' ? 'labour' : 'products'}… or own item`}
+      <input value={q != null ? q : (value ? label(value, kind) : (ownName ? `Own item: ${ownName}` : ''))}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); keepTyped(); setOpen(false); setQ(null); e.currentTarget.blur() } if (e.key === 'Escape') { setOpen(false); setQ(null) } }} placeholder={`Search ${kind === 'labour' ? 'labour' : 'products'}… or own item`}
         onFocus={() => { setOpen(true); setQ('') }} onChange={e => { setQ(e.target.value); setOpen(true) }}
         style={{ ...cellInp, width: '100%', background: red ? RED : undefined }} />
       {open && (
         <div style={{ position: 'absolute', zIndex: 30, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', maxHeight: 260, overflowY: 'auto' }}>
-          <div onMouseDown={(e) => { e.preventDefault(); pick('') }} style={{ padding: '6px 9px', fontSize: 12, color: '#555', cursor: 'pointer', borderBottom: '1px solid #f0efec', background: !value ? '#f0fdfa' : undefined }}>Own item (no product) - type its rate</div>
+          <div onMouseDown={(e) => { e.preventDefault(); const t = (q || '').trim(); onPick(''); if (t && onOwn) onOwn(t); setOpen(false); setQ(null) }} style={{ padding: '6px 9px', fontSize: 12, color: '#555', cursor: 'pointer', borderBottom: '1px solid #f0efec', background: !value ? '#f0fdfa' : undefined }}>{(q || '').trim() ? <>Own item: <strong>{q.trim()}</strong> (Enter) - then type its rate</> : 'Own item (no product) - type its name here, then its rate'}</div>
           {matches.map(ref => (
             <div key={ref} onMouseDown={(e) => { e.preventDefault(); pick(ref) }} style={{ padding: '6px 9px', fontSize: 12.5, cursor: 'pointer', background: ref === value ? '#f0fdfa' : undefined, borderBottom: '1px solid #f8f7f5' }}>
               {label(ref, kind)} <span style={{ color: '#aaa', fontSize: 11 }}>{ref}</span>

@@ -9,6 +9,7 @@ import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import { placeholderValues } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
+import { normalizeTemplate, needsNormalizing } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
 import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
@@ -89,7 +90,9 @@ export default function EstimatePage() {
     Promise.all([estApi(`${API}?id=${id}`), estApi('/api/estimating/price-list'), estApi('/api/estimating/labour-rates'), estApi('/api/estimating/build-ups'), estApi('/api/estimating/quote-templates').catch(() => ({ templates: null }))])
       .then(([e, p, l, b, q]) => {
         setQuoteDocs(q.templates)
-        setEst(e.estimate); setBase(e.estimate.updatedAt); setCrm(e.crm || null); setWho({ canDelete: !!e.canDelete, admins: e.admins || [] })
+        // Items cleaned on opening (1102): notes and old comment lines removed - saved
+        // with the next change.
+        setEst({ ...e.estimate, rows: (e.estimate.rows || []).map(r => r.kind === 'item' && r.buildup && needsNormalizing(r.buildup) ? { ...r, buildup: normalizeTemplate(r.buildup) } : r) }); setBase(e.estimate.updatedAt); setCrm(e.crm || null); setWho({ canDelete: !!e.canDelete, admins: e.admins || [] })
         setLib({ product: Object.fromEntries(p.products.map(x => [x.ref, x])), labour: Object.fromEntries(l.items.map(x => [x.ref, x])), products: p.products, labourItems: l.items })
         setTemplates(b.templates || [])
         const last = (e.estimate.revisions || []).slice(-1)[0]

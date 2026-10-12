@@ -1,6 +1,6 @@
 import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
-import { parseBuildupSheets, checkTemplate, templateKey, summarise } from '../../../lib/buildups'
+import { parseBuildupSheets, checkTemplate, templateKey, summarise, normalizeTemplate, needsNormalizing } from '../../../lib/buildups'
 import { loadBuildups, replaceBuildups, upsertBuildup, removeBuildup, knownRefs } from '../../../lib/buildupsStore'
 import { moveDocs, deleteAllDocs } from '../../../lib/documentsStore'
 import { removeFile, privateReady } from '../../../lib/privateFiles'
@@ -18,7 +18,15 @@ async function handler(req, res) {
   const session = requireArea(req, res, 'estimating')
   if (!session) return
   if (req.method === 'GET') {
-    const { index, items } = await loadBuildups()
+    let { index, items } = await loadBuildups()
+    // ONE-TIME CLEAN-UP of the library (1102): notes and the old comment lines
+    // removed (and any older line forms tidied), so nothing shows as "changed"
+    // just by being opened. Recorded in the library's history; runs once.
+    if (items.some(needsNormalizing)) {
+      const cleaned = items.map(normalizeTemplate)
+      index = await replaceBuildups(cleaned, { by: 'Portal - comments cleared (1102)', source: index?.source || '' })
+      items = cleaned
+    }
     return res.status(200).json({ index, templates: items })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
