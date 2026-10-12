@@ -1,39 +1,62 @@
-PACKAGE 1091 - Estimates: archived when the deal is lost; delete (admins only)
+PACKAGE 1092 - Quotes: Letter, Clarifications, Documents, Quote tabs; Admin > Quote Documents
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1090.
+Seven files: three complete replacements, four NEW. No re-seed. No env changes.
+Built on 1091.
 
-  lib/estimateStore.js
-  pages/api/estimating/estimates.js
-  pages/estimating/estimates.js
-  pages/estimating/estimate/[id].js        (folder literally named [id])
+  NEW       lib/quoteDocs.js
+            components/QuoteTabs.js
+            pages/admin/quote-documents.js
+            pages/api/estimating/quote-templates.js
+  REPLACED  components/AdminShell.js            (nav: Quote Documents)
+            pages/estimating/estimate/[id].js   (the tabs; folder literally [id])
+            pages/api/estimating/estimates.js   (issuing keeps the T&C version)
 
-ARCHIVED WHEN THE DEAL IS LOST
-  An estimate whose CRM deal is LOST is archived - worked out live from the
-  deal each time, so there is nothing to keep in step: reopen the deal in the
-  CRM and the estimate is active again.
-  - Estimates list: Active / Archived tabs; archived rows show the lost date.
-  - The take-off: "Archived - the CRM deal was lost on 12 Oct 2026 (Price)",
-    and the whole estimate is read-only.
-  - The server refuses to save, issue or re-link an archived estimate, and
-    refuses to link any estimate to a lost deal.
+ADMIN > QUOTE DOCUMENTS (admins edit; everyone in Estimating reads)
+  - Covering letter - with placeholders (click to insert): company name,
+    quote date, ref, revision, project, site location, customer and address,
+    contact name / first name / job role, tender return, estimator, total, MCD %
+  - Standard clarifications - inclusions, exclusions, clarifications
+  - Terms & Conditions - every save is a NEW VERSION; earlier ones are kept
+  All start EMPTY - nothing is filled in for a company.
 
-DELETE - ADMINS ONLY
-  Admins: Delete on each row of the list and on the take-off (with a
-  confirmation). The estimate's issued revisions are deleted with it.
-  Everyone else: no Delete button, and "Only an admin can delete an estimate -
-  ask James McVeigh, Carl Pryce." (the active admins, live from the portal's
-  users). Enforced by the server, not just hidden on the page.
+INSIDE EACH ESTIMATE - tabs under its name:
+  Take-off        as before
+  Letter          "Start from the company letter", then edit for this quote.
+                  Placeholders stay live - the right-hand side shows it as it
+                  will read, filled from the CRM deal; a gap shows as [Name].
+  Clarifications  tick from the company lists (the text is copied in, so a
+                  later change to the company list does not alter this quote),
+                  add your own, edit any
+  Documents       ready for compliance documents etc. - uploads arrive with
+                  private file storage (the next step)
+  Quote           the whole quote as the customer sees it: letter; the
+                  schedule in the take-off's sections and order (an empty
+                  section left off); total; the MCD statement; rate-only items
+                  BELOW THE LINE (TBC, rate only, not in the total);
+                  clarifications; T&Cs (current version). Print / save as PDF
+                  prints the quote alone.
+  Issuing a revision now keeps the T&C VERSION it went out with, along with its
+  letter and clarifications - an issued quote can be reproduced exactly.
 
-ALSO: while building this I found my working copy held changes that were in
-no package delivered to you (a half-built archive feature). They were
-discarded; this package is built on exactly the files from 1088-1090.
+TO CHECK: the MCD line reads "Our prices include a 2.5% main contractor's
+discount." - say if you want different wording, or the MCD shown as a
+separate line.
 
 Checked:
-  - the route: deal lost -> archived in the list and on opening (lost date and
-    reason); save / issue / re-link refused with the reason; deal reopened ->
-    active; linking to a lost deal refused; a pre-contract user's delete
-    refused naming the active admins (a deactivated admin left off); an
-    admin's delete removes the estimate AND its issued Rev A
-  - the take-off in a simulated browser: archived banner; controls disabled;
-    a non-admin sees who to ask and no Delete button
-  - all server routes compile; all 164 pages pass the browser check
+  - the route: empty to start; letter and library saved; T&Cs v1 -> v2, the
+    old kept; a pre-contract user refused ("Only an admin can change...")
+  - an estimate in a simulated browser against the real routes: the letter
+    started from the company letter and filled LIVE ("Dear Sam, Re: Market
+    Drayton Care Home, Market Drayton ... 14,705.60 ... Niall Case");
+    clarifications ticked; the Quote tab shows the letter, the schedule by
+    section (500 m2 x 26.26 = 13,130.00; 40 m x 39.39 = 1,575.60; total
+    14,705.60 - checked by hand), the empty section left off, the MCD line, the
+    rate-only outlet below the line, the clarifications and T&Cs version 2;
+    issuing Rev A kept T&Cs v2, the letter and the clarifications
+  - all server routes compile; all 165 pages pass the browser check
+
+SMOKE TEST
+1. Admin > Quote Documents: write a letter (insert a few placeholders), add
+   some clarifications, save; paste the T&Cs, save as version 1.
+2. Open an estimate: Letter -> Start from the company letter; Clarifications
+   -> tick some; Quote -> check it; Print / save as PDF.

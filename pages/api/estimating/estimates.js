@@ -4,6 +4,7 @@ import { get, set, getPortalUsers } from '../../../lib/db'
 import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
+import { currentTerms } from '../../../lib/quoteDocs'
 import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision } from '../../../lib/estimateStore'
 import { loadPriceList } from '../../../lib/priceListStore'
 import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
@@ -146,7 +147,9 @@ async function handler(req, res) {
     // The CRM details AS THEY WERE TODAY go with the issued revision, so its
     // letter can always be reproduced exactly.
     const crmNow = (await liveDeals())(est.dealId)
-    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow })
+    // ...and the Terms & Conditions version it went out with (1092).
+    const terms = currentTerms(await get('quote:templates'))
+    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow, terms: terms ? { v: terms.v, text: terms.text } : null })
     let crm = null
     if (est.dealId) {
       const deals = (await get('crm:deals')) || []
@@ -166,7 +169,7 @@ async function handler(req, res) {
       }
     }
     const next = { ...est, revision: nextRevision(rev), updatedAt: issuedAt, updatedBy: by,
-      revisions: [...(est.revisions || []), { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, changes }] }
+      revisions: [...(est.revisions || []), { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, changes, termsVersion: terms ? terms.v : null }] }
     await saveEstimate(next, await summaryOf(next, lib))
     return res.status(200).json({ ok: true, estimate: next, issued: rev, total, crm, changes })
   }

@@ -20,6 +20,8 @@ const MGMT = ['management', 'admin']
 export const adminTabs = (term) => [
   ['Portal Users', '/admin', ['admin']],
   ['Templates', '/admin/templates', MGMT],
+  // 1092: the letter, standard clarifications and T&Cs every quote starts from.
+  ['Quote Documents', '/admin/quote-documents', ['admin']],
   ['Email Notifications', '/admin/notifications', ['admin']],
   ['Form Builder', '/operations/forms-builder', MGMT],
   ['Site App Users', '/operations/users', MGMT],

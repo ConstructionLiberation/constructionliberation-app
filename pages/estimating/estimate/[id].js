@@ -4,8 +4,10 @@ import EstimatingShell, { ErrorBar, estApi } from '../../../components/Estimatin
 import { useFormat } from '../../../components/TenantProvider'
 import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
 import BuildupEditor, { pct, fromPct } from '../../../components/BuildupEditor'
+import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
+import { placeholderValues } from '../../../lib/quoteDocs'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { CRM_DETAILS, OWN_DETAILS, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -21,7 +23,7 @@ const API = '/api/estimating/estimates'
 export default function EstimatePage() {
   const router = useRouter()
   const { id } = router.query
-  const { money } = useFormat()
+  const { money, companyName } = useFormat()
   const m2 = (v) => v == null ? '' : money(v, { dp: 2 })
   const [est, setEst] = useState(null)
   const [base, setBase] = useState(null)        // updatedAt when opened - a stale save is refused
@@ -36,13 +38,16 @@ export default function EstimatePage() {
   const [crm, setCrm] = useState(null)          // the deal's details, LIVE from the CRM
   const [linking, setLinking] = useState(false)
   const [who, setWho] = useState({ canDelete: false, admins: [] })
+  const [tab, setTab] = useState('takeoff')
+  const [quoteDocs, setQuoteDocs] = useState(null)   // the company letter, clarifications library, T&Cs
   const [lastRev, setLastRev] = useState(null)    // the last ISSUED revision's estimate - for 'changes since'
   const [issueMsg, setIssueMsg] = useState('')
 
   useEffect(() => {
     if (!id) return
-    Promise.all([estApi(`${API}?id=${id}`), estApi('/api/estimating/price-list'), estApi('/api/estimating/labour-rates'), estApi('/api/estimating/build-ups')])
-      .then(([e, p, l, b]) => {
+    Promise.all([estApi(`${API}?id=${id}`), estApi('/api/estimating/price-list'), estApi('/api/estimating/labour-rates'), estApi('/api/estimating/build-ups'), estApi('/api/estimating/quote-templates').catch(() => ({ templates: null }))])
+      .then(([e, p, l, b, q]) => {
+        setQuoteDocs(q.templates)
         setEst(e.estimate); setBase(e.estimate.updatedAt); setCrm(e.crm || null); setWho({ canDelete: !!e.canDelete, admins: e.admins || [] })
         setLib({ product: Object.fromEntries(p.products.map(x => [x.ref, x])), labour: Object.fromEntries(l.items.map(x => [x.ref, x])), products: p.products, labourItems: l.items })
         setTemplates(b.templates || [])
@@ -65,6 +70,12 @@ export default function EstimatePage() {
   const { priced, totals } = useMemo(() => est ? priceEstimate(est, lib) : { priced: {}, totals: {} }, [est, lib])
   const secTot = useMemo(() => est ? sectionTotals(est, priced) : {}, [est, priced])
   const bud = useMemo(() => est ? budgets(est, lib) : { byCategory: {}, bySupplier: {} }, [est, lib])
+  const values = useMemo(() => {
+    if (!est) return {}
+    const d = detailsFor(est, crm)
+    const dt = d.date ? new Date(d.date) : null
+    return placeholderValues({ est, details: d, total: totals.total, companyName, money, dateText: dt && !isNaN(dt) ? dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '' })
+  }, [est, crm, totals, companyName])
   const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
 
   async function issue() {
@@ -121,8 +132,21 @@ export default function EstimatePage() {
           <strong>Archived</strong> - the CRM deal was lost{crm.lostTime ? ` on ${new Date(crm.lostTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}{crm.lostReason ? ` (${crm.lostReason})` : ''}. The estimate is read-only. Reopen the deal in the CRM to work on it again.
         </div>
       )}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #e8e7e3', marginBottom: 14 }}>
+        {[['takeoff', 'Take-off'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ border: 'none', borderBottom: `2px solid ${tab === k ? '#0f766e' : 'transparent'}`, background: 'none', padding: '8px 14px', fontSize: 13.5, fontWeight: tab === k ? 700 : 500, color: tab === k ? '#0f766e' : '#666', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{label}</button>
+        ))}
+      </div>
+      {tab === 'quote' && <QuotePreview est={est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} />}
+      {(tab === 'letter' || tab === 'clar' || tab === 'docs') && (
+        <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
+          {tab === 'letter' && <LetterTab est={est} change={change} templates={quoteDocs} values={values} />}
+          {tab === 'clar' && <ClarificationsTab est={est} change={change} templates={quoteDocs} />}
+          {tab === 'docs' && <DocumentsTab />}
+        </fieldset>
+      )}
       {/* An archived estimate is read-only: every control below is disabled (the server refuses changes too). */}
-      <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
+      <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0, display: tab === 'takeoff' ? 'block' : 'none' }}>
 
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 12, marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
