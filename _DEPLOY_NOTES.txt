@@ -1,51 +1,44 @@
-PACKAGE 1094 - Supplier price increases and discounts (price list and per quote)
+PACKAGE 1095 - Estimates: the Materials tab (material lists)
 
-Six files: five complete replacements, one NEW. No re-seed. No env changes.
-Built on 1093.
+Four files: two complete replacements, two NEW. No re-seed. No env changes.
+Built on 1094.
 
-  NEW       lib/priceAdjust.js                     (the rules - shared)
-  REPLACED  lib/priceListStore.js
-            lib/estimate.js
-            pages/api/estimating/price-list.js
-            pages/estimating/price-list.js
-            pages/estimating/estimate/[id].js      (folder literally named [id])
+  NEW       lib/materials.js
+            components/MaterialsTab.js
+  REPLACED  lib/priceAdjust.js                     (quote adjustments reach the pack price)
+            pages/estimating/estimate/[id].js      (the tab; folder literally [id])
 
-ON THE PRICE LIST (company-wide)
-  "Increase / discount": tick one or more suppliers, a % (minus for a
-  discount), a date, a note -> applied to every product from them.
-  A banner at the top: "Rates include +10% increase for Renolit from
-  12/10/2026 - Price rise letter"   [Remove]
-  Each affected price shows e.g. "+10% on 185.85".
-  - The supplier's LIST price is kept underneath; rates are worked out on top
-    of it, so Remove is exact. Editing a product edits its list price.
-  - Several on one supplier COMPOUND (+10% then +5% = +15.5%).
-  - Downloads (CSV / Excel) give the LIST prices - the increases stay in the
-    app, so a file sent round again never has them twice.
-  - UPLOADING a new list: if a supplier in the file has an increase or discount
-    in force, you are asked, per supplier, whether to keep applying it - untick
-    it if their new list already includes the rise. Others stay. The upload is
-    compared with the list prices, so an increase never shows every product of
-    that supplier as "changed".
-  Build-ups and estimates price with the adjusted rates automatically.
+ESTIMATE > MATERIALS (between Take-off and Letter) - what to order, worked out
+live from the take-off, grouped BY SUPPLIER with a cost per supplier:
+  Product (where it is used) | Code | Needed | Estimate waste | Order waste %
+  | To order | Packs x selling unit | Pack price | Cost
+  - Needed = item quantity x the line's quantity per unit (sizes included),
+    added up across every item that uses the product.
+  - Liquids and powders priced by coverage convert to litres / kg: 1,000 m2 of
+    primer at 5 m2/l = 200 l.
+  - ORDER WASTE starts at the estimate's (product rules included; where a
+    product is used at different wastes, weighted by use) and can be changed
+    per product - e.g. 10% priced, 5% ordered. Blank = the estimate's. Saved
+    with the estimate.
+  - Packs are rounded UP to whole selling units; pack prices include supplier
+    increases and this quote's adjustments.
+  - Fixed-rate lines (not from the price list) are listed apart, to arrange
+    separately. Rate-only items are left out (no quantity).
+  Note: the take-off's "Budgets by supplier" is the PRICED quantity; the
+  Materials total is WHOLE PACKS - so it is usually a little higher.
 
-ON ONE QUOTE - "This quote's price adjustments" on the take-off
-  e.g. Renolit -10% for this project: on top of the price list, this estimate
-  only (the take-off, the pop-out, the totals, the quote); the price list is
-  not changed. A note under the settings shows what is in force. Revisions
-  record it - "Changes since Rev A" lists it.
+FIXED: a quote's own supplier adjustment now reaches the pack price as well as
+the rates (needed for ordering).
 
-Checked:
-  - the rules on the real price list: +10% then +5% = x1.1550; Renolit roll
-    185.85 -> 204.44 (rate 8.85 -> 9.735/m2) with +10%; other suppliers
-    unchanged; removing returns the list price exactly; a quote's -10% on top
-    leaves the price list untouched
-  - the route: adjust (unknown supplier and 0% refused); stored price stays
-    185.85 (nothing worked out is stored); re-upload of the same file -> 0
-    changed, asks about "Renolit +10%"; kept -> 204.44, dropped -> 185.85; the
-    editor saves the list price (190 -> priced 209.00); remove -> 190
-  - in a simulated browser: the banner and "+10% on 185.85"; an estimate of
-    1,000 m2 of a Renolit membrane build-up -> 29,020.00 with the +10% and
-    27,560.00 with this quote's -10% - both checked by hand; the pop-out shows
-    27.56/m2 too; after issuing Rev A, removing the -10% shows in "Changes
-    since Rev A" (+1,460.00)
+NEXT: purchase orders from the Materials tab (one per supplier).
+
+Checked (real price list):
+  - 1,000 m2 + 500 m2 of the Renolit membrane at 14% / 10% waste -> 1,690 m2
+    (12.667% weighted) -> 81 rolls x 185.85 = 15,053.85; primer 200 l + 5% =
+    210 l -> 18 tins x 81.72; screws 5,000 + 5% -> 21 boxes of 250 x 10.14;
+    the solvent listed apart; the rate-only item left out; order waste 5% on
+    the membrane -> 1,575 m2 -> 75 rolls; a quote's Renolit -10% -> 167.265 a
+    roll - all checked by hand
+  - in a simulated browser: the tab shows those rows by supplier; an order
+    waste of 5% -> 75 rolls / 13,938.75; saved with the estimate
   - all server routes compile; all 165 pages pass the browser check

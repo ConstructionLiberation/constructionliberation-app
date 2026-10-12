@@ -6,6 +6,7 @@ import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
 import BuildupEditor, { pct, fromPct } from '../../../components/BuildupEditor'
 import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
+import MaterialsTab from '../../../components/MaterialsTab'
 import { placeholderValues } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
@@ -136,10 +137,11 @@ export default function EstimatePage() {
         </div>
       )}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #e8e7e3', marginBottom: 14 }}>
-        {[['takeoff', 'Take-off'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
+        {[['takeoff', 'Take-off'], ['materials', 'Materials'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{ border: 'none', borderBottom: `2px solid ${tab === k ? '#0f766e' : 'transparent'}`, background: 'none', padding: '8px 14px', fontSize: 13.5, fontWeight: tab === k ? 700 : 500, color: tab === k ? '#0f766e' : '#666', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{label}</button>
         ))}
       </div>
+      {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived} />}
       {tab === 'quote' && <QuotePreview est={est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} />}
       {(tab === 'letter' || tab === 'clar' || tab === 'docs') && (
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
