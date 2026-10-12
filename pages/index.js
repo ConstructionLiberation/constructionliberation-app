@@ -27,6 +27,25 @@ const departments = [
     ),
   },
   {
+    // 1083. A module: switched on per company (tenant modules list).
+    key: 'estimating',
+    label: 'Estimating',
+    description: 'Price lists, rate build-ups and quotations',
+    href: '/estimating',
+    minRole: 'pre-contract',
+    color: '#0f766e',
+    lightColor: '#f0fdfa',
+    borderColor: '#99f6e4',
+    icon: (
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <rect x="9" y="6" width="22" height="28" rx="2" stroke="#0f766e" strokeWidth="2" fill="none"/>
+        <rect x="13" y="10" width="14" height="6" rx="1" stroke="#0f766e" strokeWidth="2" fill="none"/>
+        <circle cx="15" cy="21" r="1.5" fill="#0f766e"/><circle cx="20" cy="21" r="1.5" fill="#0f766e"/><circle cx="25" cy="21" r="1.5" fill="#0f766e"/>
+        <circle cx="15" cy="27" r="1.5" fill="#0f766e"/><circle cx="20" cy="27" r="1.5" fill="#0f766e"/><circle cx="25" cy="27" r="1.5" fill="#0f766e"/>
+      </svg>
+    ),
+  },
+  {
     key: 'commercial',
     label: 'Commercial',
     description: 'Budget tracker, project financials & Xero integration',
@@ -91,25 +110,6 @@ const departments = [
     icon: (
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
         <path d="M20 6l3 8h8l-6.5 5 2.5 8-7-5-7 5 2.5-8L5 14h8z" stroke="#0891b2" strokeWidth="2" strokeLinejoin="round" fill="none"/>
-      </svg>
-    ),
-  },
-  {
-    // 1083. A module: switched on per company (tenant modules list).
-    key: 'estimating',
-    label: 'Estimating',
-    description: 'Price lists, rate build-ups and quotations',
-    href: '/estimating',
-    minRole: 'pre-contract',
-    color: '#0f766e',
-    lightColor: '#f0fdfa',
-    borderColor: '#99f6e4',
-    icon: (
-      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-        <rect x="9" y="6" width="22" height="28" rx="2" stroke="#0f766e" strokeWidth="2" fill="none"/>
-        <rect x="13" y="10" width="14" height="6" rx="1" stroke="#0f766e" strokeWidth="2" fill="none"/>
-        <circle cx="15" cy="21" r="1.5" fill="#0f766e"/><circle cx="20" cy="21" r="1.5" fill="#0f766e"/><circle cx="25" cy="21" r="1.5" fill="#0f766e"/>
-        <circle cx="15" cy="27" r="1.5" fill="#0f766e"/><circle cx="20" cy="27" r="1.5" fill="#0f766e"/><circle cx="25" cy="27" r="1.5" fill="#0f766e"/>
       </svg>
     ),
   },
