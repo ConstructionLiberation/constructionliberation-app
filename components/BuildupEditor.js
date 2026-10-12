@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable } from '../lib/buildups'
+import { LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -39,20 +39,30 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
 
   return (
     <>
-      <Block title="Size" hint="One size for this build-up (e.g. Girth 0.6). Lines with Apply size ticked are multiplied by it. Name it to suit.">
-        {(t.sizes || []).map((z, i) => (
-          <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-            <input value={z.name} onChange={e => {
-              const old = z.name, nm = e.target.value
-              setT(x => ({ ...x, sizes: x.sizes.map((s, j) => j === i ? { ...s, name: nm } : s),
-                lines: x.lines.map(l => ({ ...l, qty: old && l.qty ? l.qty.replace(new RegExp(`\\b${old}\\b`, 'g'), nm) : l.qty })) }))
-            }} style={{ ...inp, width: 160 }} />
-            <input value={z.value ?? ''} onChange={e => setT(x => ({ ...x, sizes: x.sizes.map((s, j) => j === i ? { ...s, value: e.target.value === '' ? null : parseFloat(e.target.value) } : s) }))} placeholder="value" inputMode="decimal" style={{ ...inp, width: 100 }} />
-            <span style={{ fontSize: 11.5, color: '#999', flex: 1 }}>{z.comment}</span>
-            <button onClick={() => setT(x => ({ ...x, sizes: x.sizes.filter((_, j) => j !== i) }))} style={iconBtn} title="Remove size">✕</button>
+      <Block title="Sizes" hint="Width and Height for this build-up. A line's Apply size multiplies it by one of them. (Girth belongs in the line rates.)">
+        {SIZE_NAMES.map(nm => {
+          const z = (t.sizes || []).find(x => String(x.name).toLowerCase() === nm.toLowerCase())
+          const setVal = (v) => setT(x => {
+            const list = [...(x.sizes || [])]; const k = list.findIndex(y => String(y.name).toLowerCase() === nm.toLowerCase())
+            const val = v === '' ? null : parseFloat(v)
+            if (k >= 0) list[k] = { ...list[k], value: val }; else list.push({ name: nm, value: val, comment: '' })
+            return { ...x, sizes: list }
+          })
+          return (
+            <div key={nm} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+              <span style={{ width: 70, fontSize: 13, fontWeight: 600 }}>{nm}</span>
+              <input value={z?.value ?? ''} onChange={e => setVal(e.target.value)} placeholder="m" inputMode="decimal" style={{ ...inp, width: 110 }} />
+              <span style={{ fontSize: 11.5, color: '#999' }}>{t.lines.filter(l => l.applySize === nm).length ? `used by ${t.lines.filter(l => l.applySize === nm).map(l => l.label).join(', ')}` : 'not used yet'}</span>
+            </div>
+          )
+        })}
+        {(t.sizes || []).filter(z => !SIZE_NAMES.some(n => n.toLowerCase() === String(z.name).toLowerCase())).map((z, i) => (
+          <div key={`o${i}`} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+            <span style={{ width: 70, fontSize: 12.5, color: '#666' }}>{z.name}</span>
+            <input value={z.value ?? ''} onChange={e => setT(x => ({ ...x, sizes: x.sizes.map(s2 => s2 === z ? { ...s2, value: e.target.value === '' ? null : parseFloat(e.target.value) } : s2) }))} inputMode="decimal" style={{ ...inp, width: 110 }} />
+            <span style={{ fontSize: 11.5, color: '#999' }}>from the spreadsheet - quantities written as sums use it{z.comment ? ` (${z.comment})` : ''}</span>
           </div>
         ))}
-        {!(t.sizes || []).length && <button onClick={() => setT(x => ({ ...x, sizes: [{ name: 'Girth', value: null, comment: '' }] }))} style={smallBtn}>+ Size</button>}
       </Block>
 
       <Block title="Lines">
@@ -81,11 +91,12 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                           any {l.type === 'labour' ? 'labour item' : 'product'} ({(l.offers || []).length} on this line's list)
                         </label>
                       </>}
+                      {l.type === 'lump' && <><input value={l.amount ?? ''} onChange={e => setLine(l.id, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })} placeholder="amount (x the line's qty)" inputMode="decimal" style={{ ...cellInp, width: '100%' }} /><div style={{ fontSize: 10, color: '#888' }}>lump sum - not divided by the item's quantity; set its cost category</div></>}
                       {l.type === 'lump sum' && <input value={l.amount ?? ''} onChange={e => setLine(l.id, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })} placeholder={l.type === 'lump sum' ? 'amount per job (on the estimate)' : 'amount per unit'} inputMode="decimal" style={{ ...cellInp, width: '100%' }} />}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                       {l.type !== 'comment' && l.comment && <div style={{ fontSize: 10.5, color: '#999', marginTop: 2 }}>{l.comment}</div>}
                     </td>
-                    <td style={{ ...td, textAlign: 'center' }}>{isProd && <input type="checkbox" checked={!!l.applySize} onChange={e => setLine(l.id, { applySize: e.target.checked })} title={(t.sizes || [])[0] ? `Multiply this line by the ${(t.sizes || [])[0].name}` : 'Add a size first'} disabled={!(t.sizes || []).length} />}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => setLine(l.id, { applySize: e.target.value || undefined })} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
                     <td style={td}>
                       {isProd && <>
                         {/* With a product: its rate, which can be typed over (CHANGED / Revert).
@@ -115,9 +126,15 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
         </div>
       </Block>
 
-      <Block title="Description" hint="Blank to start. Write it for this build-up; {products} becomes the products ticked under ⚙, in build-up order: A, B and C.">
+      <Block title="Description" hint="Blank to start. {products} becomes the products ticked under ⚙ (A, B and C). Insert variable adds a detail that is not a product - e.g. {Warranty period} - with its value below.">
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
           <button onClick={() => setT(x => ({ ...x, descText: `${x.descText || ''}${x.descText && !/\s$/.test(x.descText) ? ' ' : ''}{products}` }))} style={smallBtn}>Insert {'{products}'}</button>
+          <button onClick={() => {
+            const nm = (window.prompt('Name of the variable - e.g. Warranty period, Colour, Membrane thickness:') || '').trim().replace(/[{}]/g, '')
+            if (!nm) return
+            setT(x => ({ ...x, descVars: (x.descVars || []).some(v => v.name.toLowerCase() === nm.toLowerCase()) ? x.descVars : [...(x.descVars || []), { name: nm, value: '' }],
+              descText: `${x.descText || ''}${x.descText && !/\s$/.test(x.descText) ? ' ' : ''}{${nm}}` }))
+          }} style={smallBtn} title="A detail the description needs that is not a product - e.g. warranty period">Insert variable</button>
           <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which products go into the description">⚙ Products in the description ({t.lines.filter(l => l.type === 'material' && l.inDescription).length})</button>
         </div>
         {descMenu && (
@@ -129,6 +146,17 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
               </label>
             ))}
             {!t.lines.some(l => l.type === 'material') && <div style={{ fontSize: 12, color: '#aaa' }}>No material lines yet.</div>}
+          </div>
+        )}
+        {(t.descVars || []).length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 6, marginBottom: 6 }}>
+            {t.descVars.map((v, i) => (
+              <label key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12.5 }}>
+                <span style={{ minWidth: 110, color: '#555' }}>{v.name}</span>
+                <input value={v.value ?? ''} onChange={e => setT(x => ({ ...x, descVars: x.descVars.map((y, j) => j === i ? { ...y, value: e.target.value } : y) }))} placeholder="value" style={{ ...cellInp, flex: 1, background: String(v.value ?? '').trim() ? undefined : RED }} title="Empty values show light red - fill them in for this quote" />
+                <button onClick={() => setT(x => ({ ...x, descVars: x.descVars.filter((_, j) => j !== i), descText: String(x.descText || '').split(`{${v.name}}`).join('') }))} style={iconBtn} title="Remove this variable">✕</button>
+              </label>
+            ))}
           </div>
         )}
         <textarea value={t.descText || ''} onChange={e => setT(x => ({ ...x, descText: e.target.value }))} rows={3} placeholder="e.g. Single ply membrane roof system comprising: {products}." style={{ ...inp, fontFamily: 'inherit' }} />

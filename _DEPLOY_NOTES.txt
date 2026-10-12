@@ -1,27 +1,47 @@
-PACKAGE 1100 - Estimates save automatically
+PACKAGE 1101 - Lump sum lines; weeks and days; Width / Height; variable descriptions
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1099.
+Seven files. Complete replacements. No re-seed. No env changes. Built on 1100.
 
-  pages/estimating/estimate/[id].js     (folder literally named [id])
-  components/EstimatingShell.js         (its request helper reports the status code)
+  lib/buildups.js, lib/materials.js, lib/estimate.js, lib/priceList.js, lib/labourRates.js
+  components/BuildupEditor.js        (Build-ups page AND the take-off pop-out)
+  pages/estimating/build-ups.js
 
-AUTOSAVE on every estimate - the take-off, the pop-out, settings, letter,
-clarifications, materials: a change is saved about 1.5 seconds after the last
-one. Beside the title:
-  "Unsaved changes…" -> "Saving…" -> "All changes saved 22:59"
-  "Not saved - retrying…"  (connection lost - it keeps trying, backing off)
-  "Not saved - someone else saved this estimate since you opened it…"
-     autosave STOPS - nothing of theirs is overwritten; Reload to see it
-"Save now" saves straight away. Leaving with an unsaved change still warns.
-  - Typing while a save is in flight is never lost: a save that lands keeps
-    what is on screen and the newer edits go in the next save.
-  - Issue / Download and mark as sent wait until the latest change is saved.
-  - Archived estimates do not autosave (read-only).
+LUMP SUM - a new line type: an amount x the line's quantity, NOT divided by the
+item's quantity; no product; ANY cost category (Plant, Subcontract,
+Attendances...; a Labour lump sum counts as labour). E.g. Scaffold hire 350
+on a per-week item. Listed on the Materials tab under "not from the price
+list". (Lump SPREAD is unchanged - an amount per job spread over the qty.)
+In the build-ups FILE the new type is written "lump"; "lump sum" / "lump
+spread" in a file mean the spread, as in your existing file.
 
-Checked against the real routes with a deliberately slowed server: an edit
-saved itself (250 stored); a description typed WHILE a 1.5-second save was in
-flight stayed on screen and was stored by the next save (with qty 300); a
-dropped connection showed "retrying" then saved (320); after someone else
-saved, autosave stopped with the message, made no further attempts and their
-change stayed; issuing straight after an edit waited for the save and Rev A
-held the edit (777). All 165 pages pass the browser check.
+UNITS: weeks and days - for build-ups and items, labour rates and the price
+list (e.g. plant hire per week). "weeks" / "days" in a file are read too.
+
+SIZES: WIDTH and HEIGHT for each build-up. "Apply size" on a line is now a
+choice: - / Width / Height - the line is multiplied by that one. Girth belongs
+in the line rates. Sizes from the spreadsheet stay listed so quantities
+written as sums still work; a line set in 1098 keeps applying its size.
+
+VARIABLE DESCRIPTIONS: "Insert variable" asks for a name (e.g. Warranty
+period), puts {Warranty period} in the description and lists it with a value
+box - LIGHT RED until filled in. The description reads with the value; an
+empty one shows [Warranty period]. Each build-up, and each estimate item, has
+its own values. The file's Descriptions sheet carries them
+("Warranty period=20 year; Colour=Grey").
+
+Checked:
+  - rules: Scaffold 350 + Supervisor 900 per week -> 1,250 a week, not divided
+    (x 4 weeks = 5,000); plant counted as fixed, labour as labour; Width 1.2 /
+    Height 0.45 each scale only their own lines; "set the height" when missing;
+    a 1098 line still 10 x 0.6; the description "...with a 20 year warranty in
+    [Colour]"; weeks/days in all three lists, "Weeks" read as week
+  - the file: a weekly build-up with a lump sum, Width/Height and two variables
+    downloads and uploads back unchanged; your files: 1,499 products, 167
+    build-ups, 0 errors, the 44 lump spreads still spreads, Mech Fixed SP 32.04
+  - in a REAL browser (Chromium): Sizes shows Width 1.2 "used by VCL" and
+    Height 0.45; Apply size Width on the VCL; a lump sum Scaffold hire 350 costs
+    350.00 and is in the rate; Insert variable adds Warranty period - light red
+    while empty, white once filled; the description reads "20 year"
+  - all server routes compile; all 165 pages pass the browser check
+  - built from your deployed packages (1022-1100, verified against their zips);
+    each file checked identical to the tested version before zipping
