@@ -39,6 +39,33 @@ export default function EstimatePage() {
   const [picking, setPicking] = useState(false)
   const [showHeader, setShowHeader] = useState(true)
   const [showAdj, setShowAdj] = useState(false)
+  const [colMenu, setColMenu] = useState(false)
+  // Which optional take-off columns show (1096) - remembered in this browser.
+  const [cols, setCols] = useState(() => new Set(DEFAULT_COLS))
+  useEffect(() => { try { const v = JSON.parse(localStorage.getItem('takeoff:cols') || 'null'); if (Array.isArray(v)) setCols(new Set(v)) } catch {} }, [])
+  const toggleCol = (k) => setCols(c => { const n = new Set(c); n.has(k) ? n.delete(k) : n.add(k); try { localStorage.setItem('takeoff:cols', JSON.stringify([...n])) } catch {}; return n })
+  // The optional columns: cost rates and totals, profit, the item's own
+  // profit % and rate only, and one per supplier WITH a budget here.
+  function takeoffColumns(s, totals) {
+    const R = (k, v) => <td key={k} style={{ ...tdR, color: '#555' }}>{m2(v)}</td>
+    const F = (k, v) => <td key={k} style={{ ...tdR, fontWeight: 700 }}>{m2(v)}</td>
+    const list = [
+      { key: 'matRate', label: 'Materials rate', heads: ['Materials rate'], render: (r, p) => [R('mr', p.materialsRate)] },
+      { key: 'matTotal', label: 'Materials total', heads: ['Materials total'], render: (r, p) => [R('mt', p.materialsTotal)], foot: () => [F('mt', totals.materials)] },
+      { key: 'labRate', label: 'Labour rate', heads: ['Labour rate'], render: (r, p) => [R('lr', p.labourRate)] },
+      { key: 'labTotal', label: 'Labour total', heads: ['Labour total'], render: (r, p) => [R('lt', p.labourTotal)], foot: () => [F('lt', totals.labour)] },
+      { key: 'profitRate', label: 'Profit rate', heads: ['Profit rate'], render: (r, p) => [R('pr', p.profitRate)] },
+      { key: 'profitTotal', label: 'Profit total', heads: ['Profit total'], render: (r, p) => [R('pt', p.profitTotal)], foot: () => [F('pt', totals.profit)] },
+      { key: 'profitPct', label: 'Profit % (this item)', heads: ['Profit %'], align: 'left', render: (r) => [<td key="pp" style={td}><input value={pct(r.profit)} onChange={e => setRow(r.id, { profit: fromPct(e.target.value) })} placeholder={s.profit != null ? String(pct(s.profit)) : ''} style={{ ...cellInp, width: 56, borderColor: r.profit != null ? '#f59e0b' : undefined }} title="Leave blank to use the quote's profit %" /></td>] },
+      { key: 'rateOnly', label: 'Rate only', heads: ['Rate only'], align: 'left', render: (r) => [<td key="ro" style={td}><input type="checkbox" checked={!!r.rateOnly} onChange={e => setRow(r.id, { rateOnly: e.target.checked })} title="No quantity: priced as a rate, below the line" /></td>] },
+    ]
+    for (const sup of Object.keys(totals.bySupplier || {}).filter(k => totals.bySupplier[k] > 0).sort()) {
+      list.push({ key: `sup:${sup}`, label: sup, supplier: true, cells: 2, heads: [`${sup} rate`, `${sup} total`],
+        render: (r, p) => { const v = (p.bySupplier || {})[sup]; return [R('sr', v), R('st', v != null && p.qty != null && !p.belowLine ? v * p.qty : null)] },
+        foot: () => [<td key="sr" style={td} />, F('st', totals.bySupplier[sup])] })
+    }
+    return list
+  }
   const [crm, setCrm] = useState(null)          // the deal's details, LIVE from the CRM
   const [linking, setLinking] = useState(false)
   const [who, setWho] = useState({ canDelete: false, admins: [] })
@@ -206,48 +233,82 @@ export default function EstimatePage() {
         )}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-          <thead><tr>{['', 'Description', 'Qty', 'Unit', 'Rate', 'Total', 'Materials', 'Labour', 'Profit %', 'Rate only', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: [2, 4, 5, 6, 7].includes(i) ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
-          <tbody>
-            {est.rows.map((r, i) => r.kind === 'section' ? (
-              <tr key={r.id} style={{ background: '#f4f4f2' }}>
-                <td style={td}><Arrows i={i} move={move} /></td>
-                <td style={td} colSpan={4}><input value={r.title} onChange={e => setRow(r.id, { title: e.target.value })} style={{ ...cellInp, fontWeight: 700, width: '100%', background: 'transparent', border: 'none' }} /></td>
-                <td style={{ ...tdR, fontWeight: 700 }}>{m2(secTot[r.id])}</td>
-                <td style={td} colSpan={4} />
-                <td style={td}><button onClick={() => change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) }))} style={iconBtn} title="Remove section header">✕</button></td>
-              </tr>
-            ) : (() => {
-              const p = priced[r.id] || {}
-              return (
-                <tr key={r.id} style={{ background: r.rateOnly ? '#fafaf7' : undefined }}>
-                  <td style={td}><Arrows i={i} move={move} /></td>
-                  <td style={{ ...td, minWidth: 260 }}>
-                    <input value={r.description} onChange={e => setRow(r.id, { description: e.target.value })} style={{ ...cellInp, width: '100%' }} />
-                    <div style={{ fontSize: 11, color: p.missing?.length ? '#b45309' : '#aaa', marginTop: 2 }}>
-                      {r.templateRef ? 'from the build-ups' : 'unique item'}{p.missing?.length ? ` · ${p.missing.length} line${p.missing.length === 1 ? '' : 's'} not yet in the rate` : ''}
-                    </div>
-                  </td>
-                  <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
-                  <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
-                  <td style={{ ...tdR, fontWeight: 600 }}>{m2(p.rate)}</td>
-                  <td style={{ ...tdR, fontWeight: 600 }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400 }}>Rate only</span> : m2(p.total)}</td>
-                  <td style={{ ...tdR, color: '#666' }}>{m2(p.materialsTotal)}</td>
-                  <td style={{ ...tdR, color: '#666' }}>{m2(p.labourTotal)}</td>
-                  <td style={td}><input value={pct(r.profit)} onChange={e => setRow(r.id, { profit: fromPct(e.target.value) })} placeholder={s.profit != null ? String(pct(s.profit)) : ''} style={{ ...cellInp, width: 56, borderColor: r.profit != null ? '#f59e0b' : undefined }} title="Leave blank to use the quote's profit %" /></td>
-                  <td style={td}><input type="checkbox" checked={!!r.rateOnly} onChange={e => setRow(r.id, { rateOnly: e.target.checked })} title="No quantity: priced as a rate, below the line" /></td>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <button onClick={() => setPopout(r.id)} style={smallBtn}>Build-up</button>
-                    <button onClick={() => { if (window.confirm(`Remove "${r.description}"?`)) change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) })) }} style={iconBtn} title="Remove item">✕</button>
-                  </td>
-                </tr>
-              )
-            })())}
-            {!est.rows.length && <tr><td colSpan={11} style={{ ...td, textAlign: 'center', color: '#aaa', padding: 26 }}>Add a section header, then the items - from the build-ups, or unique.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      {(() => {
+        // THE TAKE-OFF COLUMNS (1096). Always: description, qty, unit, rate, total.
+        // The rest are chosen with the gear; suppliers are offered only where this
+        // estimate has a budget with them. Rates and totals for materials, labour
+        // and suppliers are COST (before profit and MCD) - the budgets.
+        const optional = takeoffColumns(s, totals)
+        const shown = optional.filter(c => cols.has(c.key))
+        const cells = shown.reduce((n, c) => n + (c.cells || 1), 0)
+        return (
+          <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
+              <button onClick={() => setColMenu(v => !v)} title="Show or hide columns" style={{ ...smallBtn, padding: '3px 9px' }}>⚙ Columns</button>
+            </div>
+            {colMenu && (
+              <div style={{ position: 'absolute', right: 8, top: 36, zIndex: 20, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.12)', padding: 12, width: 260, fontSize: 13 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Columns</div>
+                {optional.filter(c => !c.supplier).map(c => <ColTick key={c.key} c={c} cols={cols} toggle={toggleCol} />)}
+                {optional.some(c => c.supplier) && <>
+                  <div style={{ fontWeight: 700, margin: '10px 0 4px' }}>Suppliers <span style={{ fontWeight: 400, fontSize: 11.5, color: '#999' }}>rate and total</span></div>
+                  {optional.filter(c => c.supplier).map(c => <ColTick key={c.key} c={c} cols={cols} toggle={toggleCol} />)}
+                </>}
+                <div style={{ fontSize: 11, color: '#999', marginTop: 8 }}>Remembered in this browser.</div>
+              </div>
+            )}
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+              <thead><tr>
+                {['', 'Description', 'Qty', 'Unit', 'Rate', 'Total'].map((h, i) => <th key={h || i} style={{ ...th, textAlign: [2, 4, 5].includes(i) ? 'right' : 'left' }}>{h}</th>)}
+                {shown.flatMap(c => c.heads.map((h, k) => <th key={`${c.key}${k}`} style={{ ...th, textAlign: c.align || 'right', color: c.supplier ? '#1d4ed8' : th.color }}>{h}</th>))}
+                <th style={th} />
+              </tr></thead>
+              <tbody>
+                {est.rows.map((r, i) => r.kind === 'section' ? (
+                  <tr key={r.id} style={{ background: '#f4f4f2' }}>
+                    <td style={td}><Arrows i={i} move={move} /></td>
+                    <td style={td} colSpan={4}><input value={r.title} onChange={e => setRow(r.id, { title: e.target.value })} style={{ ...cellInp, fontWeight: 700, width: '100%', background: 'transparent', border: 'none' }} /></td>
+                    <td style={{ ...tdR, fontWeight: 700 }}>{m2(secTot[r.id])}</td>
+                    {cells > 0 && <td style={td} colSpan={cells} />}
+                    <td style={td}><button onClick={() => change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) }))} style={iconBtn} title="Remove section header">✕</button></td>
+                  </tr>
+                ) : (() => {
+                  const p = priced[r.id] || {}
+                  return (
+                    <tr key={r.id} style={{ background: r.rateOnly ? '#fafaf7' : undefined }}>
+                      <td style={td}><Arrows i={i} move={move} /></td>
+                      <td style={{ ...td, minWidth: 260 }}>
+                        <input value={r.description} onChange={e => setRow(r.id, { description: e.target.value })} style={{ ...cellInp, width: '100%' }} />
+                        <div style={{ fontSize: 11, color: p.missing?.length ? '#b45309' : '#aaa', marginTop: 2 }}>
+                          {r.templateRef ? 'from the build-ups' : 'unique item'}{p.missing?.length ? ` · ${p.missing.length} line${p.missing.length === 1 ? '' : 's'} not yet in the rate` : ''}
+                        </div>
+                      </td>
+                      <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
+                      <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
+                      <td style={{ ...tdR, fontWeight: 600 }}>{m2(p.rate)}</td>
+                      <td style={{ ...tdR, fontWeight: 600 }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400 }}>Rate only</span> : m2(p.total)}</td>
+                      {shown.flatMap(c => c.render(r, p))}
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        <button onClick={() => setPopout(r.id)} style={smallBtn}>Build-up</button>
+                        <button onClick={() => { if (window.confirm(`Remove "${r.description}"?`)) change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) })) }} style={iconBtn} title="Remove item">✕</button>
+                      </td>
+                    </tr>
+                  )
+                })())}
+                {!est.rows.length && <tr><td colSpan={7 + cells} style={{ ...td, textAlign: 'center', color: '#aaa', padding: 26 }}>Add a section header, then the items - from the build-ups, or unique.</td></tr>}
+              </tbody>
+              {est.rows.some(r => r.kind === 'item') && (
+                <tfoot><tr style={{ background: '#faf9f7' }}>
+                  <td style={td} /><td style={{ ...td, fontWeight: 700 }} colSpan={4}>Totals <span style={{ fontWeight: 400, color: '#999', fontSize: 11.5 }}>above the line</span></td>
+                  <td style={{ ...tdR, fontWeight: 700 }}>{m2(totals.total)}</td>
+                  {shown.flatMap(c => c.foot ? c.foot() : [<td key={c.key} style={td} />])}
+                  <td style={td} />
+                </tr></tfoot>
+              )}
+            </table>
+          </div>
+        )
+      })()}
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={() => addRow(sectionRow('New section'))} style={btn}>+ Section header</button>
         <button onClick={() => setPicking(true)} style={btn} disabled={!templates.length} title={templates.length ? '' : 'Upload build-ups first'}>+ Item from build-ups</button>
@@ -426,6 +487,8 @@ function Breakdown({ rows, money }) {
 }
 
 const panel = { background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 12 }
+const DEFAULT_COLS = ['matRate', 'matTotal', 'labRate', 'labTotal', 'profitRate', 'profitTotal', 'profitPct', 'rateOnly']
+const ColTick = ({ c, cols, toggle }) => <label style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', cursor: 'pointer' }}><input type="checkbox" checked={cols.has(c.key)} onChange={() => toggle(c.key)} />{c.label}</label>
 const Arrows = ({ i, move }) => <span style={{ whiteSpace: 'nowrap' }}><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></span>
 const lbl = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#666' }
 const cellInp = { fontSize: 13, padding: '5px 7px', border: '1px solid #d4d4d0', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box' }

@@ -1,44 +1,26 @@
-PACKAGE 1095 - Estimates: the Materials tab (material lists)
+PACKAGE 1096 - Take-off: more columns, and a gear to show / hide them
 
-Four files: two complete replacements, two NEW. No re-seed. No env changes.
-Built on 1094.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1095.
 
-  NEW       lib/materials.js
-            components/MaterialsTab.js
-  REPLACED  lib/priceAdjust.js                     (quote adjustments reach the pack price)
-            pages/estimating/estimate/[id].js      (the tab; folder literally [id])
+  lib/estimate.js
+  pages/estimating/estimate/[id].js       (folder literally named [id])
 
-ESTIMATE > MATERIALS (between Take-off and Letter) - what to order, worked out
-live from the take-off, grouped BY SUPPLIER with a cost per supplier:
-  Product (where it is used) | Code | Needed | Estimate waste | Order waste %
-  | To order | Packs x selling unit | Pack price | Cost
-  - Needed = item quantity x the line's quantity per unit (sizes included),
-    added up across every item that uses the product.
-  - Liquids and powders priced by coverage convert to litres / kg: 1,000 m2 of
-    primer at 5 m2/l = 200 l.
-  - ORDER WASTE starts at the estimate's (product rules included; where a
-    product is used at different wastes, weighted by use) and can be changed
-    per product - e.g. 10% priced, 5% ordered. Blank = the estimate's. Saved
-    with the estimate.
-  - Packs are rounded UP to whole selling units; pack prices include supplier
-    increases and this quote's adjustments.
-  - Fixed-rate lines (not from the price list) are listed apart, to arrange
-    separately. Rate-only items are left out (no quantity).
-  Note: the take-off's "Budgets by supplier" is the PRICED quantity; the
-  Materials total is WHOLE PACKS - so it is usually a little higher.
+THE TAKE-OFF TABLE
+  Always shown: Description | Qty | Unit | Rate | Total
+  Chosen with "⚙ Columns" (top right of the table) - remembered in this browser:
+    Materials rate | Materials total | Labour rate | Labour total
+    | Profit rate | Profit total | Profit % (this item) | Rate only
+    Suppliers - one entry per supplier, showing its rate and total: what each
+    item includes from that supplier. Only suppliers with a BUDGET on this
+    estimate are offered (a supplier only on a rate-only item is not).
+  All shown at first except the suppliers.
+  Materials, labour and supplier figures are COST (before profit and MCD) -
+  the budgets; profit is the profit in the rate.
+  A TOTALS row (above the line) sums every total column shown.
 
-FIXED: a quote's own supplier adjustment now reaches the pack price as well as
-the rates (needed for ordering).
-
-NEXT: purchase orders from the Materials tab (one per supplier).
-
-Checked (real price list):
-  - 1,000 m2 + 500 m2 of the Renolit membrane at 14% / 10% waste -> 1,690 m2
-    (12.667% weighted) -> 81 rolls x 185.85 = 15,053.85; primer 200 l + 5% =
-    210 l -> 18 tins x 81.72; screws 5,000 + 5% -> 21 boxes of 250 x 10.14;
-    the solvent listed apart; the rate-only item left out; order waste 5% on
-    the membrane -> 1,575 m2 -> 75 rolls; a quote's Renolit -10% -> 167.265 a
-    roll - all checked by hand
-  - in a simulated browser: the tab shows those rows by supplier; an order
-    waste of 5% -> 75 rolls / 13,938.75; saved with the estimate
-  - all server routes compile; all 165 pages pass the browser check
+Checked in a simulated browser (real price list): Roof A 1,000 m2 - materials
+10.30 / 10,301.94, labour 11.00 / 11,000.00, profit 5.96 / 5,964.54 - all as
+worked by hand; the gear offers Renolit and Valro but not Sika (only on a
+rate-only item); Renolit shown -> Roof A 10,089.00, Roof B 4,867.50, totals
+row 14,956.50 (by hand); hiding a column removes it and is remembered.
+All server routes compile; all 165 pages pass the browser check.
