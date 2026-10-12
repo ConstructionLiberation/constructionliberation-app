@@ -1,26 +1,49 @@
-PACKAGE 1096 - Take-off: more columns, and a gear to show / hide them
+PACKAGE 1097 - Build-up lines: a rate on every material and labour line; own
+items; lump spread; a searchable item picker
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1095.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1096.
 
+  lib/buildups.js
+  lib/materials.js
   lib/estimate.js
-  pages/estimating/estimate/[id].js       (folder literally named [id])
+  components/BuildupEditor.js     (the Build-ups page AND the take-off pop-out)
 
-THE TAKE-OFF TABLE
-  Always shown: Description | Qty | Unit | Rate | Total
-  Chosen with "⚙ Columns" (top right of the table) - remembered in this browser:
-    Materials rate | Materials total | Labour rate | Labour total
-    | Profit rate | Profit total | Profit % (this item) | Rate only
-    Suppliers - one entry per supplier, showing its rate and total: what each
-    item includes from that supplier. Only suppliers with a BUDGET on this
-    estimate are offered (a supplier only on a rate-only item is not).
-  All shown at first except the suppliers.
-  Materials, labour and supplier figures are COST (before profit and MCD) -
-  the budgets; profit is the profit in the rate.
-  A TOTALS row (above the line) sums every total column shown.
+LINE TYPES: material | labour | lump spread | comment
+  - "Fixed rate" is gone. EVERY material and labour line takes a rate:
+      a product (or labour item) - its rate, which can be typed over
+      (CHANGED / Revert, as before);
+      or an OWN ITEM - no product: type a label (e.g. "Risk") and a rate.
+    Material lines add to materials cost; labour lines to labour cost. Waste
+    and price increase apply to material lines.
+  - Existing fixed-rate lines (the Tape, Solvent, Butts... from the converter)
+    are read as material lines with their amount as the rate - they price
+    EXACTLY as before. A build-up or an estimate item converts them the first
+    time it is opened.
+  - "Lump sum" is now called LUMP SPREAD (an amount per job, spread over the
+    item's quantity). Upload files may say lump sum, lump spread or fixed rate.
+  - Own items are listed on the Materials tab under "Not from the price list"
+    and are not counted against any supplier.
 
-Checked in a simulated browser (real price list): Roof A 1,000 m2 - materials
-10.30 / 10,301.94, labour 11.00 / 11,000.00, profit 5.96 / 5,964.54 - all as
-worked by hand; the gear offers Renolit and Valro but not Sika (only on a
-rate-only item); Renolit shown -> Roof A 10,089.00, Roof B 4,867.50, totals
-row 14,956.50 (by hand); hiding a column removes it and is remembered.
-All server routes compile; all 165 pages pass the browser check.
+THE ITEM PICKER is now a search box: type any part of the description,
+supplier code, supplier or Ref and choose from what matches - from the line's
+own list, or the whole price list / labour rates with "any". Its first option
+is "Own item (no product)".
+
+ALSO: while building this, files I did not write kept appearing and changing
+in my working environment - including two in this package's folder (removed).
+This package was built from your deployed packages (1022-1096, verified
+against their zips) plus these four files, which were checked unchanged
+immediately before zipping.
+
+Checked:
+  - your build-ups file still reads with 0 errors; Mech Fixed SP is still
+    32.04/m2 - read from the file AND from build-ups stored with the old
+    fixed-rate lines
+  - own items: Risk 2.50 + Supervision 1.20 -> materials 15.90/m2, labour
+    12.20/m2; listed apart on the Materials tab; left out of supplier budgets
+  - in a simulated browser: the Tape row is a material line with a rate box;
+    types read "material, labour, lump spread, comment"; "polythene" narrows the
+    VCL list to 7 and picks one; "any" + "renolit 1.5" finds 5 across the whole
+    price list; a new "Risk" line at 2.50 costs 2.50; an old fixed-rate Solvent
+    opens as a material line at 0.30, same cost
+  - all server routes compile; all 165 pages pass the browser check
