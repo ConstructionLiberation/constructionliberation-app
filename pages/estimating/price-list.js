@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import EstimatingShell, { Heading, ErrorBar, estApi } from '../../components/EstimatingShell'
 import { useFormat } from '../../components/TenantProvider'
-import { COLUMNS, BASE_UNITS, UNIT_LABEL, checkProduct, usableRate } from '../../lib/priceList'
+import { COLUMNS, BASE_UNITS, UNIT_LABEL, checkProduct, usableRate, withRates } from '../../lib/priceList'
+import { pctText } from '../../lib/priceAdjust'
 import { CheckPanel, SecBtn, F, saveCsv, readRows, th, td, tdR, inp, btn } from '../../components/LibraryParts'
 
 // ESTIMATING > PRICE LIST (1083).
@@ -24,6 +25,7 @@ export default function PriceListPage() {
   const [check, setCheck] = useState(null)      // { summary, rows, fileName }
   const [busy, setBusy] = useState(false)
   const [edit, setEdit] = useState(null)        // { product, originalRef }
+  const [adjusting, setAdjusting] = useState(false)
 
   const load = () => estApi('/api/estimating/price-list').then(setData).catch(e => setErr(e.message))
   useEffect(() => { load() }, [])
@@ -52,7 +54,7 @@ export default function PriceListPage() {
   async function doImport() {
     setBusy(true); setErr('')
     try {
-      await estApi('/api/estimating/price-list', { action: 'import', rows: check.rows, fileName: check.fileName })
+      await estApi('/api/estimating/price-list', { action: 'import', rows: check.rows, fileName: check.fileName, keepAdjustments: check.keep || [] })
       setCheck(null); await load()
     } catch (e) { setErr(e.message); if (e.data?.summary) setCheck(c => ({ ...c, summary: e.data.summary })) }
     setBusy(false)
@@ -61,12 +63,15 @@ export default function PriceListPage() {
   // upload the rate columns are ignored and worked out again, so they can never
   // disagree with the price and quantity. A byte-order mark makes Excel read
   // the file as UTF-8 (the £ and ² survive).
+  // Downloads give the supplier's LIST prices - increases and discounts stay in
+  // the app (1094), so a file sent round again never has them twice.
+  const listProducts = () => products.map(p => withRates({ ...p, price: p.basePrice ?? p.price }))
   function downloadCsv() {
     const round = (v, dp) => v == null ? '' : +Number(v).toFixed(dp)
     // Inputs at FULL precision, as text: a CSV writer shortens long numbers
     // (a girth quantity of 34.0909...) and the re-uploaded rate would drift.
     const exact = (v) => typeof v === 'number' ? String(v) : (v ?? '')
-    saveCsv([COLUMNS.map(([, l]) => l), ...products.map(p => COLUMNS.map(([k]) =>
+    saveCsv([COLUMNS.map(([, l]) => l), ...listProducts().map(p => COLUMNS.map(([k]) =>
       k === 'rate' ? round(p.rate, 4) : k === 'rateM2' ? round(p.rateM2, 4) : exact(p[k])))],
       `Price-list-${new Date().toISOString().slice(0, 10)}.csv`)
   }
@@ -76,7 +81,7 @@ export default function PriceListPage() {
 
   function download() {
     const head = COLUMNS.map(([, label]) => label)
-    const body = products.map((p, i) => {
+    const body = listProducts().map((p, i) => {
       const r = i + 2
       return COLUMNS.map(([k]) => {
         if (k === 'rate') return { t: 'n', f: `IF(AND(ISNUMBER(F${r}),ISNUMBER(H${r}),H${r}>0),F${r}/H${r},"")` }
@@ -98,6 +103,7 @@ export default function PriceListPage() {
         sub={idx ? `${idx.count.toLocaleString()} products in ${sections.length} sections · updated ${new Date(idx.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${idx.updatedBy ? ` by ${idx.updatedBy}` : ''}${idx.source ? ` · from ${idx.source}` : ''}` : 'No price list yet'}
         action={<div style={{ display: 'flex', gap: 8 }}>
           {products.length > 0 && <button onClick={downloadCsv} style={btn} title="The price list with all its rates, as CSV">Download CSV</button>}
+          {products.length > 0 && <button onClick={() => setAdjusting(true)} style={btn} title="A supplier's price increase or discount, on all their products">Increase / discount</button>}
           {products.length > 0 && <button onClick={download} style={btn} title="The price list as an Excel file, rates as formulas">Download Excel</button>}
           <button onClick={downloadBlank} style={btn} title="Just the column headings, to fill in and upload">Blank template (CSV)</button>
           {products.length > 0 && <button onClick={() => setEdit({ product: { ref: '', section: section !== ALL && section !== NEEDS ? section : '', description: '', supplier: '', code: '', price: '', sellingUnit: '', qty: '', baseUnit: '', coverage: '', priceDate: '', notes: '' }, originalRef: null })} style={btn}>+ Add product</button>}
@@ -107,7 +113,29 @@ export default function PriceListPage() {
           </label>
         </div>} />
       <ErrorBar error={err} onClose={() => setErr('')} />
+      {(data?.adjustments || []).length > 0 && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
+          {data.adjustments.map(a => (
+            <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '2px 0' }}>
+              <span>Rates include <strong>{pctText(a.pct)}</strong> {a.pct < 0 ? 'discount' : 'increase'} for <strong>{a.supplier}</strong> from {a.from ? a.from.split('-').reverse().join('/') : '—'}{a.note ? ` - ${a.note}` : ''}</span>
+              <button onClick={async () => { if (!window.confirm(`Remove the ${pctText(a.pct)} for ${a.supplier}? Its products go back to the list price.`)) return; try { await estApi('/api/estimating/price-list', { action: 'unadjust', id: a.id }); await load() } catch (e) { setErr(e.message) } }} style={{ border: 'none', background: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 12.5 }}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {adjusting && <AdjustDialog suppliers={[...new Set(products.map(p => p.supplier).filter(Boolean))].sort()} onClose={() => setAdjusting(false)} onDone={async () => { setAdjusting(false); await load() }} />}
 
+      {check && (check.summary.adjustmentsInFile || []).length > 0 && (
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13 }}>
+          <strong>Price increases / discounts in force for suppliers in this file.</strong> Keep applying them on top of the new prices? Untick any the new list already includes, or it is counted twice.
+          {check.summary.adjustmentsInFile.map(a => (
+            <label key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={(check.keep || []).includes(a.id)} onChange={e => setCheck(c => ({ ...c, keep: e.target.checked ? [...(c.keep || []), a.id] : (c.keep || []).filter(x => x !== a.id) }))} />
+              Keep {pctText(a.pct)} for {a.supplier} (from {a.from ? a.from.split('-').reverse().join('/') : '—'}{a.note ? ` - ${a.note}` : ''})
+            </label>
+          ))}
+        </div>
+      )}
       {check && <CheckPanel s={check.summary} fileName={check.fileName} busy={busy} m4={m4} onImport={doImport} onCancel={() => setCheck(null)} />}
 
       {!data ? <div style={{ color: '#aaa', padding: 30 }}>Loading…</div> : !products.length ? (
@@ -137,12 +165,12 @@ export default function PriceListPage() {
                   {shown.slice(0, 400).map(p => {
                     const ok = usableRate(p)
                     return (
-                      <tr key={p.ref} onClick={() => setEdit({ product: { ...p }, originalRef: p.ref })} style={{ cursor: 'pointer', background: ok ? undefined : '#fffbeb' }}>
+                      <tr key={p.ref} onClick={() => setEdit({ product: { ...p, price: p.basePrice ?? p.price }, originalRef: p.ref, adjusted: p.adjusted })} style={{ cursor: 'pointer', background: ok ? undefined : '#fffbeb' }}>
                         <td style={{ ...td, color: '#888', whiteSpace: 'nowrap' }}>{p.ref}</td>
                         <td style={{ ...td, minWidth: 260 }}>{p.description}{(section === ALL || q.trim()) && <div style={{ fontSize: 11, color: '#aaa' }}>{p.section}</div>}</td>
                         <td style={td}>{p.supplier}</td>
                         <td style={{ ...td, color: '#666' }}>{p.code}</td>
-                        <td style={tdR}>{p.price != null ? m4(p.price) : <span style={{ color: '#d97706' }}>none</span>}</td>
+                        <td style={tdR} title={p.adjusted && p.adjusted !== 1 ? `List price ${m4(p.basePrice)}` : ''}>{p.price != null ? m4(p.price) : <span style={{ color: '#d97706' }}>none</span>}{p.adjusted && p.adjusted !== 1 && <div style={{ fontSize: 10.5, color: '#2563eb' }}>{pctText(p.adjusted - 1)} on {m4(p.basePrice)}</div>}</td>
                         <td style={{ ...td, color: '#666' }}>{p.sellingUnit}</td>
                         <td style={tdR}>{p.qty ?? <span style={{ color: '#d97706' }}>—</span>}</td>
                         <td style={td}>{p.baseUnit ? UNIT_LABEL[p.baseUnit] : <span style={{ color: '#d97706' }}>—</span>}</td>
@@ -199,7 +227,7 @@ function ProductEditor({ edit, sections, m4, onClose, onSaved }) {
           <F label="Description" span={4}><input value={p.description} onChange={set('description')} style={inp} /></F>
           <F label="Supplier" span={2}><input value={p.supplier} onChange={set('supplier')} style={inp} /></F>
           <F label="Supplier code" span={2}><input value={p.code} onChange={set('code')} style={inp} /></F>
-          <F label="Supplier price"><input value={p.price ?? ''} onChange={set('price')} inputMode="decimal" style={inp} /></F>
+          <F label={edit.adjusted && edit.adjusted !== 1 ? `Supplier LIST price (${pctText(edit.adjusted - 1)} applied on top)` : 'Supplier price'}><input value={p.price ?? ''} onChange={set('price')} inputMode="decimal" style={inp} /></F>
           <F label="Sold as (e.g. roll 21 m²)"><input value={p.sellingUnit} onChange={set('sellingUnit')} style={inp} /></F>
           <F label="Qty per selling unit"><input value={p.qty ?? ''} onChange={set('qty')} inputMode="decimal" style={inp} /></F>
           <F label="Base unit"><select value={p.baseUnit || ''} onChange={set('baseUnit')} style={inp}><option value="">—</option>{BASE_UNITS.map(u => <option key={u} value={u}>{UNIT_LABEL[u]}</option>)}</select></F>
@@ -224,3 +252,43 @@ function ProductEditor({ edit, sections, m4, onClose, onSaved }) {
   )
 }
 
+
+// INCREASE / DISCOUNT (1094): one or more suppliers, a %, a date, a note.
+function AdjustDialog({ suppliers, onClose, onDone }) {
+  const [picked, setPicked] = useState([])
+  const [pct, setPct] = useState('')
+  const [from, setFrom] = useState(new Date().toISOString().slice(0, 10))
+  const [note, setNote] = useState('')
+  const [err, setErr] = useState('')
+  const [q, setQ] = useState('')
+  async function save() {
+    setErr('')
+    try { await estApi('/api/estimating/price-list', { action: 'adjust', suppliers: picked, pct: parseFloat(pct) / 100, from, note }); await onDone() } catch (e) { setErr(e.message) }
+  }
+  const shown = suppliers.filter(s => s.toLowerCase().includes(q.trim().toLowerCase()))
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 520, padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Supplier increase or discount</div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+        </div>
+        <div style={{ fontSize: 12.5, color: '#666', marginBottom: 10 }}>Applied to every product from the supplier, on top of their list price - kept underneath, so it can be removed exactly. Several on one supplier compound.</div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a supplier…" style={{ ...inp, marginBottom: 6 }} />
+        <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8, padding: 6, marginBottom: 10 }}>
+          {shown.map(s => <label key={s} style={{ display: 'flex', gap: 8, fontSize: 13, padding: '3px 2px', cursor: 'pointer' }}><input type="checkbox" checked={picked.includes(s)} onChange={e => setPicked(p => e.target.checked ? [...p, s] : p.filter(x => x !== s))} />{s}</label>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <F label="% (minus for a discount)"><input value={pct} onChange={e => setPct(e.target.value)} placeholder="e.g. 10 or -5" inputMode="decimal" style={inp} /></F>
+          <F label="From"><input type="date" value={from} onChange={e => setFrom(e.target.value)} style={inp} /></F>
+          <F label="Note (e.g. supplier's letter)" span={2}><input value={note} onChange={e => setNote(e.target.value)} style={inp} /></F>
+        </div>
+        {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 10 }}>{err}</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+          <button onClick={onClose} style={btn}>Cancel</button>
+          <button onClick={save} disabled={!picked.length || !pct} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', opacity: !picked.length || !pct ? 0.5 : 1 }}>Apply to {picked.length || 0} supplier{picked.length === 1 ? '' : 's'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}

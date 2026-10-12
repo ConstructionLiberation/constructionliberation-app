@@ -7,6 +7,7 @@ import BuildupEditor, { pct, fromPct } from '../../../components/BuildupEditor'
 import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
 import { placeholderValues } from '../../../lib/quoteDocs'
+import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
 import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
@@ -36,6 +37,7 @@ export default function EstimatePage() {
   const [popout, setPopout] = useState(null)    // item id
   const [picking, setPicking] = useState(false)
   const [showHeader, setShowHeader] = useState(true)
+  const [showAdj, setShowAdj] = useState(false)
   const [crm, setCrm] = useState(null)          // the deal's details, LIVE from the CRM
   const [linking, setLinking] = useState(false)
   const [who, setWho] = useState({ canDelete: false, admins: [] })
@@ -157,9 +159,12 @@ export default function EstimatePage() {
           <label title="Raise or lower ALL the labour on this quote - each rate in proportion to its own labour">Labour factor <input value={s.labourFactor ?? 1} onChange={e => setSetting('labourFactor', e.target.value === '' ? 1 : parseFloat(e.target.value))} style={{ ...cellInp, width: 60 }} /></label>
           <label title="Starts from the company day rate (Labour Rates); used for prelims">Day rate <input value={s.dayRate ?? ''} onChange={e => setSetting('dayRate', e.target.value === '' ? null : parseFloat(e.target.value))} style={{ ...cellInp, width: 70 }} /></label>
           <div style={{ flex: 1 }} />
+          <button onClick={() => setShowAdj(v => !v)} style={{ ...smallBtn, borderColor: (est.adjustments || []).length ? '#2563eb' : undefined, color: (est.adjustments || []).length ? '#2563eb' : undefined }}>This quote's price adjustments{(est.adjustments || []).length ? ` (${est.adjustments.length})` : ''}</button>
           <button onClick={() => setShowHeader(v => !v)} style={smallBtn}>{showHeader ? 'Hide' : 'Show'} project and customer details</button>
         </div>
         {s.profit == null && <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>Set the profit % for this quote - every rate includes it.</div>}
+        {(est.adjustments || []).length > 0 && !showAdj && <div style={{ fontSize: 12.5, color: '#2563eb', marginTop: 6 }}>This quote only: {est.adjustments.map(a => `${a.supplier} ${pctText(a.pct)}`).join(' · ')} - on top of the price list.</div>}
+        {showAdj && <QuoteAdjustments est={est} change={change} suppliers={[...new Set(lib.products.map(p => p.supplier).filter(Boolean))].sort()} />}
         {showHeader && (
           <div style={{ marginTop: 10 }}>
             {est.dealId && crm && !crm.missing ? (
@@ -299,8 +304,10 @@ export default function EstimatePage() {
   )
 }
 
-function Popout({ item, est, lib, money, onChange, setRow, onClose }) {
+function Popout({ item, est, lib: libIn, money, onChange, setRow, onClose }) {
   const s = est.settings || {}
+  // This quote's own supplier adjustments, as the take-off prices them (1094).
+  const lib = useMemo(() => adjustLib(libIn, est.adjustments), [libIn, est.adjustments])
   const p = priceItem(item, lib, s)
   const [saving, setSaving] = useState(null)   // { category, name } when saving as a template
   const [msg, setMsg] = useState('')
@@ -422,3 +429,33 @@ const lbl = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, co
 const cellInp = { fontSize: 13, padding: '5px 7px', border: '1px solid #d4d4d0', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box' }
 const iconBtn = { border: 'none', background: 'none', cursor: 'pointer', color: '#888', fontSize: 13, padding: '2px 4px', fontFamily: 'inherit' }
 const smallBtn = { fontSize: 12, padding: '5px 10px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }
+
+// THIS QUOTE'S PRICE ADJUSTMENTS (1094): a supplier's increase or discount on
+// this estimate only, on top of the price list. Revisions record them.
+function QuoteAdjustments({ est, change, suppliers }) {
+  const [f, setF] = useState({ supplier: '', pct: '', note: '' })
+  const list = est.adjustments || []
+  const add = () => {
+    const pct = parseFloat(f.pct) / 100
+    if (!f.supplier || !Number.isFinite(pct) || pct === 0 || pct <= -1) return
+    change(e => ({ ...e, adjustments: [...(e.adjustments || []), { id: `qa${Date.now().toString(36)}`, supplier: f.supplier, pct, note: f.note.trim() }] }))
+    setF({ supplier: '', pct: '', note: '' })
+  }
+  return (
+    <div style={{ marginTop: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 10, fontSize: 13 }}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>This quote's price adjustments <span style={{ fontWeight: 400, color: '#666', fontSize: 12 }}>- e.g. a supplier's discount for this project. On top of the price list; the price list is not changed.</span></div>
+      {list.map(a => (
+        <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '2px 0' }}>
+          <span><strong>{a.supplier}</strong> {pctText(a.pct)}{a.note ? ` - ${a.note}` : ''}</span>
+          <button onClick={() => change(e => ({ ...e, adjustments: (e.adjustments || []).filter(x => x.id !== a.id) }))} style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 12 }}>Remove</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={f.supplier} onChange={e => setF({ ...f, supplier: e.target.value })} style={{ ...cellInp, minWidth: 180 }}><option value="">Supplier…</option>{suppliers.map(x => <option key={x}>{x}</option>)}</select>
+        <input value={f.pct} onChange={e => setF({ ...f, pct: e.target.value })} placeholder="% e.g. -10" style={{ ...cellInp, width: 90 }} />
+        <input value={f.note} onChange={e => setF({ ...f, note: e.target.value })} placeholder="note" style={{ ...cellInp, width: 200 }} />
+        <button onClick={add} style={smallBtn}>Add</button>
+      </div>
+    </div>
+  )
+}

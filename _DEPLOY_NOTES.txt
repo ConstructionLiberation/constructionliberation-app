@@ -1,87 +1,51 @@
-PACKAGE 1093 - Private documents: on estimates, on items (rates), on build-ups
+PACKAGE 1094 - Supplier price increases and discounts (price list and per quote)
 
-Eleven files: seven complete replacements, four NEW. No re-seed. Built on 1092.
+Six files: five complete replacements, one NEW. No re-seed. No env changes.
+Built on 1093.
 
-  NEW       lib/privateFiles.js
-            lib/documentsStore.js
-            components/DocumentsPanel.js
-            pages/api/estimating/documents.js
-  REPLACED  package.json, package-lock.json      (a new library - see below)
-            components/QuoteTabs.js
-            pages/estimating/estimate/[id].js     (folder literally named [id])
-            pages/estimating/build-ups.js
-            pages/api/estimating/estimates.js
-            pages/api/estimating/build-ups.js
+  NEW       lib/priceAdjust.js                     (the rules - shared)
+  REPLACED  lib/priceListStore.js
+            lib/estimate.js
+            pages/api/estimating/price-list.js
+            pages/estimating/price-list.js
+            pages/estimating/estimate/[id].js      (folder literally named [id])
 
-*** THREE STEPS IN VERCEL - in this order ***
-1. Storage -> Create -> Blob. Name it e.g. "rock-app-private" and choose
-   PRIVATE access. Create.
-2. Connect it to the project (Production and Preview) and set the environment
-   variable PREFIX to  BLOB_PRIVATE  so the token is called
-       BLOB_PRIVATE_READ_WRITE_TOKEN
-   Check under Settings -> Environment Variables that the name is exactly
-   that. (The existing BLOB_READ_WRITE_TOKEN stays as it is - it is the old,
-   public store, still used by every existing upload.)
-3. Settings -> Build and Deployment -> Node.js Version: 20.x or later (22.x is
-   fine). The new library needs Node 20.
-Then deploy this package (it includes package.json and package-lock.json).
-Vercel's screens may word these slightly differently - the names above are
-what matter. Until the token exists the Documents panels say "Private file
-storage is not set up yet"; nothing else is affected.
+ON THE PRICE LIST (company-wide)
+  "Increase / discount": tick one or more suppliers, a % (minus for a
+  discount), a date, a note -> applied to every product from them.
+  A banner at the top: "Rates include +10% increase for Renolit from
+  12/10/2026 - Price rise letter"   [Remove]
+  Each affected price shows e.g. "+10% on 185.85".
+  - The supplier's LIST price is kept underneath; rates are worked out on top
+    of it, so Remove is exact. Editing a product edits its list price.
+  - Several on one supplier COMPOUND (+10% then +5% = +15.5%).
+  - Downloads (CSV / Excel) give the LIST prices - the increases stay in the
+    app, so a file sent round again never has them twice.
+  - UPLOADING a new list: if a supplier in the file has an increase or discount
+    in force, you are asked, per supplier, whether to keep applying it - untick
+    it if their new list already includes the rise. Others stay. The upload is
+    compared with the list prices, so an increase never shows every product of
+    that supplier as "changed".
+  Build-ups and estimates price with the adjusted rates automatically.
 
-THE LIBRARY: @vercel/blob 2.8.0, added under its OWN name
-(@vercel/blob-private), so the existing @vercel/blob 0.27.3 - and every
-existing upload in the portal - is untouched. 2.8.0 is from August (2.8.1 is
-under a fortnight old, so not used); its @vercel/oidc is pinned to 3.8.9 for
-the same reason. package-lock.json was updated by npm itself: nothing existing
-changed or was removed. It also now records pdfjs-dist, which package.json
-already listed (the Design title-block uses it) but the lock file never had.
+ON ONE QUOTE - "This quote's price adjustments" on the take-off
+  e.g. Renolit -10% for this project: on top of the price list, this estimate
+  only (the take-off, the pop-out, the totals, the quote); the price list is
+  not changed. A note under the settings shows what is in force. Revisions
+  record it - "Changes since Rev A" lists it.
 
-WHERE DOCUMENTS ARE
-  Estimate > Documents tab   documents for the whole estimate (compliance
-                             documents etc.), or attached to one item
-  The pop-out on an item     "Documents on this item" - e.g. the green roof
-                             supplier's quote on the green roof rate
-  Build-ups editor           "Documents on this build-up" - on the library
-                             template itself
-  + Add documents (several at once, up to 50 MB each); click a name to open;
-  Delete. Archived estimates: read-only.
-
-HOW THEY ARE KEPT PRIVATE
-  - The store is private: files have no public address.
-  - Uploads go straight from the browser to the store (no 4.5 MB limit), with a
-    permission our server gives for THAT estimate / build-up's folder only,
-    under the company's own folder - never another estimate's or company's.
-  - Opening a file: the server checks the person's access, then sends the
-    browser a link to that ONE file, read-only, that stops working after 5
-    minutes.
-  - The document lists are kept apart from the estimate, so an upload never
-    collides with someone saving the take-off.
-  - Deleting an estimate or a build-up deletes its files from storage; renaming
-    a build-up (or its category) moves its documents with it.
-  - The upload code (~230 KB) loads only when someone adds a document.
-
-Checked (the route's rules, against a stand-in for the private store, since
-this environment cannot reach Vercel):
-  - not set up -> the list works and uploads say so plainly
-  - upload permission: granted for the estimate's own folder (50 MB, random
-    suffix so nothing is overwritten); refused for another folder, another
-    company's folder, an archived estimate, an unknown estimate
-  - register: refused if the file never arrived, sits outside the folder, or
-    names an item not on the estimate; a 23 MB file recorded on its item
-  - download: a redirect to a link scoped to that one file, read-only, 5 minutes
-  - delete: gone from storage and the list; another company cannot reach the
-    estimate's documents at all
-  - with the REAL library installed, every page bundles for the browser (no
-    new failures); the panel holds no server-only code
-  - all server routes compile
-
-WHAT I COULD NOT TEST HERE: a real upload to and download from Vercel's private
-store. The smoke test below is that check.
-
-SMOKE TEST (after the three Vercel steps)
-1. Open an estimate -> Documents -> + Add documents -> a PDF over 5 MB.
-2. Click its name: it opens. Copy the address, wait 6 minutes, paste it:
-   refused (the link expired).
-3. Open an item's pop-out -> attach a supplier quote there; it shows on the
-   Documents tab tagged with the item.
+Checked:
+  - the rules on the real price list: +10% then +5% = x1.1550; Renolit roll
+    185.85 -> 204.44 (rate 8.85 -> 9.735/m2) with +10%; other suppliers
+    unchanged; removing returns the list price exactly; a quote's -10% on top
+    leaves the price list untouched
+  - the route: adjust (unknown supplier and 0% refused); stored price stays
+    185.85 (nothing worked out is stored); re-upload of the same file -> 0
+    changed, asks about "Renolit +10%"; kept -> 204.44, dropped -> 185.85; the
+    editor saves the list price (190 -> priced 209.00); remove -> 190
+  - in a simulated browser: the banner and "+10% on 185.85"; an estimate of
+    1,000 m2 of a Renolit membrane build-up -> 29,020.00 with the +10% and
+    27,560.00 with this quote's -10% - both checked by hand; the pop-out shows
+    27.56/m2 too; after issuing Rev A, removing the -10% shows in "Changes
+    since Rev A" (+1,460.00)
+  - all server routes compile; all 165 pages pass the browser check
