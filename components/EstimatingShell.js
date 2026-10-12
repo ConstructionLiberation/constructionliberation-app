@@ -13,6 +13,7 @@ import { canAccessArea } from '../lib/roles'
 // gets a page with nothing in it, not the data.
 export const EST_NAV = [
   { key: 'price-list', label: 'Price List', href: '/estimating/price-list' },
+  { key: 'labour-rates', label: 'Labour Rates', href: '/estimating/labour-rates' },
 ]
 
 export default function EstimatingShell({ active, title, wide, children }) {

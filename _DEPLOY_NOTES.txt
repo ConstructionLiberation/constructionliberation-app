@@ -1,34 +1,62 @@
-PACKAGE 1085 - Price List: CSV download, blank CSV template, CSV upload
+PACKAGE 1086 - Estimating: Labour Rates and the day rate
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1084.
+Eleven files: four complete replacements, seven NEW. No re-seed. No env
+changes. Built on 1085.
 
-  pages/estimating/price-list.js
-  lib/priceList.js
+  NEW       lib/labourRates.js               (the rules)
+            lib/labourRatesStore.js          (storage + the day rate setting)
+            lib/libraryParse.js              (SHARED upload reading)
+            lib/libraryStore.js              (SHARED versioned storage)
+            components/LibraryParts.js       (SHARED upload check, sections, CSV)
+            pages/estimating/labour-rates.js
+            pages/api/estimating/labour-rates.js
+  REPLACED  lib/priceList.js, lib/priceListStore.js,
+            pages/estimating/price-list.js  (now on the shared parts - no change
+                                             in behaviour, proven below)
+            components/EstimatingShell.js    (nav: Labour Rates)
 
-THREE DOWNLOAD BUTTONS on Estimating > Price List
-  Download CSV          the whole price list with ALL its rates - rate per base
-                        unit, and rate per m2 where a coverage is given - as
-                        values (a CSV cannot hold formulas)
-  Download Excel        as before, rates as formulas
-  Blank template (CSV)  just the column headings, to fill in one row per product
-                        - also offered on the empty page ("No price list yet"),
-                        for a company starting out
+Also, OUTSIDE the app (not deployed):
+  convert_labour_rates.py                   the converter
+  Rock-Roofing-Labour-Rates-Upload.xlsx     your labour rates, ready to upload
 
-UPLOAD accepts the CSV back (and Excel, as before).
-  - A CSV is read as TEXT, then only the number columns are turned into
-    numbers - so a supplier code like 0123 keeps its leading zero (read as
-    numbers it would become 123).
-  - The rate columns in a file are always ignored and worked out again from
-    the price and quantity, so they can never disagree.
-  - The invisible marker a CSV starts with (so Excel shows the pound sign and
-    the m2 symbol properly) is ignored wherever it turns up.
+ESTIMATING > LABOUR RATES - works exactly like the Price List:
+  ONE rate per labour item: the price per m2, m or nr the estimate uses.
+  Where a rate came from (e.g. the installer who quoted) is in NOTES - for
+  reference only, never used in pricing.
+  Upload (Excel or CSV) -> checked and summarised -> Import. Download CSV /
+  Excel / Blank template. Sections, Needs attention, search, edit, add, delete.
 
-Checked on the real price list:
-  - CSV download -> re-upload: 1,499 products, 0 added, 0 changed, 0 removed.
-    The first attempt found 20 girth items whose quantity (e.g. 34.0909...) the
-    CSV writer shortened, nudging their rate - now written at full precision.
-  - a code '0123' survives the round trip
-  - the blank template is the headings only; uploaded unfilled it says "No
-    products under the header row"; with one row filled it imports cleanly
-    (box of 100 at 12.00 -> 0.12 per nr)
-  - both files compile; all 160 pages pass the browser check
+THE DAY RATE - a setting at the top of the page
+  Not set   amber "Day rate - not set yet". Type the day rate and hours a day
+            (8 shown, not saved until Save) -> the hourly rate appears.
+  Set       "Day rate 325.00 - 8 hours a day -> 40.63 an hour", who set it, when.
+  Every estimate will START from it and can change it. Never filled in for a
+  company - they set it. Uploads and edits of the rates leave it alone.
+
+THE PRICE LIST NOW SHARES ITS MACHINERY with labour rates - one upload reader,
+one store, one set of screen parts - so the two cannot drift apart. Storage
+keys are unchanged (pricelist:...); an uploaded price list is untouched.
+
+YOUR LABOUR RATES FILE: 277 items in 78 sections, all 276 rates identical to
+the workbook; 8 to check (5 no unit, 1 no rate, 1 at 0, a description repeated
+within a section). The day rates found (325) are on its Read me - enter 325 on
+the page.
+
+Checked:
+  - price list after the move to the shared parts: rules on the real file,
+    CSV round trip, all 12 route steps - identical results
+  - labour route: empty company (no items, no day rate); check and import of
+    the real file (277 / 78, 0 errors); LR-0006 11/m2, "Source: SPS"; day rate
+    0 refused; 325 / 8 -> 40.625 an hour; edit; a used Ref refused; a bad item
+    refused; the day rate survives; the price list untouched beside it;
+    Post-Contract refused
+  - the page in a simulated browser against the real route: empty and day
+    rate not set; typing 325 -> 40.63 an hour; saved; upload -> check ->
+    import; search; editor
+  - labour CSV round trip: 0 changed
+  - all 161 pages pass the browser check
+
+SMOKE TEST
+1. Estimating -> Labour Rates: "Day rate - not set yet". Enter 325, 8 -> Save.
+2. Upload labour rates -> Rock-Roofing-Labour-Rates-Upload.xlsx -> Import.
+3. Search "mech fixed warm": 11.00 and 13.50 per m2, Source: SPS in Notes.
