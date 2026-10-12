@@ -1,70 +1,69 @@
-PACKAGE 1088 - Estimating: Estimates and the Take-off (part 1 of 2)
+PACKAGE 1089 - Estimating: revisions, CRM value, budgets, prelims (part 2 of 3)
 
-Ten files: five complete replacements, five NEW. No re-seed. No env changes.
-Built on 1087.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1088.
 
-  NEW       lib/estimate.js                   (the estimate's rules and pricing)
-            lib/estimateStore.js
-            components/BuildupEditor.js       (ONE editor: Build-ups page AND the pop-out)
-            pages/estimating/estimates.js
-            pages/estimating/estimate/[id].js (the take-off - folder literally named [id])
-            pages/api/estimating/estimates.js
-  REPLACED  lib/buildups.js                   (lump sums spread over an item's quantity)
-            pages/estimating/build-ups.js     (now uses the shared editor - no change seen)
-            pages/estimating.js               (Estimating now opens on Estimates)
-            components/EstimatingShell.js     (nav: Estimates first)
+  lib/estimate.js
+  lib/estimateStore.js
+  pages/api/estimating/estimates.js
+  pages/estimating/estimate/[id].js       (folder literally named [id])
 
-ESTIMATING > ESTIMATES - the list, newest first. + New estimate: search the CRM
-pipeline and pick the deal (its name and customer come across), or start
-without one. Click an estimate to carry on with it.
+ON THE TAKE-OFF
 
-THE TAKE-OFF - everything is built here, in the order the quote will print:
-  - Quote ref; PROFIT % and MCD % for the WHOLE quote; labour factor (raises
-    all labour, each rate in proportion); day rate (starts from the company
-    setting). Profit starts blank and is flagged until set - never assumed.
-  - Project details (project, location, contractor, reviewer, dates, credit
-    score/limit, insured limit) - "Show project details".
-  - + Section header (Roof area A...) - with its subtotal.
-  - + Item from build-ups (category / search) -> the build-up POPS OUT over
-    the take-off. It is the item's OWN copy: changes stay on this estimate
-    unless you "Save as template…" (name + category) into the library.
-  - + Unique item - an empty build-up in the same pop-out.
-  - Each item: description, qty, unit, rate (incl. profit and MCD), total,
-    materials and labour (cost, for budgets), PROFIT % OVERRIDE (blank = the
-    quote's), RATE ONLY (qty TBC, total "Rate only", below the line, not in
-    the total).
-  - Lump sums in a build-up (deliveries) are spread over the item's quantity.
-  - Totals: total = materials + labour + profit & MCD; rate-only count; items
-    still without a quantity.
-  - Save - "Unsaved changes" shown until then; leaving warns. If someone else
-    saved since you opened it, the save is refused (with who and when) rather
-    than overwriting their work.
+REVISIONS
+  Issue Rev A (needs the estimate saved and the profit % set; asks for an
+  optional note):
+    - freezes the quote as Rev A - kept for good, a true copy no later edit
+      can reach
+    - the estimate carries on as Rev B
+    - the linked CRM deal's value is set to the issued total, with a value
+      history entry exactly like an edit in the CRM ("Value: 0.00 -> 20,943.09
+      (estimate Q-1042 Rev A, by ...)") - so Value of work priced counts it
+  "Changes since Rev A" updates live as you work: items added / removed,
+  quantity, rate, profit override, rate-only, the quote's profit / MCD /
+  labour factor, and the total's movement. Each issued revision lists what
+  changed from the one before.
+  A save cannot rewrite issued revisions; issuing is refused if someone has
+  changed the estimate since you opened it.
 
-NEXT PACKAGE (part 2): revisions (kept, changes tracked, a new revision updates
-the CRM value); private documents on the estimate and on items; budgets per
-supplier (-> Internal Handover / procurement); prelims incl. lodge and
-management; the cost-category breakdown.
++ PRELIMS - a Prelims section and item (per item, qty 1) with lump sums for
+  Lodge (Prelims), Management (Management) and Attendances (Attendances); it
+  opens in the pop-out to fill in. Each line keeps its cost category.
+
+COST BREAKDOWN - every cost by category (Materials, Labour, Delivery,
+  Management, Prelims, Attendances...) before profit and MCD.
+BUDGETS BY SUPPLIER - the product lines by each product's supplier. These are
+  the figures to carry to the Internal Handover / procurement schedule when the
+  job is won (that link comes with the handover work).
+
+ONE THING TO KNOW: if someone has a deal open in an older CRM tab while a
+revision is issued, and then saves that deal, their older copy replaces the
+new value - the CRM's existing behaviour between any two users, not new here.
+The issued revision itself is unaffected; re-issuing restores the value.
+
+NEXT (part 3): private documents on the estimate and on items. This needs a
+newer file-storage library and a PRIVATE store created in Vercel (your step) -
+it also clears the onboarding blocker of one shared public store.
 
 Checked:
-  - pricing with real data: the template rate unchanged (32.04); a 250
-    delivery adds exactly 0.50/m2 over 500 m2; a 20% profit override changes
-    only its item; rate-only excluded; total = materials + labour + profit&MCD
-  - the route: deals listed; created from a deal (name, customer; day rate 325
-    from the setting; profit blank); unknown deal and bad quantity refused;
-    list total worked out on the server (1,000 m2 x 27.69 = 27,690 - checked by
-    hand); a stale save refused naming who and when; reopen; delete;
-    Post-Contract refused
-  - the Build-ups page on the shared editor: its full test unchanged
-  - the take-off in a simulated browser against the real routes: opened from
-    the deal; profit/MCD set; section; Mech Fixed SP from the build-ups ->
-    pop-out -> products -> 32.04/m2 -> 500 m2 = 16,020.00 (materials 6,699.90,
-    labour 5,500.00); unique roof hatch 1,115.90 x 3 = 3,347.70; rate-only ->
-    TBC / Rate only; totals 19,367.70 = 9,249.90 + 5,500.00 + 4,617.80;
-    saved and read back
+  - budgets on a real-data estimate: by category adds up EXACTLY to the
+    take-off's materials + labour before profit (16,699.90); by supplier equals
+    the product lines exactly (fixed rates have no supplier)
+  - revision letters A->B, Z->AA, AZ->BA; the change list reports exactly what
+    was altered (profit, quantity, added, removed, total movement)
+  - the route: issue refused without profit; Rev A issued -> deal 0 -> 27,690
+    with a value history entry; a save cannot rewrite revisions; Rev B issued
+    with "qty 1000 -> 1200 (+5,538.00)"; deal -> 33,228; the CRM's own Value
+    of work priced sees +27,690 and +5,538; Rev A read back frozen at 1,000;
+    a stale issue refused. (Found and fixed: the snapshot shared its contents
+    with the live estimate, so later edits reached "frozen" Rev A.)
+  - the take-off in a simulated browser against the real routes: + Prelims ->
+    lodge 1,200 -> 1,575.39; Issue Rev A -> "CRM deal value 0.00 -> 20,943.09.
+    Now working on Rev B."; qty 500 -> 520 -> "Changes since Rev A" shows it
+    (+640.80); cost breakdown and supplier budgets correct
   - all server routes compile; all 164 pages pass the browser check
 
 SMOKE TEST
-1. Estimating -> Estimates -> + New estimate -> pick a deal.
-2. Profit 28, MCD 2.5. + Section header "Roof area A". + Item from build-ups
-   -> Single Ply -> Mech Fixed SP -> pick products in the pop-out -> qty -> Done.
-3. + Unique item; tick Rate only on another; Save; reopen from the list.
+1. Open an estimate linked to a deal; profit and MCD set; Save.
+2. + Prelims -> Lodge amount -> Done -> Save -> Issue Rev A -> note.
+3. The CRM deal's value is the issued total. Change a quantity: "Changes since
+   Rev A" lists it.

@@ -5,7 +5,7 @@ import { useFormat } from '../../../components/TenantProvider'
 import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
 import BuildupEditor, { pct, fromPct } from '../../../components/BuildupEditor'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { HEADER_FIELDS, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem } from '../../../lib/estimate'
+import { HEADER_FIELDS, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -33,6 +33,8 @@ export default function EstimatePage() {
   const [popout, setPopout] = useState(null)    // item id
   const [picking, setPicking] = useState(false)
   const [showHeader, setShowHeader] = useState(false)
+  const [lastRev, setLastRev] = useState(null)    // the last ISSUED revision's estimate - for 'changes since'
+  const [issueMsg, setIssueMsg] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -41,6 +43,8 @@ export default function EstimatePage() {
         setEst(e.estimate); setBase(e.estimate.updatedAt)
         setLib({ product: Object.fromEntries(p.products.map(x => [x.ref, x])), labour: Object.fromEntries(l.items.map(x => [x.ref, x])), products: p.products, labourItems: l.items })
         setTemplates(b.templates || [])
+        const last = (e.estimate.revisions || []).slice(-1)[0]
+        if (last) estApi(`${API}?id=${id}&rev=${last.revision}`).then(r => setLastRev(r.revision)).catch(() => {})
       }).catch(e => setErr(e.message))
   }, [id])
   useEffect(() => {
@@ -57,6 +61,21 @@ export default function EstimatePage() {
 
   const { priced, totals } = useMemo(() => est ? priceEstimate(est, lib) : { priced: {}, totals: {} }, [est, lib])
   const secTot = useMemo(() => est ? sectionTotals(est, priced) : {}, [est, priced])
+  const bud = useMemo(() => est ? budgets(est, lib) : { byCategory: {}, bySupplier: {} }, [est, lib])
+  const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
+
+  async function issue() {
+    const note = window.prompt(`Issue Rev ${est.revision}? This freezes the quote as it stands${est.dealId ? ' and sets the CRM deal value to its total' : ''}. Optional note:`, '')
+    if (note === null) return
+    setBusy(true); setErr(''); setIssueMsg('')
+    try {
+      const d = await estApi(API, { action: 'issue', id: est.id, note, baseUpdatedAt: base })
+      setLastRev({ revision: d.issued, total: d.total, estimate: JSON.parse(JSON.stringify(est)) })
+      setEst(d.estimate); setBase(d.estimate.updatedAt)
+      setIssueMsg(`Rev ${d.issued} issued at ${money(d.total, { dp: 2 })}.${d.crm ? (d.crm.updated ? ` CRM deal value ${money(d.crm.from, { dp: 2 })} → ${money(d.crm.to, { dp: 2 })}.` : d.crm.error ? ` ${d.crm.error}` : ` ${d.crm.note}`) : ''} Now working on Rev ${d.estimate.revision}.`)
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
 
   async function save() {
     setBusy(true); setErr('')
@@ -156,6 +175,7 @@ export default function EstimatePage() {
         <button onClick={() => addRow(sectionRow('New section'))} style={btn}>+ Section header</button>
         <button onClick={() => setPicking(true)} style={btn} disabled={!templates.length} title={templates.length ? '' : 'Upload build-ups first'}>+ Item from build-ups</button>
         <button onClick={() => addRow(uniqueItem('m2'), true)} style={btn}>+ Unique item</button>
+        <button onClick={() => { const [sec, it] = prelimsRows(); change(e => ({ ...e, rows: [...e.rows, sec, it] })); setPopout(it.id) }} style={btn} title="Lodge, management, attendances - lump sums for the job">+ Prelims</button>
       </div>
 
       <div style={{ display: 'flex', gap: 24, marginTop: 16, background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '12px 16px', flexWrap: 'wrap', alignItems: 'baseline', fontSize: 13 }}>
@@ -165,6 +185,36 @@ export default function EstimatePage() {
         <span>Profit &amp; MCD {money(totals.profitAndMcd || 0, { dp: 2 })}</span>
         {totals.belowLine > 0 && <span style={{ color: '#666' }}>{totals.belowLine} rate-only item{totals.belowLine === 1 ? '' : 's'} below the line</span>}
         {totals.noQty > 0 && <span style={{ color: '#b45309' }}>{totals.noQty} item{totals.noQty === 1 ? '' : 's'} without a quantity - not in the total</span>}
+      </div>
+
+      {issueMsg && <div style={{ marginTop: 10, fontSize: 13, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, padding: '8px 12px' }}>{issueMsg}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 12, marginTop: 14, alignItems: 'start' }}>
+        <div style={panel}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <strong style={{ fontSize: 14 }}>Revisions</strong>
+            <button onClick={issue} disabled={busy || dirty || s.profit == null} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ ...btn, opacity: busy || dirty || s.profit == null ? 0.5 : 1 }}>Issue Rev {est.revision}</button>
+          </div>
+          {dirty && <div style={{ fontSize: 12, color: '#b45309', marginBottom: 6 }}>Save before issuing.</div>}
+          {lastRev && <div style={{ fontSize: 12.5, marginBottom: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 3 }}>Changes since Rev {lastRev.revision}{since.length ? '' : ' - none'}</div>
+            {since.map((c, i) => <div key={i} style={{ color: c.kind === 'removed' ? '#b42318' : c.kind === 'added' ? '#15803d' : '#444', padding: '1px 0' }}>{c.text}</div>)}
+          </div>}
+          {(est.revisions || []).slice().reverse().map(r => (
+            <details key={r.revision} style={{ fontSize: 12.5, borderTop: '1px solid #f0efec', padding: '6px 0' }}>
+              <summary style={{ cursor: 'pointer' }}><strong>Rev {r.revision}</strong> · {money(r.total, { dp: 2 })} · {new Date(r.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {r.issuedBy}{r.note ? ` · ${r.note}` : ''}</summary>
+              <div style={{ paddingLeft: 12, marginTop: 4, color: '#555' }}>{(r.changes || []).length ? r.changes.map((c, i) => <div key={i}>{c.text}</div>) : 'First issue.'}</div>
+            </details>
+          ))}
+          {!(est.revisions || []).length && <div style={{ fontSize: 12.5, color: '#888' }}>Not issued yet. Issuing freezes the quote as Rev {est.revision}{est.dealId ? ' and sets the CRM deal value' : ''}.</div>}
+        </div>
+        <div style={panel}>
+          <strong style={{ fontSize: 14 }}>Cost breakdown</strong> <span style={{ fontSize: 11.5, color: '#999' }}>before profit and MCD</span>
+          <Breakdown rows={bud.byCategory} money={money} />
+        </div>
+        <div style={panel}>
+          <strong style={{ fontSize: 14 }}>Budgets by supplier</strong> <span style={{ fontSize: 11.5, color: '#999' }}>products only</span>
+          <Breakdown rows={bud.bySupplier} money={money} />
+        </div>
       </div>
 
       {picking && <TemplatePicker templates={templates} onClose={() => setPicking(false)} onPick={(t) => { setPicking(false); addRow(itemFromTemplate(t), true) }} />}
@@ -253,6 +303,21 @@ function TemplatePicker({ templates, onClose, onPick }) {
   )
 }
 
+function Breakdown({ rows, money }) {
+  const list = Object.entries(rows || {}).sort((a, b) => b[1] - a[1])
+  const total = list.reduce((s, [, v]) => s + v, 0)
+  if (!list.length) return <div style={{ fontSize: 12.5, color: '#aaa', marginTop: 6 }}>Nothing priced yet.</div>
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 6 }}>
+      <tbody>
+        {list.map(([k, v]) => <tr key={k}><td style={{ padding: '3px 0' }}>{k}</td><td style={{ padding: '3px 0', textAlign: 'right' }}>{money(v, { dp: 2 })}</td></tr>)}
+        <tr><td style={{ padding: '4px 0', fontWeight: 700, borderTop: '1px solid #eee' }}>Total</td><td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 700, borderTop: '1px solid #eee' }}>{money(total, { dp: 2 })}</td></tr>
+      </tbody>
+    </table>
+  )
+}
+
+const panel = { background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 12 }
 const Arrows = ({ i, move }) => <span style={{ whiteSpace: 'nowrap' }}><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></span>
 const lbl = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#666' }
 const cellInp = { fontSize: 13, padding: '5px 7px', border: '1px solid #d4d4d0', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box' }
