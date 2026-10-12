@@ -1,64 +1,22 @@
-PACKAGE 1098 - Build-ups and quotes: size per build-up, line lists, variable
-cells, descriptions; quote date on sending; section headers
+PACKAGE 1099 - Take-off: Rate and Total lead; the column menu shows every supplier
 
-Seven files. Complete replacements. No re-seed. No env changes. Built on 1097.
+One file. Complete replacement. No re-seed. No env changes. Built on 1098.
 
-  lib/buildups.js, lib/materials.js, lib/estimate.js
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
-  components/QuoteTabs.js
-  pages/estimating/build-ups.js
   pages/estimating/estimate/[id].js     (folder literally named [id])
 
-THE BUILD-UP EDITOR
-  SIZE: one per build-up (e.g. Girth 0.6). A new APPLY SIZE tick column after
-    Item: a ticked line's quantity is multiplied by the size. Size sums from the
-    converted spreadsheet (Size1+0.2...) still work.
-  ⚙ LIST on each material / labour line: that line's list of products -
-    remove those that do not apply to this build-up; search the whole price
-    list (or labour rates) and add. Same in the take-off pop-out.
-  V (VARIABLE) beside the item, the rate and the waste: marks that cell to be
-    reviewed on every quote - it shows LIGHT RED wherever the build-up is used.
-  DESCRIPTION box at the bottom - blank to start. Write the text and put
-    {products} where the product list goes ("Insert {products}"). "⚙ Products in
-    the description" ticks which material lines are included - in build-up
-    order, "A, B and C" (a product's price-list description; an own item's
-    label). "Reads:" shows the result. On the quote, an item with a description
-    uses it as its line.
-  PRODUCT RULES removed - waste lives on each line. A rule for a line's chosen
-    product is written onto that line's waste when the build-up is opened, so
-    nothing changes silently.
-  "+ management" removed.
+RATE AND TOTAL LEAD: larger, bold and dark (and the totals-row total). The
+materials, labour, profit and supplier columns recede - smaller and grey -
+there for reference.
 
-THE BUILD-UPS FILE (download / upload) now also carries: an own item's Rate
-(found while building this: from 1097 an own item's typed rate was NOT in the
-download - a download and re-upload would have lost it, including the
-converted Tape / Solvent rates), Apply size, In description, Variable, and a
-Descriptions sheet. Older files still upload.
+THE ⚙ COLUMNS MENU now shows every supplier. It sat inside the table's
+scrolling box, so a real browser clipped it at the bottom of a short table and
+the suppliers - at the end of the menu - could not be seen. It now opens just
+below the button as a panel pinned to the screen, sized to fit the window and
+scrolling inside if the list is long. With no supplier budgets yet it says so.
 
-THE TAKE-OFF AND QUOTE
-  - Section headers: no total; BOLD and UNDERLINED (take-off and quote).
-  - The quote DATE is not typed any more (gone from the project details): a
-    draft shows today's date marked "DRAFT - not yet sent".
-  - Quote tab: "Download and mark as sent (Rev A)" - issues the revision (the
-    CRM value updates, as with Issue), then opens the print window with the
-    quote AS ISSUED (Rev A, today's date, no DRAFT) to save as a PDF; then back
-    to the next draft (Rev B). "Print draft" prints the draft.
-
-Checked:
-  - rules: apply size 0.6 scales only ticked lines (VCL 1 -> 0.6, membrane 8 ->
-    4.8); no size -> "set the size"; Size1+0.2 still 0.8; the description reads
-    "... VCL, PIR insulation 120mm and Renolit 1.5mm membrane."; a product rule's
-    waste written onto its line, then no rules left
-  - your build-ups file: 0 errors, Mech Fixed SP 32.04; a build-up with an own
-    item, apply size, description ticks, variable cells and description text
-    downloads and uploads back with no line differing
-  - Build-ups page (simulated browser): rules and + management gone; Apply size
-    column; VCL 0.99 -> 0.60 at size 0.6; VCL list 23 -> remove -> 22 -> add ->
-    23; a variable rate shows light red; the description reads correctly
-  - estimate (simulated browser): section row with no total, bold + underlined;
-    no quote date in the details; quote shows today + DRAFT and the build-up
-    description as the line; Download and mark as sent prints Rev A dated
-    today without DRAFT, then shows the Rev B draft
-  - all server routes compile; all 165 pages pass the browser check
-  - built from your deployed packages (1022-1097, verified against their zips);
-    each of these seven files checked identical to the tested version
+Checked in a REAL browser (Chromium) with a real estimate: Rate and Total stand
+out, the rest are grey; opening the menu, every entry passes a hit test -
+Renolit, Sika-Trocal and Valro all visible and clickable; ticking Renolit adds
+"Renolit rate" and "Renolit total" (11.08 x 1,000 = 11,081.00 - the membrane
+and the Alkorplus VCL, both Renolit), blank on the line with no Renolit, and
+the totals row shows 11,081.00. All 165 pages pass the browser check.

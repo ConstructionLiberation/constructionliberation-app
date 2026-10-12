@@ -47,8 +47,9 @@ export default function EstimatePage() {
   // The optional columns: cost rates and totals, profit, the item's own
   // profit % and rate only, and one per supplier WITH a budget here.
   function takeoffColumns(s, totals) {
-    const R = (k, v) => <td key={k} style={{ ...tdR, color: '#555' }}>{m2(v)}</td>
-    const F = (k, v) => <td key={k} style={{ ...tdR, fontWeight: 700 }}>{m2(v)}</td>
+    // The supporting figures recede - smaller and grey - so Rate and Total lead (1099).
+    const R = (k, v) => <td key={k} style={{ ...tdR, color: '#9a9a96', fontSize: 11.5 }}>{m2(v)}</td>
+    const F = (k, v) => <td key={k} style={{ ...tdR, color: '#777', fontSize: 11.5, fontWeight: 600 }}>{m2(v)}</td>
     const list = [
       { key: 'matRate', label: 'Materials rate', heads: ['Materials rate'], render: (r, p) => [R('mr', p.materialsRate)] },
       { key: 'matTotal', label: 'Materials total', heads: ['Materials total'], render: (r, p) => [R('mt', p.materialsTotal)], foot: () => [F('mt', totals.materials)] },
@@ -257,14 +258,22 @@ export default function EstimatePage() {
         const shown = optional.filter(c => cols.has(c.key))
         const cells = shown.reduce((n, c) => n + (c.cells || 1), 0)
         return (
-          <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto', position: 'relative' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
-              <button onClick={() => setColMenu(v => !v)} title="Show or hide columns" style={{ ...smallBtn, padding: '3px 9px' }}>⚙ Columns</button>
+          // The column menu sits OUTSIDE the table's scrolling box (1099) - inside it,
+          // a browser clips it at the bottom of a short table and the suppliers are lost.
+          <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 2px 6px' }}>
+              <button onClick={(e) => {
+                // Opens just below the button, pinned to the screen and sized to fit
+                // the window - every entry reachable however long the list (1099).
+                const r = e.currentTarget.getBoundingClientRect()
+                setColMenu(v => v ? false : { top: Math.round(r.bottom + 4), right: Math.max(8, Math.round(window.innerWidth - r.right)), maxH: Math.max(220, Math.round(window.innerHeight - r.bottom - 16)) })
+              }} title="Show or hide columns" style={{ ...smallBtn, padding: '3px 9px' }}>⚙ Columns</button>
             </div>
             {colMenu && (
-              <div style={{ position: 'absolute', right: 8, top: 36, zIndex: 20, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.12)', padding: 12, width: 260, fontSize: 13 }}>
+              <div style={{ position: 'fixed', right: colMenu.right, top: colMenu.top, zIndex: 60, maxHeight: colMenu.maxH, overflowY: 'auto', background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.12)', padding: 12, width: 260, fontSize: 13 }}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>Columns</div>
                 {optional.filter(c => !c.supplier).map(c => <ColTick key={c.key} c={c} cols={cols} toggle={toggleCol} />)}
+                {!optional.some(c => c.supplier) && <div style={{ fontSize: 11.5, color: '#999', marginTop: 8 }}>Suppliers appear here once items have quantities and products from the price list.</div>}
                 {optional.some(c => c.supplier) && <>
                   <div style={{ fontWeight: 700, margin: '10px 0 4px' }}>Suppliers <span style={{ fontWeight: 400, fontSize: 11.5, color: '#999' }}>rate and total</span></div>
                   {optional.filter(c => c.supplier).map(c => <ColTick key={c.key} c={c} cols={cols} toggle={toggleCol} />)}
@@ -272,10 +281,11 @@ export default function EstimatePage() {
                 <div style={{ fontSize: 11, color: '#999', marginTop: 8 }}>Remembered in this browser.</div>
               </div>
             )}
+            <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
               <thead><tr>
-                {['', 'Description', 'Qty', 'Unit', 'Rate', 'Total'].map((h, i) => <th key={h || i} style={{ ...th, textAlign: [2, 4, 5].includes(i) ? 'right' : 'left' }}>{h}</th>)}
-                {shown.flatMap(c => c.heads.map((h, k) => <th key={`${c.key}${k}`} style={{ ...th, textAlign: c.align || 'right', color: c.supplier ? '#1d4ed8' : th.color }}>{h}</th>))}
+                {['', 'Description', 'Qty', 'Unit', 'Rate', 'Total'].map((h, i) => <th key={h || i} style={{ ...th, textAlign: [2, 4, 5].includes(i) ? 'right' : 'left', ...(i >= 4 ? { color: '#1a1a19', fontSize: 12.5, fontWeight: 700 } : {}) }}>{h}</th>)}
+                {shown.flatMap(c => c.heads.map((h, k) => <th key={`${c.key}${k}`} style={{ ...th, textAlign: c.align || 'right', fontSize: 10.5, fontWeight: 500, color: c.supplier ? '#93a8d8' : '#aaa' }}>{h}</th>))}
                 <th style={th} />
               </tr></thead>
               <tbody>
@@ -300,8 +310,8 @@ export default function EstimatePage() {
                       </td>
                       <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
                       <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
-                      <td style={{ ...tdR, fontWeight: 600 }}>{m2(p.rate)}</td>
-                      <td style={{ ...tdR, fontWeight: 600 }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400 }}>Rate only</span> : m2(p.total)}</td>
+                      <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{m2(p.rate)}</td>
+                      <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>Rate only</span> : m2(p.total)}</td>
                       {shown.flatMap(c => c.render(r, p))}
                       <td style={{ ...td, whiteSpace: 'nowrap' }}>
                         <button onClick={() => setPopout(r.id)} style={smallBtn}>Build-up</button>
@@ -315,12 +325,13 @@ export default function EstimatePage() {
               {est.rows.some(r => r.kind === 'item') && (
                 <tfoot><tr style={{ background: '#faf9f7' }}>
                   <td style={td} /><td style={{ ...td, fontWeight: 700 }} colSpan={4}>Totals <span style={{ fontWeight: 400, color: '#999', fontSize: 11.5 }}>above the line</span></td>
-                  <td style={{ ...tdR, fontWeight: 700 }}>{m2(totals.total)}</td>
+                  <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{m2(totals.total)}</td>
                   {shown.flatMap(c => c.foot ? c.foot() : [<td key={c.key} style={td} />])}
                   <td style={td} />
                 </tr></tfoot>
               )}
             </table>
+            </div>
           </div>
         )
       })()}
