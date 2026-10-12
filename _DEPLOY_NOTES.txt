@@ -1,31 +1,74 @@
-PACKAGE 1082 - Site App: Forms Completed set up like the portal's Completed page
+PACKAGE 1083 - Estimating: the Price List
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1081.
+Nine files: four complete replacements, five NEW. No re-seed. No env changes.
+Built on 1082.
 
-  pages/forms/cm/forms-completed.js
+  NEW       lib/priceList.js              (the rules - page and server share them)
+            lib/priceListStore.js         (storage)
+            components/EstimatingShell.js
+            pages/estimating.js           (opens on the Price List)
+            pages/estimating/price-list.js
+            pages/api/estimating/price-list.js
+  REPLACED  lib/roles.js                  (new area: estimating)
+            lib/modules.js                (new module: Estimating)
+            pages/index.js                (home tile)
 
-Contracts Manager > Forms Completed on the Site App no longer asks for a
-project first. It opens straight onto every form submitted on the CM's projects
-- or on every live project, where the CM has been given all-projects access
-(the same rule as every CM screen).
+*** ONE STEP AFTER DEPLOYING ***
+Estimating is a MODULE, switched on per company. Rock's company record has a
+module list, so add "estimating" to it - as was done for "management":
+  Upstash (registry) -> tenant:rock -> "modules": [ ..., "management", "estimating" ]
+Until then the Estimating tile does not show for Rock. A new company has it OFF
+unless it is added to theirs - and when on, its price list starts EMPTY.
 
-  DAYS       Today / Yesterday / Last 7 days / Last 30 days / Custom (From-To).
-             Opens on Last 7 days. Forms are grouped under a heading per day -
-             Today, Yesterday, Tuesday 29 September... - newest first.
-  FILTERS    Project (the CM's projects) and Form type, with a count.
-  EACH FORM  form type, project, operative, the time submitted, and any flags.
-             Tap to open it, as before.
+WHO: Pre-Contract, Management and Admin (as Pre-Contract). Others are refused
+by the server, not just hidden.
 
-Days are LOCAL: a form submitted at 23:40 is under that day, not the next.
-(The portal's Completed page reads typed dates as midnight UTC, which shifts
-them an hour in UK summer time - not copied here.)
+THE PRICE LIST (Estimating > Price List)
+  Upload price list   choose the file (the converter's output, or a download
+                      from here, edited). It is CHECKED and summarised first -
+                      products, sections, new / changed / removed, rates
+                      changing, errors, warnings. NOTHING changes until Import.
+                      - ERRORS block the import, listed by row (no Ref, Ref used
+                        twice, a price or quantity that is not a number, a base
+                        unit that is not m2 / m / nr / l / kg, quantity 0...)
+                      - WARNINGS import (no price, no quantity, no base unit) -
+                        those products show under Needs attention
+                      An upload REPLACES the list: anything not in the file is
+                      removed, and the check lists what would go.
+  Download            the current list in the same format - edit in Excel and
+                      upload again (round trip proven: no changes)
+  Sections            down the left, plus All products and Needs attention
+                      (products with no usable rate yet)
+  Search              every product, by description, supplier, code or Ref
+  Click a product     edit it - the rate updates as you type; or Delete
+  + Add product       a new Ref is refused if already used
 
-Site issues are not listed (as on the portal page).
+Every product works back to a rate per base unit (m2, m, nr, l, kg), and where
+a coverage is given, a rate per m2 - the rate the estimate will use.
 
-Checked in a simulated browser with forms across two of the CM's projects,
-another CM's project, a site issue, a late-evening form and older forms:
-opens on Last 7 days grouped Today (2) / Yesterday (1); the 23:40 form stays
-under Yesterday; Today, Yesterday and Last 30 days each right (a 12-day-old
-form under its weekday heading); the project and form-type filters correct;
-the other CM's project and the issue excluded; the project list offers only
-the CM's projects. All 158 pages pass the browser check.
+STORAGE: each section is stored separately, under an index. An upload writes a
+complete new version first and only then switches to it - a failed upload can
+never leave half a price list. Nothing is ever written on its own.
+
+Checked:
+  - the rules on your real upload file: 1,499 products, 64 sections, 0 errors,
+    224 warnings (102 no price, 107 no quantity, 15 no base unit); all 1,417
+    rates identical to the file
+  - the route end to end: empty company; check (saves nothing); import; read
+    back (membrane 8.85/m2, primer 1.362/m2); edit price; add with a used Ref
+    refused; add new; bad edit refused; delete; a file with errors refused and
+    the list untouched; old versions removed from storage; a Post-Contract user
+    refused
+  - the page in a simulated browser against the real route: empty state;
+    choose file -> "Ready to import - 1,499 products in 64 sections"; Import;
+    sections, Needs attention (116); search across all sections; the editor's
+    live rate (3.57/l, 1.43/m2 by coverage)
+  - download -> re-upload: 0 added, 0 changed, 0 removed
+  - all 160 pages pass the browser check
+
+SMOKE TEST
+1. Add "estimating" to Rock's modules (above). Home: the Estimating tile.
+2. Estimating -> "No price list yet". Upload price list ->
+   Rock-Roofing-Price-List-Upload.xlsx -> check the summary -> Import.
+3. Pick Mech Fixed Membrane: Renolit Alkorplan F 1.5mm at 185.85 / 21 m2 =
+   8.85/m2. Needs attention lists the products still to complete.
