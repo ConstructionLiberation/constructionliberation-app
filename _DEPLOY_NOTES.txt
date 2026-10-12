@@ -1,77 +1,70 @@
-PACKAGE 1087 - Estimating: Rate Build-ups
+PACKAGE 1088 - Estimating: Estimates and the Take-off (part 1 of 2)
 
-Five files: one complete replacement, four NEW. No re-seed. No env changes.
-Built on 1086.
+Ten files: five complete replacements, five NEW. No re-seed. No env changes.
+Built on 1087.
 
-  NEW       lib/buildups.js                  (the rules AND the rate - shared)
-            lib/buildupsStore.js             (storage, one section per category)
-            pages/estimating/build-ups.js
-            pages/api/estimating/build-ups.js
-  REPLACED  components/EstimatingShell.js    (nav: Rate Build-ups)
+  NEW       lib/estimate.js                   (the estimate's rules and pricing)
+            lib/estimateStore.js
+            components/BuildupEditor.js       (ONE editor: Build-ups page AND the pop-out)
+            pages/estimating/estimates.js
+            pages/estimating/estimate/[id].js (the take-off - folder literally named [id])
+            pages/api/estimating/estimates.js
+  REPLACED  lib/buildups.js                   (lump sums spread over an item's quantity)
+            pages/estimating/build-ups.js     (now uses the shared editor - no change seen)
+            pages/estimating.js               (Estimating now opens on Estimates)
+            components/EstimatingShell.js     (nav: Estimates first)
 
-Also, OUTSIDE the app (not deployed):
-  Rock-Roofing-Build-ups-Upload.xlsx   your build-ups, ready to upload (re-run)
-  convert_buildups.py                  the converter (updated)
-  extract_dropdowns.py                 step 1 of converting (from the last round)
+ESTIMATING > ESTIMATES - the list, newest first. + New estimate: search the CRM
+pipeline and pick the deal (its name and customer come across), or start
+without one. Click an estimate to carry on with it.
 
-UPLOAD ORDER: price list -> labour rates -> build-ups. The build-ups upload is
-refused until the first two exist; every Ref is checked against them.
+THE TAKE-OFF - everything is built here, in the order the quote will print:
+  - Quote ref; PROFIT % and MCD % for the WHOLE quote; labour factor (raises
+    all labour, each rate in proportion); day rate (starts from the company
+    setting). Profit starts blank and is flagged until set - never assumed.
+  - Project details (project, location, contractor, reviewer, dates, credit
+    score/limit, insured limit) - "Show project details".
+  - + Section header (Roof area A...) - with its subtotal.
+  - + Item from build-ups (category / search) -> the build-up POPS OUT over
+    the take-off. It is the item's OWN copy: changes stay on this estimate
+    unless you "Save as template…" (name + category) into the library.
+  - + Unique item - an empty build-up in the same pop-out.
+  - Each item: description, qty, unit, rate (incl. profit and MCD), total,
+    materials and labour (cost, for budgets), PROFIT % OVERRIDE (blank = the
+    quote's), RATE ONLY (qty TBC, total "Rate only", below the line, not in
+    the total).
+  - Lump sums in a build-up (deliveries) are spread over the item's quantity.
+  - Totals: total = materials + labour + profit & MCD; rate-only count; items
+    still without a quantity.
+  - Save - "Unsaved changes" shown until then; leaving warns. If someone else
+    saved since you opened it, the save is refused (with who and when) rather
+    than overwriting their work.
 
-ESTIMATING > RATE BUILD-UPS
-  Categories down the left (+ No category, flagged); rename or delete a
-  category (its build-ups move to No category). Search across all build-ups.
-  Open a build-up -> the editor:
-    - name, category, unit (m2, m, nr, item)
-    - SIZES (Size1...) that quantities can use; renaming a size renames it in
-      the quantities
-    - LINES: material | labour | fixed rate | lump sum | comment, reorder,
-      add, remove; + management (left out by default)
-        product / labour picked from the LINE'S OWN LIST; tick "any product" to
-        pick from the whole price list (it is added to the line's list)
-        RATE: type over it to change it - shown CHANGED, with Revert to price list
-        quantity (number or a sum like Size1*1.1), waste %, price increase %,
-        cost category, the line's cost
-    - PRODUCT RULES: this product on this line -> waste %
-    - TRY THE RATE: profit %, MCD %, labour factor -> materials, labour,
-      profit, MCD and the rate (for trying - estimates will set their own)
-    - Save (override template) | Save as new template | Delete
-  Upload (checked first; errors block), Download, Blank template.
-
-THE RATE (lib/buildups.js):
-  material = rate x qty x (1 + waste + increase); fixed = amount x qty x (1 + waste)
-  labour = rate x qty x labour factor; profit on the subtotal;
-  rate = (subtotal + profit) / (1 - MCD)  - EXACT; rounded UP to the penny.
-  No lodge, no management unless added. Lump sums price on the estimate.
+NEXT PACKAGE (part 2): revisions (kept, changes tracked, a new revision updates
+the CRM value); private documents on the estimate and on items; budgets per
+supplier (-> Internal Handover / procurement); prelims incl. lodge and
+management; the cost-category breakdown.
 
 Checked:
-  - your file read by the app's rules: 167 build-ups, 1,850 lines, 0 errors,
-    176 warnings (lines with no products yet, units to set, fixed rates with no
-    amount) - in 67 ms
-  - with an empty price list: refused, every missing Ref named
-  - quantity sums: real ones right (Size1*1.1, 3/Size1, 1/0.45...); refused:
-    unknown sizes, unbalanced brackets, anything that is not a sum (code cannot
-    run - a small parser, never eval)
-  - THE RATE against the costing sheet's method, by hand: Mech Fixed SP with
-    real products, 28% profit, 2.5% MCD -> 32.04 per m2 both ways (incl. the
-    sheet's typed solvent and LPVC costs). The 2.5% deduction leaves 31.2390
-    against 31.2317 needed - covered; the old +2.5% would leave it short.
-    Labour factor 1.10 -> labour exactly +10%.
-  - the route: refused before the price list; check; import 167 / 21 categories;
-    override; save as new; a clashing name, a bad quantity, an unknown product
-    refused with the line and reason; category rename and delete; Post-Contract
-    refused; largest category 268 KB stored (limit 1 MB)
-  - the page in a simulated browser against the real routes: loads 167; opens
-    Mech Fixed SP; products picked -> 32.04; a rate typed over -> CHANGED;
-    Revert -> back to 32.04; Save -> stored
-  - all 205 server routes compile; all 162 pages pass the browser check
-
-Found and fixed in the converter while checking: duplicate build-up names
-merged their lines (now numbered); a quantity dividing by a blank line (now
-entered per job); a 40 typed in a waste row (now flagged, not 4000%); delivery
-rows becoming 0 fixed rates (now lump sums again).
+  - pricing with real data: the template rate unchanged (32.04); a 250
+    delivery adds exactly 0.50/m2 over 500 m2; a 20% profit override changes
+    only its item; rate-only excluded; total = materials + labour + profit&MCD
+  - the route: deals listed; created from a deal (name, customer; day rate 325
+    from the setting; profit blank); unknown deal and bad quantity refused;
+    list total worked out on the server (1,000 m2 x 27.69 = 27,690 - checked by
+    hand); a stale save refused naming who and when; reopen; delete;
+    Post-Contract refused
+  - the Build-ups page on the shared editor: its full test unchanged
+  - the take-off in a simulated browser against the real routes: opened from
+    the deal; profit/MCD set; section; Mech Fixed SP from the build-ups ->
+    pop-out -> products -> 32.04/m2 -> 500 m2 = 16,020.00 (materials 6,699.90,
+    labour 5,500.00); unique roof hatch 1,115.90 x 3 = 3,347.70; rate-only ->
+    TBC / Rate only; totals 19,367.70 = 9,249.90 + 5,500.00 + 4,617.80;
+    saved and read back
+  - all server routes compile; all 164 pages pass the browser check
 
 SMOKE TEST
-1. Price list and labour rates already uploaded. Estimating -> Rate Build-ups
-   -> Upload build-ups -> Rock-Roofing-Build-ups-Upload.xlsx -> Import.
-2. Single Ply -> Mech Fixed SP. Pick VCL, discs, tubes, screws, membrane;
-   profit 28, MCD 2.5 -> a rate. Type over a rate -> CHANGED -> Revert.
+1. Estimating -> Estimates -> + New estimate -> pick a deal.
+2. Profit 28, MCD 2.5. + Section header "Roof area A". + Item from build-ups
+   -> Single Ply -> Mech Fixed SP -> pick products in the pop-out -> qty -> Done.
+3. + Unique item; tick Rate only on another; Save; reopen from the list.

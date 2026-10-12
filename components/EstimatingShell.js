@@ -12,6 +12,7 @@ import { canAccessArea } from '../lib/roles'
 // /api/estimating route asks requireArea('estimating') - so typing a URL
 // gets a page with nothing in it, not the data.
 export const EST_NAV = [
+  { key: 'estimates', label: 'Estimates', href: '/estimating/estimates' },
   { key: 'price-list', label: 'Price List', href: '/estimating/price-list' },
   { key: 'labour-rates', label: 'Labour Rates', href: '/estimating/labour-rates' },
   { key: 'build-ups', label: 'Rate Build-ups', href: '/estimating/build-ups' },
