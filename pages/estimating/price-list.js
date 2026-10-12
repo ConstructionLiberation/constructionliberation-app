@@ -42,7 +42,13 @@ export default function PriceListPage() {
     if (!file) return
     setErr(''); setBusy(true)
     try {
-      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
+      // A CSV is read as TEXT (1085): read as numbers, a supplier code like
+      // '0123' would lose its leading zero. The checks turn only the number
+      // columns into numbers.
+      const isCsv = /\.csv$/i.test(file.name)
+      const wb = isCsv
+        ? XLSX.read(await file.text(), { type: 'string', raw: true })
+        : XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
       const sheet = wb.Sheets['Price list'] || wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null })
       const d = await estApi('/api/estimating/price-list', { action: 'check', rows, fileName: file.name })
@@ -58,6 +64,30 @@ export default function PriceListPage() {
     } catch (e) { setErr(e.message); if (e.data?.summary) setCheck(c => ({ ...c, summary: e.data.summary })) }
     setBusy(false)
   }
+  // CSV (1085). Rates are written as VALUES - a CSV cannot hold formulas. On
+  // upload the rate columns are ignored and worked out again, so they can never
+  // disagree with the price and quantity. A byte-order mark makes Excel read
+  // the file as UTF-8 (the £ and ² survive).
+  function saveCsv(rows, name) {
+    const csv = XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(rows), { forceQuotes: false })
+    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a'); a.href = url; a.download = name
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  }
+  function downloadCsv() {
+    const round = (v, dp) => v == null ? '' : +Number(v).toFixed(dp)
+    // Inputs at FULL precision, as text: a CSV writer shortens long numbers
+    // (a girth quantity of 34.0909...) and the re-uploaded rate would drift.
+    const exact = (v) => typeof v === 'number' ? String(v) : (v ?? '')
+    saveCsv([COLUMNS.map(([, l]) => l), ...products.map(p => COLUMNS.map(([k]) =>
+      k === 'rate' ? round(p.rate, 4) : k === 'rateM2' ? round(p.rateM2, 4) : exact(p[k])))],
+      `Price-list-${new Date().toISOString().slice(0, 10)}.csv`)
+  }
+  function downloadBlank() {
+    saveCsv([COLUMNS.map(([, l]) => l)], 'Price-list-template.csv')
+  }
+
   function download() {
     const head = COLUMNS.map(([, label]) => label)
     const body = products.map((p, i) => {
@@ -81,7 +111,9 @@ export default function PriceListPage() {
       <Heading title="Price List"
         sub={idx ? `${idx.count.toLocaleString()} products in ${sections.length} sections · updated ${new Date(idx.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${idx.updatedBy ? ` by ${idx.updatedBy}` : ''}${idx.source ? ` · from ${idx.source}` : ''}` : 'No price list yet'}
         action={<div style={{ display: 'flex', gap: 8 }}>
-          {products.length > 0 && <button onClick={download} style={btn}>Download</button>}
+          {products.length > 0 && <button onClick={downloadCsv} style={btn} title="The price list with all its rates, as CSV">Download CSV</button>}
+          {products.length > 0 && <button onClick={download} style={btn} title="The price list as an Excel file, rates as formulas">Download Excel</button>}
+          <button onClick={downloadBlank} style={btn} title="Just the column headings, to fill in and upload">Blank template (CSV)</button>
           {products.length > 0 && <button onClick={() => setEdit({ product: { ref: '', section: section !== ALL && section !== NEEDS ? section : '', description: '', supplier: '', code: '', price: '', sellingUnit: '', qty: '', baseUnit: '', coverage: '', priceDate: '', notes: '' }, originalRef: null })} style={btn}>+ Add product</button>}
           <label style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
             {busy ? 'Working…' : 'Upload price list'}
@@ -95,7 +127,8 @@ export default function PriceListPage() {
       {!data ? <div style={{ color: '#aaa', padding: 30 }}>Loading…</div> : !products.length ? (
         <div style={{ background: '#fff', border: '1px dashed #d4d4d0', borderRadius: 12, padding: 32, textAlign: 'center', color: '#666', fontSize: 14 }}>
           <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a19', marginBottom: 6 }}>No price list yet</div>
-          Upload your price-list file. It is checked first - nothing changes until you press Import.
+          Upload your price-list file (Excel or CSV). It is checked first - nothing changes until you press Import.
+          <div style={{ marginTop: 6 }}>No file yet? <button onClick={downloadBlank} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: 0, textDecoration: 'underline' }}>Download the blank template (CSV)</button> - one row per product.</div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16, alignItems: 'start' }}>

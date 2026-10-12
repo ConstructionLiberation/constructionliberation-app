@@ -1,9 +1,34 @@
-PACKAGE 1084 - Home page: Estimating tile straight after Pre-Contract
+PACKAGE 1085 - Price List: CSV download, blank CSV template, CSV upload
 
-One file. Complete replacement. Built on 1083.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1084.
 
-  pages/index.js
+  pages/estimating/price-list.js
+  lib/priceList.js
 
-The Estimating tile now sits directly after Pre-Contract (it was between
-Lessons Learnt and Management). Tile order is set here, in the code - the
-order of the modules list in Upstash makes no difference.
+THREE DOWNLOAD BUTTONS on Estimating > Price List
+  Download CSV          the whole price list with ALL its rates - rate per base
+                        unit, and rate per m2 where a coverage is given - as
+                        values (a CSV cannot hold formulas)
+  Download Excel        as before, rates as formulas
+  Blank template (CSV)  just the column headings, to fill in one row per product
+                        - also offered on the empty page ("No price list yet"),
+                        for a company starting out
+
+UPLOAD accepts the CSV back (and Excel, as before).
+  - A CSV is read as TEXT, then only the number columns are turned into
+    numbers - so a supplier code like 0123 keeps its leading zero (read as
+    numbers it would become 123).
+  - The rate columns in a file are always ignored and worked out again from
+    the price and quantity, so they can never disagree.
+  - The invisible marker a CSV starts with (so Excel shows the pound sign and
+    the m2 symbol properly) is ignored wherever it turns up.
+
+Checked on the real price list:
+  - CSV download -> re-upload: 1,499 products, 0 added, 0 changed, 0 removed.
+    The first attempt found 20 girth items whose quantity (e.g. 34.0909...) the
+    CSV writer shortened, nudging their rate - now written at full precision.
+  - a code '0123' survives the round trip
+  - the blank template is the headings only; uploaded unfilled it says "No
+    products under the header row"; with one row filled it imports cleanly
+    (box of 100 at 12.00 -> 0.12 per nr)
+  - both files compile; all 160 pages pass the browser check
