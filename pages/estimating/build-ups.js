@@ -4,6 +4,7 @@ import EstimatingShell, { Heading, ErrorBar, estApi } from '../../components/Est
 import { useFormat } from '../../components/TenantProvider'
 import { CheckPanel, SecBtn, th, td, tdR, inp, btn } from '../../components/LibraryParts'
 import BuildupEditor from '../../components/BuildupEditor'
+import DocumentsPanel from '../../components/DocumentsPanel'
 import { LINE_TYPES, BU_UNITS, BU_UNIT_LABEL, COST_CATEGORIES, LINE_COLUMNS, SIZE_COLUMNS, RULE_COLUMNS, rateFor, evalQty, qtyProblem } from '../../lib/buildups'
 
 // ESTIMATING > RATE BUILD-UPS (1087). Categories down the left; a build-up
@@ -198,6 +199,7 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted }) {
         </div>
       </BuildupEditor>
 
+      {edit.originalRef && <div style={{ marginTop: 12 }}><DocumentsPanel ownerType="buildup" ownerId={edit.originalRef} title="Documents on this build-up" /></div>}
       {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 10 }}>{err}</div>}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
         <div>{edit.originalRef && <button onClick={del} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>}</div>

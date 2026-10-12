@@ -1,62 +1,87 @@
-PACKAGE 1092 - Quotes: Letter, Clarifications, Documents, Quote tabs; Admin > Quote Documents
+PACKAGE 1093 - Private documents: on estimates, on items (rates), on build-ups
 
-Seven files: three complete replacements, four NEW. No re-seed. No env changes.
-Built on 1091.
+Eleven files: seven complete replacements, four NEW. No re-seed. Built on 1092.
 
-  NEW       lib/quoteDocs.js
+  NEW       lib/privateFiles.js
+            lib/documentsStore.js
+            components/DocumentsPanel.js
+            pages/api/estimating/documents.js
+  REPLACED  package.json, package-lock.json      (a new library - see below)
             components/QuoteTabs.js
-            pages/admin/quote-documents.js
-            pages/api/estimating/quote-templates.js
-  REPLACED  components/AdminShell.js            (nav: Quote Documents)
-            pages/estimating/estimate/[id].js   (the tabs; folder literally [id])
-            pages/api/estimating/estimates.js   (issuing keeps the T&C version)
+            pages/estimating/estimate/[id].js     (folder literally named [id])
+            pages/estimating/build-ups.js
+            pages/api/estimating/estimates.js
+            pages/api/estimating/build-ups.js
 
-ADMIN > QUOTE DOCUMENTS (admins edit; everyone in Estimating reads)
-  - Covering letter - with placeholders (click to insert): company name,
-    quote date, ref, revision, project, site location, customer and address,
-    contact name / first name / job role, tender return, estimator, total, MCD %
-  - Standard clarifications - inclusions, exclusions, clarifications
-  - Terms & Conditions - every save is a NEW VERSION; earlier ones are kept
-  All start EMPTY - nothing is filled in for a company.
+*** THREE STEPS IN VERCEL - in this order ***
+1. Storage -> Create -> Blob. Name it e.g. "rock-app-private" and choose
+   PRIVATE access. Create.
+2. Connect it to the project (Production and Preview) and set the environment
+   variable PREFIX to  BLOB_PRIVATE  so the token is called
+       BLOB_PRIVATE_READ_WRITE_TOKEN
+   Check under Settings -> Environment Variables that the name is exactly
+   that. (The existing BLOB_READ_WRITE_TOKEN stays as it is - it is the old,
+   public store, still used by every existing upload.)
+3. Settings -> Build and Deployment -> Node.js Version: 20.x or later (22.x is
+   fine). The new library needs Node 20.
+Then deploy this package (it includes package.json and package-lock.json).
+Vercel's screens may word these slightly differently - the names above are
+what matter. Until the token exists the Documents panels say "Private file
+storage is not set up yet"; nothing else is affected.
 
-INSIDE EACH ESTIMATE - tabs under its name:
-  Take-off        as before
-  Letter          "Start from the company letter", then edit for this quote.
-                  Placeholders stay live - the right-hand side shows it as it
-                  will read, filled from the CRM deal; a gap shows as [Name].
-  Clarifications  tick from the company lists (the text is copied in, so a
-                  later change to the company list does not alter this quote),
-                  add your own, edit any
-  Documents       ready for compliance documents etc. - uploads arrive with
-                  private file storage (the next step)
-  Quote           the whole quote as the customer sees it: letter; the
-                  schedule in the take-off's sections and order (an empty
-                  section left off); total; the MCD statement; rate-only items
-                  BELOW THE LINE (TBC, rate only, not in the total);
-                  clarifications; T&Cs (current version). Print / save as PDF
-                  prints the quote alone.
-  Issuing a revision now keeps the T&C VERSION it went out with, along with its
-  letter and clarifications - an issued quote can be reproduced exactly.
+THE LIBRARY: @vercel/blob 2.8.0, added under its OWN name
+(@vercel/blob-private), so the existing @vercel/blob 0.27.3 - and every
+existing upload in the portal - is untouched. 2.8.0 is from August (2.8.1 is
+under a fortnight old, so not used); its @vercel/oidc is pinned to 3.8.9 for
+the same reason. package-lock.json was updated by npm itself: nothing existing
+changed or was removed. It also now records pdfjs-dist, which package.json
+already listed (the Design title-block uses it) but the lock file never had.
 
-TO CHECK: the MCD line reads "Our prices include a 2.5% main contractor's
-discount." - say if you want different wording, or the MCD shown as a
-separate line.
+WHERE DOCUMENTS ARE
+  Estimate > Documents tab   documents for the whole estimate (compliance
+                             documents etc.), or attached to one item
+  The pop-out on an item     "Documents on this item" - e.g. the green roof
+                             supplier's quote on the green roof rate
+  Build-ups editor           "Documents on this build-up" - on the library
+                             template itself
+  + Add documents (several at once, up to 50 MB each); click a name to open;
+  Delete. Archived estimates: read-only.
 
-Checked:
-  - the route: empty to start; letter and library saved; T&Cs v1 -> v2, the
-    old kept; a pre-contract user refused ("Only an admin can change...")
-  - an estimate in a simulated browser against the real routes: the letter
-    started from the company letter and filled LIVE ("Dear Sam, Re: Market
-    Drayton Care Home, Market Drayton ... 14,705.60 ... Niall Case");
-    clarifications ticked; the Quote tab shows the letter, the schedule by
-    section (500 m2 x 26.26 = 13,130.00; 40 m x 39.39 = 1,575.60; total
-    14,705.60 - checked by hand), the empty section left off, the MCD line, the
-    rate-only outlet below the line, the clarifications and T&Cs version 2;
-    issuing Rev A kept T&Cs v2, the letter and the clarifications
-  - all server routes compile; all 165 pages pass the browser check
+HOW THEY ARE KEPT PRIVATE
+  - The store is private: files have no public address.
+  - Uploads go straight from the browser to the store (no 4.5 MB limit), with a
+    permission our server gives for THAT estimate / build-up's folder only,
+    under the company's own folder - never another estimate's or company's.
+  - Opening a file: the server checks the person's access, then sends the
+    browser a link to that ONE file, read-only, that stops working after 5
+    minutes.
+  - The document lists are kept apart from the estimate, so an upload never
+    collides with someone saving the take-off.
+  - Deleting an estimate or a build-up deletes its files from storage; renaming
+    a build-up (or its category) moves its documents with it.
+  - The upload code (~230 KB) loads only when someone adds a document.
 
-SMOKE TEST
-1. Admin > Quote Documents: write a letter (insert a few placeholders), add
-   some clarifications, save; paste the T&Cs, save as version 1.
-2. Open an estimate: Letter -> Start from the company letter; Clarifications
-   -> tick some; Quote -> check it; Print / save as PDF.
+Checked (the route's rules, against a stand-in for the private store, since
+this environment cannot reach Vercel):
+  - not set up -> the list works and uploads say so plainly
+  - upload permission: granted for the estimate's own folder (50 MB, random
+    suffix so nothing is overwritten); refused for another folder, another
+    company's folder, an archived estimate, an unknown estimate
+  - register: refused if the file never arrived, sits outside the folder, or
+    names an item not on the estimate; a 23 MB file recorded on its item
+  - download: a redirect to a link scoped to that one file, read-only, 5 minutes
+  - delete: gone from storage and the list; another company cannot reach the
+    estimate's documents at all
+  - with the REAL library installed, every page bundles for the browser (no
+    new failures); the panel holds no server-only code
+  - all server routes compile
+
+WHAT I COULD NOT TEST HERE: a real upload to and download from Vercel's private
+store. The smoke test below is that check.
+
+SMOKE TEST (after the three Vercel steps)
+1. Open an estimate -> Documents -> + Add documents -> a PDF over 5 MB.
+2. Click its name: it opens. Copy the address, wait 6 minutes, paste it:
+   refused (the link expired).
+3. Open an item's pop-out -> attach a supplier quote there; it shows on the
+   Documents tab tagged with the item.

@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import BrandLogo from './BrandLogo'
+import DocumentsPanel from './DocumentsPanel'
 import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders } from '../lib/quoteDocs'
 import { BU_UNIT_LABEL } from '../lib/buildups'
 
@@ -77,13 +78,8 @@ export function ClarificationsTab({ est, change, templates }) {
   )
 }
 
-export function DocumentsTab() {
-  return (
-    <div style={{ ...box, color: '#555', fontSize: 13.5 }}>
-      <strong>Documents</strong>
-      <p style={{ marginBottom: 0 }}>Compliance documents and other files to go with this quote - added by hand, kept private to the portal. This arrives with the private file storage (the next step), so nothing commercially sensitive is ever stored at a public address.</p>
-    </div>
-  )
+export function DocumentsTab({ est, readOnly }) {
+  return <DocumentsPanel ownerType="estimate" ownerId={est.id} items={(est.rows || []).filter(r => r.kind === 'item')} title="Documents for this estimate" readOnly={readOnly} />
 }
 
 // THE QUOTE as the customer sees it. Prints to PDF (the browser's Print ->

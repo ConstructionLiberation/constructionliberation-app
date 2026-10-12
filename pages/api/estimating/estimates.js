@@ -5,6 +5,8 @@ import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
 import { currentTerms } from '../../../lib/quoteDocs'
+import { deleteAllDocs } from '../../../lib/documentsStore'
+import { removeFile, privateReady } from '../../../lib/privateFiles'
 import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision } from '../../../lib/estimateStore'
 import { loadPriceList } from '../../../lib/priceListStore'
 import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
@@ -193,6 +195,8 @@ async function handler(req, res) {
       const names = await adminNames()
       return res.status(403).json({ error: `Only an admin can delete an estimate${names.length ? ` - ask ${names.join(', ')}` : ''}.` })
     }
+    // Its private documents go too - out of storage, not just off the list (1093).
+    if (privateReady()) await deleteAllDocs('estimate', String(b.id), removeFile)
     await deleteEstimate(String(b.id))
     return res.status(200).json({ ok: true })
   }

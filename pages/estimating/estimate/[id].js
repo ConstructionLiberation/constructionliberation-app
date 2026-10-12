@@ -5,6 +5,7 @@ import { useFormat } from '../../../components/TenantProvider'
 import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
 import BuildupEditor, { pct, fromPct } from '../../../components/BuildupEditor'
 import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
+import DocumentsPanel from '../../../components/DocumentsPanel'
 import { placeholderValues } from '../../../lib/quoteDocs'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
 import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
@@ -142,7 +143,7 @@ export default function EstimatePage() {
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {tab === 'letter' && <LetterTab est={est} change={change} templates={quoteDocs} values={values} />}
           {tab === 'clar' && <ClarificationsTab est={est} change={change} templates={quoteDocs} />}
-          {tab === 'docs' && <DocumentsTab />}
+          {tab === 'docs' && <DocumentsTab est={est} readOnly={!!crm?.archived} />}
         </fieldset>
       )}
       {/* An archived estimate is read-only: every control below is disabled (the server refuses changes too). */}
@@ -332,6 +333,7 @@ function Popout({ item, est, lib, money, onChange, setRow, onClose }) {
         )}
         {msg && <div style={{ fontSize: 12.5, color: '#0f766e', marginTop: 8 }}>{msg}</div>}
         <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Changes here belong to this estimate only - the library build-up is untouched unless you save as a template.</div>
+        <div style={{ marginTop: 10 }}><DocumentsPanel ownerType="estimate" ownerId={est.id} itemId={item.id} title="Documents on this item" /></div>
         <BuildupEditor value={value} onChange={(fn) => onChange((b) => { const n = fn({ ...b, unit: item.unit }); const { unit, ...rest } = n; return rest })}
           lib={lib} money={money} rateTitle="Rate on this quote"
           rateOpts={{ profit: item.profit != null ? item.profit : (s.profit || 0), mcd: s.mcd || 0, labourFactor: s.labourFactor ?? 1, jobQty: item.rateOnly || item.qty == null ? null : Number(item.qty) }}>

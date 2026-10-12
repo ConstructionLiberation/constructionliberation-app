@@ -2,6 +2,8 @@ import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
 import { parseBuildupSheets, checkTemplate, templateKey, summarise } from '../../../lib/buildups'
 import { loadBuildups, replaceBuildups, upsertBuildup, removeBuildup, knownRefs } from '../../../lib/buildupsStore'
+import { moveDocs, deleteAllDocs } from '../../../lib/documentsStore'
+import { removeFile, privateReady } from '../../../lib/privateFiles'
 
 // RATE BUILD-UPS API (1087) - Estimating area.
 // GET                                          -> { index, templates }
@@ -58,11 +60,14 @@ async function handler(req, res) {
       const clash = /already used/.test(r.errors[0])
       return res.status(400).json({ error: clash ? `A build-up called "${tpl.description}" already exists in ${tpl.section || 'no category'} - choose another name` : r.errors[0] })
     }
+    // Renamed: its documents move with it (1093).
+    if (b.originalRef && b.originalRef !== r.item.ref) await moveDocs('buildup', b.originalRef, r.item.ref)
     return res.status(200).json({ ok: true, template: r.item, index: r.index })
   }
   if (b.action === 'delete') {
     const r = await removeBuildup(b.ref, { by })
     if (r.errors) return res.status(404).json({ error: r.errors[0] })
+    if (privateReady()) await deleteAllDocs('buildup', String(b.ref), removeFile)
     return res.status(200).json({ ok: true, index: r.index })
   }
   if (b.action === 'rename-category' || b.action === 'delete-category') {
@@ -78,6 +83,7 @@ async function handler(req, res) {
     const keys = new Set()
     for (const t of next) { if (keys.has(t.ref)) return res.status(400).json({ error: `"${t.description}" already exists in "${to || 'no category'}" - rename one first` }); keys.add(t.ref) }
     const idx = await replaceBuildups(next, { by, source: index?.source || '' })
+    for (let i = 0; i < items.length; i++) if (items[i].ref !== next[i].ref) await moveDocs('buildup', items[i].ref, next[i].ref)
     return res.status(200).json({ ok: true, moved, index: idx })
   }
   return res.status(400).json({ error: "action must be 'check', 'import', 'save', 'delete', 'rename-category' or 'delete-category'" })
