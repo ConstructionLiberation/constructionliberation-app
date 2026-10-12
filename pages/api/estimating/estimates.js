@@ -1,7 +1,8 @@
 import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
 import { get, set } from '../../../lib/db'
-import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates } from '../../../lib/estimate'
+import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
+import { resolveMerged } from '../../../lib/crmMerge'
 import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision } from '../../../lib/estimateStore'
 import { loadPriceList } from '../../../lib/priceListStore'
 import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
@@ -13,6 +14,19 @@ import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
 // POST create { dealId?, title? }   -> { estimate }  (settings start from the company's day rate)
 // POST save   { estimate }          -> the whole estimate; the list total is worked out HERE
 // POST delete { id }
+
+// THE DEAL, LIVE (1090): followed through any CRM merge to the deal it became.
+// -> { dealId, title, organisation, details } or { missing: true }
+async function liveDeals() {
+  const [deals, merged] = await Promise.all([get('crm:deals'), get('crm:merged')])
+  const byId = new Map((Array.isArray(deals) ? deals : []).map(d => [String(d.id), d]))
+  return (dealId) => {
+    if (!dealId) return null
+    const d = byId.get(resolveMerged(merged || {}, dealId))
+    if (!d) return { missing: true }
+    return { dealId: String(d.id), title: d.title || '', organisation: (d.fields || {}).organization || '', details: crmDetailsOf(d) }
+  }
+}
 
 async function loadLib() {
   const [{ products }, { items }] = await Promise.all([loadPriceList(), loadLabour()])
@@ -45,9 +59,14 @@ async function handler(req, res) {
     if (req.query.id) {
       const est = await loadEstimate(String(req.query.id))
       if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
-      return res.status(200).json({ estimate: est })
+      return res.status(200).json({ estimate: est, crm: (await liveDeals())(est.dealId) })
     }
-    return res.status(200).json({ estimates: await listEstimates() })
+    // The list shows the deal's CURRENT name and customer, not the ones it had when saved.
+    const live = await liveDeals()
+    return res.status(200).json({ estimates: (await listEstimates()).map(e => {
+      const d = live(e.dealId)
+      return d && !d.missing ? { ...e, dealTitle: d.title, organisation: d.organisation } : e
+    }) })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -63,7 +82,8 @@ async function handler(req, res) {
     const now = new Date().toISOString()
     const est = {
       id: newId('e'), dealId: b.dealId || null, dealTitle, organisation, title: String(b.title || dealTitle || 'New estimate').slice(0, 200),
-      quoteRef: '', revision: 'A', header: { project: dealTitle, contractor: organisation },
+      // Linked: the project and customer details are read LIVE from the deal, never copied.
+      quoteRef: '', revision: 'A', header: b.dealId ? {} : { project: String(b.title || '') },
       // Profit and MCD are the estimator's to set; the day rate starts from the company setting.
       settings: { profit: null, mcd: null, labourFactor: 1, dayRate: ls?.dayRate ?? null },
       rows: [], createdAt: now, createdBy: by, updatedAt: now, updatedBy: by,
@@ -106,11 +126,15 @@ async function handler(req, res) {
     const rev = est.revision || 'A'
     const { revisions, ...frozen } = est
     // A TRUE copy - nothing that later edits the estimate can reach the issued revision.
-    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)) })
+    // The CRM details AS THEY WERE TODAY go with the issued revision, so its
+    // letter can always be reproduced exactly.
+    const crmNow = (await liveDeals())(est.dealId)
+    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow })
     let crm = null
     if (est.dealId) {
       const deals = (await get('crm:deals')) || []
-      const i = deals.findIndex(d => String(d.id) === String(est.dealId))
+      const target = resolveMerged((await get('crm:merged')) || {}, est.dealId)
+      const i = deals.findIndex(d => String(d.id) === String(target))
       if (i < 0) crm = { error: 'The linked CRM deal no longer exists - its value was not updated' }
       else {
         const d = deals[i]
@@ -128,6 +152,16 @@ async function handler(req, res) {
       revisions: [...(est.revisions || []), { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, changes }] }
     await saveEstimate(next, await summaryOf(next, lib))
     return res.status(200).json({ ok: true, estimate: next, issued: rev, total, crm, changes })
+  }
+  // LINK a deal (1090) - an estimate started without one, or moved to another.
+  if (b.action === 'link') {
+    const est = await loadEstimate(String(b.id))
+    if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
+    const d = (await liveDeals())(b.dealId)
+    if (!d || d.missing) return res.status(404).json({ error: 'That CRM deal no longer exists' })
+    const next = { ...est, dealId: d.dealId, dealTitle: d.title, organisation: d.organisation, updatedAt: new Date().toISOString(), updatedBy: by }
+    await saveEstimate(next, await summaryOf(next))
+    return res.status(200).json({ ok: true, estimate: next, crm: d })
   }
   if (b.action === 'delete') {
     await deleteEstimate(String(b.id))

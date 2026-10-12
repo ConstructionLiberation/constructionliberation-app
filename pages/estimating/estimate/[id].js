@@ -5,7 +5,7 @@ import { useFormat } from '../../../components/TenantProvider'
 import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
 import BuildupEditor, { pct, fromPct } from '../../../components/BuildupEditor'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { HEADER_FIELDS, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -32,7 +32,9 @@ export default function EstimatePage() {
   const [busy, setBusy] = useState(false)
   const [popout, setPopout] = useState(null)    // item id
   const [picking, setPicking] = useState(false)
-  const [showHeader, setShowHeader] = useState(false)
+  const [showHeader, setShowHeader] = useState(true)
+  const [crm, setCrm] = useState(null)          // the deal's details, LIVE from the CRM
+  const [linking, setLinking] = useState(false)
   const [lastRev, setLastRev] = useState(null)    // the last ISSUED revision's estimate - for 'changes since'
   const [issueMsg, setIssueMsg] = useState('')
 
@@ -40,7 +42,7 @@ export default function EstimatePage() {
     if (!id) return
     Promise.all([estApi(`${API}?id=${id}`), estApi('/api/estimating/price-list'), estApi('/api/estimating/labour-rates'), estApi('/api/estimating/build-ups')])
       .then(([e, p, l, b]) => {
-        setEst(e.estimate); setBase(e.estimate.updatedAt)
+        setEst(e.estimate); setBase(e.estimate.updatedAt); setCrm(e.crm || null)
         setLib({ product: Object.fromEntries(p.products.map(x => [x.ref, x])), labour: Object.fromEntries(l.items.map(x => [x.ref, x])), products: p.products, labourItems: l.items })
         setTemplates(b.templates || [])
         const last = (e.estimate.revisions || []).slice(-1)[0]
@@ -96,7 +98,7 @@ export default function EstimatePage() {
           <a href="/estimating/estimates" style={{ fontSize: 12.5, color: '#888', textDecoration: 'none' }}>‹ Estimates</a>
           <input value={est.title} onChange={e => change(x => ({ ...x, title: e.target.value }))} style={{ display: 'block', fontSize: 21, fontWeight: 700, border: 'none', padding: '2px 0', fontFamily: 'inherit', minWidth: 420, background: 'transparent' }} />
           <div style={{ fontSize: 12.5, color: '#888' }}>
-            {est.dealId ? <>CRM deal: <a href={`/crm?deal=${est.dealId}`} style={{ color: '#0f766e' }}>{est.dealTitle}</a>{est.organisation ? ` · ${est.organisation}` : ''}</> : 'Not linked to a CRM deal'}
+            {est.dealId ? (crm && !crm.missing ? <>CRM deal: <a href={`/crm?deal=${crm.dealId}`} style={{ color: '#0f766e' }}>{crm.title}</a>{crm.organisation ? ` · ${crm.organisation}` : ''}</> : <span style={{ color: '#b42318' }}>The linked CRM deal no longer exists</span>) : 'Not linked to a CRM deal'}
             {' · '}Rev {est.revision}{' · '}last saved {new Date(est.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{est.updatedBy ? ` by ${est.updatedBy}` : ''}
           </div>
         </div>
@@ -115,16 +117,44 @@ export default function EstimatePage() {
           <label title="Raise or lower ALL the labour on this quote - each rate in proportion to its own labour">Labour factor <input value={s.labourFactor ?? 1} onChange={e => setSetting('labourFactor', e.target.value === '' ? 1 : parseFloat(e.target.value))} style={{ ...cellInp, width: 60 }} /></label>
           <label title="Starts from the company day rate (Labour Rates); used for prelims">Day rate <input value={s.dayRate ?? ''} onChange={e => setSetting('dayRate', e.target.value === '' ? null : parseFloat(e.target.value))} style={{ ...cellInp, width: 70 }} /></label>
           <div style={{ flex: 1 }} />
-          <button onClick={() => setShowHeader(v => !v)} style={smallBtn}>{showHeader ? 'Hide' : 'Show'} project details</button>
+          <button onClick={() => setShowHeader(v => !v)} style={smallBtn}>{showHeader ? 'Hide' : 'Show'} project and customer details</button>
         </div>
         {s.profit == null && <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>Set the profit % for this quote - every rate includes it.</div>}
         {showHeader && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 10 }}>
-            {HEADER_FIELDS.map(([k, label]) => (
-              <label key={k} style={{ fontSize: 12, color: '#666', display: 'flex', flexDirection: 'column', gap: 3 }}>{label}
-                <input value={(est.header || {})[k] || ''} onChange={e => change(x => ({ ...x, header: { ...(x.header || {}), [k]: e.target.value } }))} style={inp} type={k === 'date' || k === 'startOnSite' ? 'date' : 'text'} />
-              </label>
-            ))}
+          <div style={{ marginTop: 10 }}>
+            {est.dealId && crm && !crm.missing ? (
+              <>
+                <div style={{ fontSize: 12, color: '#0f766e', fontWeight: 600, marginBottom: 6 }}>
+                  Project and customer details - LIVE from the CRM deal. <a href={`/crm?deal=${crm.dealId}`} style={{ color: '#0f766e' }}>Edit them in the CRM</a>; the estimate and the letter follow.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px 16px' }}>
+                  {CRM_DETAILS.map(([k, label]) => (
+                    <div key={k} style={{ fontSize: 12.5 }}><div style={{ fontSize: 11, color: '#999' }}>{label}</div><div style={{ color: crm.details[k] ? '#1a1a19' : '#ccc' }}>{crm.details[k] || 'not set in the CRM'}</div></div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                {est.dealId && <div style={{ fontSize: 12.5, color: '#b42318', marginBottom: 6 }}>The linked CRM deal no longer exists (deleted). Link the estimate to another deal, or type the details below.</div>}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8, fontSize: 12.5, color: '#666' }}>
+                  Not linked: these details are typed here. <button onClick={() => setLinking(true)} style={smallBtn}>Link a CRM deal</button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {CRM_DETAILS.map(([k, label]) => (
+                    <label key={k} style={{ fontSize: 12, color: '#666', display: 'flex', flexDirection: 'column', gap: 3 }}>{label}
+                      <input value={(est.header || {})[k] || ''} onChange={e => change(x => ({ ...x, header: { ...(x.header || {}), [k]: e.target.value } }))} style={inp} />
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0efec' }}>
+              {OWN_DETAILS.map(([k, label]) => (
+                <label key={k} style={{ fontSize: 12, color: '#666', display: 'flex', flexDirection: 'column', gap: 3 }}>{label} <span style={{ fontSize: 10.5, color: '#aaa' }}>this estimate</span>
+                  <input value={(est.header || {})[k] || ''} onChange={e => change(x => ({ ...x, header: { ...(x.header || {}), [k]: e.target.value } }))} style={inp} type={k === 'date' ? 'date' : 'text'} />
+                </label>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -217,6 +247,10 @@ export default function EstimatePage() {
         </div>
       </div>
 
+      {linking && <DealLinker onClose={() => setLinking(false)} onPick={async (dealId) => {
+        if (dirty) { setErr('Save first, then link the deal'); setLinking(false); return }
+        try { const d = await estApi(API, { action: 'link', id: est.id, dealId }); setEst(d.estimate); setBase(d.estimate.updatedAt); setCrm(d.crm); setLinking(false) } catch (e) { setErr(e.message) }
+      }} />}
       {picking && <TemplatePicker templates={templates} onClose={() => setPicking(false)} onPick={(t) => { setPicking(false); addRow(itemFromTemplate(t), true) }} />}
       {item && <Popout item={item} est={est} lib={lib} money={money} onChange={(fn) => setRow(item.id, (r) => ({ buildup: fn(r.buildup) }))} setRow={(patch) => setRow(item.id, patch)} onClose={() => setPopout(null)} />}
     </EstimatingShell>
@@ -265,6 +299,28 @@ function Popout({ item, est, lib, money, onChange, setRow, onClose }) {
             {p.total != null && <> · <strong>{money(p.total, { dp: 2 })}</strong> for {item.qty} {BU_UNIT_LABEL[item.unit] || ''}</>}
           </div>
         </BuildupEditor>
+      </div>
+    </div>
+  )
+}
+
+function DealLinker({ onClose, onPick }) {
+  const [deals, setDeals] = useState(null)
+  const [q, setQ] = useState('')
+  useEffect(() => { estApi(`${API}?deals=1`).then(d => setDeals(d.deals)).catch(() => setDeals([])) }, [])
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const list = (deals || []).filter(d => words.length && words.every(w => `${d.title} ${d.organisation}`.toLowerCase().includes(w))).slice(0, 30)
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 520, padding: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Link a CRM deal</div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+        </div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search deals by name or customer…" style={inp} autoFocus />
+        <div style={{ maxHeight: 300, overflowY: 'auto', marginTop: 6 }}>
+          {list.map(d => <button key={d.id} onClick={() => onPick(d.id)} style={{ display: 'block', width: '100%', textAlign: 'left', border: '1px solid #eee', borderRadius: 8, padding: '8px 10px', marginBottom: 4, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}><div style={{ fontSize: 13, fontWeight: 600 }}>{d.title}</div><div style={{ fontSize: 11.5, color: '#888' }}>{d.organisation}</div></button>)}
+        </div>
       </div>
     </div>
   )

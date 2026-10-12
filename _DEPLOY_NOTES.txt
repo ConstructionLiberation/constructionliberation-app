@@ -1,69 +1,40 @@
-PACKAGE 1089 - Estimating: revisions, CRM value, budgets, prelims (part 2 of 3)
+PACKAGE 1090 - Estimates: project and customer details LIVE from the CRM
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1088.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1089.
 
   lib/estimate.js
-  lib/estimateStore.js
   pages/api/estimating/estimates.js
-  pages/estimating/estimate/[id].js       (folder literally named [id])
+  pages/estimating/estimate/[id].js        (folder literally named [id])
 
-ON THE TAKE-OFF
+Before: an estimate COPIED the deal's name and customer once, when created -
+a later change in the CRM never reached it, and the letter would have printed
+stale details.
 
-REVISIONS
-  Issue Rev A (needs the estimate saved and the profit % set; asks for an
-  optional note):
-    - freezes the quote as Rev A - kept for good, a true copy no later edit
-      can reach
-    - the estimate carries on as Rev B
-    - the linked CRM deal's value is set to the issued total, with a value
-      history entry exactly like an edit in the CRM ("Value: 0.00 -> 20,943.09
-      (estimate Q-1042 Rev A, by ...)") - so Value of work priced counts it
-  "Changes since Rev A" updates live as you work: items added / removed,
-  quantity, rate, profit override, rate-only, the quote's profit / MCD /
-  labour factor, and the total's movement. Each issued revision lists what
-  changed from the one before.
-  A save cannot rewrite issued revisions; issuing is refused if someone has
-  changed the estimate since you opened it.
-
-+ PRELIMS - a Prelims section and item (per item, qty 1) with lump sums for
-  Lodge (Prelims), Management (Management) and Attendances (Attendances); it
-  opens in the pop-out to fill in. Each line keeps its cost category.
-
-COST BREAKDOWN - every cost by category (Materials, Labour, Delivery,
-  Management, Prelims, Attendances...) before profit and MCD.
-BUDGETS BY SUPPLIER - the product lines by each product's supplier. These are
-  the figures to carry to the Internal Handover / procurement schedule when the
-  job is won (that link comes with the handover work).
-
-ONE THING TO KNOW: if someone has a deal open in an older CRM tab while a
-revision is issued, and then saves that deal, their older copy replaces the
-new value - the CRM's existing behaviour between any two users, not new here.
-The issued revision itself is unaffected; re-issuing restores the value.
-
-NEXT (part 3): private documents on the estimate and on items. This needs a
-newer file-storage library and a PRIVATE store created in Vercel (your step) -
-it also clears the onboarding blocker of one shared public store.
+Now a linked estimate stores only the deal's id. Its project and customer
+details are read LIVE from the CRM deal every time it opens:
+  Project, Site location, Customer, Customer address, Contact, Job role,
+  Email, Phone, Tender return date, Start on site, Estimator, Credit score,
+  Credit limit, Insured credit limit.
+  - On the take-off they are shown READ-ONLY, marked live, with "Edit them in
+    the CRM" - one place to maintain them. The letter (next) reads the same.
+  - The Estimates list shows each deal's current name and customer.
+  - A deal MERGED in the CRM is followed to the deal it became (the CRM's own
+    merge rule), for the details and for the value a revision sets.
+  - A deal deleted in the CRM is reported on the estimate, not shown blank.
+  - Quote date and Reviewer stay the estimate's own.
+  - ISSUING a revision keeps the CRM details as they were that day with the
+    revision - an issued letter can always be reproduced exactly.
+Not linked: the details are typed on the estimate, and "Link a CRM deal" links
+it (then they come live from the deal). Estimates already created keep working
+- their old copied header is simply not used once the deal is read live.
 
 Checked:
-  - budgets on a real-data estimate: by category adds up EXACTLY to the
-    take-off's materials + labour before profit (16,699.90); by supplier equals
-    the product lines exactly (fixed rates have no supplier)
-  - revision letters A->B, Z->AA, AZ->BA; the change list reports exactly what
-    was altered (profit, quantity, added, removed, total movement)
-  - the route: issue refused without profit; Rev A issued -> deal 0 -> 27,690
-    with a value history entry; a save cannot rewrite revisions; Rev B issued
-    with "qty 1000 -> 1200 (+5,538.00)"; deal -> 33,228; the CRM's own Value
-    of work priced sees +27,690 and +5,538; Rev A read back frozen at 1,000;
-    a stale issue refused. (Found and fixed: the snapshot shared its contents
-    with the live estimate, so later edits reached "frozen" Rev A.)
-  - the take-off in a simulated browser against the real routes: + Prelims ->
-    lodge 1,200 -> 1,575.39; Issue Rev A -> "CRM deal value 0.00 -> 20,943.09.
-    Now working on Rev B."; qty 500 -> 520 -> "Changes since Rev A" shows it
-    (+640.80); cost breakdown and supplier budgets correct
+  - the route: a linked estimate stores no copied details; edit the deal (name,
+    site location, contact) -> the estimate and the list show the change; Rev A
+    issued, then the contact changed -> Rev A keeps the old contact, the live
+    estimate shows the new; deal merged -> followed; deal deleted -> reported;
+    an unlinked estimate linked
+  - the take-off in a simulated browser: live details read-only; a CRM edit
+    shows on reopening; unlinked -> typed details + Link a CRM deal -> linked
+    -> live
   - all server routes compile; all 164 pages pass the browser check
-
-SMOKE TEST
-1. Open an estimate linked to a deal; profit and MCD set; Save.
-2. + Prelims -> Lodge amount -> Done -> Save -> Issue Rev A -> note.
-3. The CRM deal's value is the issued total. Change a quantity: "Changes since
-   Rev A" lists it.
