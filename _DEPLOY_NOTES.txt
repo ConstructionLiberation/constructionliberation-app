@@ -1,62 +1,77 @@
-PACKAGE 1086 - Estimating: Labour Rates and the day rate
+PACKAGE 1087 - Estimating: Rate Build-ups
 
-Eleven files: four complete replacements, seven NEW. No re-seed. No env
-changes. Built on 1085.
+Five files: one complete replacement, four NEW. No re-seed. No env changes.
+Built on 1086.
 
-  NEW       lib/labourRates.js               (the rules)
-            lib/labourRatesStore.js          (storage + the day rate setting)
-            lib/libraryParse.js              (SHARED upload reading)
-            lib/libraryStore.js              (SHARED versioned storage)
-            components/LibraryParts.js       (SHARED upload check, sections, CSV)
-            pages/estimating/labour-rates.js
-            pages/api/estimating/labour-rates.js
-  REPLACED  lib/priceList.js, lib/priceListStore.js,
-            pages/estimating/price-list.js  (now on the shared parts - no change
-                                             in behaviour, proven below)
-            components/EstimatingShell.js    (nav: Labour Rates)
+  NEW       lib/buildups.js                  (the rules AND the rate - shared)
+            lib/buildupsStore.js             (storage, one section per category)
+            pages/estimating/build-ups.js
+            pages/api/estimating/build-ups.js
+  REPLACED  components/EstimatingShell.js    (nav: Rate Build-ups)
 
 Also, OUTSIDE the app (not deployed):
-  convert_labour_rates.py                   the converter
-  Rock-Roofing-Labour-Rates-Upload.xlsx     your labour rates, ready to upload
+  Rock-Roofing-Build-ups-Upload.xlsx   your build-ups, ready to upload (re-run)
+  convert_buildups.py                  the converter (updated)
+  extract_dropdowns.py                 step 1 of converting (from the last round)
 
-ESTIMATING > LABOUR RATES - works exactly like the Price List:
-  ONE rate per labour item: the price per m2, m or nr the estimate uses.
-  Where a rate came from (e.g. the installer who quoted) is in NOTES - for
-  reference only, never used in pricing.
-  Upload (Excel or CSV) -> checked and summarised -> Import. Download CSV /
-  Excel / Blank template. Sections, Needs attention, search, edit, add, delete.
+UPLOAD ORDER: price list -> labour rates -> build-ups. The build-ups upload is
+refused until the first two exist; every Ref is checked against them.
 
-THE DAY RATE - a setting at the top of the page
-  Not set   amber "Day rate - not set yet". Type the day rate and hours a day
-            (8 shown, not saved until Save) -> the hourly rate appears.
-  Set       "Day rate 325.00 - 8 hours a day -> 40.63 an hour", who set it, when.
-  Every estimate will START from it and can change it. Never filled in for a
-  company - they set it. Uploads and edits of the rates leave it alone.
+ESTIMATING > RATE BUILD-UPS
+  Categories down the left (+ No category, flagged); rename or delete a
+  category (its build-ups move to No category). Search across all build-ups.
+  Open a build-up -> the editor:
+    - name, category, unit (m2, m, nr, item)
+    - SIZES (Size1...) that quantities can use; renaming a size renames it in
+      the quantities
+    - LINES: material | labour | fixed rate | lump sum | comment, reorder,
+      add, remove; + management (left out by default)
+        product / labour picked from the LINE'S OWN LIST; tick "any product" to
+        pick from the whole price list (it is added to the line's list)
+        RATE: type over it to change it - shown CHANGED, with Revert to price list
+        quantity (number or a sum like Size1*1.1), waste %, price increase %,
+        cost category, the line's cost
+    - PRODUCT RULES: this product on this line -> waste %
+    - TRY THE RATE: profit %, MCD %, labour factor -> materials, labour,
+      profit, MCD and the rate (for trying - estimates will set their own)
+    - Save (override template) | Save as new template | Delete
+  Upload (checked first; errors block), Download, Blank template.
 
-THE PRICE LIST NOW SHARES ITS MACHINERY with labour rates - one upload reader,
-one store, one set of screen parts - so the two cannot drift apart. Storage
-keys are unchanged (pricelist:...); an uploaded price list is untouched.
-
-YOUR LABOUR RATES FILE: 277 items in 78 sections, all 276 rates identical to
-the workbook; 8 to check (5 no unit, 1 no rate, 1 at 0, a description repeated
-within a section). The day rates found (325) are on its Read me - enter 325 on
-the page.
+THE RATE (lib/buildups.js):
+  material = rate x qty x (1 + waste + increase); fixed = amount x qty x (1 + waste)
+  labour = rate x qty x labour factor; profit on the subtotal;
+  rate = (subtotal + profit) / (1 - MCD)  - EXACT; rounded UP to the penny.
+  No lodge, no management unless added. Lump sums price on the estimate.
 
 Checked:
-  - price list after the move to the shared parts: rules on the real file,
-    CSV round trip, all 12 route steps - identical results
-  - labour route: empty company (no items, no day rate); check and import of
-    the real file (277 / 78, 0 errors); LR-0006 11/m2, "Source: SPS"; day rate
-    0 refused; 325 / 8 -> 40.625 an hour; edit; a used Ref refused; a bad item
-    refused; the day rate survives; the price list untouched beside it;
-    Post-Contract refused
-  - the page in a simulated browser against the real route: empty and day
-    rate not set; typing 325 -> 40.63 an hour; saved; upload -> check ->
-    import; search; editor
-  - labour CSV round trip: 0 changed
-  - all 161 pages pass the browser check
+  - your file read by the app's rules: 167 build-ups, 1,850 lines, 0 errors,
+    176 warnings (lines with no products yet, units to set, fixed rates with no
+    amount) - in 67 ms
+  - with an empty price list: refused, every missing Ref named
+  - quantity sums: real ones right (Size1*1.1, 3/Size1, 1/0.45...); refused:
+    unknown sizes, unbalanced brackets, anything that is not a sum (code cannot
+    run - a small parser, never eval)
+  - THE RATE against the costing sheet's method, by hand: Mech Fixed SP with
+    real products, 28% profit, 2.5% MCD -> 32.04 per m2 both ways (incl. the
+    sheet's typed solvent and LPVC costs). The 2.5% deduction leaves 31.2390
+    against 31.2317 needed - covered; the old +2.5% would leave it short.
+    Labour factor 1.10 -> labour exactly +10%.
+  - the route: refused before the price list; check; import 167 / 21 categories;
+    override; save as new; a clashing name, a bad quantity, an unknown product
+    refused with the line and reason; category rename and delete; Post-Contract
+    refused; largest category 268 KB stored (limit 1 MB)
+  - the page in a simulated browser against the real routes: loads 167; opens
+    Mech Fixed SP; products picked -> 32.04; a rate typed over -> CHANGED;
+    Revert -> back to 32.04; Save -> stored
+  - all 205 server routes compile; all 162 pages pass the browser check
+
+Found and fixed in the converter while checking: duplicate build-up names
+merged their lines (now numbered); a quantity dividing by a blank line (now
+entered per job); a 40 typed in a waste row (now flagged, not 4000%); delivery
+rows becoming 0 fixed rates (now lump sums again).
 
 SMOKE TEST
-1. Estimating -> Labour Rates: "Day rate - not set yet". Enter 325, 8 -> Save.
-2. Upload labour rates -> Rock-Roofing-Labour-Rates-Upload.xlsx -> Import.
-3. Search "mech fixed warm": 11.00 and 13.50 per m2, Source: SPS in Notes.
+1. Price list and labour rates already uploaded. Estimating -> Rate Build-ups
+   -> Upload build-ups -> Rock-Roofing-Build-ups-Upload.xlsx -> Import.
+2. Single Ply -> Mech Fixed SP. Pick VCL, discs, tubes, screws, membrane;
+   profit 28, MCD 2.5 -> a rate. Type over a rate -> CHANGED -> Revert.

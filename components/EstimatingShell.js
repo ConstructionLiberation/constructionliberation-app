@@ -14,6 +14,7 @@ import { canAccessArea } from '../lib/roles'
 export const EST_NAV = [
   { key: 'price-list', label: 'Price List', href: '/estimating/price-list' },
   { key: 'labour-rates', label: 'Labour Rates', href: '/estimating/labour-rates' },
+  { key: 'build-ups', label: 'Rate Build-ups', href: '/estimating/build-ups' },
 ]
 
 export default function EstimatingShell({ active, title, wide, children }) {
