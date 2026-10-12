@@ -1,40 +1,39 @@
-PACKAGE 1090 - Estimates: project and customer details LIVE from the CRM
+PACKAGE 1091 - Estimates: archived when the deal is lost; delete (admins only)
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1089.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1090.
 
-  lib/estimate.js
+  lib/estimateStore.js
   pages/api/estimating/estimates.js
+  pages/estimating/estimates.js
   pages/estimating/estimate/[id].js        (folder literally named [id])
 
-Before: an estimate COPIED the deal's name and customer once, when created -
-a later change in the CRM never reached it, and the letter would have printed
-stale details.
+ARCHIVED WHEN THE DEAL IS LOST
+  An estimate whose CRM deal is LOST is archived - worked out live from the
+  deal each time, so there is nothing to keep in step: reopen the deal in the
+  CRM and the estimate is active again.
+  - Estimates list: Active / Archived tabs; archived rows show the lost date.
+  - The take-off: "Archived - the CRM deal was lost on 12 Oct 2026 (Price)",
+    and the whole estimate is read-only.
+  - The server refuses to save, issue or re-link an archived estimate, and
+    refuses to link any estimate to a lost deal.
 
-Now a linked estimate stores only the deal's id. Its project and customer
-details are read LIVE from the CRM deal every time it opens:
-  Project, Site location, Customer, Customer address, Contact, Job role,
-  Email, Phone, Tender return date, Start on site, Estimator, Credit score,
-  Credit limit, Insured credit limit.
-  - On the take-off they are shown READ-ONLY, marked live, with "Edit them in
-    the CRM" - one place to maintain them. The letter (next) reads the same.
-  - The Estimates list shows each deal's current name and customer.
-  - A deal MERGED in the CRM is followed to the deal it became (the CRM's own
-    merge rule), for the details and for the value a revision sets.
-  - A deal deleted in the CRM is reported on the estimate, not shown blank.
-  - Quote date and Reviewer stay the estimate's own.
-  - ISSUING a revision keeps the CRM details as they were that day with the
-    revision - an issued letter can always be reproduced exactly.
-Not linked: the details are typed on the estimate, and "Link a CRM deal" links
-it (then they come live from the deal). Estimates already created keep working
-- their old copied header is simply not used once the deal is read live.
+DELETE - ADMINS ONLY
+  Admins: Delete on each row of the list and on the take-off (with a
+  confirmation). The estimate's issued revisions are deleted with it.
+  Everyone else: no Delete button, and "Only an admin can delete an estimate -
+  ask James McVeigh, Carl Pryce." (the active admins, live from the portal's
+  users). Enforced by the server, not just hidden on the page.
+
+ALSO: while building this I found my working copy held changes that were in
+no package delivered to you (a half-built archive feature). They were
+discarded; this package is built on exactly the files from 1088-1090.
 
 Checked:
-  - the route: a linked estimate stores no copied details; edit the deal (name,
-    site location, contact) -> the estimate and the list show the change; Rev A
-    issued, then the contact changed -> Rev A keeps the old contact, the live
-    estimate shows the new; deal merged -> followed; deal deleted -> reported;
-    an unlinked estimate linked
-  - the take-off in a simulated browser: live details read-only; a CRM edit
-    shows on reopening; unlinked -> typed details + Link a CRM deal -> linked
-    -> live
+  - the route: deal lost -> archived in the list and on opening (lost date and
+    reason); save / issue / re-link refused with the reason; deal reopened ->
+    active; linking to a lost deal refused; a pre-contract user's delete
+    refused naming the active admins (a deactivated admin left off); an
+    admin's delete removes the estimate AND its issued Rev A
+  - the take-off in a simulated browser: archived banner; controls disabled;
+    a non-admin sees who to ask and no Delete button
   - all server routes compile; all 164 pages pass the browser check

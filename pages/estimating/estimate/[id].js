@@ -35,6 +35,7 @@ export default function EstimatePage() {
   const [showHeader, setShowHeader] = useState(true)
   const [crm, setCrm] = useState(null)          // the deal's details, LIVE from the CRM
   const [linking, setLinking] = useState(false)
+  const [who, setWho] = useState({ canDelete: false, admins: [] })
   const [lastRev, setLastRev] = useState(null)    // the last ISSUED revision's estimate - for 'changes since'
   const [issueMsg, setIssueMsg] = useState('')
 
@@ -42,7 +43,7 @@ export default function EstimatePage() {
     if (!id) return
     Promise.all([estApi(`${API}?id=${id}`), estApi('/api/estimating/price-list'), estApi('/api/estimating/labour-rates'), estApi('/api/estimating/build-ups')])
       .then(([e, p, l, b]) => {
-        setEst(e.estimate); setBase(e.estimate.updatedAt); setCrm(e.crm || null)
+        setEst(e.estimate); setBase(e.estimate.updatedAt); setCrm(e.crm || null); setWho({ canDelete: !!e.canDelete, admins: e.admins || [] })
         setLib({ product: Object.fromEntries(p.products.map(x => [x.ref, x])), labour: Object.fromEntries(l.items.map(x => [x.ref, x])), products: p.products, labourItems: l.items })
         setTemplates(b.templates || [])
         const last = (e.estimate.revisions || []).slice(-1)[0]
@@ -88,6 +89,11 @@ export default function EstimatePage() {
     setBusy(false)
   }
 
+  async function del() {
+    if (!window.confirm(`Delete the estimate "${est.title}"${(est.revisions || []).length ? ' and its issued revisions' : ''}? This cannot be undone.`)) return
+    try { await estApi(API, { action: 'delete', id: est.id }); setDirty(false); router.push('/estimating/estimates') } catch (e) { setErr(e.message) }
+  }
+
   if (!est) return <EstimatingShell active="estimates" title="Estimate" wide>{err ? <ErrorBar error={err} /> : <div style={{ color: '#aaa', padding: 30 }}>Loading…</div>}</EstimatingShell>
   const s = est.settings || {}
   const item = popout && est.rows.find(r => r.id === popout)
@@ -103,11 +109,20 @@ export default function EstimatePage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {who.canDelete ? <button onClick={del} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>
+            : <span style={{ fontSize: 11.5, color: '#999', maxWidth: 220, textAlign: 'right' }}>Only an admin can delete an estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}
           {dirty && <span style={{ fontSize: 12.5, color: '#b45309', fontWeight: 600 }}>Unsaved changes</span>}
-          <button onClick={save} disabled={busy || !dirty} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', opacity: busy || !dirty ? 0.5 : 1 }}>{busy ? 'Saving…' : 'Save'}</button>
+          <button onClick={save} disabled={busy || !dirty || !!crm?.archived} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', opacity: busy || !dirty ? 0.5 : 1 }}>{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
       <ErrorBar error={err} onClose={() => setErr('')} />
+      {crm?.archived && (
+        <div style={{ background: '#f4f4f2', border: '1px solid #d6d3cc', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#444' }}>
+          <strong>Archived</strong> - the CRM deal was lost{crm.lostTime ? ` on ${new Date(crm.lostTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}{crm.lostReason ? ` (${crm.lostReason})` : ''}. The estimate is read-only. Reopen the deal in the CRM to work on it again.
+        </div>
+      )}
+      {/* An archived estimate is read-only: every control below is disabled (the server refuses changes too). */}
+      <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
 
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 12, marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
@@ -246,6 +261,8 @@ export default function EstimatePage() {
           <Breakdown rows={bud.bySupplier} money={money} />
         </div>
       </div>
+
+      </fieldset>
 
       {linking && <DealLinker onClose={() => setLinking(false)} onPick={async (dealId) => {
         if (dirty) { setErr('Save first, then link the deal'); setLinking(false); return }

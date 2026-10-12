@@ -1,6 +1,7 @@
 import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
-import { get, set } from '../../../lib/db'
+import { get, set, getPortalUsers } from '../../../lib/db'
+import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
 import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision } from '../../../lib/estimateStore'
@@ -24,9 +25,21 @@ async function liveDeals() {
     if (!dealId) return null
     const d = byId.get(resolveMerged(merged || {}, dealId))
     if (!d) return { missing: true }
-    return { dealId: String(d.id), title: d.title || '', organisation: (d.fields || {}).organization || '', details: crmDetailsOf(d) }
+    const f = d.fields || {}
+    // ARCHIVED (1091): the deal was LOST in the CRM. Read live, so a deal
+    // reopened in the CRM brings its estimate back by itself.
+    return { dealId: String(d.id), title: d.title || '', organisation: f.organization || '', details: crmDetailsOf(d),
+      status: d.status || 'open', archived: d.status === 'lost', lostTime: f.lost_time || null, lostReason: f.lost_reason || '' }
   }
 }
+
+// Who can delete: active admins, by name - shown to everyone else so they
+// know who to ask.
+async function adminNames() {
+  return ((await getPortalUsers()) || []).filter(u => u.active !== false && normRole(u.role) === 'admin')
+    .map(u => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.name || u.email).filter(Boolean)
+}
+const ARCHIVED = (d) => `This estimate is archived - its CRM deal${d.title ? ` "${d.title}"` : ''} was lost. Reopen the deal in the CRM to work on it again.`
 
 async function loadLib() {
   const [{ products }, { items }] = await Promise.all([loadPriceList(), loadLabour()])
@@ -59,14 +72,14 @@ async function handler(req, res) {
     if (req.query.id) {
       const est = await loadEstimate(String(req.query.id))
       if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
-      return res.status(200).json({ estimate: est, crm: (await liveDeals())(est.dealId) })
+      return res.status(200).json({ estimate: est, crm: (await liveDeals())(est.dealId), canDelete: normRole(session.role) === 'admin', admins: await adminNames() })
     }
     // The list shows the deal's CURRENT name and customer, not the ones it had when saved.
     const live = await liveDeals()
     return res.status(200).json({ estimates: (await listEstimates()).map(e => {
       const d = live(e.dealId)
-      return d && !d.missing ? { ...e, dealTitle: d.title, organisation: d.organisation } : e
-    }) })
+      return d && !d.missing ? { ...e, dealTitle: d.title, organisation: d.organisation, archived: d.archived, lostTime: d.lostTime } : e
+    }), canDelete: normRole(session.role) === 'admin', admins: await adminNames() })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -97,6 +110,8 @@ async function handler(req, res) {
     if (errors.length) return res.status(400).json({ error: errors.join('; ') })
     const existing = await loadEstimate(est.id)
     if (!existing) return res.status(404).json({ error: 'That estimate no longer exists' })
+    const dl = (await liveDeals())(existing.dealId)
+    if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
     // Someone else saved since this was opened -> refuse rather than overwrite their work.
     if (b.baseUpdatedAt && existing.updatedAt !== b.baseUpdatedAt) {
       return res.status(409).json({ error: `${existing.updatedBy || 'Someone'} saved this estimate at ${new Date(existing.updatedAt).toLocaleTimeString('en-GB')} since you opened it - reload to see their changes before saving` })
@@ -115,6 +130,8 @@ async function handler(req, res) {
     const est = await loadEstimate(String(b.id))
     if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
     if (b.baseUpdatedAt && est.updatedAt !== b.baseUpdatedAt) return res.status(409).json({ error: 'This estimate has changed since you opened it - reload, then issue' })
+    const dl = (await liveDeals())(est.dealId)
+    if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
     const lib = await loadLib()
     const { totals } = priceEstimate(est, lib)
     if (est.settings?.profit == null) return res.status(400).json({ error: 'Set the profit % before issuing' })
@@ -157,13 +174,22 @@ async function handler(req, res) {
   if (b.action === 'link') {
     const est = await loadEstimate(String(b.id))
     if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
-    const d = (await liveDeals())(b.dealId)
+    const live = await liveDeals()
+    const cur = live(est.dealId)
+    if (cur && cur.archived) return res.status(409).json({ error: ARCHIVED(cur) })
+    const d = live(b.dealId)
     if (!d || d.missing) return res.status(404).json({ error: 'That CRM deal no longer exists' })
+    if (d.archived) return res.status(409).json({ error: `"${d.title}" is lost in the CRM - link the estimate to an open deal` })
     const next = { ...est, dealId: d.dealId, dealTitle: d.title, organisation: d.organisation, updatedAt: new Date().toISOString(), updatedBy: by }
     await saveEstimate(next, await summaryOf(next))
     return res.status(200).json({ ok: true, estimate: next, crm: d })
   }
+  // DELETE - admins only (1091), enforced here, not just hidden on the page.
   if (b.action === 'delete') {
+    if (normRole(session.role) !== 'admin') {
+      const names = await adminNames()
+      return res.status(403).json({ error: `Only an admin can delete an estimate${names.length ? ` - ask ${names.join(', ')}` : ''}.` })
+    }
     await deleteEstimate(String(b.id))
     return res.status(200).json({ ok: true })
   }
