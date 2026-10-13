@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -24,6 +24,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
   useEffect(() => { if (needsNormalizing(value)) onChange(x => normalizeTemplate(x)) }, [])
   const [editList, setEditList] = useState(null)   // a line id: edit its list of products (1098)
   const [descMenu, setDescMenu] = useState(false)
+  const descInsert = useRef(null)       // the description editor's insert-at-cursor (1106)
   const [showAll, setShowAll] = useState({})     // lineId -> true: pick from the whole price list / labour rates
   const set = (patch) => setT(x => ({ ...x, ...patch }))
   const setLine = (id, patch) => setT(x => ({ ...x, lines: x.lines.map(l => l.id === id ? { ...l, ...patch } : l) }))
@@ -129,12 +130,12 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
 
       <Block title="Description" hint="Blank to start. {products} becomes the products ticked under ⚙ (A, B and C). Insert variable adds a detail that is not a product - e.g. {Warranty period} - with its value below.">
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-          <button onClick={() => setT(x => ({ ...x, descText: `${x.descText || ''}${x.descText && !/\s$/.test(x.descText) ? ' ' : ''}{products}` }))} style={smallBtn}>Insert {'{products}'}</button>
+          <button onMouseDown={e => e.preventDefault()} onClick={() => descInsert.current && descInsert.current('products')} style={smallBtn} title="The ticked products, in grey - live until you edit them">Insert products</button>
           <button onClick={() => {
             const nm = (window.prompt('Name of the variable - e.g. Warranty period, Colour, Membrane thickness:') || '').trim().replace(/[{}]/g, '')
             if (!nm) return
-            setT(x => ({ ...x, descVars: (x.descVars || []).some(v => v.name.toLowerCase() === nm.toLowerCase()) ? x.descVars : [...(x.descVars || []), { name: nm, value: '' }],
-              descText: `${x.descText || ''}${x.descText && !/\s$/.test(x.descText) ? ' ' : ''}{${nm}}` }))
+            setT(x => ({ ...x, descVars: (x.descVars || []).some(v => v.name.toLowerCase() === nm.toLowerCase()) ? x.descVars : [...(x.descVars || []), { name: nm, value: '' }] }))
+            setTimeout(() => descInsert.current && descInsert.current(nm), 0)
           }} style={smallBtn} title="A detail the description needs that is not a product - e.g. warranty period">Insert variable</button>
           <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which products go into the description">⚙ Products in the description ({t.lines.filter(l => l.type === 'material' && l.inDescription).length})</button>
         </div>
@@ -160,8 +161,8 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
             ))}
           </div>
         )}
-        <textarea value={t.descText || ''} onChange={e => setT(x => ({ ...x, descText: e.target.value }))} rows={3} placeholder="e.g. Single ply membrane roof system comprising: {products}." style={{ ...inp, fontFamily: 'inherit' }} />
-        {(t.descText || '').trim() && <div style={{ fontSize: 12.5, color: '#444', marginTop: 6, background: '#fafaf9', borderRadius: 6, padding: '6px 8px' }}><span style={{ color: '#999', fontSize: 11 }}>Reads: </span>{descriptionText(t, lib)}</div>}
+        <DescriptionEditor value={t.descText || ''} onChange={(v) => setT(x => ({ ...x, descText: v }))} liveProducts={productList(t, lib)} vars={t.descVars || []} insertRef={descInsert}
+          placeholder="e.g. Single ply membrane roof system comprising: (Insert products)." />
       </Block>
 
       <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: 12, marginTop: 12 }}>
@@ -276,6 +277,90 @@ function ListEditor({ ln, lib, label, findText, onClose, onChange }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// THE DESCRIPTION EDITOR (1106). Shows the description as it will READ: the
+// ticked products and the variables' values in LIGHT GREY - live, they follow
+// the build-up - among your own words. Everything is editable: editing inside
+// grey text makes it your own wording (black, no longer live). Stored as text
+// with {products} / {Name} where the grey text is untouched - unchanged format.
+function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, placeholder }) {
+  const el = useRef(null), saved = useRef(null), focused = useRef(false)
+  const [tick, setTick] = useState(0)
+  const GREY = '#9a9a96'
+  const esc = (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const varVal = (name) => { const v = (vars || []).find(x => String(x.name).toLowerCase() === String(name).toLowerCase()); return v ? (String(v.value ?? '').trim() || `[${v.name}]`) : null }
+  const shown = (tok) => tok === 'products' ? (liveProducts || '[no products ticked yet]') : varVal(tok)
+  const toHtml = (text) => String(text || '').split(/(\{[^{}]{1,60}\})/).map(part => {
+    const m = part.match(/^\{([^{}]{1,60})\}$/)
+    if (m) { const raw = m[1].trim(); const tok = raw.toLowerCase() === 'products' ? 'products' : raw; const sh = shown(tok); if (sh != null) return `<span data-token="${esc(tok)}" style="color:${GREY}">${esc(sh)}</span>` }
+    return esc(part).replace(/\n/g, '<br>')
+  }).join('')
+  function serialize() {
+    const out = []
+    const walk = (node) => {
+      for (const n of node.childNodes) {
+        if (n.nodeType === 3) out.push(n.nodeValue)
+        else if (n.nodeName === 'BR') out.push('\n')
+        else if (n.dataset && n.dataset.token) { const tok = n.dataset.token; out.push(n.textContent === shown(tok) ? (tok === 'products' ? '{products}' : `{${tok}}`) : n.textContent) }
+        else { if ((n.nodeName === 'DIV' || n.nodeName === 'P') && out.length && !String(out[out.length - 1]).endsWith('\n')) out.push('\n'); walk(n) }
+      }
+    }
+    walk(el.current)
+    return out.join('').replace(/\u00a0/g, ' ')
+  }
+  // Typing at the START or END of grey text adds your own words beside it -
+  // the grey stays live. Changing anything INSIDE it makes it your own
+  // wording (black, no longer live). The cursor stays where you are typing.
+  function settleEdited() {
+    for (const sp of [...el.current.querySelectorAll('span[data-token]')]) {
+      const live = shown(sp.dataset.token), txt = sp.textContent
+      if (txt === live) continue
+      let node = null
+      if (live && txt.startsWith(live)) { node = document.createTextNode(txt.slice(live.length)); sp.textContent = live; sp.after(node) }
+      else if (live && txt.endsWith(live)) { node = document.createTextNode(txt.slice(0, txt.length - live.length)); sp.textContent = live; sp.before(node) }
+      else { sp.style.color = ''; delete sp.dataset.token; continue }
+      const r = document.createRange(); r.setStart(node, node.nodeValue.length); r.collapse(true)
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r)
+    }
+  }
+  // Redraw from the stored text whenever it - or the live products / values - change,
+  // except while typing (the caret stays put).
+  useEffect(() => {
+    if (!el.current || focused.current) return
+    const html = toHtml(value)
+    if (el.current.innerHTML !== html) el.current.innerHTML = html
+  }, [value, liveProducts, JSON.stringify(vars), tick])
+  useEffect(() => {
+    const keep = () => { const sel = window.getSelection(); if (sel && sel.rangeCount && el.current && el.current.contains(sel.getRangeAt(0).startContainer)) saved.current = sel.getRangeAt(0).cloneRange() }
+    document.addEventListener('selectionchange', keep)
+    return () => document.removeEventListener('selectionchange', keep)
+  }, [])
+  // Insert grey (live) text where the cursor was - else at the end.
+  insertRef.current = (tok) => {
+    if (!el.current) return
+    const sp = document.createElement('span')
+    sp.dataset.token = tok; sp.style.color = GREY; sp.textContent = shown(tok) ?? `[${tok}]`
+    let r = saved.current && el.current.contains(saved.current.startContainer) ? saved.current : null
+    if (!r) { r = document.createRange(); r.selectNodeContents(el.current); r.collapse(false) }
+    r.deleteContents()
+    const before = r.startContainer.nodeType === 3 ? r.startContainer.nodeValue.slice(0, r.startOffset) : ''
+    if (before && !/\s$/.test(before)) r.insertNode(document.createTextNode(' '))
+    r.collapse(false); r.insertNode(sp); r.setStartAfter(sp); r.collapse(true); saved.current = r
+    onChange(serialize())
+  }
+  return (
+    <div style={{ position: 'relative' }}>
+      <div ref={el} contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true"
+        onFocus={() => { focused.current = true }}
+        onBlur={() => { focused.current = false; setTick(t => t + 1) }}
+        onInput={() => { settleEdited(); onChange(serialize()) }}
+        onPaste={(e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')) }}
+        style={{ minHeight: 64, padding: '8px 10px', border: '1px solid #d4d4d0', borderRadius: 8, fontSize: 13.5, lineHeight: 1.55, background: '#fff', outline: 'none', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }} />
+      {!value && <div style={{ position: 'absolute', left: 11, top: 9, fontSize: 13.5, color: '#bbb', pointerEvents: 'none' }}>{placeholder}</div>}
+      <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Grey = filled in for you and kept up to date; edit it and it becomes your own wording.</div>
     </div>
   )
 }

@@ -1,26 +1,29 @@
-PACKAGE 1105 - Build-up lines read Qty x Rate = Line rate, and fit the screen
+PACKAGE 1106 - The description box shows the description as it will read
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1104.
+One file. Complete replacement. No re-seed. No env changes. Built on 1105.
 
-  components/BuildupEditor.js
-  pages/estimating/build-ups.js
-  pages/estimating/estimate/[id].js     (folder literally named [id])
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-The multiplication was always there - "Line cost" was the product rate x Qty
-(x waste / increase) - but that column sat off the right edge of the screen.
-Now each line reads left to right:
-  Type | Label | Item | Apply size | Qty | Rate | Waste % | Incr % | = Line rate | Cost cat.
-"= Line rate" (green) is that line's part of the build-up's rate, e.g.
-Discs 5 x 0.233 = 1.16.
+The description box no longer shows {products} codes. It shows the
+description as it will read on the quote:
+  - INSERT PRODUCTS puts the ticked products in LIGHT GREY where the cursor is
+    ("Alkorplus polythene VCL and CX Plate for PVC 6.5mm Hole"). Grey text is
+    LIVE: tick or untick a product under ⚙ (or change a product) and it updates.
+  - INSERT VARIABLE does the same with the variable's value (e.g. "20 year").
+  - Everything is editable, typed straight into the box. Typing at the start or
+    end of grey text adds your own words beside it - the grey stays live.
+    Changing anything INSIDE grey text makes it your own wording: black, and no
+    longer updated.
+  - Pasting brings in plain text only.
+The quote prints exactly what the box shows. Saved in the same form as before,
+so existing descriptions, the quote and the build-ups file are unchanged.
 
-AND IT FITS: with a build-up open, the Build-ups page gives the editor the full
-width (the category and build-up lists fold away; "← All build-ups" brings them
-back), and the take-off pop-out is as wide as the screen allows. Widths
-tightened; "lump spread" fits its box.
-
-Checked in a REAL browser (Chromium) at 1366px and 1600px: on the Build-ups
-page and in an estimate's pop-out, a whole line fits with no sideways scroll;
-VCL 1 x 0.8267 + 20% = 0.99, Discs 5 x 0.233 = 1.16, Lab 1 x 11 = 11.00. All
-165 pages pass the browser check. Built from your deployed packages
-(1022-1104, verified against their zips); each file checked identical to the
-tested version before zipping.
+Checked in a REAL browser (Chromium): opening words typed, Insert products ->
+the two ticked products in grey with the full stop typed after it kept outside;
+Discs unticked -> the grey list updated by itself; Insert variable + "20 year"
+-> grey "20 year"; "white" typed INSIDE the product list -> "Alkorplus white
+polythene VCL", now black, the warranty still grey; SAVED as "Single ply
+membrane roof system comprising: Alkorplus white polythene VCL. Warranty:
+{Warranty period}". All 165 pages pass the browser check. Built from your
+deployed packages (1022-1105, verified against their zips); the file checked
+identical to the tested version before zipping.
