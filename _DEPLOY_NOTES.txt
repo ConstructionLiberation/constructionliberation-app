@@ -1,24 +1,25 @@
-PACKAGE 1118 - Any line (every cost category) can go into the description
+PACKAGE 1119 - A build-up's own profit % takes priority over the quote's
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1117.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1118.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
-  lib/buildups.js
+  lib/buildups.js, lib/estimate.js
+  pages/estimating/build-ups.js
 
-"⚙ Products in the description" now lists EVERY line except comments -
-materials, labour, lump sums, lump spreads - each with its cost category, to
-tick in or out. In the description each reads as:
-  a product        - its price-list description
-  a labour item    - its labour description
-  an own item, lump sum or lump spread - the description typed (else its label)
-In build-up order, "A, B and C" as before. Existing build-ups keep their ticks.
+Each build-up has a PROFIT % field beside its name, category and unit -
+blank = the quote's. Set it (e.g. Attendances 15%) and, when the build-up is
+added to an estimate, that becomes the item's profit % - which takes priority
+over the quote's (e.g. 30%) in every rate and total. On the take-off the
+item's Profit % column shows it (highlighted as differing from the quote) and
+it can still be changed for that quote. "Try the rate" uses the build-up's
+profit unless you type another. The build-ups file carries it (a "Profit %"
+column on the Descriptions sheet; 0.15, 15 or "15%" all read as 15%).
+Applies to items added after it is set - items already on estimates keep theirs.
 
-Checked: the wording - "Alkorplus polythene VCL, Scaffold hire, Timber /
-Metal Deck Mech Fixed warm roof and Fix delivery", the comment left out, build-
-up order kept. In a REAL browser (Chromium): the ⚙ list shows VCL (Materials),
-Fabricate del (Other), Fix delivery (Delivery) and both labour lines (Labour);
-ticking VCL, Fix delivery and Lab put "Alkorplus polythene VCL, Fix delivery
-and Timber / Metal Deck Mech Fixed warm roof" in the grey text, count (3). All
-165 pages pass the browser check. Built from your deployed packages
-(1022-1117, verified against their zips); each file checked identical to the
-tested version before zipping.
+Checked: on a quote at 30%, an Attendances build-up at 15% priced 1,000 ->
+1,150 while another item priced 1,300; the quote moved to 35% -> Attendances
+still 1,150, the other 1,350; "0.15" / "15" / "15%" -> 15%; the file round-
+trips it. In a REAL browser (Chromium): Attendances Lump Sum, Profit % 15 ->
+Try the rate profit 97.50 (15% of 650) and its default shows 15; saved 0.15.
+All server routes compile; all 165 pages pass the browser check. Built from
+your deployed packages (1022-1118, verified against their zips); each file
+checked identical to the tested version before zipping.

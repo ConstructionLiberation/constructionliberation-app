@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import EstimatingShell, { Heading, ErrorBar, estApi } from '../../components/EstimatingShell'
 import { useFormat } from '../../components/TenantProvider'
 import { CheckPanel, SecBtn, th, td, tdR, inp, btn } from '../../components/LibraryParts'
-import BuildupEditor from '../../components/BuildupEditor'
+import BuildupEditor, { NumBox } from '../../components/BuildupEditor'
 import DocumentsPanel from '../../components/DocumentsPanel'
 import { LINE_TYPES, BU_UNITS, BU_UNIT_LABEL, COST_CATEGORIES, LINE_COLUMNS, SIZE_COLUMNS, RULE_COLUMNS, DESC_COLUMNS, varText, varsText, rateFor, evalQty, qtyProblem, normalizeTemplate } from '../../lib/buildups'
 
@@ -81,7 +81,7 @@ export default function BuildUpsPage() {
     add('Build-ups', LINE_COLUMNS, list.flatMap(t => t.lines.map(l => [t.section, t.description, t.unit, l.id.replace(/^L/, ''), l.type, l.label, (l.offers || []).join(';'), l.default || '', l.amount ?? '', l.qty || '', l.waste ?? '', l.increase ?? '', l.cost || '', l.comment || '', l.override ?? '', l.applySize === true ? 'yes' : (l.applySize || ''), l.inDescription ? 'yes' : '', varText(l), l.ownName || ''])))
     add('Sizes', SIZE_COLUMNS, list.flatMap(t => (t.sizes || []).map(z => [t.section, t.description, z.name, z.value ?? '', z.comment || '', z.required ? 'yes' : ''])))
     add('Product rules', RULE_COLUMNS, [])   // product rules are gone (1098) - waste lives on each line
-    add('Descriptions', DESC_COLUMNS, list.filter(t => (t.descText || '').trim() || (t.descVars || []).length).map(t => [t.section, t.description, t.descText || '', varsText(t.descVars)]))
+    add('Descriptions', DESC_COLUMNS, list.filter(t => (t.descText || '').trim() || (t.descVars || []).length || t.profit != null).map(t => [t.section, t.description, t.descText || '', varsText(t.descVars), t.profit ?? '']))
     return wb
   }
   const download = () => XLSX.writeFile(workbook(templates), `Build-ups-${new Date().toISOString().slice(0, 10)}.xlsx`)
@@ -219,19 +219,21 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onC
   return (
     <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 16 }}>
       {edit.copiedFrom && <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>A copy of <strong>{edit.copiedFrom}</strong> - not saved yet. Rename it if you like, change what you need, then <strong>Save</strong>; it is saved as a new build-up and {edit.copiedFrom} is not changed.</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr 0.8fr', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr 0.8fr 0.8fr', gap: 10, marginBottom: 12 }}>
         <label style={lbl}>Build-up name<input value={t.description} onChange={e => set({ description: e.target.value })} style={inp} /></label>
         {/* Not a <label>: a click inside a label also "clicks" its first button - the box - which closed the dropdown (1116) */}
         <div style={lbl}>Category<CategoryPicker value={t.section || ''} options={categories} onChange={v => set({ section: v })} onAdd={onAddCategory} /></div>
+        {/* This build-up's own profit % (1119) - blank = the quote's. Set, it takes priority on every quote it is used on. */}
+        <label style={lbl}>Profit % <span style={{ fontSize: 10.5, color: '#999' }}>blank = the quote's</span><NumBox pct value={t.profit ?? null} onChange={v => set({ profit: v ?? undefined })} placeholder="quote's" style={{ ...inp, borderColor: t.profit != null ? '#f59e0b' : undefined }} title="Set it and this build-up is priced at this profit % on every quote it is used on - it takes priority over the quote's profit %" /></label>
         <label style={lbl}>Unit<select value={t.unit || ''} onChange={e => set({ unit: e.target.value })} style={inp}><option value="">—</option>{BU_UNITS.map(u => <option key={u} value={u}>per {BU_UNIT_LABEL[u]}</option>)}</select></label>
       </div>
       {!t.section && <div style={warnBox}>No category - this build-up is listed under No category until it has one.</div>}
 
       <BuildupEditor value={t} onChange={setT} lib={lib} money={money}
-        rateOpts={{ profit: (parseFloat(calc.profit) || 0) / 100, mcd: (parseFloat(calc.mcd) || 0) / 100, labourFactor: parseFloat(calc.factor) || 1 }}>
+        rateOpts={{ profit: calc.profit !== '' ? (parseFloat(calc.profit) || 0) / 100 : (t.profit ?? 0), mcd: (parseFloat(calc.mcd) || 0) / 100, labourFactor: parseFloat(calc.factor) || 1 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
           <strong style={{ fontSize: 13 }}>Try the rate</strong>
-          <label>Profit % <input value={calc.profit} onChange={e => setCalc({ ...calc, profit: e.target.value })} style={{ ...cellInp, width: 56 }} /></label>
+          <label>Profit % <input value={calc.profit} onChange={e => setCalc({ ...calc, profit: e.target.value })} placeholder={t.profit != null ? String(+(t.profit * 100).toFixed(4)) : ''} style={{ ...cellInp, width: 56 }} title={t.profit != null ? "Blank = this build-up's own profit %" : ''} /></label>
           <label>MCD % <input value={calc.mcd} onChange={e => setCalc({ ...calc, mcd: e.target.value })} style={{ ...cellInp, width: 56 }} /></label>
           <label>Labour factor <input value={calc.factor} onChange={e => setCalc({ ...calc, factor: e.target.value })} style={{ ...cellInp, width: 56 }} /></label>
           <span style={{ color: '#888' }}>(for trying only - an estimate sets its own)</span>
