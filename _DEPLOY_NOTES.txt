@@ -1,25 +1,18 @@
-PACKAGE 1119 - A build-up's own profit % takes priority over the quote's
+PACKAGE 1120 - Copy a line in a rate build-up
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1118.
+One file. Complete replacement. No re-seed. No env changes. Built on 1119.
 
-  lib/buildups.js, lib/estimate.js
-  pages/estimating/build-ups.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-Each build-up has a PROFIT % field beside its name, category and unit -
-blank = the quote's. Set it (e.g. Attendances 15%) and, when the build-up is
-added to an estimate, that becomes the item's profit % - which takes priority
-over the quote's (e.g. 30%) in every rate and total. On the take-off the
-item's Profit % column shows it (highlighted as differing from the quote) and
-it can still be changed for that quote. "Try the rate" uses the build-up's
-profit unless you type another. The build-ups file carries it (a "Profit %"
-column on the Descriptions sheet; 0.15, 15 or "15%" all read as 15%).
-Applies to items added after it is set - items already on estimates keep theirs.
+Each line has a COPY button (⧉) beside its ✕: an exact copy - type, label,
+item, rate, quantity, waste, cost category, Apply size, variable flags, its
+description tick - goes directly underneath, with its own id. Change whatever
+differs.
 
-Checked: on a quote at 30%, an Attendances build-up at 15% priced 1,000 ->
-1,150 while another item priced 1,300; the quote moved to 35% -> Attendances
-still 1,150, the other 1,350; "0.15" / "15" / "15%" -> 15%; the file round-
-trips it. In a REAL browser (Chromium): Attendances Lump Sum, Profit % 15 ->
-Try the rate profit 97.50 (15% of 650) and its default shows 15; saved 0.15.
-All server routes compile; all 165 pages pass the browser check. Built from
-your deployed packages (1022-1118, verified against their zips); each file
-checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium) at 1366px: copying VCL put an identical
+line directly under it (18 -> 19 lines; both = 0.99); the copy's qty changed
+to 2 -> copy 1.98, original still 0.99; a lump sum copied with its
+description and 350.00; a whole line still fits; saved with every line id
+unique. All 165 pages pass the browser check. Built from your deployed
+packages (1022-1119, verified against their zips); the file checked identical
+to the tested version before zipping.

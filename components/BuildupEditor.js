@@ -33,6 +33,14 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
   const setLine = (id, patch) => setT(x => ({ ...x, lines: x.lines.map(l => l.id === id ? { ...l, ...patch } : l) }))
   const move = (i, d) => setT(x => { const ls = [...x.lines]; const j = i + d; if (j < 0 || j >= ls.length) return x; [ls[i], ls[j]] = [ls[j], ls[i]]; return { ...x, lines: ls } })
   const nextId = () => `L${Math.max(0, ...t.lines.map(l => parseInt(String(l.id).replace(/\D/g, ''), 10) || 0)) + 1}`
+  // COPY A LINE (1120): an exact copy - everything but its id - directly underneath.
+  const copyLine = (id) => setT(x => {
+    const k = x.lines.findIndex(l => l.id === id)
+    if (k < 0) return x
+    const top = Math.max(0, ...x.lines.map(l => parseInt(String(l.id).replace(/\D/g, ''), 10) || 0))
+    const copy = { ...JSON.parse(JSON.stringify(x.lines[k])), id: `L${top + 1}` }
+    return { ...x, lines: [...x.lines.slice(0, k + 1), copy, ...x.lines.slice(k + 1)] }
+  })
   const addLine = (type) => setT(x => ({ ...x, lines: [...x.lines, { id: nextId(), type, label: '', offers: [], default: '', amount: null, qty: type === 'comment' ? '' : '1', waste: null, increase: null, cost: type === 'labour' ? 'Labour' : type === 'lump sum' ? 'Delivery' : type === 'comment' ? '' : 'Materials', comment: '' }] }))
   const sizeNames = (t.sizes || []).map(z => z.name)
   const r = rateFor(t, lib, rateOpts || {})
@@ -132,7 +140,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                     <td style={td}>{l.type === 'material' && <NumBox pct value={l.increase ?? null} onChange={v => setLine(l.id, { increase: v })} style={{ ...cellInp, width: 52 }} />}</td>
                     <td style={{ ...tdR, fontWeight: 700, color: '#0f766e', whiteSpace: 'nowrap' }} title="Rate x Qty (x waste / increase)">{lc.cost != null ? `= ${money(lc.cost, { dp: 2 })}` : ''}</td>
                     <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} style={{ ...cellInp, width: 92 }}><option value="">—</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
-                    <td style={td}><button onClick={() => setT(x => ({ ...x, lines: x.lines.filter(y => y.id !== l.id), rules: (x.rules || []).filter(rr => rr.line !== l.id) }))} style={iconBtn} title="Remove line">✕</button></td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => copyLine(l.id)} style={{ ...iconBtn, marginRight: 2 }} title="Copy this line - an exact copy goes directly underneath">⧉</button><button onClick={() => setT(x => ({ ...x, lines: x.lines.filter(y => y.id !== l.id), rules: (x.rules || []).filter(rr => rr.line !== l.id) }))} style={iconBtn} title="Remove line">✕</button></td>
                   </tr>
                 )
               })}
