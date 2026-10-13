@@ -1,28 +1,25 @@
-PACKAGE 1122 - Products in the description: red while only a label
+PACKAGE 1123 - The rate summary replaces "Try the rate"
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1121.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1122.
 
-  components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
+  components/BuildupEditor.js
   lib/buildups.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/estimating/build-ups.js
 
-In the description's product list, an item reading as only its LABEL (the line
-has no product, labour item or typed description yet) shows RED - like an
-unchosen variable. Once a product or description is entered it turns LIGHT
-GREY and reads as that. As with variables:
-  - red on the take-off too, and the item says "Insulation not chosen"
-  - red on the QUOTE
-  - Download and mark as sent warns
-Typing at the edges of the list adds your own words beside it; typing inside
-it makes it your own wording with all colours cleared - as before.
+On the Build-ups page the "Try the rate" box (trial profit / MCD / labour
+factor) is gone. In its place, the build-up's rate per unit:
+  BY SUPPLIER        each supplier's materials (own items apart)
+  BY COST CATEGORY   Materials, Labour, Plant, Delivery...
+  RATE               cost, profit at the build-up's own profit % (if set),
+                     and the rate - "the quote adds its MCD"
+"Not yet in the rate" still lists anything unpriced. The take-off pop-out is
+unchanged (its "Rate on this quote" uses the quote's settings).
 
-Checked: the list "Alkorplus polythene VCL, Insulation, Scaffold hire and Mech
-fixed warm roof" flags only Insulation; once "PIR insulation 120mm" is typed,
-nothing. In a REAL browser (Chromium): Insert products -> VCL and Discs grey,
-Insulation RED, the full stop typed after kept outside; Insulation described
--> grey "PIR insulation 120mm"; typing inside -> own wording, no colours left;
-saved as shown. The earlier description test passes in full. On an estimate:
-the take-off shows Insulation red and "Insulation not chosen", the quote
-prints it red, sending warned. All 165 pages pass the browser check. Built
-from your deployed packages (1022-1121, verified against their zips); each
-file checked identical to the tested version before zipping.
+Checked on Mech Fixed SP with real products at 15%: by supplier Renolit 11.08,
+Valro 1.72, own items 0.60 (adding up exactly to materials 13.40); by
+category Materials 13.40, Labour 11.00 (adding up exactly to the 24.40 cost);
+profit 3.66; rate 28.06 - identical to the line-by-line rate. In a REAL
+browser (Chromium): Try the rate gone; the three columns shown as above. All
+165 pages pass the browser check. Built from your deployed packages
+(1022-1122, verified against their zips); each file checked identical to the
+tested version before zipping.

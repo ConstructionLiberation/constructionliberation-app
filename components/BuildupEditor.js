@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList, lineWording, productItems } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -14,7 +14,7 @@ export const fromPct = (s) => { if (s === '' || s == null) return null; const n 
 // The shared unit names (1103) - so m³, weeks and days show here too.
 const UNIT_LABEL = BU_UNIT_LABEL
 
-export default function BuildupEditor({ varLibrary, value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children }) {
+export default function BuildupEditor({ varLibrary, value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children, summary }) {
   const t = value
   // Changes pass through as STEPS (functions), so two in one click apply in
   // order. onChange must be a state setter (or accept a function).
@@ -212,11 +212,12 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
 
       <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: 12, marginTop: 12 }}>
         {children}
+        {summary ? <RateSummary t={t} lib={lib} money={money} rateOpts={rateOpts} unit={t.unit ? UNIT_LABEL[t.unit] : ''} /> :
         <div style={{ display: 'flex', gap: 18, marginTop: children ? 10 : 0, fontSize: 13, flexWrap: 'wrap' }}>
           <span>Materials {money(r.materials + r.fixed + r.lump, { dp: 2 })}</span><span>Labour {money(r.labour, { dp: 2 })}</span>
           <span>Profit {money(r.profit, { dp: 2 })}</span><span>MCD {money(r.mcd, { dp: 2 })}</span>
           <strong style={{ fontSize: 15, color: '#0f766e' }}>{rateTitle} {money(r.rate, { dp: 2 })}{t.unit ? ` per ${UNIT_LABEL[t.unit]}` : ''}</strong>
-        </div>
+        </div>}
         {editList && (() => { const ln = t.lines.find(x => x.id === editList); return ln ? <ListEditor ln={ln} lib={lib} label={label} findText={findText} onClose={() => setEditList(null)} onChange={(offers) => setLine(ln.id, { offers })} /> : null })()}
         {r.missing.length > 0 && <div style={{ fontSize: 12, color: '#92400e', marginTop: 6 }}>Not yet in the rate: {r.missing.slice(0, 8).join(' · ')}{r.missing.length > 8 ? ` … and ${r.missing.length - 8} more` : ''}</div>}
       </div>
@@ -549,4 +550,29 @@ function AutoText({ value, onChange, style, ...rest }) {
   return <textarea ref={ref} rows={1} value={value || ''} onChange={e => onChange(e.target.value.replace(/\n/g, ' '))}
     onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
     style={{ ...style, resize: 'none', overflow: 'hidden', lineHeight: 1.3, display: 'block', fontFamily: 'inherit', boxSizing: 'border-box' }} {...rest} />
+}
+
+// THE RATE SUMMARY PANEL (1123) - on the Build-ups page, in place of "Try the
+// rate": per unit, by supplier, by cost category, cost, profit, rate.
+function RateSummary({ t, lib, money, rateOpts, unit }) {
+  const s = rateSummary(t, lib, rateOpts || {})
+  const m = (v) => money(v, { dp: 2 })
+  const per = unit ? ` per ${unit}` : ''
+  const col = { flex: '1 1 220px', minWidth: 200 }
+  const head = { fontSize: 11.5, fontWeight: 700, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }
+  const row = { display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, padding: '2px 0' }
+  const List = ({ items, empty }) => items.length ? items.map(x => <div key={x.name} style={row}><span>{x.name}</span><span>{m(x.amount)}</span></div>) : <div style={{ fontSize: 12.5, color: '#999' }}>{empty}</div>
+  return (
+    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div style={col}><div style={head}>By supplier{per}</div><List items={s.bySupplier} empty="No priced materials yet" /></div>
+      <div style={col}><div style={head}>By cost category{per}</div><List items={s.byCategory} empty="Nothing priced yet" /></div>
+      <div style={col}>
+        <div style={head}>Rate{per}</div>
+        <div style={row}><span>Cost</span><span>{m(s.subtotal)}</span></div>
+        <div style={row}><span>Profit{s.profitPct ? ` (${+(s.profitPct * 100).toFixed(2)}% - this build-up's)` : ' (set on the quote)'}</span><span>{m(s.profit)}</span></div>
+        <div style={{ ...row, borderTop: '1px solid #99f6e4', marginTop: 4, paddingTop: 6, fontWeight: 700, fontSize: 15, color: '#0f766e' }}><span>Rate</span><span>{m(s.rate)}{per}</span></div>
+        <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>The quote adds its MCD{s.profitPct ? '' : ' and profit %'}.</div>
+      </div>
+    </div>
+  )
 }

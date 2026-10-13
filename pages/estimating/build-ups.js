@@ -195,7 +195,6 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onC
   const [t, setT] = useState(edit.t)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const [calc, setCalc] = useState({ profit: '', mcd: '', factor: '1' })
   const set = (patch) => setT(x => ({ ...x, ...patch }))
   async function save(asNew) {
     let tpl = t
@@ -229,16 +228,10 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onC
       </div>
       {!t.section && <div style={warnBox}>No category - this build-up is listed under No category until it has one.</div>}
 
-      <BuildupEditor value={t} onChange={setT} lib={lib} money={money} varLibrary={varLibrary}
-        rateOpts={{ profit: calc.profit !== '' ? (parseFloat(calc.profit) || 0) / 100 : (t.profit ?? 0), mcd: (parseFloat(calc.mcd) || 0) / 100, labourFactor: parseFloat(calc.factor) || 1 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
-          <strong style={{ fontSize: 13 }}>Try the rate</strong>
-          <label>Profit % <input value={calc.profit} onChange={e => setCalc({ ...calc, profit: e.target.value })} placeholder={t.profit != null ? String(+(t.profit * 100).toFixed(4)) : ''} style={{ ...cellInp, width: 56 }} title={t.profit != null ? "Blank = this build-up's own profit %" : ''} /></label>
-          <label>MCD % <input value={calc.mcd} onChange={e => setCalc({ ...calc, mcd: e.target.value })} style={{ ...cellInp, width: 56 }} /></label>
-          <label>Labour factor <input value={calc.factor} onChange={e => setCalc({ ...calc, factor: e.target.value })} style={{ ...cellInp, width: 56 }} /></label>
-          <span style={{ color: '#888' }}>(for trying only - an estimate sets its own)</span>
-        </div>
-      </BuildupEditor>
+      {/* "Try the rate" is gone (1123): the summary shows the rate by supplier and
+          cost category, at this build-up's own profit % - no quote settings. */}
+      <BuildupEditor value={t} onChange={setT} lib={lib} money={money} varLibrary={varLibrary} summary
+        rateOpts={{ profit: t.profit ?? 0, mcd: 0, labourFactor: 1 }} />
 
       {edit.originalRef && <div style={{ marginTop: 12 }}><DocumentsPanel ownerType="buildup" ownerId={edit.originalRef} title="Documents on this build-up" /></div>}
       {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 10 }}>{err}</div>}
