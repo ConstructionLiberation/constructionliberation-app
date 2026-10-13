@@ -152,7 +152,17 @@ export default function BuildUpsPage() {
           </>}
           <div style={{ minWidth: 0 }}>
             {edit && <button onClick={() => setEdit(null)} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '0 0 8px', fontFamily: 'inherit' }}>← All build-ups{edit.t?.section ? ` · ${edit.t.section}` : ''}</button>}
-            {edit ? <Editor key={edit.originalRef || 'new'} edit={edit} lib={lib} money={money} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
+            {edit ? <Editor key={edit.key || edit.originalRef || 'new'} edit={edit} lib={lib} money={money} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
+              onCopy={(t) => {
+                // COPY (1115): a new, unsaved build-up - everything copied, named
+                // "(copy)" (or "(copy 2)"...) in the same category. Saved as NEW.
+                const taken = new Set(templates.filter(x => (x.section || '') === (t.section || '')).map(x => x.description.toLowerCase()))
+                const base = `${t.description} (copy`
+                let name = `${base})`, n = 2
+                while (taken.has(name.toLowerCase())) name = `${base} ${n++})`
+                const copy = JSON.parse(JSON.stringify(t)); delete copy.ref
+                setEdit({ t: { ...copy, description: name }, originalRef: null, copiedFrom: t.description, key: `copy-${Date.now()}` })
+              }}
               onClose={() => setEdit(null)} onSaved={async (t) => { await load(); setCat(t.section || NOCAT); setEdit({ t: JSON.parse(JSON.stringify(t)), originalRef: t.ref }) }}
               onDeleted={async () => { setEdit(null); await load() }} />
               : <div style={{ color: '#aaa', fontSize: 13, padding: 20 }}>Open a build-up to see and edit it.</div>}
@@ -163,7 +173,7 @@ export default function BuildUpsPage() {
   )
 }
 
-function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted }) {
+function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onCopy }) {
   const [t, setT] = useState(edit.t)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -190,6 +200,7 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted }) {
 
   return (
     <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 16 }}>
+      {edit.copiedFrom && <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>A copy of <strong>{edit.copiedFrom}</strong> - not saved yet. Rename it if you like, change what you need, then <strong>Save</strong>; it is saved as a new build-up and {edit.copiedFrom} is not changed.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr 0.8fr', gap: 10, marginBottom: 12 }}>
         <label style={lbl}>Build-up name<input value={t.description} onChange={e => set({ description: e.target.value })} style={inp} /></label>
         <label style={lbl}>Category<input list="bu-cats" value={t.section || ''} onChange={e => set({ section: e.target.value })} placeholder="No category" style={inp} /><datalist id="bu-cats">{categories.map(c => <option key={c} value={c} />)}</datalist></label>
@@ -211,7 +222,10 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted }) {
       {edit.originalRef && <div style={{ marginTop: 12 }}><DocumentsPanel ownerType="buildup" ownerId={edit.originalRef} title="Documents on this build-up" /></div>}
       {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 10 }}>{err}</div>}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
-        <div>{edit.originalRef && <button onClick={del} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {edit.originalRef && <button onClick={del} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>}
+          {onCopy && (t.description || '').trim() && <button onClick={() => onCopy(t)} style={btn} title="Open a copy of this build-up - saved as a new one; this one is not changed">Copy</button>}
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onClose} style={btn}>Close</button>
           {edit.originalRef && <button onClick={() => save(true)} disabled={busy} style={btn}>Save as new template</button>}

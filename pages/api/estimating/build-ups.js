@@ -57,6 +57,22 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true, index, summary })
   }
 
+  // ADD (1114): a NEW template only - used from the take-off. It never takes an
+  // originalRef, so it can never overwrite: a name already in use is refused.
+  if (b.action === 'add') {
+    const t = b.template || {}
+    const tpl = { ...t, section: String(t.section || '').trim(), description: String(t.description || '').trim() }
+    if (!tpl.description) return res.status(400).json({ error: 'Give the new template a name' })
+    tpl.ref = templateKey(tpl.section, tpl.description)
+    const { errors } = checkTemplate(tpl, await knownRefs())
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') })
+    const r = await upsertBuildup(tpl, { by, originalRef: null })
+    if (r.errors) {
+      const clash = /already used/.test(r.errors[0])
+      return res.status(400).json({ error: clash ? `A template called "${tpl.description}" already exists in ${tpl.section || 'no category'} - templates are never changed from the take-off; give this one a new name` : r.errors[0] })
+    }
+    return res.status(200).json({ ok: true, template: r.item, index: r.index })
+  }
   if (b.action === 'save') {
     const t = b.template || {}
     const tpl = { ...t, section: String(t.section || '').trim(), description: String(t.description || '').trim() }
@@ -94,7 +110,7 @@ async function handler(req, res) {
     for (let i = 0; i < items.length; i++) if (items[i].ref !== next[i].ref) await moveDocs('buildup', items[i].ref, next[i].ref)
     return res.status(200).json({ ok: true, moved, index: idx })
   }
-  return res.status(400).json({ error: "action must be 'check', 'import', 'save', 'delete', 'rename-category' or 'delete-category'" })
+  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'rename-category' or 'delete-category'" })
 }
 
 export default withTenant(handler)

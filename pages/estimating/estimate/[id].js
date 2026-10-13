@@ -450,23 +450,28 @@ export default function EstimatePage() {
         try { const d = await estApi(API, { action: 'link', id: est.id, dealId }); setEst(d.estimate); setBase(d.estimate.updatedAt); setCrm(d.crm); setLinking(false) } catch (e) { setErr(e.message) }
       }} />}
       {picking && <TemplatePicker templates={templates} onClose={() => setPicking(false)} onPick={(t) => { setPicking(false); addRow(itemFromTemplate(t), true) }} />}
-      {item && <Popout item={item} est={est} lib={lib} money={money} onChange={(fn) => setRow(item.id, (r) => ({ buildup: fn(r.buildup) }))} setRow={(patch) => setRow(item.id, patch)} onClose={() => setPopout(null)} />}
+      {item && <Popout item={item} est={est} lib={lib} templates={templates} money={money} onChange={(fn) => setRow(item.id, (r) => ({ buildup: fn(r.buildup) }))} setRow={(patch) => setRow(item.id, patch)} onClose={() => setPopout(null)} />}
     </EstimatingShell>
   )
 }
 
-function Popout({ item, est, lib: libIn, money, onChange, setRow, onClose }) {
+function Popout({ item, est, lib: libIn, templates = [], money, onChange, setRow, onClose }) {
   const s = est.settings || {}
   // This quote's own supplier adjustments, as the take-off prices them (1094).
   const lib = useMemo(() => adjustLib(libIn, est.adjustments), [libIn, est.adjustments])
   const p = priceItem(item, lib, s)
-  const [saving, setSaving] = useState(null)   // { category, name } when saving as a template
+  const [saving, setSaving] = useState(null)   // { category, name } when adding as a new template
+  const source = templates.find(t => t.ref === item.templateRef)   // the template this item came from, if any
   const [msg, setMsg] = useState('')
   const value = { ...item.buildup, unit: item.unit }
+  // ADD AS A NEW TEMPLATE (1114) - from the take-off a build-up is only ever
+  // ADDED to the library, never saved over an existing one (that is done on the
+  // Build-ups page). The server's 'add' action cannot overwrite: a name already
+  // in use in that category is refused.
   async function saveTemplate() {
     try {
-      const d = await estApi('/api/estimating/build-ups', { action: 'save', template: { section: saving.category, description: saving.name, unit: item.unit, sizes: item.buildup.sizes, lines: item.buildup.lines, rules: item.buildup.rules }, originalRef: null })
-      setMsg(`Saved to the library as "${d.template.description}" in ${d.template.section || 'no category'}.`); setSaving(null)
+      const d = await estApi('/api/estimating/build-ups', { action: 'add', template: { section: saving.category, description: saving.name, unit: item.unit, sizes: item.buildup.sizes, lines: item.buildup.lines, rules: item.buildup.rules, descText: item.buildup.descText, descVars: item.buildup.descVars, commentsCleared: true } })
+      setMsg(`Added to the library as a new template: "${d.template.description}" in ${d.template.section || 'no category'}.`); setSaving(null)
     } catch (e) { setMsg(e.message) }
   }
   return (
@@ -479,19 +484,20 @@ function Popout({ item, est, lib: libIn, money, onChange, setRow, onClose }) {
           <label style={lbl}>Quantity<input value={item.rateOnly ? '' : (item.qty ?? '')} disabled={item.rateOnly} placeholder={item.rateOnly ? 'TBC (rate only)' : ''} onChange={e => setRow({ qty: e.target.value === '' ? null : e.target.value })} style={{ ...inp, width: 110 }} /></label>
           <label style={lbl}>Profit % (this item)<NumBox pct value={item.profit ?? null} onChange={v => setRow({ profit: v })} placeholder={s.profit != null ? `${pct(s.profit)} (quote)` : 'quote'} style={{ ...inp, width: 120 }} /></label>
           <div style={{ flex: 1 }} />
-          <button onClick={() => setSaving({ category: '', name: item.description })} style={btn}>Save as template…</button>
+          <button onClick={() => setSaving({ category: source?.section || '', name: '' })} style={btn} title="Add this build-up to the library as a NEW template - existing templates are never changed from here">Add as new template…</button>
           <button onClick={onClose} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e' }}>Done</button>
         </div>
         {saving && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, fontSize: 13, background: '#fafaf9', padding: 10, borderRadius: 8 }}>
-            Save this build-up to the library as
-            <input value={saving.name} onChange={e => setSaving({ ...saving, name: e.target.value })} style={{ ...inp, width: 260 }} />
+            Add to the library as a NEW template, named
+            <input value={saving.name} onChange={e => setSaving({ ...saving, name: e.target.value })} placeholder={`e.g. ${item.description} - variant`} autoFocus style={{ ...inp, width: 260 }} />
             in category <input value={saving.category} onChange={e => setSaving({ ...saving, category: e.target.value })} placeholder="category" style={{ ...inp, width: 180 }} />
-            <button onClick={saveTemplate} style={btn}>Save</button><button onClick={() => setSaving(null)} style={btn}>Cancel</button>
+            <button onClick={saveTemplate} disabled={!saving.name.trim()} style={{ ...btn, opacity: saving.name.trim() ? 1 : 0.5 }}>Add</button><button onClick={() => setSaving(null)} style={btn}>Cancel</button>
+            <span style={{ fontSize: 11.5, color: '#888', flexBasis: '100%' }}>Existing templates are never changed from the take-off - edit them on the Build-ups page.</span>
           </div>
         )}
         {msg && <div style={{ fontSize: 12.5, color: '#0f766e', marginTop: 8 }}>{msg}</div>}
-        <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Changes here belong to this estimate only - the library build-up is untouched unless you save as a template.</div>
+        <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Changes here belong to this estimate only - the library is never changed from here (Add as new template adds a new one).</div>
         <div style={{ marginTop: 10 }}><DocumentsPanel ownerType="estimate" ownerId={est.id} itemId={item.id} title="Documents on this item" /></div>
         <BuildupEditor value={value} onChange={(fn) => onChange((b) => { const n = fn({ ...b, unit: item.unit }); const { unit, ...rest } = n; return rest })}
           lib={lib} money={money} rateTitle="Rate on this quote"

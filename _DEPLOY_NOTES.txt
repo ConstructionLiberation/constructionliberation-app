@@ -1,29 +1,21 @@
-PACKAGE 1113 - Mandatory sizes
+PACKAGE 1115 - Copy a rate build-up
 
-Five files. Complete replacements. No re-seed. No env changes. Built on 1112.
+One file. Complete replacement. No re-seed. No env changes. Built on 1114.
 
-  components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
-  lib/buildups.js
   pages/estimating/build-ups.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/estimates.js
 
-In a build-up's Sizes block, each size (Width, Height, Girth) has a MANDATORY
-tick. Leave the value blank on the template; on every quote using the
-build-up a number must be entered:
-  - the size box is RED ("required") in the pop-out until it has a number
-  - the take-off shows "Width required" (etc.) in red on the item
-  - Issue / Download and mark as sent are REFUSED, listing what is missing
-    ("Enter the mandatory sizes first: Mech fixed single ply - Width") - and the
-    server refuses too, so it cannot be bypassed
-The build-ups file carries it (a Mandatory column on the Sizes sheet).
+Open a build-up on the Build-ups page and click COPY (bottom left, beside
+Delete). It opens a new, unsaved copy - every line, size (and Mandatory tick),
+variable flag, description and its variables - named "Mech Fixed SP (copy)",
+or "(copy 2)" etc. if that is taken, in the same category. A banner says it
+is a copy and not saved yet. Rename it, change what you need, then Save - it is
+saved as a NEW build-up; the original is not changed. Documents attached to
+the original are not copied (they are files on that template).
 
-Checked: through the real routes - issuing with a mandatory Width empty
-refused ("Enter the mandatory sizes first: Coping (Width)"), with 0.6 it
-issued Rev A; the file reads the tick. In a REAL browser (Chromium): ticking
-Mandatory turns the Width box red ("required"), typing 1.2 clears it, saved
-with the tick; on an estimate the take-off shows "Width required", sending is
-refused with the list, the pop-out's Width box is red, and entering 0.6 clears
-the note. All server routes compile; all 165 pages pass the browser check.
-Built from your deployed packages (1022-1112, verified against their zips);
-each file checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium), with "Mech Fixed SP (copy)" already in
+the library: Copy opened the banner, all 18 lines and the mandatory Width;
+Save sent "Mech Fixed SP (copy 2)" in Single Ply as a NEW build-up (no
+overwrite), its lines identical to the original, with the description and
+sizes. All 165 pages pass the browser check. Built from your deployed packages
+(1022-1114, verified against their zips); the file checked identical to the
+tested version before zipping.
