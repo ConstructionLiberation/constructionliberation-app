@@ -44,7 +44,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
 
   return (
     <>
-      <Block title="Sizes" hint="Width and Height for this build-up. A line's Apply size multiplies it by one of them. (Girth belongs in the line rates.)">
+      <Block title="Sizes" hint="Width, Height and Girth for this build-up. A line's Apply size multiplies it by one of them.">
         {SIZE_NAMES.map(nm => {
           const z = (t.sizes || []).find(x => String(x.name).toLowerCase() === nm.toLowerCase())
           const setVal = (v) => setT(x => {

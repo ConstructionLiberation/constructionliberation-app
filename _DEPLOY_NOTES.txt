@@ -1,29 +1,19 @@
-PACKAGE 1110 - Mark parts of a description red for amending
+PACKAGE 1111 - Girth as a size
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1109.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1110.
 
-  components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
   lib/buildups.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-In the description box: select the words that need amending (e.g. "XXXmm")
-and click MARK FOR AMENDING - they turn RED. Click inside red words and
-CLEAR MARK to remove it. Grey products / variables can sit inside a red mark
-and stay live.
-  - The TAKE-OFF now shows each item's description under its name, with the
-    marked parts in red, and the item says "description needs amending".
-  - The QUOTE prints the same words - never red, no marks.
-  - Download and mark as sent WARNS if any item is still marked ("1 item's
-    description is still marked for amending ... Issue the quote anyway?").
-Marks are saved with the description (and in the build-ups file).
+Sizes are now WIDTH, HEIGHT and GIRTH. A line's Apply size can be Girth - its
+quantity multiplied by the girth. Build-ups that already had a size you named
+"Girth" (from 1098) are picked up as the Girth size. "girth" in the build-ups
+file reads as Girth.
 
-Checked in a REAL browser (Chromium): Mark with nothing selected -> "Select
-the words to mark first"; "XXXmm" selected with the keyboard and marked ->
-red; SAVED "Coping [!XXXmm!] girth powder coated aluminium to all edges.";
-Clear mark -> the words kept, unmarked. On an estimate: the take-off shows
-"Coping XXXmm girth ... with Alkorplus polythene VCL." with XXXmm red and
-"description needs amending"; the quote prints the same words with no red and
-no marks; Download and mark as sent warned, and declining stopped the issue.
-Descriptions without marks read exactly as before. All 165 pages pass the
-browser check. Built from your deployed packages (1022-1109, verified against
-their zips); each file checked identical to the tested version before zipping.
+Checked: Girth 0.6 and Width 1.2 each scale only their own lines (12 / 24); a
+1098 build-up's "Girth" size still applies (9); the file reads "girth". In a
+REAL browser (Chromium): the Sizes block lists Width, Height, Girth (the older
+Girth size showing 0.45); Apply size offers Girth once; applying it to the VCL
+took its line from 0.99 to 0.45. All 165 pages pass the browser check. Built
+from your deployed packages (1022-1110, verified against their zips); each
+file checked identical to the tested version before zipping.
