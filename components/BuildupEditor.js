@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList, lineWording } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList, lineWording, productItems } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -206,7 +206,7 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
             {!t.lines.some(l => l.type !== 'comment') && <div style={{ fontSize: 12, color: '#aaa' }}>No lines yet.</div>}
           </div>
         )}
-        <DescriptionEditor value={t.descText || ''} onChange={(v) => setT(x => ({ ...x, descText: v }))} liveProducts={productList(t, lib)} vars={t.descVars || []} insertRef={descInsert} flagRef={descFlag}
+        <DescriptionEditor value={t.descText || ''} onChange={(v) => setT(x => ({ ...x, descText: v }))} liveProducts={productList(t, lib)} liveProductItems={productItems(t, lib)} vars={t.descVars || []} insertRef={descInsert} flagRef={descFlag}
           placeholder="e.g. Single ply membrane roof system comprising: (Insert products)." />
       </Block>
 
@@ -349,13 +349,21 @@ function ListEditor({ ln, lib, label, findText, onClose, onChange }) {
 // the build-up - among your own words. Everything is editable: editing inside
 // grey text makes it your own wording (black, no longer live). Stored as text
 // with {products} / {Name} where the grey text is untouched - unchanged format.
-function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, flagRef, placeholder }) {
+function DescriptionEditor({ value, onChange, liveProducts, liveProductItems = [], vars, insertRef, flagRef, placeholder }) {
   const el = useRef(null), saved = useRef(null), focused = useRef(false)
   const [tick, setTick] = useState(0)
   const GREY = '#9a9a96'
   const esc = (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const varVal = (name) => { const v = (vars || []).find(x => String(x.name).toLowerCase() === String(name).toLowerCase()); return v ? (String(v.value ?? '').trim() || `[${v.name}]`) : null }
   const shown = (tok) => tok === 'products' ? (liveProducts || '[no products ticked yet]') : varVal(tok)
+  // Inside the products: each item in turn - one reading as only its LABEL in RED,
+  // the rest light grey (1122). Same words, so it still matches the live list.
+  const productsInner = () => {
+    const items = liveProductItems || []
+    if (!items.length) return esc(shown('products'))
+    return items.map((x, n) => (n ? (n === items.length - 1 ? ' and ' : ', ') : '') + (x.missing ? `<span style="color:#b91c1c">${esc(x.text)}</span>` : esc(x.text))).join('')
+  }
+  const innerOf = (tok) => tok === 'products' ? productsInner() : esc(shown(tok) ?? `[${tok}]`)
   // A variable with no value chosen is RED; chosen (and the products) light grey (1121).
   const colourOf = (tok) => { if (tok === 'products') return GREY; const v = (vars || []).find(x => String(x.name).toLowerCase() === String(tok).toLowerCase()); return v && !String(v.value ?? '').trim() ? '#b91c1c' : GREY }
   const RED_STYLE = 'color:#b91c1c;background:#fee2e2;border-radius:3px'
@@ -366,7 +374,7 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
   }).join('')
   const tokensHtml = (text) => String(text || '').split(/(\{[^{}]{1,60}\})/).map(part => {
     const m = part.match(/^\{([^{}]{1,60})\}$/)
-    if (m) { const raw = m[1].trim(); const tok = raw.toLowerCase() === 'products' ? 'products' : raw; const sh = shown(tok); if (sh != null) return `<span data-token="${esc(tok)}" style="color:${colourOf(tok)}">${esc(sh)}</span>` }
+    if (m) { const raw = m[1].trim(); const tok = raw.toLowerCase() === 'products' ? 'products' : raw; const sh = shown(tok); if (sh != null) return `<span data-token="${esc(tok)}" style="color:${colourOf(tok)}">${innerOf(tok)}</span>` }
     return esc(part).replace(/\n/g, '<br>')
   }).join('')
   function serialize() {
@@ -391,9 +399,9 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
       const live = shown(sp.dataset.token), txt = sp.textContent
       if (txt === live) continue
       let node = null
-      if (live && txt.startsWith(live)) { node = document.createTextNode(txt.slice(live.length)); sp.textContent = live; sp.after(node) }
-      else if (live && txt.endsWith(live)) { node = document.createTextNode(txt.slice(0, txt.length - live.length)); sp.textContent = live; sp.before(node) }
-      else { sp.style.color = ''; delete sp.dataset.token; continue }
+      if (live && txt.startsWith(live)) { node = document.createTextNode(txt.slice(live.length)); sp.innerHTML = innerOf(sp.dataset.token); sp.after(node) }
+      else if (live && txt.endsWith(live)) { node = document.createTextNode(txt.slice(0, txt.length - live.length)); sp.innerHTML = innerOf(sp.dataset.token); sp.before(node) }
+      else { sp.style.color = ''; delete sp.dataset.token; for (const inner of sp.querySelectorAll('span')) inner.style.color = ''; continue }
       const r = document.createRange(); r.setStart(node, node.nodeValue.length); r.collapse(true)
       const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r)
     }
@@ -406,7 +414,7 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
     // Redrawn: a remembered cursor would now point at the START of the box -
     // forget it, so an insert without a fresh cursor goes at the END (1109).
     if (el.current.innerHTML !== html) { el.current.innerHTML = html; saved.current = null }
-  }, [value, liveProducts, JSON.stringify(vars), tick])
+  }, [value, liveProducts, JSON.stringify(liveProductItems), JSON.stringify(vars), tick])
   useEffect(() => {
     const keep = () => { const sel = window.getSelection(); if (sel && sel.rangeCount && el.current && el.current.contains(sel.getRangeAt(0).startContainer)) saved.current = sel.getRangeAt(0).cloneRange() }
     document.addEventListener('selectionchange', keep)
@@ -435,7 +443,7 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
   insertRef.current = (tok) => {
     if (!el.current) return
     const sp = document.createElement('span')
-    sp.dataset.token = tok; sp.style.color = colourOf(tok); sp.textContent = shown(tok) ?? `[${tok}]`
+    sp.dataset.token = tok; sp.style.color = colourOf(tok); sp.innerHTML = innerOf(tok)
     let r = saved.current && el.current.contains(saved.current.startContainer) ? saved.current : null
     if (!r) { r = document.createRange(); r.selectNodeContents(el.current); r.collapse(false) }
     r.deleteContents()

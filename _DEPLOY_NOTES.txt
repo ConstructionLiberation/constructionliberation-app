@@ -1,35 +1,28 @@
-PACKAGE 1121 - Choose an existing variable; unchosen variables show red
+PACKAGE 1122 - Products in the description: red while only a label
 
-Five files. Complete replacements. No re-seed. No env changes. Built on 1120.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1121.
 
   components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
-  components/QuoteTabs.js
   lib/buildups.js
-  pages/estimating/build-ups.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
 
-INSERT VARIABLE opens on "CHOOSE EXISTING": every variable already used in any
-build-up (Warranty, Girth, Colour...), with its options - click one to insert
-it. "New variable" makes one that does not exist yet. Variables with the same
-name are one variable; their options are combined.
+In the description's product list, an item reading as only its LABEL (the line
+has no product, labour item or typed description yet) shows RED - like an
+unchosen variable. Once a product or description is entered it turns LIGHT
+GREY and reads as that. As with variables:
+  - red on the take-off too, and the item says "Insulation not chosen"
+  - red on the QUOTE
+  - Download and mark as sent warns
+Typing at the edges of the list adds your own words beside it; typing inside
+it makes it your own wording with all colours cleared - as before.
 
-A variable with NO VALUE CHOSEN shows RED as [Warranty]:
-  - in the description box (red writing)
-  - on the take-off (red in the item's description; the item says "Warranty
-    not chosen")
-  - on the QUOTE (red) - so a quote cannot go out with a gap unnoticed
-  - Download and mark as sent warns ("Warranty not chosen (prints red on
-    the quote)")
-Once a value is chosen it turns LIGHT GREY in the description box and reads as
-chosen ("20 year"); on the take-off and quote it reads as normal text.
-(Text marked for amending stays take-off-only, as before.)
-
-Checked in a REAL browser (Chromium): Insert variable opened on Choose existing,
-listing Colour and Warranty from another build-up; Warranty inserted as red
-"[Warranty]" with its 10/20/25 year dropdown; 20 year chosen -> light grey "20
-year"; a New variable (Girth) still works, red until chosen. On an estimate:
-the take-off shows "[Warranty]" red and "Warranty not chosen", the chosen
-Colour normal; the quote prints "[Warranty]" in red (and nothing else red);
-sending warned. All 165 pages pass the browser check. Built from your deployed
-packages (1022-1120, verified against their zips); each file checked identical
-to the tested version before zipping.
+Checked: the list "Alkorplus polythene VCL, Insulation, Scaffold hire and Mech
+fixed warm roof" flags only Insulation; once "PIR insulation 120mm" is typed,
+nothing. In a REAL browser (Chromium): Insert products -> VCL and Discs grey,
+Insulation RED, the full stop typed after kept outside; Insulation described
+-> grey "PIR insulation 120mm"; typing inside -> own wording, no colours left;
+saved as shown. The earlier description test passes in full. On an estimate:
+the take-off shows Insulation red and "Insulation not chosen", the quote
+prints it red, sending warned. All 165 pages pass the browser check. Built
+from your deployed packages (1022-1121, verified against their zips); each
+file checked identical to the tested version before zipping.
