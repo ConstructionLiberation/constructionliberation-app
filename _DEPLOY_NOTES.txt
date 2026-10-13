@@ -1,25 +1,13 @@
-PACKAGE 1123 - The rate summary replaces "Try the rate"
+PACKAGE 1124 - An empty Qty box reads "per rate"
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1122.
+One file. Complete replacement. No re-seed. No env changes. Built on 1123.
 
-  components/BuildupEditor.js
-  lib/buildups.js
-  pages/estimating/build-ups.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-On the Build-ups page the "Try the rate" box (trial profit / MCD / labour
-factor) is gone. In its place, the build-up's rate per unit:
-  BY SUPPLIER        each supplier's materials (own items apart)
-  BY COST CATEGORY   Materials, Labour, Plant, Delivery...
-  RATE               cost, profit at the build-up's own profit % (if set),
-                     and the rate - "the quote adds its MCD"
-"Not yet in the rate" still lists anything unpriced. The take-off pop-out is
-unchanged (its "Rate on this quote" uses the quote's settings).
+An empty Qty box on a build-up line now reads "per rate" (was "per job"). A
+lump spread's amount still reads "per job" - it is an amount for the whole job.
 
-Checked on Mech Fixed SP with real products at 15%: by supplier Renolit 11.08,
-Valro 1.72, own items 0.60 (adding up exactly to materials 13.40); by
-category Materials 13.40, Labour 11.00 (adding up exactly to the 24.40 cost);
-profit 3.66; rate 28.06 - identical to the line-by-line rate. In a REAL
-browser (Chromium): Try the rate gone; the three columns shown as above. All
-165 pages pass the browser check. Built from your deployed packages
-(1022-1122, verified against their zips); each file checked identical to the
-tested version before zipping.
+Checked in a REAL browser (Chromium) on Mech Fixed SP: every empty Qty box
+reads "per rate"; the lump spread amounts read "per job". All 165 pages pass
+the browser check. Built from your deployed packages (1022-1123, verified
+against their zips); the file checked identical to the tested version.
