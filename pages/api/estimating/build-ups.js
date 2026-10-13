@@ -4,6 +4,11 @@ import { parseBuildupSheets, checkTemplate, templateKey, summarise, normalizeTem
 import { loadBuildups, replaceBuildups, upsertBuildup, removeBuildup, knownRefs } from '../../../lib/buildupsStore'
 import { moveDocs, deleteAllDocs } from '../../../lib/documentsStore'
 import { removeFile, privateReady } from '../../../lib/privateFiles'
+import { get, set } from '../../../lib/db'
+// CATEGORIES ADDED ON THEIR OWN (1116) - kept so an empty category shows until
+// build-ups are put in it. Categories in use come from the build-ups themselves.
+const CATS = 'buildups:categories'
+const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
 
 // RATE BUILD-UPS API (1087) - Estimating area.
 // GET                                          -> { index, templates }
@@ -27,7 +32,7 @@ async function handler(req, res) {
       index = await replaceBuildups(cleaned, { by: 'Portal - comments cleared (1102)', source: index?.source || '' })
       items = cleaned
     }
-    return res.status(200).json({ index, templates: items })
+    return res.status(200).json({ index, templates: items, categories: (await get(CATS)) || [] })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -94,6 +99,16 @@ async function handler(req, res) {
     if (privateReady()) await deleteAllDocs('buildup', String(b.ref), removeFile)
     return res.status(200).json({ ok: true, index: r.index })
   }
+  // ADD A CATEGORY (1116) - on its own, before any build-up is in it.
+  if (b.action === 'add-category') {
+    const name = String(b.name || '').trim().slice(0, 120)
+    if (!name) return res.status(400).json({ error: 'Give the category a name' })
+    const { items } = await loadBuildups()
+    const extra = (await get(CATS)) || []
+    if (items.some(t => sameName(t.section, name)) || extra.some(c => sameName(c, name))) return res.status(400).json({ error: `There is already a category called "${name}"` })
+    await set(CATS, [...extra, name])
+    return res.status(200).json({ ok: true, categories: [...extra, name] })
+  }
   if (b.action === 'rename-category' || b.action === 'delete-category') {
     const { items, index } = await loadBuildups()
     const from = String(b.from ?? b.name ?? '').trim(), to = b.action === 'delete-category' ? '' : String(b.to || '').trim()
@@ -108,9 +123,12 @@ async function handler(req, res) {
     for (const t of next) { if (keys.has(t.ref)) return res.status(400).json({ error: `"${t.description}" already exists in "${to || 'no category'}" - rename one first` }); keys.add(t.ref) }
     const idx = await replaceBuildups(next, { by, source: index?.source || '' })
     for (let i = 0; i < items.length; i++) if (items[i].ref !== next[i].ref) await moveDocs('buildup', items[i].ref, next[i].ref)
+    // ...and the categories added on their own (1116)
+    const extra = (await get(CATS)) || []
+    if (extra.some(c => sameName(c, from))) await set(CATS, b.action === 'delete-category' ? extra.filter(c => !sameName(c, from)) : extra.map(c => sameName(c, from) ? to : c))
     return res.status(200).json({ ok: true, moved, index: idx })
   }
-  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'rename-category' or 'delete-category'" })
+  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'add-category', 'rename-category' or 'delete-category'" })
 }
 
 export default withTenant(handler)

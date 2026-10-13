@@ -1,21 +1,30 @@
-PACKAGE 1115 - Copy a rate build-up
+PACKAGE 1116 - Add categories; a category dropdown that matches the box
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1114.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1115.
 
   pages/estimating/build-ups.js
+  pages/api/estimating/build-ups.js
 
-Open a build-up on the Build-ups page and click COPY (bottom left, beside
-Delete). It opens a new, unsaved copy - every line, size (and Mandatory tick),
-variable flag, description and its variables - named "Mech Fixed SP (copy)",
-or "(copy 2)" etc. if that is taken, in the same category. A banner says it
-is a copy and not saved yet. Rename it, change what you need, then Save - it is
-saved as a NEW build-up; the original is not changed. Documents attached to
-the original are not copied (they are files on that template).
++ NEW CATEGORY under the categories list (left): type a name, Enter / Add.
+It is saved straight away and shows with 0 until build-ups are added ("No
+build-ups in Green Roofs yet - + New build-up adds one here"). A name that
+already exists - in any capitals - is refused. Rename / delete work on new,
+empty categories too.
 
-Checked in a REAL browser (Chromium), with "Mech Fixed SP (copy)" already in
-the library: Copy opened the banner, all 18 lines and the mandatory Width;
-Save sent "Mech Fixed SP (copy 2)" in Single Ply as a NEW build-up (no
-overwrite), its lines identical to the original, with the description and
-sizes. All 165 pages pass the browser check. Built from your deployed packages
-(1022-1114, verified against their zips); the file checked identical to the
-tested version before zipping.
+THE CATEGORY BOX in the build-up editor is now a dropdown drawn like the other
+boxes (same font, border, corners, height, width) - every category listed,
+"Find a category…" to filter, "No category", and "+ ADD NEW CATEGORY…" to type
+a new one in place (it is added to the list straight away). Before, it was the
+browser's own suggestion list, styled by the browser and showing only matches.
+
+Checked: through the real route - Green Roofs added; "green roofs" and the
+in-use "single ply" refused; rename and delete of an empty category; the 167
+build-ups untouched. In a REAL browser (Chromium): + New category -> Green
+Roofs listed with 0; the category box measured identical to the name box
+(13.5px, 1px border, 7px corners, 34px); the dropdown lists every category,
+"green" filters it; + Add new category -> "Hot Melt Systems" fills the box and
+the build-up saves in it. (Found by the real browser: inside a field label a
+click also "clicks" the box, closing the dropdown - the field no longer uses a
+label.) All server routes compile; all 165 pages pass the browser check. Built
+from your deployed packages (1022-1115, verified against their zips); each
+file checked identical to the tested version before zipping.

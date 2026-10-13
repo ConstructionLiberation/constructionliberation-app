@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import EstimatingShell, { Heading, ErrorBar, estApi } from '../../components/EstimatingShell'
 import { useFormat } from '../../components/TenantProvider'
@@ -44,8 +44,10 @@ export default function BuildUpsPage() {
   const cats = useMemo(() => {
     const m = new Map()
     for (const t of templates) m.set(t.section || NOCAT, (m.get(t.section || NOCAT) || 0) + 1)
+    // categories added on their own, with no build-ups yet (1116)
+    for (const c of data?.categories || []) if (![...m.keys()].some(k => k.toLowerCase() === c.toLowerCase())) m.set(c, 0)
     return [...m.entries()].sort((a, b) => a[0] === NOCAT ? -1 : b[0] === NOCAT ? 1 : a[0].localeCompare(b[0]))
-  }, [templates])
+  }, [templates, data])
   const shown = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
     if (words.length) return templates.filter(t => words.every(w => `${t.section} ${t.description}`.toLowerCase().includes(w)))
@@ -85,6 +87,13 @@ export default function BuildUpsPage() {
   const download = () => XLSX.writeFile(workbook(templates), `Build-ups-${new Date().toISOString().slice(0, 10)}.xlsx`)
   const downloadBlank = () => XLSX.writeFile(workbook([]), 'Build-ups-template.xlsx')
 
+  const [newCat, setNewCat] = useState(null)       // the "+ New category" box (1116)
+  async function addCategory(name, quiet) {
+    const n = String(name || '').trim()
+    if (!n) return
+    try { await estApi(API, { action: 'add-category', name: n }); if (!quiet) { setNewCat(null); setCat(n); setQ('') } await load() }
+    catch (e) { if (!quiet) setErr(e.message) }
+  }
   async function catAction(kind, name) {
     const label = name === NOCAT ? '' : name
     if (kind === 'rename') {
@@ -138,9 +147,17 @@ export default function BuildUpsPage() {
                 </>}
               </div>
             ))}
+            {/* + NEW CATEGORY (1116) - saved straight away; shows with 0 until build-ups are added */}
+            {newCat == null
+              ? <button onClick={() => setNewCat('')} style={{ ...btn, width: '100%', marginTop: 8, fontSize: 12.5, color: '#0f766e', borderColor: '#99f6e4' }}>+ New category</button>
+              : <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <input autoFocus value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="New category name" onKeyDown={e => { if (e.key === 'Enter') addCategory(newCat); if (e.key === 'Escape') setNewCat(null) }} style={{ ...inp, padding: '6px 8px', fontSize: 13 }} />
+                  <button onClick={() => addCategory(newCat)} disabled={!newCat.trim()} style={{ ...btn, fontSize: 12.5, padding: '6px 10px', opacity: newCat.trim() ? 1 : 0.5 }}>Add</button>
+                  <button onClick={() => setNewCat(null)} style={{ ...iconBtn }} title="Cancel">✕</button>
+                </div>}
           </div>
           <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 8, maxHeight: '78vh', overflowY: 'auto' }}>
-            {!shown.length && <div style={{ color: '#aaa', fontSize: 13, padding: 12 }}>{q ? 'Nothing matches.' : 'Pick a category.'}</div>}
+            {!shown.length && <div style={{ color: '#aaa', fontSize: 13, padding: 12 }}>{q ? 'Nothing matches.' : cat == null ? 'Pick a category.' : `No build-ups in ${cat === NOCAT ? 'No category' : cat} yet - + New build-up adds one here.`}</div>}
             {shown.map(t => (
               <button key={t.ref} onClick={() => setEdit({ t: JSON.parse(JSON.stringify(t)), originalRef: t.ref })}
                 style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 7, padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit', background: edit?.originalRef === t.ref ? '#f0fdfa' : 'transparent' }}>
@@ -153,6 +170,7 @@ export default function BuildUpsPage() {
           <div style={{ minWidth: 0 }}>
             {edit && <button onClick={() => setEdit(null)} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '0 0 8px', fontFamily: 'inherit' }}>← All build-ups{edit.t?.section ? ` · ${edit.t.section}` : ''}</button>}
             {edit ? <Editor key={edit.key || edit.originalRef || 'new'} edit={edit} lib={lib} money={money} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
+              onAddCategory={(n) => addCategory(n, true)}
               onCopy={(t) => {
                 // COPY (1115): a new, unsaved build-up - everything copied, named
                 // "(copy)" (or "(copy 2)"...) in the same category. Saved as NEW.
@@ -173,7 +191,7 @@ export default function BuildUpsPage() {
   )
 }
 
-function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onCopy }) {
+function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onCopy, onAddCategory }) {
   const [t, setT] = useState(edit.t)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -203,7 +221,8 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onC
       {edit.copiedFrom && <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>A copy of <strong>{edit.copiedFrom}</strong> - not saved yet. Rename it if you like, change what you need, then <strong>Save</strong>; it is saved as a new build-up and {edit.copiedFrom} is not changed.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr 0.8fr', gap: 10, marginBottom: 12 }}>
         <label style={lbl}>Build-up name<input value={t.description} onChange={e => set({ description: e.target.value })} style={inp} /></label>
-        <label style={lbl}>Category<input list="bu-cats" value={t.section || ''} onChange={e => set({ section: e.target.value })} placeholder="No category" style={inp} /><datalist id="bu-cats">{categories.map(c => <option key={c} value={c} />)}</datalist></label>
+        {/* Not a <label>: a click inside a label also "clicks" its first button - the box - which closed the dropdown (1116) */}
+        <div style={lbl}>Category<CategoryPicker value={t.section || ''} options={categories} onChange={v => set({ section: v })} onAdd={onAddCategory} /></div>
         <label style={lbl}>Unit<select value={t.unit || ''} onChange={e => set({ unit: e.target.value })} style={inp}><option value="">—</option>{BU_UNITS.map(u => <option key={u} value={u}>per {BU_UNIT_LABEL[u]}</option>)}</select></label>
       </div>
       {!t.section && <div style={warnBox}>No category - this build-up is listed under No category until it has one.</div>}
@@ -249,3 +268,45 @@ const cellInp = { fontSize: 12.5, padding: '5px 6px', border: '1px solid #d4d4d0
 const iconBtn = { border: 'none', background: 'none', cursor: 'pointer', color: '#888', fontSize: 13, padding: '2px 4px', fontFamily: 'inherit' }
 const smallBtn = { fontSize: 12, padding: '5px 10px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }
 const warnBox = { fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '7px 10px', marginBottom: 8 }
+
+// THE CATEGORY DROPDOWN (1116) - drawn like the other boxes (same font, border,
+// width), every category listed (type to filter), and "+ Add new category…".
+function CategoryPicker({ value, options, onChange, onAdd }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const [adding, setAdding] = useState(null)
+  const box = useRef(null)
+  useEffect(() => {
+    const close = (e) => { if (box.current && !box.current.contains(e.target)) { setOpen(false); setAdding(null); setQ('') } }
+    document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close)
+  }, [])
+  const list = [...new Set(options)].sort((a, b) => a.localeCompare(b)).filter(c => c.toLowerCase().includes(q.trim().toLowerCase()))
+  const pick = (v) => { onChange(v); setOpen(false); setQ(''); setAdding(null) }
+  const add = () => { const n = (adding || '').trim(); if (!n) return; if (onAdd) onAdd(n); pick(n) }
+  const row = { padding: '8px 9px', fontSize: 13.5, cursor: 'pointer', borderBottom: '1px solid #f4f3f0', textAlign: 'left', width: '100%', border: 'none', background: 'none', fontFamily: 'inherit', display: 'block' }
+  return (
+    <div ref={box} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{ ...inp, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', cursor: 'pointer', textAlign: 'left', color: value ? '#1a1a19' : '#999' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || 'No category'}</span><span style={{ color: '#888', fontSize: 11, marginLeft: 8 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', zIndex: 40, left: 0, right: 0, top: '100%', marginTop: 3, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 7, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden' }}>
+          <div style={{ padding: 6, borderBottom: '1px solid #f0efec' }}><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Find a category…" style={{ ...inp, padding: '6px 8px', fontSize: 13 }} /></div>
+          <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+            <button type="button" onClick={() => pick('')} style={{ ...row, color: '#888', background: !value ? '#f0fdfa' : 'none' }}>No category</button>
+            {list.map(c => <button type="button" key={c} onClick={() => pick(c)} style={{ ...row, background: c === value ? '#f0fdfa' : 'none', fontWeight: c === value ? 600 : 400 }}>{c}</button>)}
+            {!list.length && q && <div style={{ ...row, color: '#aaa', cursor: 'default' }}>No category matches</div>}
+          </div>
+          <div style={{ borderTop: '1px solid #e8e7e3', padding: 6 }}>
+            {adding == null
+              ? <button type="button" onClick={() => setAdding(q.trim())} style={{ ...row, color: '#0f766e', fontWeight: 600, borderBottom: 'none', padding: '6px 4px' }}>+ Add new category…</button>
+              : <div style={{ display: 'flex', gap: 6 }}>
+                  <input autoFocus value={adding} onChange={e => setAdding(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } if (e.key === 'Escape') setAdding(null) }} placeholder="New category name" style={{ ...inp, padding: '6px 8px', fontSize: 13 }} />
+                  <button type="button" onClick={add} disabled={!adding.trim()} style={{ ...btn, padding: '6px 10px', fontSize: 12.5, opacity: adding.trim() ? 1 : 0.5 }}>Add</button>
+                </div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
