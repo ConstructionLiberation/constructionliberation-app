@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -70,7 +70,7 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
               <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12, color: z?.required ? '#b91c1c' : '#666', cursor: 'pointer', whiteSpace: 'nowrap' }} title="A number must be entered on every quote using this build-up - the quote cannot be issued until it is">
                 <input type="checkbox" checked={!!z?.required} onChange={e => setSize({ required: e.target.checked || undefined })} /> Mandatory
               </label>
-              <span style={{ fontSize: 11.5, color: '#999' }}>{t.lines.filter(l => l.applySize === nm).length ? `used by ${t.lines.filter(l => l.applySize === nm).map(l => l.label).join(', ')}` : 'not used yet'}</span>
+              <span style={{ fontSize: 11.5, color: '#999' }}>{t.lines.filter(l => sizesUsed(l.applySize).includes(nm)).length ? `used by ${t.lines.filter(l => sizesUsed(l.applySize).includes(nm)).map(l => l.label).join(', ')}` : 'not used yet'}</span>
             </div>
           )
         })}
@@ -118,14 +118,14 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
                       </>}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                     </td>
-                    <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => { const v = e.target.value; setLine(l.id, { applySize: v || undefined, ...(v && (!String(l.qty ?? '').trim() || Number(l.qty) === 0) ? { qty: '1' } : {}) }) }} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => { const v = e.target.value; setLine(l.id, { applySize: v || undefined, ...(v && (!String(l.qty ?? '').trim() || Number(l.qty) === 0) ? { qty: '1' } : {}) }) }} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...APPLY_CHOICES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per rate" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}
                       {/* What the line uses (1126): qty x the size it applies - and a warning when qty is 0 */}
                       {l.applySize && l.type !== 'comment' && (() => {
                         const z = (t.sizes || []).find(x => l.applySize === true ? x === (t.sizes || [])[0] : String(x.name).toLowerCase() === String(l.applySize).toLowerCase())
-                        const nm = z ? z.name : (l.applySize === true ? 'size' : l.applySize)
+                        const nm = isCombined(l.applySize) ? 'Height + Width' : z ? z.name : (l.applySize === true ? 'size' : l.applySize)
                         const q = evalQty(l.qty, Object.fromEntries((t.sizes || []).map(x => [x.name, x.value])))
-                        const sv = z && z.value != null && z.value !== '' ? Number(z.value) : null
+                        const sv = isCombined(l.applySize) ? sizeOf(t, null, l.applySize) : z && z.value != null && z.value !== '' ? Number(z.value) : null
                         if (q === 0) return <div style={{ fontSize: 10.5, color: '#b91c1c', fontWeight: 600, whiteSpace: 'normal', maxWidth: 120 }}>qty 0 - this line costs nothing</div>
                         return <div style={{ fontSize: 10.5, color: '#0f766e', whiteSpace: 'nowrap' }}>{sv == null ? `x ${nm} (on the quote)` : `x ${nm} ${sv} = ${q == null ? '?' : +(q * sv).toFixed(4)}`}</div>
                       })()}</td>

@@ -1,30 +1,21 @@
-PACKAGE 1127 - Edit description variables across every build-up
+PACKAGE 1128 - Apply size: Height + Width
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1126.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1127.
 
-  pages/estimating/build-ups.js
-  pages/api/estimating/build-ups.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  lib/buildups.js
 
-A VARIABLES button on the Build-ups page (beside Download / Blank template)
-opens the variables manager: every description variable, with how many
-build-ups use it. Pick one to:
-  - RENAME it - every build-up's description follows
-  - change its OPTIONS (one per line; none = a typed value) - each build-up
-    keeps its chosen value unless it is no longer offered, then it is cleared
-    (shows red) to choose again
-  - DELETE it - removed from every build-up and their descriptions
-"Save - 2 build-ups" applies to every build-up using it. Quotes already priced
-keep their own copies. Available while no build-up is open (so an unsaved
-build-up cannot overwrite the change). Clicking a variable's name beside a
-build-up's description still edits it for that build-up only.
+Apply size has a new choice, HEIGHT + WIDTH: the line is multiplied by the
+two added together - Height 1 m + Width 0.5 m = 1.5. The Qty hint reads
+"x Height + Width 1.5 = 1.5"; if either is blank the line says "set the height
+and width"; the Sizes block shows the line as using both. The Materials tab
+orders by it too. In the build-ups file, "Height + Width" (either way round).
 
-Checked through the real route: Warranty in two build-ups (20 year / 10 year,
-one written {warranty}) renamed "Warranty period" with 15/20 year - both
-descriptions followed, 20 year kept, 10 year cleared; renaming to "colour"
-refused (exists); delete removed it from both - "Roof with a warranty." - and
-left Colour untouched. In a REAL browser (Chromium): the button, disabled with
-a build-up open; the manager lists "Warranty - 2 options · 2 build-ups"; rename
-+ new options -> "Save - 2 build-ups" sent the change. All server routes
-compile; all 165 pages pass the browser check. Built from your deployed
-packages (1022-1126, verified against their zips); each file checked identical
-to the tested version before zipping.
+Checked: H 1 + W 0.5 -> a 2.00 line becomes 3.00; width blank -> "set the
+height and width"; 10 m of upstand -> 15 m on the Materials tab; "width +
+height" in a file reads as the choice. In a REAL browser (Chromium): the
+choices are -, Width, Height, Girth, Height + Width; on Underlay it shows "x
+Height + Width 1.5 = 1.5" and = 3.42 (2.00 x 1.5 + 14%); Height and Width both
+"used by Underlay". All 165 pages pass the browser check. Built from your
+deployed packages (1022-1127, verified against their zips); each file checked
+identical to the tested version before zipping.
