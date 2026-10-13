@@ -1,29 +1,36 @@
-PACKAGE 1108 - Decimals can be typed everywhere; rates shown to 2 decimal places
+PACKAGE 1109 - Description variables: a pop-out to name them and list options;
+a dropdown beside the products to choose
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1107.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1108.
 
-  components/BuildupEditor.js
-  pages/estimating/estimate/[id].js     (folder literally named [id])
-  pages/estimating/price-list.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  lib/buildups.js                 (the file carries a variable's options)
 
-FIXED: a number under 1 (e.g. an own item at 0.25) could not be typed. Every
-number box turned each keystroke into a number, so "0." became 0 and the
-decimal point vanished. The same fault was in Width / Height, lump amounts,
-waste %, price increase %, and on the estimate: Profit %, MCD % (2.5 could
-not be typed), labour factor, day rate and an item's profit %. All now use one
-number box that keeps exactly what you type ("0.", ".25", "28.5") and tidies
-the display when you leave it.
+INSERT VARIABLE now opens a POP-OUT beside the description's buttons:
+  Name     - e.g. Warranty, Girth, Colour
+  Options  - one per line, e.g. 10 year / 15 year / 20 year
+  Insert   - it goes into the description where the cursor is, in grey
+Each variable then has a DROPDOWN in the same row as "Insert products" and
+"⚙ Products in the description" - choose its value there (light red until
+chosen); the grey text follows. On an estimate, the pop-out's dropdown picks
+the value for that quote. Click a variable's name to rename it or change its
+options (the description follows a rename). No options -> a box to type the
+value instead. ✕ removes it.
 
-RATES TO 2 DECIMAL PLACES - in the build-up editor (the rate box and the
-price-list rate shown in it) and on the price list. The EXACT rate is still
-used in every calculation, so prices do not change (Mech Fixed SP stays
-32.04); hover over a rate (or click into it) to see the exact figure - e.g.
-Discs 0.23 (exact 0.23296).
+The build-ups file carries the options: "Warranty=20 year [10 year|15 year|20
+year]". Older files still read.
 
-Checked in a REAL browser (Chromium), typing ONE KEY AT A TIME: own item rate
-"0.25" -> 0.25, line 0.26 with its 5% waste; ".25" -> 0.25; Width "1.2";
-waste "12.5" -> VCL line 0.93; rates shown 0.83 / 0.23 with the exact figure
-on hover; on an estimate MCD "2.5" and Profit "28.5" stuck and moved the total
-(21,334.00 -> 21,418.00); day rate 325.50. All 165 pages pass the browser
-check. Built from your deployed packages (1022-1107, verified against their
-zips); each file checked identical to the tested version before zipping.
+ALSO FIXED: inserting when the cursor was not in the description could put the
+grey text at the START after the description had redrawn; it now goes at the
+END, with a space before it.
+
+Checked in a REAL browser (Chromium): Insert variable -> pop-out; "Warranty"
+with three options inserted at the cursor -> "...with a [Warranty] warranty.",
+dropdown light red; 20 year chosen -> "...with a 20 year warranty.", red
+cleared; renamed "Warranty period" with a 25 year option -> still reads the
+same, 20 year kept; "Girth" with no options -> a typing box, red until filled;
+SAVED "Single ply roof with a {Warranty period} warranty. {Girth}" with the
+options stored; the 1106 description test (grey products, edits inside them)
+still passes. The file format round-trips options exactly. All 165 pages pass
+the browser check. Built from your deployed packages (1022-1108, verified
+against their zips); each file checked identical to the tested version.

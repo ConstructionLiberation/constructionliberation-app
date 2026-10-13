@@ -25,6 +25,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
   const [editList, setEditList] = useState(null)   // a line id: edit its list of products (1098)
   const [descMenu, setDescMenu] = useState(false)
   const descInsert = useRef(null)       // the description editor's insert-at-cursor (1106)
+  const [varPop, setVarPop] = useState(null)   // the variable pop-out: { index } - null index = a new one (1109)
   const [showAll, setShowAll] = useState({})     // lineId -> true: pick from the whole price list / labour rates
   const set = (patch) => setT(x => ({ ...x, ...patch }))
   const setLine = (id, patch) => setT(x => ({ ...x, lines: x.lines.map(l => l.id === id ? { ...l, ...patch } : l) }))
@@ -128,16 +129,40 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
         </div>
       </Block>
 
-      <Block title="Description" hint="Blank to start. {products} becomes the products ticked under ⚙ (A, B and C). Insert variable adds a detail that is not a product - e.g. {Warranty period} - with its value below.">
-        <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+      <Block title="Description" hint="Blank to start. Insert products adds the products ticked under ⚙ (A, B and C); Insert variable adds a detail chosen from a list - e.g. Warranty or Girth - with its dropdown beside the products. Grey text is filled in for you.">
+        {/* 1109: Insert products | Insert variable (a pop-out) | ⚙ Products - and each
+            variable's DROPDOWN in the same row, to select its value. */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap', position: 'relative' }}>
           <button onMouseDown={e => e.preventDefault()} onClick={() => descInsert.current && descInsert.current('products')} style={smallBtn} title="The ticked products, in grey - live until you edit them">Insert products</button>
-          <button onClick={() => {
-            const nm = (window.prompt('Name of the variable - e.g. Warranty period, Colour, Membrane thickness:') || '').trim().replace(/[{}]/g, '')
-            if (!nm) return
-            setT(x => ({ ...x, descVars: (x.descVars || []).some(v => v.name.toLowerCase() === nm.toLowerCase()) ? x.descVars : [...(x.descVars || []), { name: nm, value: '' }] }))
-            setTimeout(() => descInsert.current && descInsert.current(nm), 0)
-          }} style={smallBtn} title="A detail the description needs that is not a product - e.g. warranty period">Insert variable</button>
+          <button onMouseDown={e => e.preventDefault()} onClick={() => setVarPop({ index: null })} style={smallBtn} title="A detail the description needs that is not a product - e.g. Warranty, Girth">Insert variable</button>
           <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which products go into the description">⚙ Products in the description ({t.lines.filter(l => l.type === 'material' && l.inDescription).length})</button>
+          {(t.descVars || []).map((v, i) => {
+            const opts = v.options || []
+            const empty = !String(v.value ?? '').trim()
+            return (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid #e8e7e3', borderRadius: 8, padding: '2px 4px 2px 8px', background: '#fafaf9' }}>
+                <button onClick={() => setVarPop({ index: i })} title="Rename it or change its options" style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, color: '#0f766e', fontWeight: 600, padding: 0, fontFamily: 'inherit' }}>{v.name}</button>
+                {opts.length
+                  ? <select value={opts.includes(v.value) ? v.value : ''} onChange={e => setT(x => ({ ...x, descVars: x.descVars.map((y, j) => j === i ? { ...y, value: e.target.value } : y) }))} style={{ ...cellInp, padding: '3px 4px', background: empty ? RED : undefined }} title={empty ? 'Choose a value' : ''}>
+                      <option value="">— choose —</option>{opts.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  : <input value={v.value ?? ''} onChange={e => setT(x => ({ ...x, descVars: x.descVars.map((y, j) => j === i ? { ...y, value: e.target.value } : y) }))} placeholder="value" style={{ ...cellInp, width: 110, background: empty ? RED : undefined }} />}
+                <button onClick={() => setT(x => ({ ...x, descVars: x.descVars.filter((_, j) => j !== i), descText: String(x.descText || '').split(`{${v.name}}`).join('') }))} style={{ ...iconBtn, fontSize: 11 }} title="Remove this variable">✕</button>
+              </span>
+            )
+          })}
+          {varPop && <VariablePopout v={varPop.index != null ? t.descVars[varPop.index] : null} names={(t.descVars || []).map(v => v.name)} onClose={() => setVarPop(null)}
+            onSave={({ name, options }) => {
+              if (varPop.index == null) {
+                setT(x => ({ ...x, descVars: [...(x.descVars || []).filter(v => v.name.toLowerCase() !== name.toLowerCase()), { name, options, value: options.length === 1 ? options[0] : '' }] }))
+                setTimeout(() => descInsert.current && descInsert.current(name), 0)
+              } else {
+                const old = t.descVars[varPop.index].name
+                setT(x => ({ ...x, descText: old === name ? x.descText : String(x.descText || '').split(`{${old}}`).join(`{${name}}`),
+                  descVars: x.descVars.map((y, j) => j === varPop.index ? { ...y, name, options, value: options.length && !options.includes(y.value) ? '' : y.value } : y) }))
+              }
+              setVarPop(null)
+            }} />}
         </div>
         {descMenu && (
           <div style={{ border: '1px solid #e8e7e3', borderRadius: 8, padding: 8, marginBottom: 6, maxWidth: 520 }}>
@@ -148,17 +173,6 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
               </label>
             ))}
             {!t.lines.some(l => l.type === 'material') && <div style={{ fontSize: 12, color: '#aaa' }}>No material lines yet.</div>}
-          </div>
-        )}
-        {(t.descVars || []).length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 6, marginBottom: 6 }}>
-            {t.descVars.map((v, i) => (
-              <label key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12.5 }}>
-                <span style={{ minWidth: 110, color: '#555' }}>{v.name}</span>
-                <input value={v.value ?? ''} onChange={e => setT(x => ({ ...x, descVars: x.descVars.map((y, j) => j === i ? { ...y, value: e.target.value } : y) }))} placeholder="value" style={{ ...cellInp, flex: 1, background: String(v.value ?? '').trim() ? undefined : RED }} title="Empty values show light red - fill them in for this quote" />
-                <button onClick={() => setT(x => ({ ...x, descVars: x.descVars.filter((_, j) => j !== i), descText: String(x.descText || '').split(`{${v.name}}`).join('') }))} style={iconBtn} title="Remove this variable">✕</button>
-              </label>
-            ))}
           </div>
         )}
         <DescriptionEditor value={t.descText || ''} onChange={(v) => setT(x => ({ ...x, descText: v }))} liveProducts={productList(t, lib)} vars={t.descVars || []} insertRef={descInsert}
@@ -349,7 +363,9 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, pla
   useEffect(() => {
     if (!el.current || focused.current) return
     const html = toHtml(value)
-    if (el.current.innerHTML !== html) el.current.innerHTML = html
+    // Redrawn: a remembered cursor would now point at the START of the box -
+    // forget it, so an insert without a fresh cursor goes at the END (1109).
+    if (el.current.innerHTML !== html) { el.current.innerHTML = html; saved.current = null }
   }, [value, liveProducts, JSON.stringify(vars), tick])
   useEffect(() => {
     const keep = () => { const sel = window.getSelection(); if (sel && sel.rangeCount && el.current && el.current.contains(sel.getRangeAt(0).startContainer)) saved.current = sel.getRangeAt(0).cloneRange() }
@@ -364,7 +380,9 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, pla
     let r = saved.current && el.current.contains(saved.current.startContainer) ? saved.current : null
     if (!r) { r = document.createRange(); r.selectNodeContents(el.current); r.collapse(false) }
     r.deleteContents()
-    const before = r.startContainer.nodeType === 3 ? r.startContainer.nodeValue.slice(0, r.startOffset) : ''
+    // The text just before the insert point - a text position, or the end of the box (1109).
+    const pre = document.createRange(); pre.selectNodeContents(el.current); pre.setEnd(r.startContainer, r.startOffset)
+    const before = pre.toString()
     if (before && !/\s$/.test(before)) r.insertNode(document.createTextNode(' '))
     r.collapse(false); r.insertNode(sp); r.setStartAfter(sp); r.collapse(true); saved.current = r
     onChange(serialize())
@@ -400,4 +418,33 @@ export function NumBox({ value, onChange, pct: isPct, dp, emptyAs = null, ...res
       if (/^-?\d*\.?\d*$/.test(c) && Number.isFinite(parseFloat(c))) onChange(isPct ? parseFloat(c) / 100 : parseFloat(c))
     }}
     onBlur={e => { setText(null); rest.onBlur && rest.onBlur(e) }} />
+}
+
+// THE VARIABLE POP-OUT (1109): name a variable (Warranty, Girth...) and list
+// the options to choose from, one per line. With no options it is a free-text
+// value. Opens beside the description's buttons.
+function VariablePopout({ v, names, onClose, onSave }) {
+  const [name, setName] = useState(v ? v.name : '')
+  const [opts, setOpts] = useState(v ? (v.options || []).join('\n') : '')
+  const clean = name.trim().replace(/[{}]/g, '')
+  const taken = clean && names.some(n => n.toLowerCase() === clean.toLowerCase() && (!v || n !== v.name))
+  const options = [...new Set(opts.split('\n').map(o => o.trim()).filter(Boolean))]
+  return (
+    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 50, width: 340, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.14)', padding: 12 }}>
+      <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 8 }}>{v ? 'Edit variable' : 'Insert a variable'}</div>
+      <label style={{ display: 'block', fontSize: 12, color: '#666', marginBottom: 8 }}>Name
+        <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Warranty, Girth" style={{ ...cellInp, width: '100%', marginTop: 3 }} />
+      </label>
+      <label style={{ display: 'block', fontSize: 12, color: '#666' }}>Options to choose from - one per line
+        <textarea value={opts} onChange={e => setOpts(e.target.value)} rows={5} placeholder={'e.g.\n10 year\n15 year\n20 year'} style={{ ...cellInp, width: '100%', marginTop: 3, fontFamily: 'inherit', resize: 'vertical' }} />
+      </label>
+      <div style={{ fontSize: 11, color: '#999', margin: '4px 0 8px' }}>{options.length ? `${options.length} option${options.length === 1 ? '' : 's'} - a dropdown beside the products` : 'No options - a box to type the value'}</div>
+      {taken && <div style={{ fontSize: 12, color: '#b42318', marginBottom: 6 }}>There is already a variable called {clean}.</div>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+        <button onClick={onClose} style={{ fontSize: 12.5, padding: '5px 12px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer' }}>Cancel</button>
+        <button onMouseDown={e => e.preventDefault()} onClick={() => clean && !taken && onSave({ name: clean, options })} disabled={!clean || taken}
+          style={{ fontSize: 12.5, padding: '5px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: !clean || taken ? 0.5 : 1 }}>{v ? 'Save' : 'Insert'}</button>
+      </div>
+    </div>
+  )
 }
