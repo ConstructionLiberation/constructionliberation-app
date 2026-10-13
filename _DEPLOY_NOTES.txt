@@ -1,23 +1,26 @@
-PACKAGE 1104 - Own items: the text as written, edited in place
+PACKAGE 1105 - Build-up lines read Qty x Rate = Line rate, and fit the screen
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1103.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1104.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  components/BuildupEditor.js
+  pages/estimating/build-ups.js
+  pages/estimating/estimate/[id].js     (folder literally named [id])
 
-An OWN ITEM's Item box now shows exactly what was written - no "Own item:"
-prefix - and is edited in place: click in, the text stays; change XXX to 600 in
-"XXXmm girth powder coated aluminium". Every keystroke saves; matching products
-still list underneath in case you want one instead. Tip: mark the item V so the
-box shows light red on quotes until someone updates it.
+The multiplication was always there - "Line cost" was the product rate x Qty
+(x waste / increase) - but that column sat off the right edge of the screen.
+Now each line reads left to right:
+  Type | Label | Item | Apply size | Qty | Rate | Waste % | Incr % | = Line rate | Cost cat.
+"= Line rate" (green) is that line's part of the build-up's rate, e.g.
+Discs 5 x 0.233 = 1.16.
 
-ALSO FIXED (older): after picking a PRODUCT the cursor stayed in the box, so
-clicking it again did not start a new search and typing added to the product's
-name. The box is now left after a pick; the next click starts a fresh search.
+AND IT FITS: with a build-up open, the Build-ups page gives the editor the full
+width (the category and build-up lists fold away; "← All build-ups" brings them
+back), and the take-off pop-out is as wide as the screen allows. Widths
+tightened; "lump spread" fits its box.
 
-Checked in a REAL browser (Chromium), typing as a person would: own item typed
-+ Enter -> exactly the text; clicked back in -> text kept; "XXX" selected and
-600 typed -> "600mm girth powder coated aluminium"; kept after clicking away;
-the description reads the same. A product line: picked, clicked back in ->
-empty search, "vapor" typed -> switched to Vapor Flag. All 165 pages pass the
-browser check. Built from your deployed packages (1022-1103, verified against
-their zips); the file checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium) at 1366px and 1600px: on the Build-ups
+page and in an estimate's pop-out, a whole line fits with no sideways scroll;
+VCL 1 x 0.8267 + 20% = 0.99, Discs 5 x 0.233 = 1.16, Lab 1 x 11 = 11.00. All
+165 pages pass the browser check. Built from your deployed packages
+(1022-1104, verified against their zips); each file checked identical to the
+tested version before zipping.

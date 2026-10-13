@@ -123,7 +123,10 @@ export default function BuildUpsPage() {
           <div style={{ marginTop: 6 }}><button onClick={downloadBlank} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: 0, textDecoration: 'underline' }}>Download the blank template</button></div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '250px 300px 1fr', gap: 14, alignItems: 'start' }}>
+        // A build-up OPEN takes the full width (1105) - its lines fit on screen;
+        // "All build-ups" brings the two lists back.
+        <div style={{ display: 'grid', gridTemplateColumns: edit ? '1fr' : '250px 300px 1fr', gap: 14, alignItems: 'start' }}>
+          {!edit && <>
           <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 8, maxHeight: '78vh', overflowY: 'auto', position: 'sticky', top: 12 }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search build-ups…" style={{ ...inp, marginBottom: 8 }} />
             {cats.map(([name, n]) => (
@@ -146,7 +149,9 @@ export default function BuildUpsPage() {
               </button>
             ))}
           </div>
+          </>}
           <div style={{ minWidth: 0 }}>
+            {edit && <button onClick={() => setEdit(null)} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '0 0 8px', fontFamily: 'inherit' }}>← All build-ups{edit.t?.section ? ` · ${edit.t.section}` : ''}</button>}
             {edit ? <Editor key={edit.originalRef || 'new'} edit={edit} lib={lib} money={money} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
               onClose={() => setEdit(null)} onSaved={async (t) => { await load(); setCat(t.section || NOCAT); setEdit({ t: JSON.parse(JSON.stringify(t)), originalRef: t.ref }) }}
               onDeleted={async () => { setEdit(null); await load() }} />

@@ -69,7 +69,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
       <Block title="Lines">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
-            <thead><tr>{['', 'Type', 'Label', 'Item', 'Apply size', 'Rate', 'Qty', 'Waste %', 'Incr %', 'Cost cat.', 'Line cost', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 10 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['', 'Type', 'Label', 'Item', 'Apply size', 'Qty', 'Rate', 'Waste %', 'Incr %', '= Line rate', 'Cost cat.', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 9 ? 'right' : 'left', ...(i === 9 ? { color: '#1a1a19' } : {}) }} title={i === 9 ? "Rate x Qty (x waste / increase): this line's part of the build-up's rate" : ''}>{h}</th>)}</tr></thead>
             <tbody>
               {t.lines.map((l, i) => {
                 const lc = lineCost[l.id] || {}
@@ -80,8 +80,8 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                   <tr key={l.id} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
                     <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => setLine(l.id, { type: e.target.value })} style={{ ...cellInp, width: 104 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
-                    <td style={td}><input value={l.label} onChange={e => setLine(l.id, { label: e.target.value })} style={{ ...cellInp, width: 140 }} /></td>
-                    <td style={{ ...td, minWidth: 260 }}>
+                    <td style={td}><input value={l.label} onChange={e => setLine(l.id, { label: e.target.value })} style={{ ...cellInp, width: 118 }} /></td>
+                    <td style={{ ...td, minWidth: 210 }}>
                       {isProd && <>
                         <ItemSearch red={isVariable(l, 'item')} kind={l.type} value={l.default || ''} choices={choices} label={label} findText={findText}
                           onPick={(v) => setLine(l.id, { default: v, ownName: v ? undefined : l.ownName, override: v ? null : l.override, offers: v && !(l.offers || []).includes(v) ? [...(l.offers || []), v] : l.offers })}
@@ -90,7 +90,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                           <VarFlag l={l} cell="item" setLine={setLine} />
                           <button onClick={() => setEditList(l.id)} title="Edit this line's list of products" style={{ ...iconBtn, fontSize: 11, padding: '0 3px' }}>⚙ list</button>
                           <input type="checkbox" checked={!!showAll[l.id]} onChange={e => setShowAll(s => ({ ...s, [l.id]: e.target.checked }))} />
-                          any {l.type === 'labour' ? 'labour item' : 'product'} ({(l.offers || []).length} on this line's list)
+                          any ({(l.offers || []).length} on list)
                         </label>
                       </>}
                       {l.type === 'lump' && <><input value={l.amount ?? ''} onChange={e => setLine(l.id, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })} placeholder="amount (x the line's qty)" inputMode="decimal" style={{ ...cellInp, width: '100%' }} /><div style={{ fontSize: 10, color: '#888' }}>lump sum - not divided by the item's quantity; set its cost category</div></>}
@@ -98,6 +98,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => setLine(l.id, { applySize: e.target.value || undefined })} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per job" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}</td>
                     <td style={td}>
                       {isProd && <>
                         {/* With a product: its rate, which can be typed over (CHANGED / Revert).
@@ -110,11 +111,10 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                         {!l.default && <div style={{ fontSize: 10, color: '#888' }}>own item</div>}
                       </>}
                     </td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per job" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 80, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}</td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type === 'material' && <><input value={pct(l.waste)} onChange={e => setLine(l.id, { waste: fromPct(e.target.value) })} style={{ ...cellInp, width: 52, background: isVariable(l, 'waste') ? RED : undefined }} /><VarFlag l={l} cell="waste" setLine={setLine} /></>}</td>
                     <td style={td}>{l.type === 'material' && <input value={pct(l.increase)} onChange={e => setLine(l.id, { increase: fromPct(e.target.value) })} style={{ ...cellInp, width: 52 }} />}</td>
-                    <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} style={{ ...cellInp, width: 98 }}><option value="">—</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
-                    <td style={{ ...tdR, fontWeight: 600 }}>{lc.cost != null ? money(lc.cost, { dp: 2 }) : ''}</td>
+                    <td style={{ ...tdR, fontWeight: 700, color: '#0f766e', whiteSpace: 'nowrap' }} title="Rate x Qty (x waste / increase)">{lc.cost != null ? `= ${money(lc.cost, { dp: 2 })}` : ''}</td>
+                    <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} style={{ ...cellInp, width: 92 }}><option value="">—</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
                     <td style={td}><button onClick={() => setT(x => ({ ...x, lines: x.lines.filter(y => y.id !== l.id), rules: (x.rules || []).filter(rr => rr.line !== l.id) }))} style={iconBtn} title="Remove line">✕</button></td>
                   </tr>
                 )

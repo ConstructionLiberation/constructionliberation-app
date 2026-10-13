@@ -457,7 +457,8 @@ function Popout({ item, est, lib: libIn, money, onChange, setRow, onClose }) {
   }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '30px 20px', overflowY: 'auto' }}>
-      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1250, padding: 18 }}>
+      {/* As wide as the screen allows (1105) - a build-up line fits without sideways scrolling */}
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 'min(1500px, 96vw)', padding: 18 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <label style={lbl}>Item<input value={item.description} onChange={e => setRow({ description: e.target.value })} style={{ ...inp, minWidth: 340 }} /></label>
           <label style={lbl}>Unit<select value={item.unit || ''} onChange={e => setRow({ unit: e.target.value })} style={inp}><option value="">—</option>{BU_UNITS.map(u => <option key={u} value={u}>{BU_UNIT_LABEL[u]}</option>)}</select></label>
