@@ -52,7 +52,7 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
 
   return (
     <>
-      <Block title="Sizes" hint="Width, Height and Girth for this build-up. A line's Apply size multiplies it by one of them.">
+      <Block title="Sizes" hint="Width, Height and Girth for this build-up, all in METRES (600mm = 0.6). A line's Apply size multiplies its quantity by one of them.">
         {SIZE_NAMES.map(nm => {
           const z = (t.sizes || []).find(x => String(x.name).toLowerCase() === nm.toLowerCase())
           const setSize = (patch) => setT(x => {
@@ -66,7 +66,7 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
           return (
             <div key={nm} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
               <span style={{ width: 70, fontSize: 13, fontWeight: 600 }}>{nm}</span>
-              <NumBox value={z?.value ?? null} onChange={v => setVal(v == null ? '' : String(v))} placeholder={needed ? 'required' : 'm'} style={{ ...inp, width: 110, background: needed ? RED : undefined, borderColor: needed ? '#ef4444' : undefined }} title={needed ? `${nm} is mandatory - enter a number` : ''} />
+                            <NumBox value={z?.value ?? null} onChange={v => setVal(v == null ? '' : String(v))} placeholder={needed ? 'required' : 'm'} style={{ ...inp, width: 110, background: needed ? RED : undefined, borderColor: needed ? '#ef4444' : undefined }} title={needed ? `${nm} is mandatory - enter a number` : ''} /><span style={{ fontSize: 12.5, color: '#666', marginLeft: -4 }}>m</span>
               <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12, color: z?.required ? '#b91c1c' : '#666', cursor: 'pointer', whiteSpace: 'nowrap' }} title="A number must be entered on every quote using this build-up - the quote cannot be issued until it is">
                 <input type="checkbox" checked={!!z?.required} onChange={e => setSize({ required: e.target.checked || undefined })} /> Mandatory
               </label>
@@ -118,8 +118,17 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
                       </>}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                     </td>
-                    <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => setLine(l.id, { applySize: e.target.value || undefined })} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per rate" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => { const v = e.target.value; setLine(l.id, { applySize: v || undefined, ...(v && (!String(l.qty ?? '').trim() || Number(l.qty) === 0) ? { qty: '1' } : {}) }) }} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per rate" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}
+                      {/* What the line uses (1126): qty x the size it applies - and a warning when qty is 0 */}
+                      {l.applySize && l.type !== 'comment' && (() => {
+                        const z = (t.sizes || []).find(x => l.applySize === true ? x === (t.sizes || [])[0] : String(x.name).toLowerCase() === String(l.applySize).toLowerCase())
+                        const nm = z ? z.name : (l.applySize === true ? 'size' : l.applySize)
+                        const q = evalQty(l.qty, Object.fromEntries((t.sizes || []).map(x => [x.name, x.value])))
+                        const sv = z && z.value != null && z.value !== '' ? Number(z.value) : null
+                        if (q === 0) return <div style={{ fontSize: 10.5, color: '#b91c1c', fontWeight: 600, whiteSpace: 'normal', maxWidth: 120 }}>qty 0 - this line costs nothing</div>
+                        return <div style={{ fontSize: 10.5, color: '#0f766e', whiteSpace: 'nowrap' }}>{sv == null ? `x ${nm} (on the quote)` : `x ${nm} ${sv} = ${q == null ? '?' : +(q * sv).toFixed(4)}`}</div>
+                      })()}</td>
                     <td style={td}>
                       {(l.type === 'lump' || l.type === 'lump sum') && <>
                         <NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder={l.type === 'lump' ? 'amount' : 'per job'} style={{ ...cellInp, width: 70, background: isVariable(l, 'rate') ? RED : undefined }} title={l.type === 'lump' ? 'The amount - x the line qty' : 'An amount per job - spread over the item qty on the estimate'} />

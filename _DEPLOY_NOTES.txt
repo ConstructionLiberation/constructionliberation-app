@@ -1,24 +1,25 @@
-PACKAGE 1125 - Reorder rate build-ups
+PACKAGE 1126 - Apply size: the quantity it uses, shown; sizes in metres
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1124.
+One file. Complete replacement. No re-seed. No env changes. Built on 1125.
 
-  pages/estimating/build-ups.js
-  pages/api/estimating/build-ups.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-In the build-ups list (the middle column), each build-up has ↑ ↓ arrows to
-move it within its category. The order is saved straight away, for everyone,
-and the take-off's "Item from build-ups" picker lists them in the same order.
-  - renaming a build-up keeps its place; moving it to another category puts it
-    at the end there; renaming a category keeps the order; new build-ups go at
-    the end
-  - the arrows hide while searching (results mix categories)
-The order is kept apart from the build-ups - reordering never rewrites them.
+Why the Primer line showed 0.00: Apply size MULTIPLIES the line's quantity by
+the size, and its quantity was 0 (0 x 1.2 = 0). Now:
+  - choosing Width / Height / Girth sets a blank or 0 quantity to 1, so the
+    line takes the size at once
+  - under the Qty box the line shows what it uses: "x Girth 1.2 = 1.2", or
+    "x Girth (on the quote)" when the size is blank on the template
+  - a line applying a size with qty 0 says, in red, "qty 0 - this line costs
+    nothing"
+  - the quantity is still a multiplier - 2 = twice the girth
+SIZES ARE IN METRES - all three; each box shows "m", and the hint says
+600mm = 0.6.
 
-Checked through the real route (Felt): the third moved to the top and it
-stayed; renamed - still first; another moved to Single Ply - out of Felt's
-order, last in Single Ply (21 of 21); the category renamed "Felt Roofing" -
-order kept. In a REAL browser (Chromium): arrows on all 15 Felt build-ups;
-moving up and down reordered the list at once and sent the new order; no
-arrows while searching. All server routes compile; all 165 pages pass the
-browser check. Built from your deployed packages (1022-1124, verified against
-their zips); each file checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium), recreating the screenshot: Primer at qty
+0 with Girth 1.2 -> the red note and 0.00; qty 1 -> "x Girth 1.2 = 1.2", line
+1.12 (0.85 x 1.2 + 10%); Underlay with a blank qty set to Girth -> qty became
+1, line 2.74 (2.00 x 1.2 + 14%); Width left blank -> "x Width (on the
+quote)"; all three size boxes show "m". All 165 pages pass the browser check.
+Built from your deployed packages (1022-1125, verified against their zips);
+the file checked identical to the tested version before zipping.
