@@ -94,6 +94,15 @@ export default function BuildUpsPage() {
     try { await estApi(API, { action: 'add-category', name: n }); if (!quiet) { setNewCat(null); setCat(n); setQ('') } await load() }
     catch (e) { if (!quiet) setErr(e.message) }
   }
+  // Move a build-up up or down within its category (1125): shown at once, saved
+  // straight away; every list (and the take-off picker) follows the saved order.
+  async function moveBuildup(i, dir) {
+    const j = i + dir
+    if (j < 0 || j >= shown.length) return
+    const refs = shown.map(t => t.ref); [refs[i], refs[j]] = [refs[j], refs[i]]
+    setData(d => { const pos = new Map(refs.map((r, k) => [r, k])); const inCat = d.templates.filter(t => pos.has(t.ref)).sort((a, b) => pos.get(a.ref) - pos.get(b.ref)); let n = 0; return { ...d, templates: d.templates.map(t => pos.has(t.ref) ? inCat[n++] : t) } })
+    try { await estApi(API, { action: 'reorder', category: cat === NOCAT ? '' : cat, refs }) } catch (e) { setErr(e.message); await load() }
+  }
   async function catAction(kind, name) {
     const label = name === NOCAT ? '' : name
     if (kind === 'rename') {
@@ -158,12 +167,19 @@ export default function BuildUpsPage() {
           </div>
           <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 8, maxHeight: '78vh', overflowY: 'auto' }}>
             {!shown.length && <div style={{ color: '#aaa', fontSize: 13, padding: 12 }}>{q ? 'Nothing matches.' : cat == null ? 'Pick a category.' : `No build-ups in ${cat === NOCAT ? 'No category' : cat} yet - + New build-up adds one here.`}</div>}
-            {shown.map(t => (
-              <button key={t.ref} onClick={() => setEdit({ t: JSON.parse(JSON.stringify(t)), originalRef: t.ref })}
+            {shown.map((t, i) => (
+              <div key={t.ref} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {/* REORDER (1125) - within the category; hidden while searching */}
+              {!q && cat != null && <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                <button onClick={() => moveBuildup(i, -1)} disabled={i === 0} title="Move up" style={{ ...iconBtn, padding: '0 3px', fontSize: 11, opacity: i === 0 ? 0.25 : 1 }}>↑</button>
+                <button onClick={() => moveBuildup(i, 1)} disabled={i === shown.length - 1} title="Move down" style={{ ...iconBtn, padding: '0 3px', fontSize: 11, opacity: i === shown.length - 1 ? 0.25 : 1 }}>↓</button>
+              </div>}
+              <button onClick={() => setEdit({ t: JSON.parse(JSON.stringify(t)), originalRef: t.ref })}
                 style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 7, padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit', background: edit?.originalRef === t.ref ? '#f0fdfa' : 'transparent' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a19' }}>{t.description}</div>
                 <div style={{ fontSize: 11.5, color: '#999' }}>{q ? `${t.section || 'No category'} · ` : ''}{t.unit ? `per ${BU_UNIT_LABEL[t.unit]}` : 'no unit'} · {t.lines.filter(l => l.type !== 'comment').length} lines</div>
               </button>
+              </div>
             ))}
           </div>
           </>}

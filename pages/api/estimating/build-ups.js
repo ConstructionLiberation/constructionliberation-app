@@ -8,6 +8,22 @@ import { get, set } from '../../../lib/db'
 // CATEGORIES ADDED ON THEIR OWN (1116) - kept so an empty category shows until
 // build-ups are put in it. Categories in use come from the build-ups themselves.
 const CATS = 'buildups:categories'
+// THE ORDER OF BUILD-UPS within each category (1125) - { category (lower case):
+// [refs] }, kept apart from the build-ups so reordering never rewrites them.
+// Build-ups are SENT in this order, so every list follows it.
+const ORDER = 'buildups:order'
+const catKey = (c) => String(c || '').trim().toLowerCase()
+function inOrder(items, order) {
+  const groups = new Map()
+  items.forEach((t, i) => { const k = catKey(t.section); if (!groups.has(k)) groups.set(k, []); groups.get(k).push({ t, i }) })
+  const out = []
+  for (const [k, g] of groups) {
+    const list = (order && order[k]) || []
+    const rank = (x) => { const p = list.indexOf(x.t.ref); return p >= 0 ? p : 1e6 + x.i }   // not placed yet -> at the end, as before
+    out.push(...g.sort((a, b) => rank(a) - rank(b)).map(x => x.t))
+  }
+  return out
+}
 const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
 
 // RATE BUILD-UPS API (1087) - Estimating area.
@@ -32,7 +48,7 @@ async function handler(req, res) {
       index = await replaceBuildups(cleaned, { by: 'Portal - comments cleared (1102)', source: index?.source || '' })
       items = cleaned
     }
-    return res.status(200).json({ index, templates: items, categories: (await get(CATS)) || [] })
+    return res.status(200).json({ index, templates: inOrder(items, (await get(ORDER)) || {}), categories: (await get(CATS)) || [] })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -90,7 +106,19 @@ async function handler(req, res) {
       return res.status(400).json({ error: clash ? `A build-up called "${tpl.description}" already exists in ${tpl.section || 'no category'} - choose another name` : r.errors[0] })
     }
     // Renamed: its documents move with it (1093).
-    if (b.originalRef && b.originalRef !== r.item.ref) await moveDocs('buildup', b.originalRef, r.item.ref)
+    if (b.originalRef && b.originalRef !== r.item.ref) {
+      await moveDocs('buildup', b.originalRef, r.item.ref)
+      // its place in the order (1125): same category - same place; moved - it
+      // leaves the old category's order and joins the new one at the end
+      const order = (await get(ORDER)) || {}
+      let changed = false
+      for (const k of Object.keys(order)) {
+        if (!order[k].includes(b.originalRef)) continue
+        order[k] = k === catKey(r.item.section) ? order[k].map(x => x === b.originalRef ? r.item.ref : x) : order[k].filter(x => x !== b.originalRef)
+        changed = true
+      }
+      if (changed) await set(ORDER, order)
+    }
     return res.status(200).json({ ok: true, template: r.item, index: r.index })
   }
   if (b.action === 'delete') {
@@ -98,6 +126,17 @@ async function handler(req, res) {
     if (r.errors) return res.status(404).json({ error: r.errors[0] })
     if (privateReady()) await deleteAllDocs('buildup', String(b.ref), removeFile)
     return res.status(200).json({ ok: true, index: r.index })
+  }
+  // REORDER (1125): the build-ups of one category, in the order given.
+  if (b.action === 'reorder') {
+    const k = catKey(b.category === 'No category' ? '' : b.category)
+    const { items } = await loadBuildups()
+    const inCat = new Set(items.filter(t => catKey(t.section) === k).map(t => t.ref))
+    const refs = [...new Set((b.refs || []).map(String))].filter(r => inCat.has(r))
+    const order = (await get(ORDER)) || {}
+    order[k] = refs
+    await set(ORDER, order)
+    return res.status(200).json({ ok: true, refs })
   }
   // ADD A CATEGORY (1116) - on its own, before any build-up is in it.
   if (b.action === 'add-category') {
@@ -123,12 +162,24 @@ async function handler(req, res) {
     for (const t of next) { if (keys.has(t.ref)) return res.status(400).json({ error: `"${t.description}" already exists in "${to || 'no category'}" - rename one first` }); keys.add(t.ref) }
     const idx = await replaceBuildups(next, { by, source: index?.source || '' })
     for (let i = 0; i < items.length; i++) if (items[i].ref !== next[i].ref) await moveDocs('buildup', items[i].ref, next[i].ref)
+    // ...and the order of its build-ups (1125) - refs change with the category
+    {
+      const order = (await get(ORDER)) || {}
+      const fromK = catKey(from)
+      if (order[fromK]) {
+        const moved2 = Object.fromEntries(items.map((t, i) => [t.ref, next[i].ref]))
+        const list = order[fromK].map(x => moved2[x] || x)
+        delete order[fromK]
+        if (b.action !== 'delete-category') order[catKey(to)] = list
+        await set(ORDER, order)
+      }
+    }
     // ...and the categories added on their own (1116)
     const extra = (await get(CATS)) || []
     if (extra.some(c => sameName(c, from))) await set(CATS, b.action === 'delete-category' ? extra.filter(c => !sameName(c, from)) : extra.map(c => sameName(c, from) ? to : c))
     return res.status(200).json({ ok: true, moved, index: idx })
   }
-  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'add-category', 'rename-category' or 'delete-category'" })
+  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'reorder', 'add-category', 'rename-category' or 'delete-category'" })
 }
 
 export default withTenant(handler)
