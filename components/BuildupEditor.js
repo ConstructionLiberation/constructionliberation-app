@@ -249,11 +249,16 @@ function VarFlag({ l, cell, setLine }) {
 // those that do not apply to this build-up; add any from the whole price list.
 function ListEditor({ ln, lib, label, findText, onClose, onChange }) {
   const [q, setQ] = useState('')
+  // Tick several from the search, then add them together (1107). Ticks are
+  // kept while the search changes; added in the order ticked.
+  const [picked, setPicked] = useState([])
+  const toggle = (ref) => setPicked(p => p.includes(ref) ? p.filter(x => x !== ref) : [...p, ref])
   const kind = ln.type
   const offers = ln.offers || []
   const all = kind === 'labour' ? lib.labourItems.map(x => x.ref) : lib.products.map(x => x.ref)
   const words = q.toLowerCase().split(/\s+/).filter(Boolean)
-  const found = words.length ? all.filter(ref => !offers.includes(ref) && words.every(w => findText(ref, kind).includes(w))).slice(0, 40) : []
+  const matches = words.length ? all.filter(ref => !offers.includes(ref) && words.every(w => findText(ref, kind).includes(w))) : []
+  const found = matches.slice(0, 40)      // shown; more than 40 -> say so (1107)
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 16 }}>
@@ -271,9 +276,22 @@ function ListEditor({ ln, lib, label, findText, onClose, onChange }) {
           {!offers.length && <div style={{ fontSize: 12.5, color: '#aaa' }}>Empty - add from the price list below.</div>}
         </div>
         <div style={{ borderTop: '1px solid #f0efec', marginTop: 8, paddingTop: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+            <button onClick={() => { onChange([...offers, ...picked.filter(r => !offers.includes(r))]); setPicked([]) }} disabled={!picked.length}
+              style={{ fontSize: 12.5, padding: '5px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: picked.length ? 'pointer' : 'default', opacity: picked.length ? 1 : 0.45 }}>Add {picked.length || ''} selected</button>
+            {found.length > 0 && <button onClick={() => setPicked(p => [...p, ...found.filter(r => !p.includes(r))])} style={{ fontSize: 12, padding: '4px 10px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer' }}>Tick all shown ({found.length})</button>}
+            {picked.length > 0 && <button onClick={() => setPicked([])} style={{ fontSize: 12, border: 'none', background: 'none', color: '#888', cursor: 'pointer' }}>Clear ticks</button>}
+            {picked.length > 0 && <span style={{ fontSize: 11.5, color: '#888' }}>ticks are kept while you search again</span>}
+            {matches.length > found.length && <span style={{ fontSize: 11.5, color: '#b45309' }}>{found.length} of {matches.length} shown - narrow the search to see the rest</span>}
+          </div>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={`Add from the whole ${kind === 'labour' ? 'labour rates' : 'price list'} - search…`} style={{ ...cellInp, width: '100%' }} />
           <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 4 }}>
-            {found.map(ref => <div key={ref} onClick={() => onChange([...offers, ref])} style={{ fontSize: 12.5, padding: '4px 6px', cursor: 'pointer', borderBottom: '1px solid #f8f7f5' }}>+ {label(ref, kind)} <span style={{ color: '#aaa', fontSize: 11 }}>{ref}</span></div>)}
+            {found.map(ref => (
+              <label key={ref} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '4px 6px', cursor: 'pointer', borderBottom: '1px solid #f8f7f5', background: picked.includes(ref) ? '#f0fdfa' : undefined }}>
+                <input type="checkbox" checked={picked.includes(ref)} onChange={() => toggle(ref)} />
+                <span>{label(ref, kind)} <span style={{ color: '#aaa', fontSize: 11 }}>{ref}</span></span>
+              </label>
+            ))}
           </div>
         </div>
       </div>

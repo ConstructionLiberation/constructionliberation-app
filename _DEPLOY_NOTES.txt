@@ -1,29 +1,21 @@
-PACKAGE 1106 - The description box shows the description as it will read
+PACKAGE 1107 - Add several products to a line's list at once
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1105.
+One file. Complete replacement. No re-seed. No env changes. Built on 1106.
 
   components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-The description box no longer shows {products} codes. It shows the
-description as it will read on the quote:
-  - INSERT PRODUCTS puts the ticked products in LIGHT GREY where the cursor is
-    ("Alkorplus polythene VCL and CX Plate for PVC 6.5mm Hole"). Grey text is
-    LIVE: tick or untick a product under ⚙ (or change a product) and it updates.
-  - INSERT VARIABLE does the same with the variable's value (e.g. "20 year").
-  - Everything is editable, typed straight into the box. Typing at the start or
-    end of grey text adds your own words beside it - the grey stays live.
-    Changing anything INSIDE grey text makes it your own wording: black, and no
-    longer updated.
-  - Pasting brings in plain text only.
-The quote prints exactly what the box shows. Saved in the same form as before,
-so existing descriptions, the quote and the build-ups file are unchanged.
+A line's ⚙ LIST: the search results now have TICK BOXES.
+  - Tick as many as you like; ticks are kept while you search again (search
+    "renolit", tick three, search "tape", tick one more).
+  - "Tick all shown" ticks everything the current search found.
+  - "Add N selected" adds them in one go, in the order ticked; ticks clear.
+  - A search shows up to 40 results; if more match it says so ("40 of 46 shown
+    - narrow the search to see the rest").
+Products already on the list are left out of the search.
 
-Checked in a REAL browser (Chromium): opening words typed, Insert products ->
-the two ticked products in grey with the full stop typed after it kept outside;
-Discs unticked -> the grey list updated by itself; Insert variable + "20 year"
--> grey "20 year"; "white" typed INSIDE the product list -> "Alkorplus white
-polythene VCL", now black, the warranty still grey; SAVED as "Single ply
-membrane roof system comprising: Alkorplus white polythene VCL. Warranty:
-{Warranty period}". All 165 pages pass the browser check. Built from your
-deployed packages (1022-1105, verified against their zips); the file checked
-identical to the tested version before zipping.
+Checked in a REAL browser (Chromium) on the VCL line (23 on its list): three
+Renolit products and one tape ticked across two searches -> "Add 4 selected"
+-> 27, ticks cleared; "screw" -> "40 of 46 shown..." -> Tick all shown (40) ->
+added -> 67. All 165 pages pass the browser check. Built from your deployed
+packages (1022-1106, verified against their zips); the file checked identical
+to the tested version before zipping.
