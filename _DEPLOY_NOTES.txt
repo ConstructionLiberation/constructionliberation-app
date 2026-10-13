@@ -1,28 +1,24 @@
-PACKAGE 1117 - Labels wrap; lump lines: description in Item, amount in Rate
+PACKAGE 1118 - Any line (every cost category) can go into the description
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1116.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1117.
 
   components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
-  lib/materials.js
+  lib/buildups.js
 
-LABELS WRAP inside their box - a long label grows a line taller instead of
-being cut off ("Lab (Non Combustible)"). Enter still does not add a break.
+"⚙ Products in the description" now lists EVERY line except comments -
+materials, labour, lump sums, lump spreads - each with its cost category, to
+tick in or out. In the description each reads as:
+  a product        - its price-list description
+  a labour item    - its labour description
+  an own item, lump sum or lump spread - the description typed (else its label)
+In build-up order, "A, B and C" as before. Existing build-ups keep their ticks.
 
-LUMP SUM and LUMP SPREAD lines now work like the others:
-  ITEM  = the line's DESCRIPTION (e.g. "Scaffold hire - 4 weeks"), with a V
-          so it can be marked red
-  RATE  = the AMOUNT (lump sum: x the line qty; lump spread: per job, spread
-          over the item qty), with its own V
-Existing lump lines keep their amounts - shown in Rate now, with an empty
-description to fill in. The Materials tab lists a lump sum by its description.
-(Comment lines are unchanged - their text is in the Item column.)
-The type box is a little wider so "lump spread" shows in full.
-
-Checked in a REAL browser (Chromium): "Lab (Non Combustible)" wraps to two
-lines, fully visible; the lump spread lines show a description + V in Item and
-"per job" + V in Rate; a new lump sum "Scaffold hire - 4 weeks" with 350 in
-Rate -> = 350.00; V on its item and rate -> both light red; saved with its
-description, amount and flags; at 1366px and 1600px a whole line still fits
-and "lump spread" shows in full. All 165 pages pass the browser check. Built
-from your deployed packages (1022-1116, verified against their zips); each
-file checked identical to the tested version before zipping.
+Checked: the wording - "Alkorplus polythene VCL, Scaffold hire, Timber /
+Metal Deck Mech Fixed warm roof and Fix delivery", the comment left out, build-
+up order kept. In a REAL browser (Chromium): the ⚙ list shows VCL (Materials),
+Fabricate del (Other), Fix delivery (Delivery) and both labour lines (Labour);
+ticking VCL, Fix delivery and Lab put "Alkorplus polythene VCL, Fix delivery
+and Timber / Metal Deck Mech Fixed warm roof" in the grey text, count (3). All
+165 pages pass the browser check. Built from your deployed packages
+(1022-1117, verified against their zips); each file checked identical to the
+tested version before zipping.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, productList, lineWording } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -150,7 +150,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap', position: 'relative' }}>
           <button onMouseDown={e => e.preventDefault()} onClick={() => descInsert.current && descInsert.current('products')} style={smallBtn} title="The ticked products, in grey - live until you edit them">Insert products</button>
           <button onMouseDown={e => e.preventDefault()} onClick={() => setVarPop({ index: null })} style={smallBtn} title="A detail the description needs that is not a product - e.g. Warranty, Girth">Insert variable</button>
-          <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which products go into the description">⚙ Products in the description ({t.lines.filter(l => l.type === 'material' && l.inDescription).length})</button>
+          <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which lines go into the description - any cost category">⚙ Products in the description ({t.lines.filter(l => l.type !== 'comment' && l.inDescription).length})</button>
           <button onMouseDown={e => e.preventDefault()} onClick={() => { const ok = descFlag.current && descFlag.current.mark(); setFlagMsg(ok ? '' : 'Select the words to mark first') }} style={{ ...smallBtn, color: '#b91c1c', borderColor: '#fca5a5' }} title="Mark the selected words red - shows on the take-off, never on the quote">Mark for amending</button>
           <button onMouseDown={e => e.preventDefault()} onClick={() => { const ok = descFlag.current && descFlag.current.clear(); setFlagMsg(ok ? '' : 'Click inside the red words first') }} style={smallBtn} title="Remove the red mark the cursor is in">Clear mark</button>
           {flagMsg && <span style={{ fontSize: 11.5, color: '#b45309' }}>{flagMsg}</span>}
@@ -184,13 +184,15 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
         </div>
         {descMenu && (
           <div style={{ border: '1px solid #e8e7e3', borderRadius: 8, padding: 8, marginBottom: 6, maxWidth: 520 }}>
-            {t.lines.filter(l => l.type === 'material').map(l => (
-              <label key={l.id} style={{ display: 'flex', gap: 8, fontSize: 12.5, padding: '2px 0', cursor: 'pointer' }}>
+            {/* ANY line - every cost category - can go in (1118); comments cannot. */}
+            {t.lines.filter(l => l.type !== 'comment').map(l => (
+              <label key={l.id} style={{ display: 'flex', gap: 8, fontSize: 12.5, padding: '2px 0', cursor: 'pointer', alignItems: 'baseline' }}>
                 <input type="checkbox" checked={!!l.inDescription} onChange={e => setLine(l.id, { inDescription: e.target.checked })} />
-                <span>{l.label}{l.default ? <span style={{ color: '#888' }}> - {label(l.default, 'material')}</span> : <span style={{ color: '#888' }}> - own item</span>}</span>
+                <span>{l.label}<span style={{ color: '#888' }}> - {lineWording(l, lib) && lineWording(l, lib) !== l.label ? lineWording(l, lib) : (l.type === 'material' || l.type === 'labour' ? 'own item' : 'no description yet')}</span>
+                  <span style={{ marginLeft: 6, fontSize: 10.5, color: '#666', background: '#f4f4f2', borderRadius: 8, padding: '0 6px' }}>{l.cost || LINE_TYPE_LABEL[l.type] || l.type}</span></span>
               </label>
             ))}
-            {!t.lines.some(l => l.type === 'material') && <div style={{ fontSize: 12, color: '#aaa' }}>No material lines yet.</div>}
+            {!t.lines.some(l => l.type !== 'comment') && <div style={{ fontSize: 12, color: '#aaa' }}>No lines yet.</div>}
           </div>
         )}
         <DescriptionEditor value={t.descText || ''} onChange={(v) => setT(x => ({ ...x, descText: v }))} liveProducts={productList(t, lib)} vars={t.descVars || []} insertRef={descInsert} flagRef={descFlag}
