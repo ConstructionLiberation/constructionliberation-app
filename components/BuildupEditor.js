@@ -200,6 +200,10 @@ function ItemSearch({ kind, value, choices, label, findText, onPick, red, ownNam
   // Typed a name and did not pick a product? That name is the OWN ITEM (1102).
   const qRef = useRef(null); qRef.current = q
   const keepTyped = () => { const t = (qRef.current || '').trim(); if (t && onOwn) onOwn(t) }
+  // An OWN ITEM's box is its text (1104): shown as written, edited in place -
+  // e.g. "XXXmm girth powder coated aluminium" -> change XXX to 600. Every
+  // keystroke saves. With a PRODUCT chosen, clicking in starts a fresh search.
+  const isOwn = !value
   useEffect(() => {
     const close = (e) => { if (box.current && !box.current.contains(e.target)) { if (qRef.current != null) keepTyped(); setOpen(false); setQ(null) } }
     document.addEventListener('mousedown', close)
@@ -207,12 +211,14 @@ function ItemSearch({ kind, value, choices, label, findText, onPick, red, ownNam
   }, [])
   const words = (q || '').toLowerCase().split(/\s+/).filter(Boolean)
   const matches = choices.filter(ref => { const t = findText(ref, kind); return words.every(w => t.includes(w)) }).slice(0, 60)
-  const pick = (v) => { qRef.current = null; onPick(v); setOpen(false); setQ(null) }
+  // Leave the box after picking (1104), so the next click starts a fresh search.
+  const inputRef = useRef(null)
+  const pick = (v) => { qRef.current = null; onPick(v); setOpen(false); setQ(null); setTimeout(() => inputRef.current && inputRef.current.blur(), 0) }
   return (
     <div ref={box} style={{ position: 'relative' }}>
-      <input value={q != null ? q : (value ? label(value, kind) : (ownName ? `Own item: ${ownName}` : ''))}
+      <input ref={inputRef} value={q != null ? q : (value ? label(value, kind) : (ownName || ''))}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); keepTyped(); setOpen(false); setQ(null); e.currentTarget.blur() } if (e.key === 'Escape') { setOpen(false); setQ(null) } }} placeholder={`Search ${kind === 'labour' ? 'labour' : 'products'}… or own item`}
-        onFocus={() => { setOpen(true); setQ('') }} onChange={e => { setQ(e.target.value); setOpen(true) }}
+        onFocus={() => { setOpen(true); setQ(isOwn ? (ownName || '') : '') }} onChange={e => { const v = e.target.value; setQ(v); setOpen(true); if (isOwn && onOwn) onOwn(v) }}
         style={{ ...cellInp, width: '100%', background: red ? RED : undefined }} />
       {open && (
         <div style={{ position: 'absolute', zIndex: 30, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', maxHeight: 260, overflowY: 'auto' }}>

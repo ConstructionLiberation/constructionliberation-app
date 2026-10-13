@@ -1,22 +1,23 @@
-PACKAGE 1103 - Per m3 as a unit
+PACKAGE 1104 - Own items: the text as written, edited in place
 
-Five files. Complete replacements. No re-seed. No env changes. Built on 1102.
+One file. Complete replacement. No re-seed. No env changes. Built on 1103.
 
-  lib/buildups.js, lib/priceList.js, lib/labourRates.js
-  components/BuildupEditor.js, components/MaterialsTab.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-m3 (shown m³) is now a unit for build-ups and take-off items, labour rates and
-the price list (e.g. concrete, loose fill by volume). Files may write m3 or m³.
+An OWN ITEM's Item box now shows exactly what was written - no "Own item:"
+prefix - and is edited in place: click in, the text stays; change XXX to 600 in
+"XXXmm girth powder coated aluminium". Every keystroke saves; matching products
+still list underneath in case you want one instead. Tip: mark the item V so the
+box shows light red on quotes until someone updates it.
 
-ALSO FIXED: the build-up editor and the Materials tab kept their own lists of
-unit names, which knew neither m³ nor the weeks and days added in 1101 - so a
-per-week build-up's rate read "per" and nothing. Both now use the shared lists,
-so a unit added in future shows everywhere at once.
+ALSO FIXED (older): after picking a PRODUCT the cursor stayed in the box, so
+clicking it again did not start a new search and typing added to the product's
+name. The box is now left after a pick; the next click starts a fresh search.
 
-Checked: "m³" / "M3" read as m3 with no errors in the price list, labour rates
-and build-ups. In a REAL browser (Chromium): the build-up list shows "per m³"
-and "per week"; the Unit choice offers per m², m, m³, nr, item, week, day; the
-rate lines read "Rate 11.60 per m³" and "Rate 0.60 per week". All server
-routes compile; all 165 pages pass the browser check. Built from your deployed
-packages (1022-1102, verified against their zips); each file checked identical
-to the tested version before zipping.
+Checked in a REAL browser (Chromium), typing as a person would: own item typed
++ Enter -> exactly the text; clicked back in -> text kept; "XXX" selected and
+600 typed -> "600mm girth powder coated aluminium"; kept after clicking away;
+the description reads the same. A product line: picked, clicked back in ->
+empty search, "vapor" typed -> switched to Vapor Flag. All 165 pages pass the
+browser check. Built from your deployed packages (1022-1103, verified against
+their zips); the file checked identical to the tested version before zipping.
