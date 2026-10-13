@@ -138,6 +138,32 @@ async function handler(req, res) {
     await set(ORDER, order)
     return res.status(200).json({ ok: true, refs })
   }
+  // EDIT / DELETE A VARIABLE across EVERY build-up using it (1127).
+  //   edit-variable   { from, to, options }  - rename (descriptions follow) and
+  //                   set its options; a chosen value no longer offered is cleared
+  //   delete-variable { name }  - removed, and from every description
+  // Quotes already priced keep their own copies.
+  if (b.action === 'edit-variable' || b.action === 'delete-variable') {
+    const from = String(b.from ?? b.name ?? '').trim(), to = String(b.to ?? from).trim().replace(/[{}]/g, '')
+    if (!from) return res.status(400).json({ error: 'Which variable?' })
+    if (b.action === 'edit-variable' && !to) return res.status(400).json({ error: 'Give the variable a name' })
+    const options = [...new Set((b.options || []).map(o => String(o).trim()).filter(Boolean))]
+    const same = (a, c) => String(a || '').trim().toLowerCase() === c.toLowerCase()
+    const tok = new RegExp(`\\{\\s*${from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\}`, 'gi')
+    const { index, items } = await loadBuildups()
+    if (b.action === 'edit-variable' && !same(from, to) && items.some(t => (t.descVars || []).some(v => same(v.name, to)))) return res.status(400).json({ error: `There is already a variable called "${to}"` })
+    let changed = 0
+    const next = items.map(t => {
+      if (!(t.descVars || []).some(v => same(v.name, from))) return t
+      changed++
+      if (b.action === 'delete-variable') return { ...t, descVars: t.descVars.filter(v => !same(v.name, from)), descText: String(t.descText || '').replace(tok, '').replace(/ {2,}/g, ' ').replace(/ ([.,;:])/g, '$1') }
+      return { ...t, descText: String(t.descText || '').replace(tok, `{${to}}`),
+        descVars: t.descVars.map(v => same(v.name, from) ? { ...v, name: to, options, value: options.length && !options.includes(v.value) ? '' : v.value } : v) }
+    })
+    if (!changed) return res.status(404).json({ error: `No build-up uses "${from}"` })
+    const idx = await replaceBuildups(next, { by, source: index?.source || '' })
+    return res.status(200).json({ ok: true, changed, index: idx })
+  }
   // ADD A CATEGORY (1116) - on its own, before any build-up is in it.
   if (b.action === 'add-category') {
     const name = String(b.name || '').trim().slice(0, 120)
@@ -179,7 +205,7 @@ async function handler(req, res) {
     if (extra.some(c => sameName(c, from))) await set(CATS, b.action === 'delete-category' ? extra.filter(c => !sameName(c, from)) : extra.map(c => sameName(c, from) ? to : c))
     return res.status(200).json({ ok: true, moved, index: idx })
   }
-  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'reorder', 'add-category', 'rename-category' or 'delete-category'" })
+  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'reorder', 'edit-variable', 'delete-variable', 'add-category', 'rename-category' or 'delete-category'" })
 }
 
 export default withTenant(handler)

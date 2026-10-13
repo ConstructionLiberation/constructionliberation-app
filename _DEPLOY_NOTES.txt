@@ -1,25 +1,30 @@
-PACKAGE 1126 - Apply size: the quantity it uses, shown; sizes in metres
+PACKAGE 1127 - Edit description variables across every build-up
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1125.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1126.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  pages/estimating/build-ups.js
+  pages/api/estimating/build-ups.js
 
-Why the Primer line showed 0.00: Apply size MULTIPLIES the line's quantity by
-the size, and its quantity was 0 (0 x 1.2 = 0). Now:
-  - choosing Width / Height / Girth sets a blank or 0 quantity to 1, so the
-    line takes the size at once
-  - under the Qty box the line shows what it uses: "x Girth 1.2 = 1.2", or
-    "x Girth (on the quote)" when the size is blank on the template
-  - a line applying a size with qty 0 says, in red, "qty 0 - this line costs
-    nothing"
-  - the quantity is still a multiplier - 2 = twice the girth
-SIZES ARE IN METRES - all three; each box shows "m", and the hint says
-600mm = 0.6.
+A VARIABLES button on the Build-ups page (beside Download / Blank template)
+opens the variables manager: every description variable, with how many
+build-ups use it. Pick one to:
+  - RENAME it - every build-up's description follows
+  - change its OPTIONS (one per line; none = a typed value) - each build-up
+    keeps its chosen value unless it is no longer offered, then it is cleared
+    (shows red) to choose again
+  - DELETE it - removed from every build-up and their descriptions
+"Save - 2 build-ups" applies to every build-up using it. Quotes already priced
+keep their own copies. Available while no build-up is open (so an unsaved
+build-up cannot overwrite the change). Clicking a variable's name beside a
+build-up's description still edits it for that build-up only.
 
-Checked in a REAL browser (Chromium), recreating the screenshot: Primer at qty
-0 with Girth 1.2 -> the red note and 0.00; qty 1 -> "x Girth 1.2 = 1.2", line
-1.12 (0.85 x 1.2 + 10%); Underlay with a blank qty set to Girth -> qty became
-1, line 2.74 (2.00 x 1.2 + 14%); Width left blank -> "x Width (on the
-quote)"; all three size boxes show "m". All 165 pages pass the browser check.
-Built from your deployed packages (1022-1125, verified against their zips);
-the file checked identical to the tested version before zipping.
+Checked through the real route: Warranty in two build-ups (20 year / 10 year,
+one written {warranty}) renamed "Warranty period" with 15/20 year - both
+descriptions followed, 20 year kept, 10 year cleared; renaming to "colour"
+refused (exists); delete removed it from both - "Roof with a warranty." - and
+left Colour untouched. In a REAL browser (Chromium): the button, disabled with
+a build-up open; the manager lists "Warranty - 2 options · 2 build-ups"; rename
++ new options -> "Save - 2 build-ups" sent the change. All server routes
+compile; all 165 pages pass the browser check. Built from your deployed
+packages (1022-1126, verified against their zips); each file checked identical
+to the tested version before zipping.

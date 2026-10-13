@@ -87,6 +87,7 @@ export default function BuildUpsPage() {
   const download = () => XLSX.writeFile(workbook(templates), `Build-ups-${new Date().toISOString().slice(0, 10)}.xlsx`)
   const downloadBlank = () => XLSX.writeFile(workbook([]), 'Build-ups-template.xlsx')
 
+  const [varsOpen, setVarsOpen] = useState(false)   // the variables manager (1127)
   const [newCat, setNewCat] = useState(null)       // the "+ New category" box (1116)
   async function addCategory(name, quiet) {
     const n = String(name || '').trim()
@@ -124,6 +125,7 @@ export default function BuildUpsPage() {
         action={<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {templates.length > 0 && <button onClick={download} style={btn}>Download</button>}
           <button onClick={downloadBlank} style={btn}>Blank template</button>
+          {templates.length > 0 && <button onClick={() => setVarsOpen(true)} disabled={!!edit} style={{ ...btn, opacity: edit ? 0.5 : 1 }} title={edit ? 'Close the open build-up first' : 'Edit the description variables used across every build-up'}>Variables</button>}
           {templates.length > 0 && <button onClick={() => setEdit({ t: { section: cat && cat !== NOCAT ? cat : '', description: '', unit: 'm2', sizes: [], lines: [], rules: [] }, originalRef: null })} style={btn}>+ New build-up</button>}
           <label style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', cursor: busy || noLib ? 'default' : 'pointer', opacity: busy || noLib ? 0.5 : 1 }} title={noLib ? 'Upload the price list and labour rates first' : ''}>
             {busy ? 'Working…' : 'Upload build-ups'}
@@ -131,6 +133,7 @@ export default function BuildUpsPage() {
           </label>
         </div>} />
       <ErrorBar error={err} onClose={() => setErr('')} />
+      {varsOpen && <VariablesManager templates={templates} onClose={() => setVarsOpen(false)} onDone={async () => { await load() }} />}
       {noLib && <div style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 14 }}>Upload the {!lib.products.length ? 'price list' : 'labour rates'} first - every build-up line is checked against it, and rates are worked out from it.</div>}
       {check && <CheckPanel s={check.summary} fileName={check.fileName} busy={busy} m4={m2} onImport={doImport} onCancel={() => setCheck(null)} noun="build-ups" />}
 
@@ -318,6 +321,70 @@ function CategoryPicker({ value, options, onChange, onAdd }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// THE VARIABLES MANAGER (1127): every description variable used across the
+// build-ups - rename it, change its options, or delete it - for EVERY build-up
+// using it at once.
+function VariablesManager({ templates, onClose, onDone }) {
+  const lib = variableLibrary(templates)
+  const uses = (name) => templates.filter(t => (t.descVars || []).some(v => v.name.toLowerCase() === name.toLowerCase())).length
+  const [sel, setSel] = useState(lib[0]?.name || null)
+  const cur = lib.find(v => v.name === sel)
+  const [name, setName] = useState(cur?.name || '')
+  const [opts, setOpts] = useState((cur?.options || []).join('\n'))
+  const [msg, setMsg] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false)
+  const pick = (v) => { setSel(v.name); setName(v.name); setOpts((v.options || []).join('\n')); setMsg(''); setErr('') }
+  async function save() {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const d = await estApi(API, { action: 'edit-variable', from: sel, to: name.trim(), options: opts.split('\n') })
+      await onDone(); setSel(name.trim()); setMsg(`Saved - ${d.changed} build-up${d.changed === 1 ? '' : 's'} updated.`)
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  async function del() {
+    if (!window.confirm(`Delete "${sel}" from all ${uses(sel)} build-up${uses(sel) === 1 ? '' : 's'} using it? It is removed from their descriptions too.`)) return
+    setBusy(true); setErr('')
+    try { const d = await estApi(API, { action: 'delete-variable', name: sel }); await onDone(); setMsg(`Deleted from ${d.changed} build-up${d.changed === 1 ? '' : 's'}.`); setSel(null) } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 760, maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <strong style={{ fontSize: 16 }}>Description variables</strong>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+        </div>
+        <div style={{ fontSize: 12.5, color: '#666', marginBottom: 12 }}>Changes apply to every build-up using the variable. Quotes already priced keep their own copies.</div>
+        {!lib.length ? <div style={{ color: '#999', fontSize: 13 }}>No variables yet - add one with Insert variable in a build-up's description.</div> : (
+          <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16, minHeight: 0, flex: 1 }}>
+            <div style={{ overflowY: 'auto', borderRight: '1px solid #f0efec', paddingRight: 8 }}>
+              {lib.map(v => (
+                <button key={v.name} onClick={() => pick(v)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 7, padding: '7px 9px', marginBottom: 2, cursor: 'pointer', fontFamily: 'inherit', background: v.name === sel ? '#f0fdfa' : 'transparent' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: v.name === sel ? '#0f766e' : '#1a1a19' }}>{v.name}</div>
+                  <div style={{ fontSize: 11, color: '#999' }}>{(v.options || []).length ? `${v.options.length} options` : 'typed value'} · {uses(v.name)} build-up{uses(v.name) === 1 ? '' : 's'}</div>
+                </button>
+              ))}
+            </div>
+            {cur ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ fontSize: 12, color: '#666' }}>Name<input value={name} onChange={e => setName(e.target.value)} style={{ ...inp, marginTop: 3 }} /></label>
+                <label style={{ fontSize: 12, color: '#666' }}>Options to choose from - one per line (none = a typed value)
+                  <textarea value={opts} onChange={e => setOpts(e.target.value)} rows={10} style={{ ...inp, marginTop: 3, fontFamily: 'inherit', resize: 'vertical' }} /></label>
+                {err && <div style={{ color: '#b42318', fontSize: 12.5 }}>{err}</div>}
+                {msg && <div style={{ color: '#15803d', fontSize: 12.5 }}>{msg}</div>}
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <button onClick={del} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>
+                  <button onClick={save} disabled={busy || !name.trim()} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', opacity: busy || !name.trim() ? 0.5 : 1 }}>Save - {uses(sel)} build-up{uses(sel) === 1 ? '' : 's'}</button>
+                </div>
+              </div>
+            ) : <div style={{ color: '#999', fontSize: 13 }}>{msg || 'Pick a variable.'}</div>}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
