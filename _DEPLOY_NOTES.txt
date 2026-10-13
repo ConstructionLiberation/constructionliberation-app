@@ -1,30 +1,28 @@
-PACKAGE 1116 - Add categories; a category dropdown that matches the box
+PACKAGE 1117 - Labels wrap; lump lines: description in Item, amount in Rate
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1115.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1116.
 
-  pages/estimating/build-ups.js
-  pages/api/estimating/build-ups.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  lib/materials.js
 
-+ NEW CATEGORY under the categories list (left): type a name, Enter / Add.
-It is saved straight away and shows with 0 until build-ups are added ("No
-build-ups in Green Roofs yet - + New build-up adds one here"). A name that
-already exists - in any capitals - is refused. Rename / delete work on new,
-empty categories too.
+LABELS WRAP inside their box - a long label grows a line taller instead of
+being cut off ("Lab (Non Combustible)"). Enter still does not add a break.
 
-THE CATEGORY BOX in the build-up editor is now a dropdown drawn like the other
-boxes (same font, border, corners, height, width) - every category listed,
-"Find a category…" to filter, "No category", and "+ ADD NEW CATEGORY…" to type
-a new one in place (it is added to the list straight away). Before, it was the
-browser's own suggestion list, styled by the browser and showing only matches.
+LUMP SUM and LUMP SPREAD lines now work like the others:
+  ITEM  = the line's DESCRIPTION (e.g. "Scaffold hire - 4 weeks"), with a V
+          so it can be marked red
+  RATE  = the AMOUNT (lump sum: x the line qty; lump spread: per job, spread
+          over the item qty), with its own V
+Existing lump lines keep their amounts - shown in Rate now, with an empty
+description to fill in. The Materials tab lists a lump sum by its description.
+(Comment lines are unchanged - their text is in the Item column.)
+The type box is a little wider so "lump spread" shows in full.
 
-Checked: through the real route - Green Roofs added; "green roofs" and the
-in-use "single ply" refused; rename and delete of an empty category; the 167
-build-ups untouched. In a REAL browser (Chromium): + New category -> Green
-Roofs listed with 0; the category box measured identical to the name box
-(13.5px, 1px border, 7px corners, 34px); the dropdown lists every category,
-"green" filters it; + Add new category -> "Hot Melt Systems" fills the box and
-the build-up saves in it. (Found by the real browser: inside a field label a
-click also "clicks" the box, closing the dropdown - the field no longer uses a
-label.) All server routes compile; all 165 pages pass the browser check. Built
-from your deployed packages (1022-1115, verified against their zips); each
+Checked in a REAL browser (Chromium): "Lab (Non Combustible)" wraps to two
+lines, fully visible; the lump spread lines show a description + V in Item and
+"per job" + V in Rate; a new lump sum "Scaffold hire - 4 weeks" with 350 in
+Rate -> = 350.00; V on its item and rate -> both light red; saved with its
+description, amount and flags; at 1366px and 1600px a whole line still fits
+and "lump spread" shows in full. All 165 pages pass the browser check. Built
+from your deployed packages (1022-1116, verified against their zips); each
 file checked identical to the tested version before zipping.

@@ -88,8 +88,8 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                 return (
                   <tr key={l.id} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
-                    <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => setLine(l.id, { type: e.target.value })} style={{ ...cellInp, width: 104 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
-                    <td style={td}><input value={l.label} onChange={e => setLine(l.id, { label: e.target.value })} style={{ ...cellInp, width: 118 }} /></td>
+                    <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => setLine(l.id, { type: e.target.value })} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
+                    <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 118 }} /></td>
                     <td style={{ ...td, minWidth: 210 }}>
                       {isProd && <>
                         <ItemSearch red={isVariable(l, 'item')} kind={l.type} value={l.default || ''} choices={choices} label={label} findText={findText}
@@ -102,13 +102,21 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                           any ({(l.offers || []).length} on list)
                         </label>
                       </>}
-                      {l.type === 'lump' && <><NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder="amount (x the line's qty)" style={{ ...cellInp, width: '100%' }} /><div style={{ fontSize: 10, color: '#888' }}>lump sum - not divided by the item's quantity; set its cost category</div></>}
-                      {l.type === 'lump sum' && <NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder={l.type === 'lump sum' ? 'amount per job (on the estimate)' : 'amount per unit'} style={{ ...cellInp, width: '100%' }} />}
+                      {/* LUMP SUM / LUMP SPREAD (1117): the Item is its DESCRIPTION, like the
+                          other lines; the amount is in the Rate column. */}
+                      {(l.type === 'lump' || l.type === 'lump sum') && <>
+                        <input value={l.ownName || ''} onChange={e => setLine(l.id, { ownName: e.target.value })} placeholder={l.type === 'lump' ? 'description - e.g. Scaffold hire' : 'description - e.g. Delivery to site'} style={{ ...cellInp, width: '100%', background: isVariable(l, 'item') ? RED : undefined }} />
+                        <div style={{ fontSize: 10.5, color: '#888', display: 'flex', gap: 4, marginTop: 2, alignItems: 'center' }}><VarFlag l={l} cell="item" setLine={setLine} />{l.type === 'lump' ? 'lump sum - amount x the line qty, not divided by the item qty' : 'lump spread - an amount per job, spread over the item qty'}</div>
+                      </>}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => setLine(l.id, { applySize: e.target.value || undefined })} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per job" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}</td>
                     <td style={td}>
+                      {(l.type === 'lump' || l.type === 'lump sum') && <>
+                        <NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder={l.type === 'lump' ? 'amount' : 'per job'} style={{ ...cellInp, width: 70, background: isVariable(l, 'rate') ? RED : undefined }} title={l.type === 'lump' ? 'The amount - x the line qty' : 'An amount per job - spread over the item qty on the estimate'} />
+                        <VarFlag l={l} cell="rate" setLine={setLine} />
+                      </>}
                       {isProd && <>
                         {/* With a product: its rate, which can be typed over (CHANGED / Revert).
                             With none: an OWN item - this is its rate (1097). */}
@@ -483,4 +491,14 @@ function VariablePopout({ v, names, onClose, onSave }) {
       </div>
     </div>
   )
+}
+
+// A TEXT BOX THAT WRAPS (1117): grows a line taller instead of hiding text
+// (the line labels). Enter does not add a line break - it is still one label.
+function AutoText({ value, onChange, style, ...rest }) {
+  const ref = useRef(null)
+  useEffect(() => { const e = ref.current; if (e) { e.style.height = 'auto'; e.style.height = `${e.scrollHeight + 2}px` } }, [value])
+  return <textarea ref={ref} rows={1} value={value || ''} onChange={e => onChange(e.target.value.replace(/\n/g, ' '))}
+    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+    style={{ ...style, resize: 'none', overflow: 'hidden', lineHeight: 1.3, display: 'block', fontFamily: 'inherit', boxSizing: 'border-box' }} {...rest} />
 }
