@@ -47,16 +47,21 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
       <Block title="Sizes" hint="Width, Height and Girth for this build-up. A line's Apply size multiplies it by one of them.">
         {SIZE_NAMES.map(nm => {
           const z = (t.sizes || []).find(x => String(x.name).toLowerCase() === nm.toLowerCase())
-          const setVal = (v) => setT(x => {
+          const setSize = (patch) => setT(x => {
             const list = [...(x.sizes || [])]; const k = list.findIndex(y => String(y.name).toLowerCase() === nm.toLowerCase())
-            const val = v === '' ? null : parseFloat(v)
-            if (k >= 0) list[k] = { ...list[k], value: val }; else list.push({ name: nm, value: val, comment: '' })
+            if (k >= 0) list[k] = { ...list[k], ...patch }; else list.push({ name: nm, value: null, comment: '', ...patch })
             return { ...x, sizes: list }
           })
+          const setVal = (v) => setSize({ value: v === '' ? null : parseFloat(v) })
+          // MANDATORY (1113): a number must be entered on every quote using this build-up.
+          const needed = !!(z && z.required) && (z.value == null || z.value === '')
           return (
             <div key={nm} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
               <span style={{ width: 70, fontSize: 13, fontWeight: 600 }}>{nm}</span>
-              <NumBox value={z?.value ?? null} onChange={v => setVal(v == null ? '' : String(v))} placeholder="m" style={{ ...inp, width: 110 }} />
+              <NumBox value={z?.value ?? null} onChange={v => setVal(v == null ? '' : String(v))} placeholder={needed ? 'required' : 'm'} style={{ ...inp, width: 110, background: needed ? RED : undefined, borderColor: needed ? '#ef4444' : undefined }} title={needed ? `${nm} is mandatory - enter a number` : ''} />
+              <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12, color: z?.required ? '#b91c1c' : '#666', cursor: 'pointer', whiteSpace: 'nowrap' }} title="A number must be entered on every quote using this build-up - the quote cannot be issued until it is">
+                <input type="checkbox" checked={!!z?.required} onChange={e => setSize({ required: e.target.checked || undefined })} /> Mandatory
+              </label>
               <span style={{ fontSize: 11.5, color: '#999' }}>{t.lines.filter(l => l.applySize === nm).length ? `used by ${t.lines.filter(l => l.applySize === nm).map(l => l.label).join(', ')}` : 'not used yet'}</span>
             </div>
           )

@@ -9,7 +9,7 @@ import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import { placeholderValues } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
-import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending } from '../../../lib/buildups'
+import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
 import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
@@ -166,6 +166,9 @@ export default function EstimatePage() {
   const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
 
   async function issue(andPrint) {
+    // Mandatory sizes (1113): no quote goes out until each has a number.
+    const noSize = itemsMissingSizes(est)
+    if (noSize.length) { setErr(`Enter the mandatory sizes first (Build-up on each item): ${noSize.slice(0, 6).map(x => `${x.description} - ${x.sizes.join(', ')}`).join('; ')}${noSize.length > 6 ? ` and ${noSize.length - 6} more` : ''}`); return }
     // Marked-for-amending text never prints - so check before a quote goes out (1110).
     const marked = (est.rows || []).filter(r => r.kind === 'item' && r.buildup && needsAmending(r.buildup))
     if (marked.length && !window.confirm(`${marked.length} item${marked.length === 1 ? "'s description is" : "s' descriptions are"} still marked for amending (red on the take-off):\n\n${marked.slice(0, 8).map(r => '- ' + r.description).join('\n')}\n\nIssue the quote anyway?`)) return
@@ -358,6 +361,7 @@ export default function EstimatePage() {
                         <div style={{ fontSize: 11, color: p.missing?.length ? '#b45309' : '#aaa', marginTop: 2 }}>
                           {r.templateRef ? 'from the build-ups' : 'unique item'}{p.missing?.length ? ` · ${p.missing.length} line${p.missing.length === 1 ? '' : 's'} not yet in the rate` : ''}
                           {r.buildup && needsAmending(r.buildup) && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · description needs amending</span>}
+                          {r.buildup && missingSizes(r.buildup).length > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {missingSizes(r.buildup).join(', ')} required</span>}
                         </div>
                         {/* The item's description, as the quote will word it - parts marked for
                             amending shown RED here, never on the quote (1110). */}
