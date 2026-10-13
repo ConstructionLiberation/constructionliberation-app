@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import BrandLogo from './BrandLogo'
 import DocumentsPanel from './DocumentsPanel'
 import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders } from '../lib/quoteDocs'
-import { BU_UNIT_LABEL, descriptionText } from '../lib/buildups'
+import { BU_UNIT_LABEL, descriptionText, descriptionParts } from '../lib/buildups'
 
 // THE ESTIMATE'S QUOTE TABS (1092): Letter, Clarifications, Documents, Quote.
 // The take-off is the other tab (pages/estimating/estimate/[id].js).
@@ -86,7 +86,12 @@ export function DocumentsTab({ est, readOnly }) {
 // Save as PDF) with only the quote on the page.
 export function QuotePreview({ est, values, priced, totals, templates, money, companyName, termsOverride, lib, draft, actions }) {
   // An item's quote line: its build-up DESCRIPTION when written, else its name (1098).
-  const lineText = (r) => (lib && r.buildup && descriptionText(r.buildup, lib)) || r.description
+  // ...with a variable not yet chosen printed RED as [Warranty] (1121). Text marked
+  // for amending prints normally - that red is for the take-off only.
+  const lineText = (r) => {
+    if (!(lib && r.buildup && descriptionText(r.buildup, lib))) return r.description
+    return <>{descriptionParts(r.buildup, lib).map((x, k) => x.red === 'missing' ? <span key={k} style={{ color: '#b91c1c', fontWeight: 700 }}>{x.text}</span> : <span key={k}>{x.text}</span>)}</>
+  }
   const m2 = (v) => v == null ? '' : money(v, { dp: 2 })
   const s = est.settings || {}
   const terms = termsOverride || currentTerms(templates)

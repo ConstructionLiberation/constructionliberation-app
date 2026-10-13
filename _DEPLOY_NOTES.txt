@@ -1,18 +1,35 @@
-PACKAGE 1120 - Copy a line in a rate build-up
+PACKAGE 1121 - Choose an existing variable; unchosen variables show red
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1119.
+Five files. Complete replacements. No re-seed. No env changes. Built on 1120.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
+  components/QuoteTabs.js
+  lib/buildups.js
+  pages/estimating/build-ups.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-Each line has a COPY button (⧉) beside its ✕: an exact copy - type, label,
-item, rate, quantity, waste, cost category, Apply size, variable flags, its
-description tick - goes directly underneath, with its own id. Change whatever
-differs.
+INSERT VARIABLE opens on "CHOOSE EXISTING": every variable already used in any
+build-up (Warranty, Girth, Colour...), with its options - click one to insert
+it. "New variable" makes one that does not exist yet. Variables with the same
+name are one variable; their options are combined.
 
-Checked in a REAL browser (Chromium) at 1366px: copying VCL put an identical
-line directly under it (18 -> 19 lines; both = 0.99); the copy's qty changed
-to 2 -> copy 1.98, original still 0.99; a lump sum copied with its
-description and 350.00; a whole line still fits; saved with every line id
-unique. All 165 pages pass the browser check. Built from your deployed
-packages (1022-1119, verified against their zips); the file checked identical
+A variable with NO VALUE CHOSEN shows RED as [Warranty]:
+  - in the description box (red writing)
+  - on the take-off (red in the item's description; the item says "Warranty
+    not chosen")
+  - on the QUOTE (red) - so a quote cannot go out with a gap unnoticed
+  - Download and mark as sent warns ("Warranty not chosen (prints red on
+    the quote)")
+Once a value is chosen it turns LIGHT GREY in the description box and reads as
+chosen ("20 year"); on the take-off and quote it reads as normal text.
+(Text marked for amending stays take-off-only, as before.)
+
+Checked in a REAL browser (Chromium): Insert variable opened on Choose existing,
+listing Colour and Warranty from another build-up; Warranty inserted as red
+"[Warranty]" with its 10/20/25 year dropdown; 20 year chosen -> light grey "20
+year"; a New variable (Girth) still works, red until chosen. On an estimate:
+the take-off shows "[Warranty]" red and "Warranty not chosen", the chosen
+Colour normal; the quote prints "[Warranty]" in red (and nothing else red);
+sending warned. All 165 pages pass the browser check. Built from your deployed
+packages (1022-1120, verified against their zips); each file checked identical
 to the tested version before zipping.

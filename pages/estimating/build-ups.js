@@ -5,7 +5,7 @@ import { useFormat } from '../../components/TenantProvider'
 import { CheckPanel, SecBtn, th, td, tdR, inp, btn } from '../../components/LibraryParts'
 import BuildupEditor, { NumBox } from '../../components/BuildupEditor'
 import DocumentsPanel from '../../components/DocumentsPanel'
-import { LINE_TYPES, BU_UNITS, BU_UNIT_LABEL, COST_CATEGORIES, LINE_COLUMNS, SIZE_COLUMNS, RULE_COLUMNS, DESC_COLUMNS, varText, varsText, rateFor, evalQty, qtyProblem, normalizeTemplate } from '../../lib/buildups'
+import { LINE_TYPES, BU_UNITS, BU_UNIT_LABEL, COST_CATEGORIES, LINE_COLUMNS, SIZE_COLUMNS, RULE_COLUMNS, DESC_COLUMNS, varText, varsText, rateFor, evalQty, qtyProblem, normalizeTemplate, variableLibrary } from '../../lib/buildups'
 
 // ESTIMATING > RATE BUILD-UPS (1087). Categories down the left; a build-up
 // opens in the editor: name, category, unit, sizes, lines (products picked from
@@ -169,7 +169,7 @@ export default function BuildUpsPage() {
           </>}
           <div style={{ minWidth: 0 }}>
             {edit && <button onClick={() => setEdit(null)} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '0 0 8px', fontFamily: 'inherit' }}>← All build-ups{edit.t?.section ? ` · ${edit.t.section}` : ''}</button>}
-            {edit ? <Editor key={edit.key || edit.originalRef || 'new'} edit={edit} lib={lib} money={money} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
+            {edit ? <Editor key={edit.key || edit.originalRef || 'new'} edit={edit} lib={lib} money={money} varLibrary={variableLibrary(templates)} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
               onAddCategory={(n) => addCategory(n, true)}
               onCopy={(t) => {
                 // COPY (1115): a new, unsaved build-up - everything copied, named
@@ -191,7 +191,7 @@ export default function BuildUpsPage() {
   )
 }
 
-function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onCopy, onAddCategory }) {
+function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onCopy, onAddCategory, varLibrary }) {
   const [t, setT] = useState(edit.t)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -229,7 +229,7 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onC
       </div>
       {!t.section && <div style={warnBox}>No category - this build-up is listed under No category until it has one.</div>}
 
-      <BuildupEditor value={t} onChange={setT} lib={lib} money={money}
+      <BuildupEditor value={t} onChange={setT} lib={lib} money={money} varLibrary={varLibrary}
         rateOpts={{ profit: calc.profit !== '' ? (parseFloat(calc.profit) || 0) / 100 : (t.profit ?? 0), mcd: (parseFloat(calc.mcd) || 0) / 100, labourFactor: parseFloat(calc.factor) || 1 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
           <strong style={{ fontSize: 13 }}>Try the rate</strong>

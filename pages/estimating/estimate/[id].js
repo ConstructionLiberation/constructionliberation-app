@@ -9,7 +9,7 @@ import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import { placeholderValues } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
-import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes } from '../../../lib/buildups'
+import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
 import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
@@ -170,8 +170,8 @@ export default function EstimatePage() {
     const noSize = itemsMissingSizes(est)
     if (noSize.length) { setErr(`Enter the mandatory sizes first (Build-up on each item): ${noSize.slice(0, 6).map(x => `${x.description} - ${x.sizes.join(', ')}`).join('; ')}${noSize.length > 6 ? ` and ${noSize.length - 6} more` : ''}`); return }
     // Marked-for-amending text never prints - so check before a quote goes out (1110).
-    const marked = (est.rows || []).filter(r => r.kind === 'item' && r.buildup && needsAmending(r.buildup))
-    if (marked.length && !window.confirm(`${marked.length} item${marked.length === 1 ? "'s description is" : "s' descriptions are"} still marked for amending (red on the take-off):\n\n${marked.slice(0, 8).map(r => '- ' + r.description).join('\n')}\n\nIssue the quote anyway?`)) return
+    const marked = (est.rows || []).filter(r => r.kind === 'item' && r.buildup && (needsAmending(r.buildup) || missingVars(r.buildup).length))
+    if (marked.length && !window.confirm(`${marked.length} item${marked.length === 1 ? "'s description needs" : "s' descriptions need"} attention (red on the take-off):\n\n${marked.slice(0, 8).map(r => '- ' + r.description + (missingVars(r.buildup).length ? ` - ${missingVars(r.buildup).join(', ')} not chosen (prints red on the quote)` : '') + (needsAmending(r.buildup) ? ' - marked for amending' : '')).join('\n')}\n\nIssue the quote anyway?`)) return
     if (dirty && !(await flushSave())) { setErr('The estimate could not be saved, so it was not issued'); return }
     const note = window.prompt(andPrint
       ? `Mark Rev ${est.revision} as SENT? It is issued - frozen as it stands, dated today${est.dealId ? ', the CRM deal value set to its total' : ''} - then the print window opens to save it as a PDF. Optional note:`
@@ -362,12 +362,15 @@ export default function EstimatePage() {
                           {r.templateRef ? 'from the build-ups' : 'unique item'}{p.missing?.length ? ` · ${p.missing.length} line${p.missing.length === 1 ? '' : 's'} not yet in the rate` : ''}
                           {r.buildup && needsAmending(r.buildup) && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · description needs amending</span>}
                           {r.buildup && missingSizes(r.buildup).length > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {missingSizes(r.buildup).join(', ')} required</span>}
+                          {r.buildup && missingVars(r.buildup).length > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {missingVars(r.buildup).join(', ')} not chosen</span>}
                         </div>
                         {/* The item's description, as the quote will word it - parts marked for
                             amending shown RED here, never on the quote (1110). */}
                         {(() => { const parts = r.buildup ? descriptionParts(r.buildup, lib) : []; return parts.length ? (
                           <div style={{ fontSize: 11.5, color: '#666', marginTop: 3, lineHeight: 1.45, maxWidth: 560 }}>
-                            {parts.map((x, k) => x.red ? <span key={k} style={{ color: '#b91c1c', background: '#fee2e2', fontWeight: 600, borderRadius: 3 }}>{x.text}</span> : <span key={k}>{x.text}</span>)}
+                            {parts.map((x, k) => x.red === 'amend' ? <span key={k} style={{ color: '#b91c1c', background: '#fee2e2', fontWeight: 600, borderRadius: 3 }}>{x.text}</span>
+                              : x.red === 'missing' ? <span key={k} style={{ color: '#b91c1c', fontWeight: 700 }} title="Not chosen yet - choose it in the item's Build-up">{x.text}</span>
+                              : <span key={k}>{x.text}</span>)}
                           </div>) : null })()}
                       </td>
                       <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
@@ -499,7 +502,7 @@ function Popout({ item, est, lib: libIn, templates = [], money, onChange, setRow
         {msg && <div style={{ fontSize: 12.5, color: '#0f766e', marginTop: 8 }}>{msg}</div>}
         <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Changes here belong to this estimate only - the library is never changed from here (Add as new template adds a new one).</div>
         <div style={{ marginTop: 10 }}><DocumentsPanel ownerType="estimate" ownerId={est.id} itemId={item.id} title="Documents on this item" /></div>
-        <BuildupEditor value={value} onChange={(fn) => onChange((b) => { const n = fn({ ...b, unit: item.unit }); const { unit, ...rest } = n; return rest })}
+        <BuildupEditor varLibrary={variableLibrary(templates)} value={value} onChange={(fn) => onChange((b) => { const n = fn({ ...b, unit: item.unit }); const { unit, ...rest } = n; return rest })}
           lib={lib} money={money} rateTitle="Rate on this quote"
           rateOpts={{ profit: item.profit != null ? item.profit : (s.profit || 0), mcd: s.mcd || 0, labourFactor: s.labourFactor ?? 1, jobQty: item.rateOnly || item.qty == null ? null : Number(item.qty) }}>
           <div style={{ fontSize: 12.5, color: '#555' }}>

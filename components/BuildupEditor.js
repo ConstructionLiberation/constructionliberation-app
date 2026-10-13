@@ -14,7 +14,7 @@ export const fromPct = (s) => { if (s === '' || s == null) return null; const n 
 // The shared unit names (1103) - so m³, weeks and days show here too.
 const UNIT_LABEL = BU_UNIT_LABEL
 
-export default function BuildupEditor({ value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children }) {
+export default function BuildupEditor({ varLibrary, value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children }) {
   const t = value
   // Changes pass through as STEPS (functions), so two in one click apply in
   // order. onChange must be a state setter (or accept a function).
@@ -178,9 +178,12 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
             )
           })}
           {varPop && <VariablePopout v={varPop.index != null ? t.descVars[varPop.index] : null} names={(t.descVars || []).map(v => v.name)} onClose={() => setVarPop(null)}
+            library={varPop.index == null ? [...(t.descVars || []).map(v => ({ name: v.name, options: v.options || [] })), ...(varLibrary || [])].filter((v, i, a) => a.findIndex(y => y.name.toLowerCase() === v.name.toLowerCase()) === i) : []}
             onSave={({ name, options }) => {
               if (varPop.index == null) {
-                setT(x => ({ ...x, descVars: [...(x.descVars || []).filter(v => v.name.toLowerCase() !== name.toLowerCase()), { name, options, value: options.length === 1 ? options[0] : '' }] }))
+                setT(x => (x.descVars || []).some(v => v.name.toLowerCase() === name.toLowerCase())
+                  ? x                                                    // already on this build-up: keep its value (1121)
+                  : { ...x, descVars: [...(x.descVars || []), { name, options, value: options.length === 1 ? options[0] : '' }] })
                 setTimeout(() => descInsert.current && descInsert.current(name), 0)
               } else {
                 const old = t.descVars[varPop.index].name
@@ -353,6 +356,8 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
   const esc = (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const varVal = (name) => { const v = (vars || []).find(x => String(x.name).toLowerCase() === String(name).toLowerCase()); return v ? (String(v.value ?? '').trim() || `[${v.name}]`) : null }
   const shown = (tok) => tok === 'products' ? (liveProducts || '[no products ticked yet]') : varVal(tok)
+  // A variable with no value chosen is RED; chosen (and the products) light grey (1121).
+  const colourOf = (tok) => { if (tok === 'products') return GREY; const v = (vars || []).find(x => String(x.name).toLowerCase() === String(tok).toLowerCase()); return v && !String(v.value ?? '').trim() ? '#b91c1c' : GREY }
   const RED_STYLE = 'color:#b91c1c;background:#fee2e2;border-radius:3px'
   // [! ... !] = marked for amending (1110): drawn red, its contents as usual.
   const toHtml = (text) => String(text || '').split(/(\[![\s\S]*?!\])/).map(chunk => {
@@ -361,7 +366,7 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
   }).join('')
   const tokensHtml = (text) => String(text || '').split(/(\{[^{}]{1,60}\})/).map(part => {
     const m = part.match(/^\{([^{}]{1,60})\}$/)
-    if (m) { const raw = m[1].trim(); const tok = raw.toLowerCase() === 'products' ? 'products' : raw; const sh = shown(tok); if (sh != null) return `<span data-token="${esc(tok)}" style="color:${GREY}">${esc(sh)}</span>` }
+    if (m) { const raw = m[1].trim(); const tok = raw.toLowerCase() === 'products' ? 'products' : raw; const sh = shown(tok); if (sh != null) return `<span data-token="${esc(tok)}" style="color:${colourOf(tok)}">${esc(sh)}</span>` }
     return esc(part).replace(/\n/g, '<br>')
   }).join('')
   function serialize() {
@@ -430,7 +435,7 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
   insertRef.current = (tok) => {
     if (!el.current) return
     const sp = document.createElement('span')
-    sp.dataset.token = tok; sp.style.color = GREY; sp.textContent = shown(tok) ?? `[${tok}]`
+    sp.dataset.token = tok; sp.style.color = colourOf(tok); sp.textContent = shown(tok) ?? `[${tok}]`
     let r = saved.current && el.current.contains(saved.current.startContainer) ? saved.current : null
     if (!r) { r = document.createRange(); r.selectNodeContents(el.current); r.collapse(false) }
     r.deleteContents()
@@ -477,7 +482,11 @@ export function NumBox({ value, onChange, pct: isPct, dp, emptyAs = null, ...res
 // THE VARIABLE POP-OUT (1109): name a variable (Warranty, Girth...) and list
 // the options to choose from, one per line. With no options it is a free-text
 // value. Opens beside the description's buttons.
-function VariablePopout({ v, names, onClose, onSave }) {
+function VariablePopout({ v, names, onClose, onSave, library = [] }) {
+  // CHOOSE AN EXISTING VARIABLE (1121) - any used in this or another build-up -
+  // or make a new one.
+  const [mode, setMode] = useState(!v && library.length ? 'choose' : 'new')
+  const [find, setFind] = useState('')
   const [name, setName] = useState(v ? v.name : '')
   const [opts, setOpts] = useState(v ? (v.options || []).join('\n') : '')
   const clean = name.trim().replace(/[{}]/g, '')
@@ -486,6 +495,26 @@ function VariablePopout({ v, names, onClose, onSave }) {
   return (
     <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 50, width: 340, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.14)', padding: 12 }}>
       <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 8 }}>{v ? 'Edit variable' : 'Insert a variable'}</div>
+      {!v && library.length > 0 && (
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          {[['choose', 'Choose existing'], ['new', 'New variable']].map(([k, lab]) => <button key={k} onClick={() => setMode(k)} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: `1px solid ${mode === k ? '#0f766e' : '#d4d4d0'}`, background: mode === k ? '#f0fdfa' : '#fff', color: mode === k ? '#0f766e' : '#555', cursor: 'pointer', fontWeight: mode === k ? 600 : 400 }}>{lab}</button>)}
+        </div>
+      )}
+      {mode === 'choose' && !v ? (
+        <div>
+          <input autoFocus value={find} onChange={e => setFind(e.target.value)} placeholder="Find a variable…" style={{ ...cellInp, width: '100%', marginBottom: 6 }} />
+          <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #f0efec', borderRadius: 6 }}>
+            {library.filter(x => x.name.toLowerCase().includes(find.trim().toLowerCase())).map(x => (
+              <button key={x.name} onMouseDown={e => e.preventDefault()} onClick={() => onSave({ name: x.name, options: x.options || [] })}
+                style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderBottom: '1px solid #f4f3f0', background: '#fff', padding: '7px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f766e' }}>{x.name}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>{(x.options || []).length ? `${x.options.length} option${x.options.length === 1 ? '' : 's'}: ${x.options.slice(0, 4).join(', ')}${x.options.length > 4 ? '…' : ''}` : 'typed value'}</div>
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}><button onClick={onClose} style={{ fontSize: 12.5, padding: '5px 12px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer' }}>Cancel</button></div>
+        </div>
+      ) : <>
       <label style={{ display: 'block', fontSize: 12, color: '#666', marginBottom: 8 }}>Name
         <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Warranty, Girth" style={{ ...cellInp, width: '100%', marginTop: 3 }} />
       </label>
@@ -499,6 +528,7 @@ function VariablePopout({ v, names, onClose, onSave }) {
         <button onMouseDown={e => e.preventDefault()} onClick={() => clean && !taken && onSave({ name: clean, options })} disabled={!clean || taken}
           style={{ fontSize: 12.5, padding: '5px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: !clean || taken ? 0.5 : 1 }}>{v ? 'Save' : 'Insert'}</button>
       </div>
+      </>}
     </div>
   )
 }
