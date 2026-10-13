@@ -53,7 +53,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
           return (
             <div key={nm} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
               <span style={{ width: 70, fontSize: 13, fontWeight: 600 }}>{nm}</span>
-              <input value={z?.value ?? ''} onChange={e => setVal(e.target.value)} placeholder="m" inputMode="decimal" style={{ ...inp, width: 110 }} />
+              <NumBox value={z?.value ?? null} onChange={v => setVal(v == null ? '' : String(v))} placeholder="m" style={{ ...inp, width: 110 }} />
               <span style={{ fontSize: 11.5, color: '#999' }}>{t.lines.filter(l => l.applySize === nm).length ? `used by ${t.lines.filter(l => l.applySize === nm).map(l => l.label).join(', ')}` : 'not used yet'}</span>
             </div>
           )
@@ -61,7 +61,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
         {(t.sizes || []).filter(z => !SIZE_NAMES.some(n => n.toLowerCase() === String(z.name).toLowerCase())).map((z, i) => (
           <div key={`o${i}`} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
             <span style={{ width: 70, fontSize: 12.5, color: '#666' }}>{z.name}</span>
-            <input value={z.value ?? ''} onChange={e => setT(x => ({ ...x, sizes: x.sizes.map(s2 => s2 === z ? { ...s2, value: e.target.value === '' ? null : parseFloat(e.target.value) } : s2) }))} inputMode="decimal" style={{ ...inp, width: 110 }} />
+            <NumBox value={z.value ?? null} onChange={v => setT(x => ({ ...x, sizes: x.sizes.map(s2 => s2 === z ? { ...s2, value: v } : s2) }))} style={{ ...inp, width: 110 }} />
             <span style={{ fontSize: 11.5, color: '#999' }}>from the spreadsheet - quantities written as sums use it{z.comment ? ` (${z.comment})` : ''}</span>
           </div>
         ))}
@@ -94,8 +94,8 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                           any ({(l.offers || []).length} on list)
                         </label>
                       </>}
-                      {l.type === 'lump' && <><input value={l.amount ?? ''} onChange={e => setLine(l.id, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })} placeholder="amount (x the line's qty)" inputMode="decimal" style={{ ...cellInp, width: '100%' }} /><div style={{ fontSize: 10, color: '#888' }}>lump sum - not divided by the item's quantity; set its cost category</div></>}
-                      {l.type === 'lump sum' && <input value={l.amount ?? ''} onChange={e => setLine(l.id, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })} placeholder={l.type === 'lump sum' ? 'amount per job (on the estimate)' : 'amount per unit'} inputMode="decimal" style={{ ...cellInp, width: '100%' }} />}
+                      {l.type === 'lump' && <><NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder="amount (x the line's qty)" style={{ ...cellInp, width: '100%' }} /><div style={{ fontSize: 10, color: '#888' }}>lump sum - not divided by the item's quantity; set its cost category</div></>}
+                      {l.type === 'lump sum' && <NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder={l.type === 'lump sum' ? 'amount per job (on the estimate)' : 'amount per unit'} style={{ ...cellInp, width: '100%' }} />}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => setLine(l.id, { applySize: e.target.value || undefined })} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...SIZE_NAMES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
@@ -104,16 +104,16 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
                       {isProd && <>
                         {/* With a product: its rate, which can be typed over (CHANGED / Revert).
                             With none: an OWN item - this is its rate (1097). */}
-                        <input value={l.override ?? ''} onChange={e => setLine(l.id, { override: e.target.value === '' ? null : parseFloat(e.target.value) })}
-                          placeholder={l.default ? (lc.libRate != null ? (+lc.libRate.toFixed(4)).toString() : '') : 'rate'} inputMode="decimal"
-                          style={{ ...cellInp, width: 70, borderColor: l.default && l.override != null ? '#f59e0b' : undefined, background: isVariable(l, 'rate') ? RED : undefined }} title={l.default ? 'The price-list rate - type over it to change it on this build-up' : 'Your own item: type its rate'} />
+                        <NumBox dp={2} value={l.override ?? null} onChange={v => setLine(l.id, { override: v })}
+                          placeholder={l.default ? (lc.libRate != null ? lc.libRate.toFixed(2) : '') : 'rate'}
+                          style={{ ...cellInp, width: 70, borderColor: l.default && l.override != null ? '#f59e0b' : undefined, background: isVariable(l, 'rate') ? RED : undefined }} title={`${l.default ? 'The price-list rate - type over it to change it on this build-up' : 'Your own item: type its rate'}${(l.override ?? lc.libRate) != null ? ` - exact: ${+Number(l.override ?? lc.libRate).toFixed(6)}` : ''}`} />
                         <VarFlag l={l} cell="rate" setLine={setLine} />
                         {l.default && l.override != null && <div><span style={{ fontSize: 10, fontWeight: 700, color: '#b45309' }}>CHANGED</span> <button onClick={() => setLine(l.id, { override: null })} style={{ ...iconBtn, fontSize: 10.5, color: '#2563eb' }}>Revert to {l.type === 'labour' ? 'labour rate' : 'price list'}</button></div>}
                         {!l.default && <div style={{ fontSize: 10, color: '#888' }}>own item</div>}
                       </>}
                     </td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type === 'material' && <><input value={pct(l.waste)} onChange={e => setLine(l.id, { waste: fromPct(e.target.value) })} style={{ ...cellInp, width: 52, background: isVariable(l, 'waste') ? RED : undefined }} /><VarFlag l={l} cell="waste" setLine={setLine} /></>}</td>
-                    <td style={td}>{l.type === 'material' && <input value={pct(l.increase)} onChange={e => setLine(l.id, { increase: fromPct(e.target.value) })} style={{ ...cellInp, width: 52 }} />}</td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type === 'material' && <><NumBox pct value={l.waste ?? null} onChange={v => setLine(l.id, { waste: v })} style={{ ...cellInp, width: 52, background: isVariable(l, 'waste') ? RED : undefined }} /><VarFlag l={l} cell="waste" setLine={setLine} /></>}</td>
+                    <td style={td}>{l.type === 'material' && <NumBox pct value={l.increase ?? null} onChange={v => setLine(l.id, { increase: v })} style={{ ...cellInp, width: 52 }} />}</td>
                     <td style={{ ...tdR, fontWeight: 700, color: '#0f766e', whiteSpace: 'nowrap' }} title="Rate x Qty (x waste / increase)">{lc.cost != null ? `= ${money(lc.cost, { dp: 2 })}` : ''}</td>
                     <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} style={{ ...cellInp, width: 92 }}><option value="">—</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
                     <td style={td}><button onClick={() => setT(x => ({ ...x, lines: x.lines.filter(y => y.id !== l.id), rules: (x.rules || []).filter(rr => rr.line !== l.id) }))} style={iconBtn} title="Remove line">✕</button></td>
@@ -381,4 +381,23 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, pla
       <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Grey = filled in for you and kept up to date; edit it and it becomes your own wording.</div>
     </div>
   )
+}
+
+// THE NUMBER BOX (1108). While you type it keeps EXACTLY what you typed - "0.",
+// ".25", "2.5" - and saves the number as soon as it is a number; leaving the
+// box tidies the display. (Before, each keystroke was turned into a number,
+// so a decimal point vanished and no value under 1 could be typed.)
+//   value: a number or null;  pct: shown x100 (0.025 -> 2.5);  dp: decimals shown
+export function NumBox({ value, onChange, pct: isPct, dp, emptyAs = null, ...rest }) {
+  const [text, setText] = useState(null)       // null = not typing in it
+  const shown = value == null ? '' : isPct ? String(+(value * 100).toFixed(4)) : dp != null ? Number(value).toFixed(dp) : String(value)
+  return <input {...rest} inputMode="decimal" value={text != null ? text : shown}
+    onFocus={() => setText(value == null ? '' : isPct ? String(+(value * 100).toFixed(6)) : String(value))}
+    onChange={e => {
+      const t = e.target.value; setText(t)
+      const c = t.replace(/[£,%\s]/g, '')
+      if (c === '') return onChange(emptyAs)
+      if (/^-?\d*\.?\d*$/.test(c) && Number.isFinite(parseFloat(c))) onChange(isPct ? parseFloat(c) / 100 : parseFloat(c))
+    }}
+    onBlur={e => { setText(null); rest.onBlur && rest.onBlur(e) }} />
 }

@@ -17,7 +17,8 @@ const ALL = '__all__'
 
 export default function PriceListPage() {
   const { money } = useFormat()
-  const m4 = (v) => v == null ? '' : money(v, { dp: v < 1 ? 4 : 2 })
+  // Prices and rates to 2 decimal places (1108) - the exact figure is still used in every calculation.
+  const m4 = (v) => v == null ? '' : money(v, { dp: 2 })
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
   const [section, setSection] = useState(ALL)

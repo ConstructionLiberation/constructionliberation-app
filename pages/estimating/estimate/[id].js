@@ -3,7 +3,7 @@ import { useRouter } from 'next/router'
 import EstimatingShell, { ErrorBar, estApi } from '../../../components/EstimatingShell'
 import { useFormat } from '../../../components/TenantProvider'
 import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
-import BuildupEditor, { pct, fromPct } from '../../../components/BuildupEditor'
+import BuildupEditor, { pct, fromPct, NumBox } from '../../../components/BuildupEditor'
 import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
@@ -66,7 +66,7 @@ export default function EstimatePage() {
       { key: 'labTotal', label: 'Labour total', heads: ['Labour total'], render: (r, p) => [R('lt', p.labourTotal)], foot: () => [F('lt', totals.labour)] },
       { key: 'profitRate', label: 'Profit rate', heads: ['Profit rate'], render: (r, p) => [R('pr', p.profitRate)] },
       { key: 'profitTotal', label: 'Profit total', heads: ['Profit total'], render: (r, p) => [R('pt', p.profitTotal)], foot: () => [F('pt', totals.profit)] },
-      { key: 'profitPct', label: 'Profit % (this item)', heads: ['Profit %'], align: 'left', render: (r) => [<td key="pp" style={td}><input value={pct(r.profit)} onChange={e => setRow(r.id, { profit: fromPct(e.target.value) })} placeholder={s.profit != null ? String(pct(s.profit)) : ''} style={{ ...cellInp, width: 56, borderColor: r.profit != null ? '#f59e0b' : undefined }} title="Leave blank to use the quote's profit %" /></td>] },
+      { key: 'profitPct', label: 'Profit % (this item)', heads: ['Profit %'], align: 'left', render: (r) => [<td key="pp" style={td}><NumBox pct value={r.profit ?? null} onChange={v => setRow(r.id, { profit: v })} placeholder={s.profit != null ? String(pct(s.profit)) : ''} style={{ ...cellInp, width: 56, borderColor: r.profit != null ? '#f59e0b' : undefined }} title="Leave blank to use the quote's profit %" /></td>] },
       { key: 'rateOnly', label: 'Rate only', heads: ['Rate only'], align: 'left', render: (r) => [<td key="ro" style={td}><input type="checkbox" checked={!!r.rateOnly} onChange={e => setRow(r.id, { rateOnly: e.target.checked })} title="No quantity: priced as a rate, below the line" /></td>] },
     ]
     for (const sup of Object.keys(totals.bySupplier || {}).filter(k => totals.bySupplier[k] > 0).sort()) {
@@ -247,10 +247,10 @@ export default function EstimatePage() {
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 12, marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
           <label>Quote ref <input value={est.quoteRef || ''} onChange={e => change(x => ({ ...x, quoteRef: e.target.value }))} style={{ ...cellInp, width: 120 }} /></label>
-          <label>Profit % <input value={pct(s.profit)} onChange={e => setSetting('profit', fromPct(e.target.value))} placeholder="set" style={{ ...cellInp, width: 60, borderColor: s.profit == null ? '#f59e0b' : undefined }} /></label>
-          <label>MCD % <input value={pct(s.mcd)} onChange={e => setSetting('mcd', fromPct(e.target.value))} placeholder="0" style={{ ...cellInp, width: 60 }} /></label>
-          <label title="Raise or lower ALL the labour on this quote - each rate in proportion to its own labour">Labour factor <input value={s.labourFactor ?? 1} onChange={e => setSetting('labourFactor', e.target.value === '' ? 1 : parseFloat(e.target.value))} style={{ ...cellInp, width: 60 }} /></label>
-          <label title="Starts from the company day rate (Labour Rates); used for prelims">Day rate <input value={s.dayRate ?? ''} onChange={e => setSetting('dayRate', e.target.value === '' ? null : parseFloat(e.target.value))} style={{ ...cellInp, width: 70 }} /></label>
+          <label>Profit % <NumBox pct value={s.profit ?? null} onChange={v => setSetting('profit', v)} placeholder="set" style={{ ...cellInp, width: 60, borderColor: s.profit == null ? '#f59e0b' : undefined }} /></label>
+          <label>MCD % <NumBox pct value={s.mcd ?? null} onChange={v => setSetting('mcd', v)} placeholder="0" style={{ ...cellInp, width: 60 }} /></label>
+          <label title="Raise or lower ALL the labour on this quote - each rate in proportion to its own labour">Labour factor <NumBox value={s.labourFactor ?? 1} emptyAs={1} onChange={v => setSetting('labourFactor', v)} style={{ ...cellInp, width: 60 }} /></label>
+          <label title="Starts from the company day rate (Labour Rates); used for prelims">Day rate <NumBox dp={2} value={s.dayRate ?? null} onChange={v => setSetting('dayRate', v)} style={{ ...cellInp, width: 70 }} /></label>
           <div style={{ flex: 1 }} />
           <button onClick={() => setShowAdj(v => !v)} style={{ ...smallBtn, borderColor: (est.adjustments || []).length ? '#2563eb' : undefined, color: (est.adjustments || []).length ? '#2563eb' : undefined }}>This quote's price adjustments{(est.adjustments || []).length ? ` (${est.adjustments.length})` : ''}</button>
           <button onClick={() => setShowHeader(v => !v)} style={smallBtn}>{showHeader ? 'Hide' : 'Show'} project and customer details</button>
@@ -463,7 +463,7 @@ function Popout({ item, est, lib: libIn, money, onChange, setRow, onClose }) {
           <label style={lbl}>Item<input value={item.description} onChange={e => setRow({ description: e.target.value })} style={{ ...inp, minWidth: 340 }} /></label>
           <label style={lbl}>Unit<select value={item.unit || ''} onChange={e => setRow({ unit: e.target.value })} style={inp}><option value="">—</option>{BU_UNITS.map(u => <option key={u} value={u}>{BU_UNIT_LABEL[u]}</option>)}</select></label>
           <label style={lbl}>Quantity<input value={item.rateOnly ? '' : (item.qty ?? '')} disabled={item.rateOnly} placeholder={item.rateOnly ? 'TBC (rate only)' : ''} onChange={e => setRow({ qty: e.target.value === '' ? null : e.target.value })} style={{ ...inp, width: 110 }} /></label>
-          <label style={lbl}>Profit % (this item)<input value={pct(item.profit)} onChange={e => setRow({ profit: fromPct(e.target.value) })} placeholder={s.profit != null ? `${pct(s.profit)} (quote)` : 'quote'} style={{ ...inp, width: 120 }} /></label>
+          <label style={lbl}>Profit % (this item)<NumBox pct value={item.profit ?? null} onChange={v => setRow({ profit: v })} placeholder={s.profit != null ? `${pct(s.profit)} (quote)` : 'quote'} style={{ ...inp, width: 120 }} /></label>
           <div style={{ flex: 1 }} />
           <button onClick={() => setSaving({ category: '', name: item.description })} style={btn}>Save as template…</button>
           <button onClick={onClose} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e' }}>Done</button>
