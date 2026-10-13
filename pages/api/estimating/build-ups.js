@@ -45,7 +45,7 @@ async function handler(req, res) {
     // just by being opened. Recorded in the library's history; runs once.
     if (items.some(needsNormalizing)) {
       const cleaned = items.map(normalizeTemplate)
-      index = await replaceBuildups(cleaned, { by: 'Portal - comments cleared (1102)', source: index?.source || '' })
+      index = await replaceBuildups(cleaned, { by: 'Portal - tidied: old comments removed; Size1 removed - its lines need a quantity (red V) (1102/1130)', source: index?.source || '' })
       items = cleaned
     }
     return res.status(200).json({ index, templates: inOrder(items, (await get(ORDER)) || {}), categories: (await get(CATS)) || [] })

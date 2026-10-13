@@ -1,21 +1,31 @@
-PACKAGE 1128 - Apply size: Height + Width
+PACKAGE 1130 - Size1 removed (replaces 1129, which was withdrawn)
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1127.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1128.
+DO NOT deploy 1129 - it was withdrawn before deployment; this replaces it.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
   lib/buildups.js
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  pages/api/estimating/build-ups.js
 
-Apply size has a new choice, HEIGHT + WIDTH: the line is multiplied by the
-two added together - Height 1 m + Width 0.5 m = 1.5. The Qty hint reads
-"x Height + Width 1.5 = 1.5"; if either is blank the line says "set the height
-and width"; the Sizes block shows the line as using both. The Materials tab
-orders by it too. In the build-ups file, "Height + Width" (either way round).
+Size1 (the costing spreadsheet's size cell, in 23 build-ups) is REMOVED, for
+you to set each line up with Width / Height / Girth yourself. The 46 lines
+whose quantity used it:
+  - quantity CLEARED - so the line is not in the rate (it is listed under "not
+    yet in the rate") until you set it; nothing prices without a size by mistake
+  - Qty marked V (red) so they stand out
+  - "was Size1" / "was Size1+0.2"... shown under the Qty box until a quantity
+    is entered, so you can see what it was
+Choosing an Apply size fills the quantity with 1 (as in 1126).
+Done ONCE on the library the first time the Build-ups page loads after this
+deploy (history: "Size1 removed - its lines need a quantity (red V)"); on
+estimate items when the estimate is opened; on the converter's file if it is
+ever uploaded again.
 
-Checked: H 1 + W 0.5 -> a 2.00 line becomes 3.00; width blank -> "set the
-height and width"; 10 m of upstand -> 15 m on the Materials tab; "width +
-height" in a file reads as the choice. In a REAL browser (Chromium): the
-choices are -, Width, Height, Girth, Height + Width; on Underlay it shows "x
-Height + Width 1.5 = 1.5" and = 3.42 (2.00 x 1.5 + 14%); Height and Width both
-"used by Underlay". All 165 pages pass the browser check. Built from your
-deployed packages (1022-1127, verified against their zips); each file checked
-identical to the tested version before zipping.
+Checked: on your converter file - no Size1 left; all 46 lines that used it
+cleared, red V, old quantity kept; no other line changed. Through the real
+route - Size1 in storage removed on the first load, recorded, not rewritten on
+the second. In a REAL browser (Chromium): no Size1 row; the Membrane's Qty
+empty and red, "was Size1", under not-yet-in-the-rate; Apply size Girth ->
+qty 1, "x Girth (on the quote)". All server routes compile; all 165 pages pass
+the browser check. Built from your deployed packages (1022-1128, verified
+against their zips); each file checked identical to the tested version.
