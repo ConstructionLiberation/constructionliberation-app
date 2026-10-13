@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -11,7 +11,8 @@ import { th, td, tdR, inp } from './LibraryParts'
 //   lib       { product, labour, products, labourItems }
 export const pct = (v) => v == null ? '' : +(v * 100).toFixed(4)
 export const fromPct = (s) => { if (s === '' || s == null) return null; const n = parseFloat(s); return Number.isNaN(n) ? NaN : n / 100 }
-const UNIT_LABEL = { m2: 'm²', m: 'm', nr: 'nr', item: 'item' }
+// The shared unit names (1103) - so m³, weeks and days show here too.
+const UNIT_LABEL = BU_UNIT_LABEL
 
 export default function BuildupEditor({ value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children }) {
   const t = value

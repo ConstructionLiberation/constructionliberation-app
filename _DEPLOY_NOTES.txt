@@ -1,48 +1,22 @@
-PACKAGE 1102 - Own items save; V on quantity; comments cleared
+PACKAGE 1103 - Per m3 as a unit
 
-Seven files. Complete replacements. No re-seed. No env changes. Built on 1101.
+Five files. Complete replacements. No re-seed. No env changes. Built on 1102.
 
-  lib/buildups.js, lib/estimate.js, lib/materials.js
-  components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
-  pages/estimating/build-ups.js
-  pages/api/estimating/build-ups.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
+  lib/buildups.js, lib/priceList.js, lib/labourRates.js
+  components/BuildupEditor.js, components/MaterialsTab.js
 
-OWN ITEMS NOW SAVE: type a name in the Item box and press Enter, or click away
-- it stays as "Own item: Risk allowance"; then type its rate. (Before, the box
-only searched, and what was typed was dropped.) The description uses the name;
-the build-ups file has an "Own item" column.
+m3 (shown m³) is now a unit for build-ups and take-off items, labour rates and
+the price list (e.g. concrete, loose fill by volume). Files may write m3 or m³.
 
-V ON THE QUANTITY too (item, rate, quantity, waste) - light red when set.
+ALSO FIXED: the build-up editor and the Materials tab kept their own lists of
+unit names, which knew neither m³ nor the weeks and days added in 1101 - so a
+per-week build-up's rate read "per" and nothing. Both now use the shared lists,
+so a unit added in future shows everywhere at once.
 
-COMMENTS: lines no longer carry notes - a comment is its own line, added with
-"+ comment" underneath. ONCE:
-  - the library is cleaned on the server the first time the Build-ups page
-    loads after this deploy - every note and every old comment line removed;
-    the library's history shows "Portal - comments cleared (1102)"; it does not
-    run again
-  - an estimate's items are cleaned when it is opened (saved with the next change)
-  - the converter's upload file is read without its comments
-Comment lines added afterwards are kept - including through a download and
-re-upload of the app's own file.
-
-ALSO - found and put right: the build-ups CONVERTER script (outside the app)
-had been changed by someone other than me since I last ran it - it would have
-turned every lump spread into a material line and its Read me described types
-it does not write. Restored; it now reproduces the upload file you used EXACTLY
-(all 1,851 rows). The file itself was never affected.
-
-Checked:
-  - the converter's file: 167 build-ups, 0 errors, none of its 619 comment rows
-    or any notes come in; Mech Fixed SP still 32.04
-  - an app-downloaded file keeps its comment line, drops a note, keeps an own
-    item's name and a variable quantity; a comment added later survives
-  - the server clean-up removes every comment line and note, is recorded in the
-    history, and does not rewrite the library on the next load; a build-up
-    added to an estimate comes in clean
-  - in a REAL browser (Chromium): no notes or comment lines; "Risk allowance" +
-    Enter -> "Own item: Risk allowance"; "Contingency" + click away -> "Own item:
-    Contingency"; picking a product still works; V on a quantity -> light red
-  - all server routes compile; all 165 pages pass the browser check
-  - built from your deployed packages (1022-1101, verified against their zips);
-    each file checked identical to the tested version before zipping
+Checked: "m³" / "M3" read as m3 with no errors in the price list, labour rates
+and build-ups. In a REAL browser (Chromium): the build-up list shows "per m³"
+and "per week"; the Unit choice offers per m², m, m³, nr, item, week, day; the
+rate lines read "Rate 11.60 per m³" and "Rate 0.60 per week". All server
+routes compile; all 165 pages pass the browser check. Built from your deployed
+packages (1022-1102, verified against their zips); each file checked identical
+to the tested version before zipping.

@@ -1,11 +1,14 @@
 import { useMemo } from 'react'
 import { materialList } from '../lib/materials'
+import { UNIT_LABEL } from '../lib/priceList'
+import { BU_UNIT_LABEL } from '../lib/buildups'
 
 // THE ESTIMATE'S MATERIALS TAB (1095): what to order, worked out live from the
 // take-off - by supplier, in packs, at the supplier's pack price. Order waste
 // can differ from the estimate's (e.g. 10% priced, 5% ordered): blank uses the
 // estimate's. Rules: lib/materials.js.
-const UNIT = { m2: 'm²', m: 'm', nr: 'nr', l: 'l', kg: 'kg' }
+// The shared unit names (1103): products' base units and items' units.
+const UNIT = { ...BU_UNIT_LABEL, ...UNIT_LABEL }
 const n = (v, dp = 2) => v == null ? '' : (+v.toFixed(dp)).toLocaleString('en-GB')
 const pct = (v) => v == null ? '' : +(v * 100).toFixed(2)
 
