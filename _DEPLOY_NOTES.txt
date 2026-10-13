@@ -1,19 +1,15 @@
-PACKAGE 1111 - Girth as a size
+PACKAGE 1112 - A deeper description box, writing starting one line down
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1110.
+One file. Complete replacement. No re-seed. No env changes. Built on 1111.
 
   components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
-  lib/buildups.js
 
-Sizes are now WIDTH, HEIGHT and GIRTH. A line's Apply size can be Girth - its
-quantity multiplied by the girth. Build-ups that already had a size you named
-"Girth" (from 1098) are picked up as the Girth size. "girth" in the build-ups
-file reads as Girth.
+The description box is deeper (about six lines, from three) and its writing
+starts one line further down, so it is not bunched against the top; the
+empty-box hint moved to match.
 
-Checked: Girth 0.6 and Width 1.2 each scale only their own lines (12 / 24); a
-1098 build-up's "Girth" size still applies (9); the file reads "girth". In a
-REAL browser (Chromium): the Sizes block lists Width, Height, Girth (the older
-Girth size showing 0.45); Apply size offers Girth once; applying it to the VCL
-took its line from 0.99 to 0.45. All 165 pages pass the browser check. Built
-from your deployed packages (1022-1110, verified against their zips); each
-file checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium): box about 190px tall (was 64); writing
+starts 32px from the top (was 8); the hint lines up with where typing starts.
+All 165 pages pass the browser check. Built from your deployed packages
+(1022-1111, verified against their zips); the file checked identical to the
+tested version before zipping.

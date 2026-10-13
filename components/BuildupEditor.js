@@ -425,8 +425,8 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, fla
         onBlur={() => { focused.current = false; setTick(t => t + 1) }}
         onInput={() => { settleEdited(); onChange(serialize()) }}
         onPaste={(e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')) }}
-        style={{ minHeight: 64, padding: '8px 10px', border: '1px solid #d4d4d0', borderRadius: 8, fontSize: 13.5, lineHeight: 1.55, background: '#fff', outline: 'none', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }} />
-      {!value && <div style={{ position: 'absolute', left: 11, top: 9, fontSize: 13.5, color: '#bbb', pointerEvents: 'none' }}>{placeholder}</div>}
+        style={{ minHeight: 150, padding: '29px 12px 12px', border: '1px solid #d4d4d0', borderRadius: 8, fontSize: 13.5, lineHeight: 1.55, background: '#fff', outline: 'none', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }} />
+      {!value && <div style={{ position: 'absolute', left: 13, top: 30, fontSize: 13.5, color: '#bbb', pointerEvents: 'none' }}>{placeholder}</div>}
       <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Grey = filled in for you and kept up to date; edit it and it becomes your own wording.</div>
     </div>
   )
