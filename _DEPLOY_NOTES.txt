@@ -1,36 +1,29 @@
-PACKAGE 1109 - Description variables: a pop-out to name them and list options;
-a dropdown beside the products to choose
+PACKAGE 1110 - Mark parts of a description red for amending
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1108.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1109.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
-  lib/buildups.js                 (the file carries a variable's options)
+  components/BuildupEditor.js            (Build-ups page AND the take-off pop-out)
+  lib/buildups.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-INSERT VARIABLE now opens a POP-OUT beside the description's buttons:
-  Name     - e.g. Warranty, Girth, Colour
-  Options  - one per line, e.g. 10 year / 15 year / 20 year
-  Insert   - it goes into the description where the cursor is, in grey
-Each variable then has a DROPDOWN in the same row as "Insert products" and
-"⚙ Products in the description" - choose its value there (light red until
-chosen); the grey text follows. On an estimate, the pop-out's dropdown picks
-the value for that quote. Click a variable's name to rename it or change its
-options (the description follows a rename). No options -> a box to type the
-value instead. ✕ removes it.
+In the description box: select the words that need amending (e.g. "XXXmm")
+and click MARK FOR AMENDING - they turn RED. Click inside red words and
+CLEAR MARK to remove it. Grey products / variables can sit inside a red mark
+and stay live.
+  - The TAKE-OFF now shows each item's description under its name, with the
+    marked parts in red, and the item says "description needs amending".
+  - The QUOTE prints the same words - never red, no marks.
+  - Download and mark as sent WARNS if any item is still marked ("1 item's
+    description is still marked for amending ... Issue the quote anyway?").
+Marks are saved with the description (and in the build-ups file).
 
-The build-ups file carries the options: "Warranty=20 year [10 year|15 year|20
-year]". Older files still read.
-
-ALSO FIXED: inserting when the cursor was not in the description could put the
-grey text at the START after the description had redrawn; it now goes at the
-END, with a space before it.
-
-Checked in a REAL browser (Chromium): Insert variable -> pop-out; "Warranty"
-with three options inserted at the cursor -> "...with a [Warranty] warranty.",
-dropdown light red; 20 year chosen -> "...with a 20 year warranty.", red
-cleared; renamed "Warranty period" with a 25 year option -> still reads the
-same, 20 year kept; "Girth" with no options -> a typing box, red until filled;
-SAVED "Single ply roof with a {Warranty period} warranty. {Girth}" with the
-options stored; the 1106 description test (grey products, edits inside them)
-still passes. The file format round-trips options exactly. All 165 pages pass
-the browser check. Built from your deployed packages (1022-1108, verified
-against their zips); each file checked identical to the tested version.
+Checked in a REAL browser (Chromium): Mark with nothing selected -> "Select
+the words to mark first"; "XXXmm" selected with the keyboard and marked ->
+red; SAVED "Coping [!XXXmm!] girth powder coated aluminium to all edges.";
+Clear mark -> the words kept, unmarked. On an estimate: the take-off shows
+"Coping XXXmm girth ... with Alkorplus polythene VCL." with XXXmm red and
+"description needs amending"; the quote prints the same words with no red and
+no marks; Download and mark as sent warned, and declining stopped the issue.
+Descriptions without marks read exactly as before. All 165 pages pass the
+browser check. Built from your deployed packages (1022-1109, verified against
+their zips); each file checked identical to the tested version before zipping.

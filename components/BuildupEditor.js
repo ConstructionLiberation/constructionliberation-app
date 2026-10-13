@@ -26,6 +26,8 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
   const [descMenu, setDescMenu] = useState(false)
   const descInsert = useRef(null)       // the description editor's insert-at-cursor (1106)
   const [varPop, setVarPop] = useState(null)   // the variable pop-out: { index } - null index = a new one (1109)
+  const descFlag = useRef(null)                 // mark / clear red in the description (1110)
+  const [flagMsg, setFlagMsg] = useState('')
   const [showAll, setShowAll] = useState({})     // lineId -> true: pick from the whole price list / labour rates
   const set = (patch) => setT(x => ({ ...x, ...patch }))
   const setLine = (id, patch) => setT(x => ({ ...x, lines: x.lines.map(l => l.id === id ? { ...l, ...patch } : l) }))
@@ -136,6 +138,9 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
           <button onMouseDown={e => e.preventDefault()} onClick={() => descInsert.current && descInsert.current('products')} style={smallBtn} title="The ticked products, in grey - live until you edit them">Insert products</button>
           <button onMouseDown={e => e.preventDefault()} onClick={() => setVarPop({ index: null })} style={smallBtn} title="A detail the description needs that is not a product - e.g. Warranty, Girth">Insert variable</button>
           <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which products go into the description">⚙ Products in the description ({t.lines.filter(l => l.type === 'material' && l.inDescription).length})</button>
+          <button onMouseDown={e => e.preventDefault()} onClick={() => { const ok = descFlag.current && descFlag.current.mark(); setFlagMsg(ok ? '' : 'Select the words to mark first') }} style={{ ...smallBtn, color: '#b91c1c', borderColor: '#fca5a5' }} title="Mark the selected words red - shows on the take-off, never on the quote">Mark for amending</button>
+          <button onMouseDown={e => e.preventDefault()} onClick={() => { const ok = descFlag.current && descFlag.current.clear(); setFlagMsg(ok ? '' : 'Click inside the red words first') }} style={smallBtn} title="Remove the red mark the cursor is in">Clear mark</button>
+          {flagMsg && <span style={{ fontSize: 11.5, color: '#b45309' }}>{flagMsg}</span>}
           {(t.descVars || []).map((v, i) => {
             const opts = v.options || []
             const empty = !String(v.value ?? '').trim()
@@ -175,7 +180,7 @@ export default function BuildupEditor({ value, onChange, lib, money, rateOpts, r
             {!t.lines.some(l => l.type === 'material') && <div style={{ fontSize: 12, color: '#aaa' }}>No material lines yet.</div>}
           </div>
         )}
-        <DescriptionEditor value={t.descText || ''} onChange={(v) => setT(x => ({ ...x, descText: v }))} liveProducts={productList(t, lib)} vars={t.descVars || []} insertRef={descInsert}
+        <DescriptionEditor value={t.descText || ''} onChange={(v) => setT(x => ({ ...x, descText: v }))} liveProducts={productList(t, lib)} vars={t.descVars || []} insertRef={descInsert} flagRef={descFlag}
           placeholder="e.g. Single ply membrane roof system comprising: (Insert products)." />
       </Block>
 
@@ -318,14 +323,20 @@ function ListEditor({ ln, lib, label, findText, onClose, onChange }) {
 // the build-up - among your own words. Everything is editable: editing inside
 // grey text makes it your own wording (black, no longer live). Stored as text
 // with {products} / {Name} where the grey text is untouched - unchanged format.
-function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, placeholder }) {
+function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, flagRef, placeholder }) {
   const el = useRef(null), saved = useRef(null), focused = useRef(false)
   const [tick, setTick] = useState(0)
   const GREY = '#9a9a96'
   const esc = (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const varVal = (name) => { const v = (vars || []).find(x => String(x.name).toLowerCase() === String(name).toLowerCase()); return v ? (String(v.value ?? '').trim() || `[${v.name}]`) : null }
   const shown = (tok) => tok === 'products' ? (liveProducts || '[no products ticked yet]') : varVal(tok)
-  const toHtml = (text) => String(text || '').split(/(\{[^{}]{1,60}\})/).map(part => {
+  const RED_STYLE = 'color:#b91c1c;background:#fee2e2;border-radius:3px'
+  // [! ... !] = marked for amending (1110): drawn red, its contents as usual.
+  const toHtml = (text) => String(text || '').split(/(\[![\s\S]*?!\])/).map(chunk => {
+    const f = chunk.match(/^\[!([\s\S]*?)!\]$/)
+    return f ? `<span data-flag="1" style="${RED_STYLE}">${tokensHtml(f[1])}</span>` : tokensHtml(chunk)
+  }).join('')
+  const tokensHtml = (text) => String(text || '').split(/(\{[^{}]{1,60}\})/).map(part => {
     const m = part.match(/^\{([^{}]{1,60})\}$/)
     if (m) { const raw = m[1].trim(); const tok = raw.toLowerCase() === 'products' ? 'products' : raw; const sh = shown(tok); if (sh != null) return `<span data-token="${esc(tok)}" style="color:${GREY}">${esc(sh)}</span>` }
     return esc(part).replace(/\n/g, '<br>')
@@ -337,6 +348,7 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, pla
         if (n.nodeType === 3) out.push(n.nodeValue)
         else if (n.nodeName === 'BR') out.push('\n')
         else if (n.dataset && n.dataset.token) { const tok = n.dataset.token; out.push(n.textContent === shown(tok) ? (tok === 'products' ? '{products}' : `{${tok}}`) : n.textContent) }
+        else if (n.dataset && n.dataset.flag) { if (n.textContent) { out.push('[!'); walk(n); out.push('!]') } }
         else { if ((n.nodeName === 'DIV' || n.nodeName === 'P') && out.length && !String(out[out.length - 1]).endsWith('\n')) out.push('\n'); walk(n) }
       }
     }
@@ -372,6 +384,25 @@ function DescriptionEditor({ value, onChange, liveProducts, vars, insertRef, pla
     document.addEventListener('selectionchange', keep)
     return () => document.removeEventListener('selectionchange', keep)
   }, [])
+  // MARK FOR AMENDING / CLEAR MARK (1110) - the selected words, or the red part the cursor is in.
+  if (flagRef) flagRef.current = {
+    mark() {
+      const sel = window.getSelection()
+      if (!sel || !sel.rangeCount || sel.isCollapsed || !el.current.contains(sel.getRangeAt(0).commonAncestorContainer)) return false
+      const r = sel.getRangeAt(0)
+      const sp = document.createElement('span'); sp.dataset.flag = '1'; sp.setAttribute('style', RED_STYLE)
+      sp.appendChild(r.extractContents()); r.insertNode(sp)
+      for (const inner of [...sp.querySelectorAll('span[data-flag]')]) inner.replaceWith(...inner.childNodes)   // no red inside red
+      sel.removeAllRanges(); onChange(serialize()); return true
+    },
+    clear() {
+      const sel = window.getSelection()
+      let n = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null
+      while (n && n !== el.current && !(n.dataset && n.dataset.flag)) n = n.parentNode
+      if (!n || n === el.current) return false
+      n.replaceWith(...n.childNodes); onChange(serialize()); return true
+    },
+  }
   // Insert grey (live) text where the cursor was - else at the end.
   insertRef.current = (tok) => {
     if (!el.current) return

@@ -9,7 +9,7 @@ import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import { placeholderValues } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
-import { normalizeTemplate, needsNormalizing } from '../../../lib/buildups'
+import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
 import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
@@ -166,6 +166,9 @@ export default function EstimatePage() {
   const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
 
   async function issue(andPrint) {
+    // Marked-for-amending text never prints - so check before a quote goes out (1110).
+    const marked = (est.rows || []).filter(r => r.kind === 'item' && r.buildup && needsAmending(r.buildup))
+    if (marked.length && !window.confirm(`${marked.length} item${marked.length === 1 ? "'s description is" : "s' descriptions are"} still marked for amending (red on the take-off):\n\n${marked.slice(0, 8).map(r => '- ' + r.description).join('\n')}\n\nIssue the quote anyway?`)) return
     if (dirty && !(await flushSave())) { setErr('The estimate could not be saved, so it was not issued'); return }
     const note = window.prompt(andPrint
       ? `Mark Rev ${est.revision} as SENT? It is issued - frozen as it stands, dated today${est.dealId ? ', the CRM deal value set to its total' : ''} - then the print window opens to save it as a PDF. Optional note:`
@@ -354,7 +357,14 @@ export default function EstimatePage() {
                         <input value={r.description} onChange={e => setRow(r.id, { description: e.target.value })} style={{ ...cellInp, width: '100%' }} />
                         <div style={{ fontSize: 11, color: p.missing?.length ? '#b45309' : '#aaa', marginTop: 2 }}>
                           {r.templateRef ? 'from the build-ups' : 'unique item'}{p.missing?.length ? ` · ${p.missing.length} line${p.missing.length === 1 ? '' : 's'} not yet in the rate` : ''}
+                          {r.buildup && needsAmending(r.buildup) && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · description needs amending</span>}
                         </div>
+                        {/* The item's description, as the quote will word it - parts marked for
+                            amending shown RED here, never on the quote (1110). */}
+                        {(() => { const parts = r.buildup ? descriptionParts(r.buildup, lib) : []; return parts.length ? (
+                          <div style={{ fontSize: 11.5, color: '#666', marginTop: 3, lineHeight: 1.45, maxWidth: 560 }}>
+                            {parts.map((x, k) => x.red ? <span key={k} style={{ color: '#b91c1c', background: '#fee2e2', fontWeight: 600, borderRadius: 3 }}>{x.text}</span> : <span key={k}>{x.text}</span>)}
+                          </div>) : null })()}
                       </td>
                       <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
                       <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
