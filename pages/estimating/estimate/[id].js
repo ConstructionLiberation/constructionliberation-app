@@ -538,7 +538,8 @@ function DealLinker({ onClose, onPick }) {
   )
 }
 
-function TemplatePicker({ templates, onClose, onPick }) {
+function TemplatePicker({ templates: allTemplates, onClose, onPick }) {
+  const templates = allTemplates.filter(t => !t.hidden)   // build-ups not in use are left out (1137)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState(null)
   const cats = [...new Set(templates.map(t => t.section || 'No category'))].sort()

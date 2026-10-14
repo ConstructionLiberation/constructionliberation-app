@@ -1,25 +1,27 @@
-PACKAGE 1136 - Apply several sizes at once (added, then multiplied)
+PACKAGE 1137 - Hide rate build-ups that are not in use
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1135.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1136.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
-  lib/buildups.js
-  pages/estimating/build-ups.js   (the file writes the list)
+  pages/estimating/build-ups.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/estimating/build-ups.js
 
-APPLY SIZE is now a tick-box list: tick any number of sizes and they are ADDED
-TOGETHER, then the line's quantity is multiplied by the sum - Width 0.5 +
-Height 1 + Girth 0.3 = 1.8, x qty. The cell shows what is ticked (in full on
-hover); the Qty hint reads "x (Width 0.5 + Height 1 + Girth 0.3) = 1.8"; a
-blank one is named ("set the girth"); the Sizes row shows the line under each.
-The 1128 "Height + Width" choice is simply those two ticked - same result.
-The build-ups file writes and reads "Width + Height + Girth".
+A ⚙ at the top of the build-ups list (middle column) lists that category's
+build-ups with an "In use" tick. Untick one and it is HIDDEN: left out of the
+build-ups list, the search, and the take-off's "Item from build-ups" picker.
+"N hidden" shows beside the ⚙; "Show hidden build-ups in the list" brings them
+back into view, greyed and tagged "hidden", to open or tick back into use.
+Nothing is deleted - a hidden build-up keeps everything, and estimates already
+using it are unaffected. Shared across the company; kept through renaming a
+build-up or its category; stored apart from the build-ups.
 
-Checked: (0.5 + 1 + 0.3) x 2 = 3.6 -> 7.20 at 2.00; one size and "Height +
-Width" unchanged (0.3, 1.5); girth blank -> "set the girth"; 10 m -> 18 m on
-the Materials tab; the file reads the list back. In a REAL browser
-(Chromium): the picker lists all six sizes with their values; Width, Height
-and Girth ticked -> "Width + Height + Girth", "x (Width 0.5 + Height 1 + Girth
-0.3) = 1.8", = 4.10 (2.00 x 1.8 + 14%); each size shows "used by Underlay"; a
-whole line still fits at 1366px and 1600px. All 165 pages pass the browser
-check. Built from your deployed packages (1022-1135, verified against their
-zips); each file checked identical to the tested version before zipping.
+Checked through the real route: two Felt build-ups hidden -> 13 of 15 shown,
+all 15 still there; a hidden one renamed stays hidden, and "hidden" is never
+stored in the build-up; the category renamed - still hidden; shown again;
+deleting a hidden one clears it from the list. In a REAL browser (Chromium):
+the ⚙ and "1 hidden"; unticking Felt Warm Roof hides it at once (2 hidden) and
+saves; Show hidden brings both back tagged; on an estimate the picker leaves
+the hidden one out, in the category list and in search. All server routes
+compile; all 165 pages pass the browser check. Built from your deployed
+packages (1022-1136, verified against their zips); each file checked identical
+to the tested version before zipping.

@@ -48,11 +48,19 @@ export default function BuildUpsPage() {
     for (const c of data?.categories || []) if (![...m.keys()].some(k => k.toLowerCase() === c.toLowerCase())) m.set(c, 0)
     return [...m.entries()].sort((a, b) => a[0] === NOCAT ? -1 : b[0] === NOCAT ? 1 : a[0].localeCompare(b[0]))
   }, [templates, data])
+  // Build-ups NOT IN USE are left out unless "Show hidden" is on (1137).
+  const [showHidden, setShowHidden] = useState(false)
+  const [useMenu, setUseMenu] = useState(false)
+  const visible = useMemo(() => showHidden ? templates : templates.filter(t => !t.hidden), [templates, showHidden])
   const shown = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    if (words.length) return templates.filter(t => words.every(w => `${t.section} ${t.description}`.toLowerCase().includes(w)))
-    return cat == null ? [] : templates.filter(t => (t.section || NOCAT) === cat)
-  }, [templates, cat, q])
+    if (words.length) return visible.filter(t => words.every(w => `${t.section} ${t.description}`.toLowerCase().includes(w)))
+    return cat == null ? [] : visible.filter(t => (t.section || NOCAT) === cat)
+  }, [visible, cat, q])
+  async function setInUse(refs, inUse) {
+    setData(d => ({ ...d, templates: d.templates.map(t => refs.includes(t.ref) ? { ...t, hidden: !inUse || undefined } : t) }))
+    try { await estApi(API, { action: 'set-hidden', refs, hidden: !inUse }) } catch (e) { setErr(e.message); await load() }
+  }
 
   async function pickFile(file) {
     if (!file) return
@@ -170,6 +178,26 @@ export default function BuildUpsPage() {
           </div>
           <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 8, maxHeight: '78vh', overflowY: 'auto' }}>
             {!shown.length && <div style={{ color: '#aaa', fontSize: 13, padding: 12 }}>{q ? 'Nothing matches.' : cat == null ? 'Pick a category.' : `No build-ups in ${cat === NOCAT ? 'No category' : cat} yet - + New build-up adds one here.`}</div>}
+            {cat != null && !q && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, padding: '0 2px 6px', position: 'relative' }}>
+                {templates.some(t => t.hidden && (t.section || NOCAT) === cat) && !showHidden && <span style={{ fontSize: 11, color: '#999' }}>{templates.filter(t => t.hidden && (t.section || NOCAT) === cat).length} hidden</span>}
+                <button onClick={() => setUseMenu(v => !v)} title="Which build-ups are in use - hide the ones that are not" style={{ ...iconBtn, fontSize: 13, padding: '2px 6px', border: '1px solid #e8e7e3', borderRadius: 6 }}>⚙</button>
+                {useMenu && (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 40, width: 280, maxHeight: '60vh', overflowY: 'auto', background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 10 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>In use - {cat === NOCAT ? 'No category' : cat}</div>
+                    <div style={{ fontSize: 11.5, color: '#888', marginBottom: 6 }}>Untick to hide a build-up from the lists and the take-off. Nothing is deleted.</div>
+                    {templates.filter(t => (t.section || NOCAT) === cat).map(t => (
+                      <label key={t.ref} style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12.5, padding: '3px 0', cursor: 'pointer', color: t.hidden ? '#999' : '#1a1a19' }}>
+                        <input type="checkbox" checked={!t.hidden} onChange={e => setInUse([t.ref], e.target.checked)} /> {t.description}
+                      </label>
+                    ))}
+                    <label style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12, padding: '6px 0 0', marginTop: 6, borderTop: '1px solid #f0efec', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> Show hidden build-ups in the list
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
             {shown.map((t, i) => (
               <div key={t.ref} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               {/* REORDER (1125) - within the category; hidden while searching */}
@@ -177,9 +205,9 @@ export default function BuildUpsPage() {
                 <button onClick={() => moveBuildup(i, -1)} disabled={i === 0} title="Move up" style={{ ...iconBtn, padding: '0 3px', fontSize: 11, opacity: i === 0 ? 0.25 : 1 }}>↑</button>
                 <button onClick={() => moveBuildup(i, 1)} disabled={i === shown.length - 1} title="Move down" style={{ ...iconBtn, padding: '0 3px', fontSize: 11, opacity: i === shown.length - 1 ? 0.25 : 1 }}>↓</button>
               </div>}
-              <button onClick={() => setEdit({ t: JSON.parse(JSON.stringify(t)), originalRef: t.ref })}
+              <button onClick={() => setEdit({ t: (() => { const c = JSON.parse(JSON.stringify(t)); delete c.hidden; return c })(), originalRef: t.ref })}
                 style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 7, padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit', background: edit?.originalRef === t.ref ? '#f0fdfa' : 'transparent' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a19' }}>{t.description}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: t.hidden ? '#aaa' : '#1a1a19' }}>{t.description}{t.hidden && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 600, color: '#888', background: '#f0efec', borderRadius: 8, padding: '1px 6px' }}>hidden</span>}</div>
                 <div style={{ fontSize: 11.5, color: '#999' }}>{q ? `${t.section || 'No category'} · ` : ''}{t.unit ? `per ${BU_UNIT_LABEL[t.unit]}` : 'no unit'} · {t.lines.filter(l => l.type !== 'comment').length} lines</div>
               </button>
               </div>

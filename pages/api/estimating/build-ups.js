@@ -12,6 +12,10 @@ const CATS = 'buildups:categories'
 // [refs] }, kept apart from the build-ups so reordering never rewrites them.
 // Build-ups are SENT in this order, so every list follows it.
 const ORDER = 'buildups:order'
+// BUILD-UPS NOT IN USE (1137) - [refs], kept apart from the build-ups. Sent with
+// hidden: true so the lists (and the take-off picker) leave them out; nothing
+// is deleted. Kept in step on rename / category rename / delete.
+const HIDDEN = 'buildups:hidden'
 const catKey = (c) => String(c || '').trim().toLowerCase()
 function inOrder(items, order) {
   const groups = new Map()
@@ -48,7 +52,9 @@ async function handler(req, res) {
       index = await replaceBuildups(cleaned, { by: 'Portal - tidied: old comments removed; Size1 removed - its lines need a quantity (red V) (1102/1130)', source: index?.source || '' })
       items = cleaned
     }
-    return res.status(200).json({ index, templates: inOrder(items, (await get(ORDER)) || {}), categories: (await get(CATS)) || [] })
+    const hidden = new Set((await get(HIDDEN)) || [])
+    const sent = inOrder(items, (await get(ORDER)) || {}).map(t => hidden.has(t.ref) ? { ...t, hidden: true } : t)
+    return res.status(200).json({ index, templates: sent, categories: (await get(CATS)) || [] })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -95,7 +101,7 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true, template: r.item, index: r.index })
   }
   if (b.action === 'save') {
-    const t = b.template || {}
+    const t = { ...(b.template || {}) }; delete t.hidden   // shown, not stored (1137)
     const tpl = { ...t, section: String(t.section || '').trim(), description: String(t.description || '').trim() }
     tpl.ref = templateKey(tpl.section, tpl.description)
     const { errors } = checkTemplate(tpl, await knownRefs())
@@ -118,6 +124,8 @@ async function handler(req, res) {
         changed = true
       }
       if (changed) await set(ORDER, order)
+      const hid = (await get(HIDDEN)) || []
+      if (hid.includes(b.originalRef)) await set(HIDDEN, hid.map(x => x === b.originalRef ? r.item.ref : x))
     }
     return res.status(200).json({ ok: true, template: r.item, index: r.index })
   }
@@ -125,7 +133,19 @@ async function handler(req, res) {
     const r = await removeBuildup(b.ref, { by })
     if (r.errors) return res.status(404).json({ error: r.errors[0] })
     if (privateReady()) await deleteAllDocs('buildup', String(b.ref), removeFile)
+    { const hid = (await get(HIDDEN)) || []; if (hid.includes(String(b.ref))) await set(HIDDEN, hid.filter(x => x !== String(b.ref))) }
     return res.status(200).json({ ok: true, index: r.index })
+  }
+  // IN USE / HIDDEN (1137): { refs: [...], hidden: true|false } - hide or show again.
+  if (b.action === 'set-hidden') {
+    const { items } = await loadBuildups()
+    const known = new Set(items.map(t => t.ref))
+    const refs = (b.refs || []).map(String).filter(r => known.has(r))
+    const cur = new Set((await get(HIDDEN)) || [])
+    for (const r of refs) { if (b.hidden) cur.add(r); else cur.delete(r) }
+    const list = [...cur].filter(r => known.has(r))
+    await set(HIDDEN, list)
+    return res.status(200).json({ ok: true, hidden: list })
   }
   // REORDER (1125): the build-ups of one category, in the order given.
   if (b.action === 'reorder') {
@@ -200,12 +220,18 @@ async function handler(req, res) {
         await set(ORDER, order)
       }
     }
+    // ...and which are hidden (1137) - refs change with the category
+    {
+      const hid = (await get(HIDDEN)) || []
+      const moved3 = Object.fromEntries(items.map((t, i) => [t.ref, next[i].ref]))
+      if (hid.some(x => moved3[x] && moved3[x] !== x)) await set(HIDDEN, hid.map(x => moved3[x] || x))
+    }
     // ...and the categories added on their own (1116)
     const extra = (await get(CATS)) || []
     if (extra.some(c => sameName(c, from))) await set(CATS, b.action === 'delete-category' ? extra.filter(c => !sameName(c, from)) : extra.map(c => sameName(c, from) ? to : c))
     return res.status(200).json({ ok: true, moved, index: idx })
   }
-  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'reorder', 'edit-variable', 'delete-variable', 'add-category', 'rename-category' or 'delete-category'" })
+  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'reorder', 'set-hidden', 'edit-variable', 'delete-variable', 'add-category', 'rename-category' or 'delete-category'" })
 }
 
 export default withTenant(handler)
