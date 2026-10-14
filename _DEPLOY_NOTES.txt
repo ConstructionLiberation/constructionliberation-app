@@ -1,14 +1,16 @@
-PACKAGE 1131 - No "was Size1" under the Qty box
+PACKAGE 1132 - Lump spread: "per rate build-up", not "per job"
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1130.
+One file. Complete replacement. No re-seed. No env changes. Built on 1131.
 
   components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-The "was Size1" / "was Size1+0.2" note under the Qty box is gone. The lines
-that used Size1 still have their quantity cleared and the Qty marked red (V),
-and are listed under "not yet in the rate".
+A lump spread line's Rate box reads "amount", with "per rate build-up"
+underneath; the note under its Item reads "lump spread - an amount per rate
+build-up, spread over the item qty"; the hover text likewise. "Per job" is
+gone everywhere.
 
-Checked in a REAL browser (Chromium): the Membrane's Qty empty and red with no
-note; Apply size Girth still fills it with 1. All 165 pages pass the browser
-check. Built from your deployed packages (1022-1130, verified against their
-zips); the file checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium) at 1366px and 1600px: the Rate box reads
+"amount" (fits), "per rate build-up" underneath, the note as above, and a whole
+line still fits on screen. All 165 pages pass the browser check. Built from
+your deployed packages (1022-1131, verified against their zips); the file
+checked identical to the tested version before zipping.

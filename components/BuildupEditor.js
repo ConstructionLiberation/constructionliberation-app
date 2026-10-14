@@ -114,7 +114,7 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
                           other lines; the amount is in the Rate column. */}
                       {(l.type === 'lump' || l.type === 'lump sum') && <>
                         <input value={l.ownName || ''} onChange={e => setLine(l.id, { ownName: e.target.value })} placeholder={l.type === 'lump' ? 'description - e.g. Scaffold hire' : 'description - e.g. Delivery to site'} style={{ ...cellInp, width: '100%', background: isVariable(l, 'item') ? RED : undefined }} />
-                        <div style={{ fontSize: 10.5, color: '#888', display: 'flex', gap: 4, marginTop: 2, alignItems: 'center' }}><VarFlag l={l} cell="item" setLine={setLine} />{l.type === 'lump' ? 'lump sum - amount x the line qty, not divided by the item qty' : 'lump spread - an amount per job, spread over the item qty'}</div>
+                        <div style={{ fontSize: 10.5, color: '#888', display: 'flex', gap: 4, marginTop: 2, alignItems: 'center' }}><VarFlag l={l} cell="item" setLine={setLine} />{l.type === 'lump' ? 'lump sum - amount x the line qty, not divided by the item qty' : 'lump spread - an amount per rate build-up, spread over the item qty'}</div>
                       </>}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                     </td>
@@ -131,8 +131,9 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
                       })()}</td>
                     <td style={td}>
                       {(l.type === 'lump' || l.type === 'lump sum') && <>
-                        <NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder={l.type === 'lump' ? 'amount' : 'per job'} style={{ ...cellInp, width: 70, background: isVariable(l, 'rate') ? RED : undefined }} title={l.type === 'lump' ? 'The amount - x the line qty' : 'An amount per job - spread over the item qty on the estimate'} />
+                        <NumBox dp={2} value={l.amount ?? null} onChange={v => setLine(l.id, { amount: v })} placeholder="amount" style={{ ...cellInp, width: 70, background: isVariable(l, 'rate') ? RED : undefined }} title={l.type === 'lump' ? 'The amount - x the line qty' : 'An amount per rate build-up - for each item using it on a quote, spread over that item qty'} />
                         <VarFlag l={l} cell="rate" setLine={setLine} />
+                        {l.type === 'lump sum' && <div style={{ fontSize: 10, color: '#888', maxWidth: 92, lineHeight: 1.25 }}>per rate build-up</div>}
                       </>}
                       {isProd && <>
                         {/* With a product: its rate, which can be typed over (CHANGED / Revert).

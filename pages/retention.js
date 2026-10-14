@@ -260,7 +260,7 @@ function exportColumns(term) {
   const recon = (e) => {
     if (!e.ret612Lines) return ''
     const ded = parseFloat(e.retention612Deducted) || 0, rel = parseFloat(e.retention612Released) || 0
-    const owed = calcRetentionOwed(e)
+    const owed = calcRetentionOwed(e) || 0   // blank (no certificate) counts as nothing (1133)
     const markedRel = (released1(e) ? calcReleaseHalf(e) : 0) + (released2(e) ? calcReleaseHalf(e) : 0)
     const dOk = Math.abs(ded - owed) < 1, rOk = Math.abs(rel - markedRel) < 1
     return dOk && rOk ? 'Ties' : !dOk && !rOk ? 'Both out' : !dOk ? 'Deducted out' : 'Released out'
@@ -685,7 +685,7 @@ export default function RetentionPage() {
           // Still HELD: retention on the invoiced value, less anything already claimed
           // back through an application's Retention section. Without the deduction the
           // register keeps chasing money that has been applied for.
-          // Derived by calcRetentionOwed from invoiced x retentionPct once the row is
+          // Derived by calcRetentionOwed from CERTIFIED x retentionPct (1133) once the row is
           // assembled - see the note on that function, amended 22 Sep 2026. Kept here
           // only as a fallback for rows that never get a percentage or an invoiced
           // figure.
@@ -1030,7 +1030,7 @@ export default function RetentionPage() {
     // live" should not change because somebody ticked a filter. It was never
     // applied to the money.
     outstanding: everyEntry.reduce((s, e) => {
-      const owed = calcRetentionOwed(e)
+      const owed = calcRetentionOwed(e) || 0   // blank (no certificate) counts as nothing (1133)
       const rel = (released1(e) ? calcReleaseHalf(e) : 0) + (released2(e) ? calcReleaseHalf(e) : 0)
       return s + (owed - rel)
     }, 0),
@@ -1038,7 +1038,7 @@ export default function RetentionPage() {
     // readable. Shown next to the headline only when a filter is hiding
     // something - see the card below.
     outstandingFiltered: allEntries.reduce((s, e) => {
-      const owed = calcRetentionOwed(e)
+      const owed = calcRetentionOwed(e) || 0   // blank (no certificate) counts as nothing (1133)
       const rel = (released1(e) ? calcReleaseHalf(e) : 0) + (released2(e) ? calcReleaseHalf(e) : 0)
       return s + (owed - rel)
     }, 0),
@@ -1338,7 +1338,7 @@ export default function RetentionPage() {
                   </table>
                 </div>
                 <div style={{ padding: '10px 16px', borderTop: '1px solid #e5e7eb', fontSize: 12, color: '#555' }}>
-                  Retention Owed <strong>{fmt(calcRetentionOwed(ret612For))}</strong> is the source of truth. Deducted should match it.
+                  Retention Owed <strong>{fmt(calcRetentionOwed(ret612For))}</strong> (Certified \u00d7 Ret %) is the source of truth. Deducted is taken on invoices, so it matches only where Certified = Invoiced.
                 </div>
               </div>
             </div>
@@ -1564,7 +1564,7 @@ export default function RetentionPage() {
                         ['Invoiced', 'right', `Total invoiced on the project: sum of the Sales (account code 200) lines from Xero. NET of ${term('vat')}, and INCLUDING retention (retention is posted to a separate account, so the Sales total already includes it). From Xero for synced projects, or the imported Xero CSV.`, 'invoiced'],
                         ['✓', 'center', 'Match check: green tick when CERTIFIED equals INVOICED (within 1), red flag when they differ - something certified has not been invoiced yet, or an invoice has gone out for something not certified. A dash means one of the two figures is missing.', null],
                         ['Account Remaining', 'right', 'Final Account − Applied for. What is still to be CLAIMED against the final account. Falls back to invoiced only where a project has no application.', null],
-                        ['Retention Owed', 'right', 'Invoiced \u00d7 Ret %. Computed on INVOICED so it can be reconciled against the 612 account, which is deducted on invoices - see lib/retentionCalc.js. It therefore lags anything applied for but not yet invoiced.', 'retentionOwed'],
+                        ['Retention Owed', 'right', 'Certified \u00d7 Ret %. Calculated on the CERTIFIED amount (the Certified column - the latest certificate). Blank where there is no Certified figure yet. The 612 account is deducted on invoices, so 612 Deducted matches this only where Certified = Invoiced.', 'retentionOwed'],
                         ['612 Deducted', 'right', 'Retention withheld on invoices under account code 612 - the GROSS figure, before any release. Sum of the negative 612 lines. NOTE: the old "612 Allocated" column was the NET (deducted less released), which is a different number.', 'r612ded'],
                         ['612 Released', 'right', 'Retention invoiced back out - the POSITIVE account 612 lines. WARNING: a release posted as a plain sales invoice with no 612 line does not appear here, which is common on older projects. A dash means no 612 movement was found at all, which is NOT the same as nothing released.', 'r612rel'],
                         ['\u2713', 'center', 'Reconciliation with Xero, two checks: 612 DEDUCTED should equal RETENTION OWED, and 612 RELEASED should equal what you have MARKED released in 1st / 2nd Value (each within 1). Green tick when both tie ("ties" underneath). Red flag when either is out, with which ("deducted out", "released out" or "both out") and how far the worse one is out - hover for both figures. A dash means no 612 lines at all.', null],
@@ -1840,7 +1840,7 @@ export default function RetentionPage() {
                               // Retention Owed is the source of truth. Xero should show
                               // that much deducted, and should show released whatever you
                               // have marked released. Two comparisons, both stated.
-                              const owed = calcRetentionOwed(entry)
+                              const owed = calcRetentionOwed(entry) || 0   // blank counts as nothing (1133)
                               const markedRel = (released1(entry) ? calcReleaseHalf(entry) : 0)
                                 + (released2(entry) ? calcReleaseHalf(entry) : 0)
                               // A pound of tolerance - retention halves round.
