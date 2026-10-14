@@ -1,19 +1,25 @@
-PACKAGE 1135 - Sizes: Length, Area and Volume; side by side
+PACKAGE 1136 - Apply several sizes at once (added, then multiplied)
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1134.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1135.
 
   components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
   lib/buildups.js
+  pages/estimating/build-ups.js   (the file writes the list)
 
-Three new sizes - LENGTH (m) for single items (e.g. 4 lineal metres around a
-rooflight), AREA (m²) and VOLUME (m³) - alongside Width, Height and Girth.
-Each can be Mandatory and is an Apply size choice (with Height + Width).
-The six sizes now sit SIDE BY SIDE in one row (wrapping on a narrow screen),
-each showing its unit, its Mandatory tick and what uses it.
+APPLY SIZE is now a tick-box list: tick any number of sizes and they are ADDED
+TOGETHER, then the line's quantity is multiplied by the sum - Width 0.5 +
+Height 1 + Girth 0.3 = 1.8, x qty. The cell shows what is ticked (in full on
+hover); the Qty hint reads "x (Width 0.5 + Height 1 + Girth 0.3) = 1.8"; a
+blank one is named ("set the girth"); the Sizes row shows the line under each.
+The 1128 "Height + Width" choice is simply those two ticked - same result.
+The build-ups file writes and reads "Width + Height + Girth".
 
-Checked in a REAL browser (Chromium) at 1366px and 1600px: the six sizes in
-one row with their units; Apply size offers all of them and Height + Width;
-Underlay applying Length 4 -> "x Length 4 = 4", = 9.12 (2.00 x 4 + 14%); Area
-marked Mandatory shows red. All 165 pages pass the browser check. Built from
-your deployed packages (1022-1134, verified against their zips); each file
-checked identical to the tested version before zipping.
+Checked: (0.5 + 1 + 0.3) x 2 = 3.6 -> 7.20 at 2.00; one size and "Height +
+Width" unchanged (0.3, 1.5); girth blank -> "set the girth"; 10 m -> 18 m on
+the Materials tab; the file reads the list back. In a REAL browser
+(Chromium): the picker lists all six sizes with their values; Width, Height
+and Girth ticked -> "Width + Height + Girth", "x (Width 0.5 + Height 1 + Girth
+0.3) = 1.8", = 4.10 (2.00 x 1.8 + 14%); each size shows "used by Underlay"; a
+whole line still fits at 1366px and 1600px. All 165 pages pass the browser
+check. Built from your deployed packages (1022-1135, verified against their
+zips); each file checked identical to the tested version before zipping.

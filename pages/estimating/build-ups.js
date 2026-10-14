@@ -78,7 +78,7 @@ export default function BuildUpsPage() {
     const add = (name, cols, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cols.map(([, l]) => l), ...rows]), name)
     // Every setting a line has goes out - an own item's rate, Apply size, in the
     // description, variable cells (1098) - so a download uploads back unchanged.
-    add('Build-ups', LINE_COLUMNS, list.flatMap(t => t.lines.map(l => [t.section, t.description, t.unit, l.id.replace(/^L/, ''), l.type, l.label, (l.offers || []).join(';'), l.default || '', l.amount ?? '', l.qty || '', l.waste ?? '', l.increase ?? '', l.cost || '', l.comment || '', l.override ?? '', l.applySize === true ? 'yes' : (l.applySize || ''), l.inDescription ? 'yes' : '', varText(l), l.ownName || ''])))
+    add('Build-ups', LINE_COLUMNS, list.flatMap(t => t.lines.map(l => [t.section, t.description, t.unit, l.id.replace(/^L/, ''), l.type, l.label, (l.offers || []).join(';'), l.default || '', l.amount ?? '', l.qty || '', l.waste ?? '', l.increase ?? '', l.cost || '', l.comment || '', l.override ?? '', l.applySize === true ? 'yes' : (Array.isArray(l.applySize) ? l.applySize.join(' + ') : (l.applySize || '')), l.inDescription ? 'yes' : '', varText(l), l.ownName || ''])))
     add('Sizes', SIZE_COLUMNS, list.flatMap(t => (t.sizes || []).map(z => [t.section, t.description, z.name, z.value ?? '', z.comment || '', z.required ? 'yes' : ''])))
     add('Product rules', RULE_COLUMNS, [])   // product rules are gone (1098) - waste lives on each line
     add('Descriptions', DESC_COLUMNS, list.filter(t => (t.descText || '').trim() || (t.descVars || []).length || t.profit != null).map(t => [t.section, t.description, t.descText || '', varsText(t.descVars), t.profit ?? '']))

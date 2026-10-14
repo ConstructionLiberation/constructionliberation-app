@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, SIZE_UNIT, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, SIZE_UNIT, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, applyList, applyText, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -125,16 +125,19 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
                       </>}
                       {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
                     </td>
-                    <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <select value={l.applySize === true ? ((t.sizes || [])[0]?.name || '') : (l.applySize || '')} onChange={e => { const v = e.target.value; setLine(l.id, { applySize: v || undefined, ...(v && (!String(l.qty ?? '').trim() || Number(l.qty) === 0) ? { qty: '1' } : {}) }) }} style={{ ...cellInp, width: 78 }} title="Multiply this line by the Width or Height"><option value="">—</option>{[...APPLY_CHOICES, ...(t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))].map(n => <option key={n} value={n}>{n}</option>)}</select>}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <SizePicker value={l.applySize} t={t}
+                      onChange={(list) => setLine(l.id, { applySize: !list.length ? undefined : list.length === 1 ? list[0] : list, ...(list.length && (!String(l.qty ?? '').trim() || Number(l.qty) === 0) ? { qty: '1' } : {}) })} />}</td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per rate" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}
                       {/* What the line uses (1126): qty x the size it applies - and a warning when qty is 0 */}
                       {l.applySize && l.type !== 'comment' && (() => {
-                        const z = (t.sizes || []).find(x => l.applySize === true ? x === (t.sizes || [])[0] : String(x.name).toLowerCase() === String(l.applySize).toLowerCase())
-                        const nm = isCombined(l.applySize) ? 'Height + Width' : z ? z.name : (l.applySize === true ? 'size' : l.applySize)
+                        // What the line uses (1126, 1136): qty x the size - or x the SUM of several
+                        const names = l.applySize === true ? [(t.sizes || [])[0]?.name || 'size'] : applyList(l.applySize)
                         const q = evalQty(l.qty, Object.fromEntries((t.sizes || []).map(x => [x.name, x.value])))
-                        const sv = isCombined(l.applySize) ? sizeOf(t, null, l.applySize) : z && z.value != null && z.value !== '' ? Number(z.value) : null
+                        const parts = names.map(nm => ({ nm, v: sizeOf(t, null, nm) }))
+                        const sv = sizeOf(t, null, l.applySize)
                         if (q === 0) return <div style={{ fontSize: 10.5, color: '#b91c1c', fontWeight: 600, whiteSpace: 'normal', maxWidth: 120 }}>qty 0 - this line costs nothing</div>
-                        return <div style={{ fontSize: 10.5, color: '#0f766e', whiteSpace: 'nowrap' }}>{sv == null ? `x ${nm} (on the quote)` : `x ${nm} ${sv} = ${q == null ? '?' : +(q * sv).toFixed(4)}`}</div>
+                        const label = parts.length > 1 ? `(${parts.map(x => `${x.nm}${x.v != null ? ' ' + x.v : ''}`).join(' + ')})` : `${parts[0].nm}${parts[0].v != null ? ' ' + parts[0].v : ''}`
+                        return <div style={{ fontSize: 10.5, color: '#0f766e', whiteSpace: 'normal', maxWidth: 170 }}>{sv == null ? `x ${label} (on the quote)` : `x ${label} = ${q == null ? '?' : +(q * sv).toFixed(4)}`}</div>
                       })()}</td>
                     <td style={td}>
                       {(l.type === 'lump' || l.type === 'lump sum') && <>
@@ -590,6 +593,39 @@ function RateSummary({ t, lib, money, rateOpts, unit }) {
         <div style={{ ...row, borderTop: '1px solid #99f6e4', marginTop: 4, paddingTop: 6, fontWeight: 700, fontSize: 15, color: '#0f766e' }}><span>Rate</span><span>{m(s.rate)}{per}</span></div>
         <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>The quote adds its MCD{s.profitPct ? '' : ' and profit %'}.</div>
       </div>
+    </div>
+  )
+}
+
+// APPLY SIZE - several at once (1136): tick the sizes; they are ADDED TOGETHER
+// and the line's quantity is multiplied by the sum.
+function SizePicker({ value, t, onChange }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  useEffect(() => {
+    const close = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close)
+  }, [])
+  const chosen = value === true ? [(t.sizes || [])[0]?.name].filter(Boolean) : applyList(value)
+  const others = (t.sizes || []).map(z => z.name).filter(n => n && !SIZE_NAMES.some(x => x.toLowerCase() === String(n).toLowerCase()))
+  const all = [...SIZE_NAMES, ...others]
+  const has = (n) => chosen.some(c => c.toLowerCase() === n.toLowerCase())
+  const toggle = (n) => onChange(has(n) ? chosen.filter(c => c.toLowerCase() !== n.toLowerCase()) : all.filter(x => has(x) || x === n))
+  const text = chosen.length ? chosen.join(' + ') : '—'
+  return (
+    <div ref={box} style={{ position: 'relative', display: 'inline-block' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} title={chosen.length > 1 ? `${text} - added together, then x the qty` : 'Multiply this line by a size - tick several to add them together'}
+        style={{ ...cellInp, width: 84, textAlign: 'left', background: '#fff', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: chosen.length ? '#1a1a19' : '#999' }}>{text} <span style={{ float: 'right', color: '#888', fontSize: 10 }}>▾</span></button>
+      {open && (
+        <div style={{ position: 'absolute', zIndex: 40, top: '100%', left: 0, marginTop: 3, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', padding: 8, minWidth: 170, textAlign: 'left' }}>
+          {all.map(n => {
+            const v = sizeOf(t, null, n)
+            return <label key={n} style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12.5, padding: '3px 2px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={has(n)} onChange={() => toggle(n)} /> {n} <span style={{ color: '#aaa', fontSize: 11 }}>{v != null ? `${v} ${SIZE_UNIT[n] || ''}` : ''}</span></label>
+          })}
+          <div style={{ fontSize: 10.5, color: '#888', marginTop: 4, borderTop: '1px solid #f0efec', paddingTop: 4 }}>Ticked sizes are added together, then x the qty.</div>
+        </div>
+      )}
     </div>
   )
 }
