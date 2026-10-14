@@ -19,6 +19,7 @@ import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../../lib/db'
 import { getClient } from '../../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories, fetchProfitAndLoss, fetchAccountCodeMap } from '../../../lib/xero'
+import { codeTotals, invoiceKeyOf, mergeWindowed, BYCODE_KEY } from '../../../lib/salesByCode'
 import { mergeCosts } from '../../../lib/mergeCosts'
 import { costLineKey as costKey, invoiceLineKey as invoiceKey } from '../../../lib/costDedupe'
 
@@ -220,6 +221,7 @@ async function fetchSalesInvoices(accessToken, tenantId, trackingOptionId, track
         amountPaid: full.AmountPaid || 0,
         amountDue: full.AmountDue || 0,
         status: full.Status || '',
+        byCode: codeTotals(full.LineItems),   // totals per account code (1134)
       })
     }
     if (invoices.length < 100) break
@@ -293,6 +295,13 @@ async function handler(req, res) {
     const paidTotal = mergedInv.reduce((s, l) => s + (l.amountPaid || 0), 0)
     const dueTotal = mergedInv.reduce((s, l) => s + (l.amountDue || 0), 0)
     await redis.set(`invoiced:lines:${projectId}`, mergedInv)
+    // Totals per account code, in their own store (1134) - same window rule.
+    try {
+      const fresh = {}
+      for (const l of salesLines) if (l.byCode) fresh[invoiceKeyOf(l)] = { date: l.date || '', byCode: l.byCode }
+      const had = (await redis.get(BYCODE_KEY(projectId)).catch(() => null)) || {}
+      await redis.set(BYCODE_KEY(projectId), mergeWindowed(had, fresh, fromDateStr))
+    } catch (e) { console.error('sales-by-code store', projectId, e.message) }
     await redis.set(`invoiced:latest:${projectId}`, { totalInvoiced, paidTotal, dueTotal, invoiceCount: mergedInv.length, calculatedAt: new Date().toISOString(), source: 'deep_sync' })
 
     await redis.set('deep-sync:pointer', (pointer + 1) % active.length)

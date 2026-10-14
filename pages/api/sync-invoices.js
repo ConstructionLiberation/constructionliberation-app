@@ -3,6 +3,7 @@ import { invalidateDashboardCache } from '../../lib/dashboardCache'
 import { getTokens, saveTokens } from '../../lib/db'
 import { getClient } from '../../lib/db'
 import { refreshXeroToken, getProjectsFromCategories } from '../../lib/xero'
+import { codeTotals, invoiceKeyOf, mergeWindowed, BYCODE_KEY } from '../../lib/salesByCode'
 import withTenant from '../../lib/withTenant'
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
@@ -66,6 +67,7 @@ async function fetchAllSalesInvoices(at, tid, fromDate) {
         contact: full.Contact?.Name || '', reference: full.Reference || '',
         total: full.Total || 0, subTotal: full.SubTotal != null ? full.SubTotal : (full.Total || 0),
         totalTax: full.TotalTax || 0, sales200, retention612,
+        byCode: codeTotals(lineItems),   // totals per account code - the tracker's Sales (1134)
         amountPaid: full.AmountPaid || 0, amountDue: full.AmountDue || 0,
         fullyPaidOnDate: full.FullyPaidOnDate || null,
         status: full.Status || '', trackingNames: [...trackingNames],
@@ -124,6 +126,7 @@ async function fetchAllSalesCreditNotes(at, tid, fromDate) {
         contact: full.Contact?.Name || '', reference: full.Reference || '',
         total: -(full.Total || 0), subTotal: -(full.SubTotal != null ? full.SubTotal : (full.Total || 0)),
         totalTax: -(full.TotalTax || 0), sales200: -sales200, retention612: -retention612,
+        byCode: codeTotals(lineItems, -1),   // a credit note reduces each code (1134)
         amountPaid: 0, amountDue: 0,
         status: full.Status || '', trackingNames: [...trackingNames],
         creditNote: true,
@@ -315,6 +318,14 @@ async function handler(req, res) {
       if (exVat > 0 && vat > 0) vatRateLabel = `${Math.round((vat / exVat) * 100)}%`
       else if (exVat > 0 && vat === 0) vatRateLabel = '0%'
       await redis.set(`invoiced:lines:${pid}`, merged)
+      // Totals per account code, in their OWN store (1134) - the retention tracker's
+      // Invoiced = the codes bookkeeping categorises as Sales. Same window rule.
+      try {
+        const fresh = {}
+        for (const l of invoices) if (l.byCode) fresh[invoiceKeyOf(l)] = { date: l.date || '', byCode: l.byCode }
+        const had = (await redis.get(BYCODE_KEY(pid)).catch(() => null)) || {}
+        await redis.set(BYCODE_KEY(pid), mergeWindowed(had, fresh, winStr))
+      } catch (e) { console.error('sales-by-code store', pid, e.message) }
       await redis.set(`invoiced:latest:${pid}`, { totalInvoiced: tot, invoicedExVat: exVat, invoicedSales200: sales200, retention612, vatTotal: vat, vatRateLabel, paidTotal: paid, dueTotal: due, invoiceCount: merged.length, calculatedAt: new Date().toISOString(), source: 'sync_button' })
     }
 

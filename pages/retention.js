@@ -673,7 +673,9 @@ export default function RetentionPage() {
           qsEmail: p.qsEmail || p.qsEmailSetting || '',
           comments: p.retentionComments || p.comment || '',
           invoiced: p.totalInvoiced || 0,
-          invoicedNet: p.grossInvoiced || p.invoicedExVat || 0,
+          // Every line in a code bookkeeping categorises as SALES (1134); where a project
+          // has no per-code data yet (before its first sync), the code-200 figure as before.
+          invoicedNet: p.invoicedSales != null ? p.invoicedSales : (p.grossInvoiced || p.invoicedExVat || 0),
           vat: p.vat || 0,
           vatRateLabel: p.vatRateLabel || '—',
           paid: p.paid || 0,
@@ -1561,7 +1563,7 @@ export default function RetentionPage() {
                         ['Final Account', 'right', 'Proj. Final Account less MCD, retention included. MCD comes off only what Edit Project Details says it comes off - measured works only, or measured plus variations and materials - so a project that excludes variations from MCD is no longer over-discounted. Taken from the latest SENT application, which has already done this arithmetic; a typed value is only used where there is no sent application. This is the figure retention is calculated on.', 'finalAccount'],
                         ['Applied for', 'right', 'The sub-total on the latest SENT application: gross measured works less MCD, plus variations. The application always wins - a typed value is only used where a project has no sent application. A warning triangle means it does not agree with Certified.', 'appliedFor'],
                         ['Certified', 'right', 'The "Previously certified (gross)" box on the latest SENT application - the typed figure, used as the Previously Cert. column on the certificate, where This Certificate = current less previously. Blank means the box has not been filled in. Editable inline, but the next application sent overwrites it.', 'certified'],
-                        ['Invoiced', 'right', `Total invoiced on the project: sum of the Sales (account code 200) lines from Xero. NET of ${term('vat')}, and INCLUDING retention (retention is posted to a separate account, so the Sales total already includes it). From Xero for synced projects, or the imported Xero CSV.`, 'invoiced'],
+                        ['Invoiced', 'right', `Total invoiced on the project: every invoice line in an account code categorised as SALES in bookkeeping (Admin > Account categorisation - code 200 unless set otherwise), less credit notes. NET of ${term('vat')}, and INCLUDING retention (retention is posted to a separate account, 612, which is not Sales). From Xero; a project not yet synced since this change shows its code-200 total until it is.`, 'invoiced'],
                         ['✓', 'center', 'Match check: green tick when CERTIFIED equals INVOICED (within 1), red flag when they differ - something certified has not been invoiced yet, or an invoice has gone out for something not certified. A dash means one of the two figures is missing.', null],
                         ['Account Remaining', 'right', 'Final Account − Applied for. What is still to be CLAIMED against the final account. Falls back to invoiced only where a project has no application.', null],
                         ['Retention Owed', 'right', 'Certified \u00d7 Ret %. Calculated on the CERTIFIED amount (the Certified column - the latest certificate). Blank where there is no Certified figure yet. The 612 account is deducted on invoices, so 612 Deducted matches this only where Certified = Invoiced.', 'retentionOwed'],

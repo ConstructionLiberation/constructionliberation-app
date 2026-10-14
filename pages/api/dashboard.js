@@ -1,4 +1,5 @@
 import { getAllProjectSettings, getOpsProjects, getClient } from '../../lib/db'
+import { BYCODE_KEY, salesTotal } from '../../lib/salesByCode'
 import { computeApplicationSummary, isInstructed, resolveGrossAfa } from '../../lib/applications'
 import { missingProjectFields } from '../../lib/projectComplete'
 import { getProjectsFromCategories } from '../../lib/xero'
@@ -62,6 +63,8 @@ export async function handler(req, res) {
             resolvePeople = (await import('../../lib/projectPeople')).resolveProjectPeople
           } catch {}
 
+          // Bookkeeping's account categorisation - for the tracker's Sales total (1134).
+          const salesCat = (await redis.get('config:account-categorisation').catch(() => null)) || {}
           const withLive = await Promise.all(cached.map(async (p) => {
             if (!p || !p.xeroId) return p
             const s = liveSettings[String(p.xeroId)] || {}
@@ -74,8 +77,12 @@ export async function handler(req, res) {
                 cm = rp?.team?.contractsManager?.name || cm
               } catch {}
             }
+            // Sales total, LIVE (1134): every code bookkeeping categorises as Sales.
+            let invoicedSales = null
+            try { invoicedSales = salesTotal((await redis.get(BYCODE_KEY(p.xeroId))) || null, salesCat) } catch {}
             return {
               ...p,
+              invoicedSales,        // LIVE - after the cached fields so it wins (1134)
               contractsManager: cm,
               wipMarginOverride: (s.wipMarginOverride != null && s.wipMarginOverride !== '') ? s.wipMarginOverride : null,
               dateOverrides: s.dateOverrides || p.dateOverrides || {},
@@ -176,6 +183,7 @@ export async function handler(req, res) {
       }
     } catch {}
 
+    const salesCatFull = (await redis.get('config:account-categorisation').catch(() => null)) || {}   // (1134)
     const projects = await Promise.all(allCategoryProjects.map(async (cp) => {
       const id = cp.trackingOptionId
       const settings = allSettings[id] || allSettings[cp.jobNo] || {}
@@ -1030,6 +1038,9 @@ export async function handler(req, res) {
         ret612Detail: ret612Detail.slice(0, 60),
         ret612From: ret612First || '',
         grossInvoiced,
+        // Every line in a code bookkeeping categorises as SALES (1134) - the
+        // retention tracker's Invoiced. null = no per-code data yet.
+        invoicedSales: await (async () => { try { return salesTotal((await redis.get(BYCODE_KEY(id))) || null, salesCatFull) } catch { return null } })(),
         currentMargin,
         wip,
         wipMarginOverride,

@@ -1,16 +1,48 @@
-PACKAGE 1132 - Lump spread: "per rate build-up", not "per job"
+PACKAGE 1134 - Retention tracker: Invoiced = every line categorised as SALES
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1131.
+Five files: four complete replacements, one NEW. No re-seed. No env changes.
+Built on 1133.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  NEW       lib/salesByCode.js
+  REPLACED  pages/api/sync-invoices.js
+            pages/api/cron/deep-sync.js
+            pages/api/dashboard.js
+            pages/retention.js
 
-A lump spread line's Rate box reads "amount", with "per rate build-up"
-underneath; the note under its Item reads "lump spread - an amount per rate
-build-up, spread over the item qty"; the hover text likewise. "Per job" is
-gone everywhere.
+The tracker's INVOICED is now every invoice line in an account code that
+bookkeeping categorises as SALES (Admin > Account categorisation; code 200 is
+Sales unless set otherwise), less credit notes - not just code 200. Net of VAT,
+including retention (612 is not Sales). The column's header says so.
 
-Checked in a REAL browser (Chromium) at 1366px and 1600px: the Rate box reads
-"amount" (fits), "per rate build-up" underneath, the note as above, and a whole
-line still fits on screen. All 165 pages pass the browser check. Built from
-your deployed packages (1022-1131, verified against their zips); the file
-checked identical to the tested version before zipping.
+How: the invoice syncs now keep each invoice's totals PER ACCOUNT CODE, in
+their own store (invoiced:bycode:<project>) - the invoice line lists are
+rewritten by other syncs (the WIP sync replaces them nightly) and would lose
+it. Totals are kept for every code, so RECATEGORISING a code in bookkeeping
+changes the tracker straight away, no re-sync. Same window rule as the invoice
+lines (a deleted / voided invoice drops out).
+
+ONLY the tracker's Invoiced changes. The code-200 totals everything else uses
+(margins, remaining to claim...) are untouched - say if those should follow.
+
+AFTER DEPLOYING: run "Sync invoices" (with enough months to cover your live
+jobs). Until a project has been synced since this deploy it shows its code-200
+figure, exactly as now.
+
+Checked:
+  - the rules: per-code totals for an invoice and a credit note; Sales =
+    bookkeeping's category (200 by default; recategorised; ignore); 612 never
+    Sales; the window merge keeps old invoices and drops one deleted in Xero
+  - the REAL sync-invoices route run with Xero stood in (an invoice with 200 /
+    201 / 612 lines and a credit note on 201): the per-code store holds both;
+    the existing code-200 total is unchanged (10,000); with 201 as Sales the
+    tracker's Invoiced is 12,200
+  - the REAL dashboard route on its cached path: the Sales total worked out
+    live (12,200 - not a stale cached value); a project with no per-code data
+    -> none (keeps its figure); 201 recategorised -> 10,000 at once
+  - the tracker page in a REAL browser (Chromium): a synced project 12,200
+    (its code-200 figure was 10,000); an unsynced one keeps 5,000; the header
+  - deep-sync.js: compiles; its change (per-code totals on each invoice it
+    fetches, saved with the same window rule) was reviewed but not run - it
+    needs Xero and its nightly schedule
+  - all server routes compile; all 165 pages pass the browser check
+  Built from your deployed packages (1022-1133, verified against their zips).
