@@ -1,27 +1,30 @@
-PACKAGE 1137 - Hide rate build-ups that are not in use
+PACKAGE 1138 - Hide categories that are not in use
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1136.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1137.
 
   pages/estimating/build-ups.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
   pages/api/estimating/build-ups.js
 
-A ⚙ at the top of the build-ups list (middle column) lists that category's
-build-ups with an "In use" tick. Untick one and it is HIDDEN: left out of the
-build-ups list, the search, and the take-off's "Item from build-ups" picker.
-"N hidden" shows beside the ⚙; "Show hidden build-ups in the list" brings them
-back into view, greyed and tagged "hidden", to open or tick back into use.
-Nothing is deleted - a hidden build-up keeps everything, and estimates already
-using it are unaffected. Shared across the company; kept through renaming a
-build-up or its category; stored apart from the build-ups.
+A ⚙ beside the search box at the top of the CATEGORIES column lists every
+category with an "In use" tick. Untick one and the whole category is hidden -
+gone from the categories list, and its build-ups from the search and from the
+take-off's "Item from build-ups" picker. "N categories hidden" shows; "Show
+hidden categories in the list" brings them back, greyed and marked "(hidden)".
+It works alongside hiding single build-ups (1137): showing a category again
+restores what was showing - build-ups hidden on their own stay hidden.
+Nothing is deleted; kept through renaming the category; stored apart.
 
-Checked through the real route: two Felt build-ups hidden -> 13 of 15 shown,
-all 15 still there; a hidden one renamed stays hidden, and "hidden" is never
-stored in the build-up; the category renamed - still hidden; shown again;
-deleting a hidden one clears it from the list. In a REAL browser (Chromium):
-the ⚙ and "1 hidden"; unticking Felt Warm Roof hides it at once (2 hidden) and
-saves; Show hidden brings both back tagged; on an estimate the picker leaves
-the hidden one out, in the category list and in search. All server routes
-compile; all 165 pages pass the browser check. Built from your deployed
-packages (1022-1136, verified against their zips); each file checked identical
-to the tested version before zipping.
+The menu opens inside the column (with a Done button) rather than floating:
+floating, it was clipped by the scrolling column and covered by the next one,
+so its ticks could not be clicked - found in a real browser before shipping.
+
+Checked through the real route: Felt hidden -> all 15 Felt build-ups marked,
+no others; shown again -> the one hidden on its own stays hidden; the hidden
+category renamed "Felt Roofing" stays hidden; deleted -> cleared. In a REAL
+browser (Chromium): 21 categories; unticking Felt -> 20, "1 category hidden",
+saved; "felt" search finds nothing; Show hidden categories -> "Felt (hidden)";
+on an estimate the picker offers no Felt, in its categories or a search. All
+server routes compile; all 165 pages pass the browser check. Built from your
+deployed packages (1022-1137, verified against their zips); each file checked
+identical to the tested version before zipping.

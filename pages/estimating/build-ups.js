@@ -51,7 +51,17 @@ export default function BuildUpsPage() {
   // Build-ups NOT IN USE are left out unless "Show hidden" is on (1137).
   const [showHidden, setShowHidden] = useState(false)
   const [useMenu, setUseMenu] = useState(false)
-  const visible = useMemo(() => showHidden ? templates : templates.filter(t => !t.hidden), [templates, showHidden])
+  // ...and CATEGORIES not in use, unless "Show hidden categories" is on (1138).
+  const [showHiddenCats, setShowHiddenCats] = useState(false)
+  const [catMenu, setCatMenu] = useState(false)
+  const hiddenCats = new Set((data?.hiddenCategories) || [])
+  const catHidden = (name) => hiddenCats.has((name === NOCAT ? '' : String(name)).trim().toLowerCase())
+  const visible = useMemo(() => templates.filter(t => (showHidden || !t.hidden) && (showHiddenCats || !t.catHidden)), [templates, showHidden, showHiddenCats])
+  async function setCatInUse(name, inUse) {
+    const k = (name === NOCAT ? '' : String(name)).trim().toLowerCase()
+    setData(d => { const hc = new Set(d.hiddenCategories || []); if (inUse) hc.delete(k); else hc.add(k); return { ...d, hiddenCategories: [...hc], templates: d.templates.map(t => (t.section || '').trim().toLowerCase() === k ? { ...t, catHidden: !inUse || undefined } : t) } })
+    try { await estApi(API, { action: 'set-category-hidden', category: name === NOCAT ? '' : name, hidden: !inUse }) } catch (e) { setErr(e.message); await load() }
+  }
   const shown = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
     if (words.length) return visible.filter(t => words.every(w => `${t.section} ${t.description}`.toLowerCase().includes(w)))
@@ -157,10 +167,31 @@ export default function BuildUpsPage() {
         <div style={{ display: 'grid', gridTemplateColumns: edit ? '1fr' : '250px 300px 1fr', gap: 14, alignItems: 'start' }}>
           {!edit && <>
           <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 8, maxHeight: '78vh', overflowY: 'auto', position: 'sticky', top: 12 }}>
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search build-ups…" style={{ ...inp, marginBottom: 8 }} />
-            {cats.map(([name, n]) => (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, position: 'relative' }}>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search build-ups…" style={{ ...inp }} />
+              <button onClick={() => setCatMenu(v => !v)} title="Which categories are in use - hide the ones that are not" style={{ ...iconBtn, fontSize: 13, padding: '6px 8px', border: '1px solid #e8e7e3', borderRadius: 6, flexShrink: 0 }}>⚙</button>
+            </div>
+            {/* In the column's own flow (1138) - a floating menu here was clipped by the
+                scrolling column and covered by the next one, so its ticks could not be clicked. */}
+            {catMenu && (
+                <div style={{ marginBottom: 8, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 4px 14px rgba(0,0,0,0.08)', padding: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>Categories in use</div>
+                  <div style={{ fontSize: 11.5, color: '#888', marginBottom: 6 }}>Untick to hide a whole category - and its build-ups - from the lists and the take-off. Nothing is deleted.</div>
+                  {cats.map(([name, n]) => (
+                    <label key={name} style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12.5, padding: '3px 0', cursor: 'pointer', color: catHidden(name) ? '#999' : '#1a1a19' }}>
+                      <input type="checkbox" checked={!catHidden(name)} onChange={e => setCatInUse(name, e.target.checked)} /> {name === NOCAT ? 'No category' : name} <span style={{ color: '#bbb', fontSize: 11 }}>{n}</span>
+                    </label>
+                  ))}
+                  <label style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12, padding: '6px 0 0', marginTop: 6, borderTop: '1px solid #f0efec', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={showHiddenCats} onChange={e => setShowHiddenCats(e.target.checked)} /> Show hidden categories in the list
+                  </label>
+                  <button onClick={() => setCatMenu(false)} style={{ ...btn, width: '100%', marginTop: 8, fontSize: 12 }}>Done</button>
+                </div>
+            )}
+            {!showHiddenCats && cats.some(([name]) => catHidden(name)) && <div style={{ fontSize: 11, color: '#999', margin: '-4px 2px 6px', textAlign: 'right' }}>{cats.filter(([name]) => catHidden(name)).length} categor{cats.filter(([name]) => catHidden(name)).length === 1 ? 'y' : 'ies'} hidden</div>}
+            {cats.filter(([name]) => showHiddenCats || !catHidden(name)).map(([name, n]) => (
               <div key={name} style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ flex: 1, minWidth: 0 }}><SecBtn on={cat === name && !q} onClick={() => { setCat(name); setQ('') }} label={name === NOCAT ? 'No category' : name} n={n} warn={name === NOCAT} /></div>
+                <div style={{ flex: 1, minWidth: 0, opacity: catHidden(name) ? 0.5 : 1 }}><SecBtn on={cat === name && !q} onClick={() => { setCat(name); setQ('') }} label={name === NOCAT ? 'No category' : catHidden(name) ? `${name} (hidden)` : name} n={n} warn={name === NOCAT} /></div>
                 {name !== NOCAT && cat === name && !q && <>
                   <button title="Rename category" onClick={() => catAction('rename', name)} style={iconBtn}>✎</button>
                   <button title="Delete category" onClick={() => catAction('delete', name)} style={iconBtn}>✕</button>
@@ -205,7 +236,7 @@ export default function BuildUpsPage() {
                 <button onClick={() => moveBuildup(i, -1)} disabled={i === 0} title="Move up" style={{ ...iconBtn, padding: '0 3px', fontSize: 11, opacity: i === 0 ? 0.25 : 1 }}>↑</button>
                 <button onClick={() => moveBuildup(i, 1)} disabled={i === shown.length - 1} title="Move down" style={{ ...iconBtn, padding: '0 3px', fontSize: 11, opacity: i === shown.length - 1 ? 0.25 : 1 }}>↓</button>
               </div>}
-              <button onClick={() => setEdit({ t: (() => { const c = JSON.parse(JSON.stringify(t)); delete c.hidden; return c })(), originalRef: t.ref })}
+              <button onClick={() => setEdit({ t: (() => { const c = JSON.parse(JSON.stringify(t)); delete c.hidden; delete c.catHidden; return c })(), originalRef: t.ref })}
                 style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 7, padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit', background: edit?.originalRef === t.ref ? '#f0fdfa' : 'transparent' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: t.hidden ? '#aaa' : '#1a1a19' }}>{t.description}{t.hidden && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 600, color: '#888', background: '#f0efec', borderRadius: 8, padding: '1px 6px' }}>hidden</span>}</div>
                 <div style={{ fontSize: 11.5, color: '#999' }}>{q ? `${t.section || 'No category'} · ` : ''}{t.unit ? `per ${BU_UNIT_LABEL[t.unit]}` : 'no unit'} · {t.lines.filter(l => l.type !== 'comment').length} lines</div>

@@ -16,6 +16,9 @@ const ORDER = 'buildups:order'
 // hidden: true so the lists (and the take-off picker) leave them out; nothing
 // is deleted. Kept in step on rename / category rename / delete.
 const HIDDEN = 'buildups:hidden'
+// CATEGORIES NOT IN USE (1138) - [category names, lower case]. Their build-ups
+// are sent with catHidden: true; separate from build-ups hidden one by one.
+const HIDDEN_CATS = 'buildups:hiddenCats'
 const catKey = (c) => String(c || '').trim().toLowerCase()
 function inOrder(items, order) {
   const groups = new Map()
@@ -53,8 +56,14 @@ async function handler(req, res) {
       items = cleaned
     }
     const hidden = new Set((await get(HIDDEN)) || [])
-    const sent = inOrder(items, (await get(ORDER)) || {}).map(t => hidden.has(t.ref) ? { ...t, hidden: true } : t)
-    return res.status(200).json({ index, templates: sent, categories: (await get(CATS)) || [] })
+    const hiddenCats = (await get(HIDDEN_CATS)) || []
+    const hc = new Set(hiddenCats)
+    const sent = inOrder(items, (await get(ORDER)) || {}).map(t => {
+      let o = hidden.has(t.ref) ? { ...t, hidden: true } : t
+      if (hc.has(catKey(t.section))) o = { ...o, catHidden: true }
+      return o
+    })
+    return res.status(200).json({ index, templates: sent, categories: (await get(CATS)) || [], hiddenCategories: hiddenCats })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -101,7 +110,7 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true, template: r.item, index: r.index })
   }
   if (b.action === 'save') {
-    const t = { ...(b.template || {}) }; delete t.hidden   // shown, not stored (1137)
+    const t = { ...(b.template || {}) }; delete t.hidden; delete t.catHidden   // shown, not stored (1137/1138)
     const tpl = { ...t, section: String(t.section || '').trim(), description: String(t.description || '').trim() }
     tpl.ref = templateKey(tpl.section, tpl.description)
     const { errors } = checkTemplate(tpl, await knownRefs())
@@ -137,6 +146,14 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true, index: r.index })
   }
   // IN USE / HIDDEN (1137): { refs: [...], hidden: true|false } - hide or show again.
+  // CATEGORY IN USE / HIDDEN (1138): { category, hidden: true|false }
+  if (b.action === 'set-category-hidden') {
+    const k = catKey(b.category === 'No category' ? '' : b.category)
+    const cur = new Set((await get(HIDDEN_CATS)) || [])
+    if (b.hidden) cur.add(k); else cur.delete(k)
+    await set(HIDDEN_CATS, [...cur])
+    return res.status(200).json({ ok: true, hiddenCategories: [...cur] })
+  }
   if (b.action === 'set-hidden') {
     const { items } = await loadBuildups()
     const known = new Set(items.map(t => t.ref))
@@ -220,6 +237,11 @@ async function handler(req, res) {
         await set(ORDER, order)
       }
     }
+    // ...and whether the category itself is hidden (1138)
+    {
+      const hcs = (await get(HIDDEN_CATS)) || []
+      if (hcs.includes(catKey(from))) await set(HIDDEN_CATS, b.action === 'delete-category' ? hcs.filter(c => c !== catKey(from)) : hcs.map(c => c === catKey(from) ? catKey(to) : c))
+    }
     // ...and which are hidden (1137) - refs change with the category
     {
       const hid = (await get(HIDDEN)) || []
@@ -231,7 +253,7 @@ async function handler(req, res) {
     if (extra.some(c => sameName(c, from))) await set(CATS, b.action === 'delete-category' ? extra.filter(c => !sameName(c, from)) : extra.map(c => sameName(c, from) ? to : c))
     return res.status(200).json({ ok: true, moved, index: idx })
   }
-  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'reorder', 'set-hidden', 'edit-variable', 'delete-variable', 'add-category', 'rename-category' or 'delete-category'" })
+  return res.status(400).json({ error: "action must be 'check', 'import', 'add', 'save', 'delete', 'reorder', 'set-hidden', 'set-category-hidden', 'edit-variable', 'delete-variable', 'add-category', 'rename-category' or 'delete-category'" })
 }
 
 export default withTenant(handler)
