@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, SIZE_UNIT, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -52,7 +52,9 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
 
   return (
     <>
-      <Block title="Sizes" hint="Width, Height and Girth for this build-up, all in METRES (600mm = 0.6). A line's Apply size multiplies its quantity by one of them.">
+      <Block title="Sizes" hint="For this build-up - a line's Apply size multiplies its quantity by one of them. Width, Height, Girth and Length in metres (600mm = 0.6), Area in m², Volume in m³. Length suits single items - e.g. 4 lineal metres around a rooflight.">
+        {/* Side by side (1135) - six sizes in one row, wrapping on a narrow screen. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         {SIZE_NAMES.map(nm => {
           const z = (t.sizes || []).find(x => String(x.name).toLowerCase() === nm.toLowerCase())
           const setSize = (patch) => setT(x => {
@@ -63,19 +65,24 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
           const setVal = (v) => setSize({ value: v === '' ? null : parseFloat(v) })
           // MANDATORY (1113): a number must be entered on every quote using this build-up.
           const needed = !!(z && z.required) && (z.value == null || z.value === '')
+          const users = t.lines.filter(l => sizesUsed(l.applySize).includes(nm)).map(l => l.label)
           return (
-            <div key={nm} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-              <span style={{ width: 70, fontSize: 13, fontWeight: 600 }}>{nm}</span>
-                            <NumBox value={z?.value ?? null} onChange={v => setVal(v == null ? '' : String(v))} placeholder={needed ? 'required' : 'm'} style={{ ...inp, width: 110, background: needed ? RED : undefined, borderColor: needed ? '#ef4444' : undefined }} title={needed ? `${nm} is mandatory - enter a number` : ''} /><span style={{ fontSize: 12.5, color: '#666', marginLeft: -4 }}>m</span>
-              <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12, color: z?.required ? '#b91c1c' : '#666', cursor: 'pointer', whiteSpace: 'nowrap' }} title="A number must be entered on every quote using this build-up - the quote cannot be issued until it is">
+            <div key={nm} style={{ border: '1px solid #ecebe6', borderRadius: 8, padding: '7px 9px', minWidth: 132, flex: '0 0 auto' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{nm}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <NumBox value={z?.value ?? null} onChange={v => setVal(v == null ? '' : String(v))} placeholder={needed ? 'required' : ''} style={{ ...inp, width: 86, padding: '6px 8px', background: needed ? RED : undefined, borderColor: needed ? '#ef4444' : undefined }} title={needed ? `${nm} is mandatory - enter a number` : ''} />
+                <span style={{ fontSize: 12.5, color: '#666' }}>{SIZE_UNIT[nm]}</span>
+              </div>
+              <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 11.5, color: z?.required ? '#b91c1c' : '#666', cursor: 'pointer', marginTop: 4 }} title="A number must be entered on every quote using this build-up - the quote cannot be issued until it is">
                 <input type="checkbox" checked={!!z?.required} onChange={e => setSize({ required: e.target.checked || undefined })} /> Mandatory
               </label>
-              <span style={{ fontSize: 11.5, color: '#999' }}>{t.lines.filter(l => sizesUsed(l.applySize).includes(nm)).length ? `used by ${t.lines.filter(l => sizesUsed(l.applySize).includes(nm)).map(l => l.label).join(', ')}` : 'not used yet'}</span>
+              <div style={{ fontSize: 10.5, color: users.length ? '#0f766e' : '#aaa', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={users.length ? `used by ${users.join(', ')}` : ''}>{users.length ? `used by ${users.join(', ')}` : 'not used yet'}</div>
             </div>
           )
         })}
+        </div>
         {(t.sizes || []).filter(z => !SIZE_NAMES.some(n => n.toLowerCase() === String(z.name).toLowerCase())).map((z, i) => (
-          <div key={`o${i}`} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+          <div key={`o${i}`} style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
             <span style={{ width: 70, fontSize: 12.5, color: '#666' }}>{z.name}</span>
             <NumBox value={z.value ?? null} onChange={v => setT(x => ({ ...x, sizes: x.sizes.map(s2 => s2 === z ? { ...s2, value: v } : s2) }))} style={{ ...inp, width: 110 }} />
             <span style={{ fontSize: 11.5, color: '#999' }}>from the spreadsheet - quantities written as sums use it{z.comment ? ` (${z.comment})` : ''}</span>
