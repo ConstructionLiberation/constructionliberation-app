@@ -13,10 +13,14 @@ import { buildLabourLines, subTotal, saving, sentIn } from '../lib/labourSchedul
 // Tick lines and "Create schedule" to save them, under a name, as a schedule
 // for one subbie. It appears in the list on the left; its lines are greyed out
 // here as sent. Each schedule downloads as Excel or PDF WITHOUT our budgets.
-export default function LabourRates({ projectId, crItems, variations }) {
+// ON AN ESTIMATE TOO (1167): pass estimateId and its lines (lib/estimateLabour.js)
+// instead of a project - Estimating > Labour Schedule. Everything else is the same.
+export default function LabourRates({ projectId, crItems, variations, estimateId, lines: linesIn, ownerLabel = 'project' }) {
+  const ownerQ = estimateId ? `estimateId=${encodeURIComponent(estimateId)}` : `projectId=${encodeURIComponent(projectId || '')}`
+  const ownerId = estimateId || projectId
   const { money } = useFormat()
   const m = (v) => v == null ? '' : money(v, { dp: 2 })
-  const lines = useMemo(() => buildLabourLines(crItems || [], variations || []), [crItems, variations])
+  const lines = useMemo(() => linesIn || buildLabourLines(crItems || [], variations || []), [linesIn, crItems, variations])
   const [sched, setSched] = useState(null)
   const [rates, setRates] = useState({})
   const [dirty, setDirty] = useState(false)
@@ -27,16 +31,16 @@ export default function LabourRates({ projectId, crItems, variations }) {
   const [err, setErr] = useState('')
 
   async function api(method, body, qs = '') {
-    const r = await fetch(`/api/labour-schedules?projectId=${encodeURIComponent(projectId)}${qs}`, method === 'GET' ? undefined : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, ...body }) })
+    const r = await fetch(`/api/labour-schedules?${ownerQ}${qs}`, method === 'GET' ? undefined : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(estimateId ? { estimateId } : { projectId }), ...body }) })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.error || `Request failed (${r.status})`)
     return d
   }
   useEffect(() => {
     setSched(null); setView('main'); setTicked(new Set()); setDirty(false); setErr('')
-    if (!projectId) return
+    if (!ownerId) return
     api('GET').then(d => { setSched(d.schedules); setRates(d.schedules.rates || {}) }).catch(e => setErr(e.message))
-  }, [projectId])
+  }, [ownerId])
 
   if (!sched) return <div style={box}>{err ? <span style={{ color: '#b42318' }}>{err}</span> : 'Loading…'}</div>
   const sent = sentIn(sched.packages)
@@ -94,7 +98,7 @@ export default function LabourRates({ projectId, crItems, variations }) {
         {!items.length ? (
           <div style={box}>No labour items yet. Upload the contracted rates (above-the-line items with labour rates), or instruct a variation.</div>
         ) : pkg ? (
-          <PackageView p={pkg} m={m} busy={busy} projectId={projectId} onDelete={() => remove(pkg)} />
+          <PackageView p={pkg} m={m} busy={busy} ownerQ={ownerQ} onDelete={() => remove(pkg)} />
         ) : (
           <>
             <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -159,10 +163,10 @@ export default function LabourRates({ projectId, crItems, variations }) {
   )
 }
 
-function PackageView({ p, m, busy, projectId, onDelete }) {
+function PackageView({ p, m, busy, ownerQ, onDelete }) {
   const sum = (f) => p.lines.reduce((s, l) => s + (f(l) || 0), 0)
   const tot = sum(l => l.total), bud = sum(l => l.budgetTotal), sv = sum(l => saving(l.budgetTotal, l.total))
-  const dl = (fmt) => `/api/labour-schedules?projectId=${encodeURIComponent(projectId)}&download=${encodeURIComponent(p.id)}&format=${fmt}`
+  const dl = (fmt) => `/api/labour-schedules?${ownerQ}&download=${encodeURIComponent(p.id)}&format=${fmt}`
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>

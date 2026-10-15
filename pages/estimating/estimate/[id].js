@@ -7,6 +7,8 @@ import BuildupEditor, { pct, fromPct, NumBox } from '../../../components/Buildup
 import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
+import LabourRates from '../../../components/LabourRates'
+import { buildEstimateLabourLines } from '../../../lib/estimateLabour'
 import { placeholderValues, checklistOf, letterOf, letterProblems, letterProblemText } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, descriptionText, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
@@ -111,6 +113,7 @@ export default function EstimatePage() {
     catch (e) { setErr(e.message) }
     setBusy(false)
   }
+  const labourLines = useMemo(() => est ? buildEstimateLabourLines(est, lib) : [], [est, lib])   // (1167)
   const [warnList, setWarnList] = useState(null)   // 'cost' | 'qty' - the list behind a red warning (1146)
   const [showChecklist, setShowChecklist] = useState(false)   // re-open a completed checklist (1142)
   const [ckNew, setCkNew] = useState('')
@@ -376,7 +379,7 @@ export default function EstimatePage() {
         </div>
       )}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #e8e7e3', marginBottom: 14 }}>
-        {[['takeoff', 'Take-off'], ['budgets', 'Summary'], ['materials', 'Materials'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
+        {[['takeoff', 'Take-off'], ['budgets', 'Summary'], ['materials', 'Materials'], ['labour', 'Labour Schedule'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{ border: 'none', borderBottom: `2px solid ${tab === k ? '#0f766e' : 'transparent'}`, background: 'none', padding: '8px 14px', fontSize: 13.5, fontWeight: tab === k ? 700 : 500, color: tab === k ? '#0f766e' : '#666', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{label}</button>
         ))}
       </div>
@@ -411,6 +414,14 @@ export default function EstimatePage() {
         <div style={panel}>
           <BudgetPanel bud={bud} est={est} change={change} money={money} />
         </div>
+        </div>
+      )}
+      {/* LABOUR SCHEDULE (1167) - the take-off's labour, priced by subcontractors:
+          the same screen as Contracted Rates > Labour Rates, off this estimate */}
+      {tab === 'labour' && (
+        <div style={{ marginTop: 14 }}>
+          {dirty && <div style={{ fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '7px 12px', marginBottom: 10 }}>Unsaved changes on the take-off - schedules are made from the saved take-off, so save first.</div>}
+          <LabourRates estimateId={est.id} lines={labourLines} />
         </div>
       )}
       {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived} />}

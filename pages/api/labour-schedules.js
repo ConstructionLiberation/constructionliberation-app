@@ -2,9 +2,15 @@ import { requireArea } from '../../lib/portalAuth'
 import withTenant from '../../lib/withTenant'
 import { loadProject, persistProject } from '../../lib/projectStore'
 import { buildLabourLines, subTotal, round2 } from '../../lib/labourSchedule'
+import { buildEstimateLabourLines } from '../../lib/estimateLabour'
+import { loadEstimate } from '../../lib/estimateStore'
+import { loadPriceList } from '../../lib/priceListStore'
+import { loadLabour } from '../../lib/labourRatesStore'
+import { get, set } from '../../lib/db'
 import { companyName } from '../../lib/tenantSettings'
 import { currencySymbol } from '../../lib/locale'
 import { pdfText } from '../../lib/pdfText'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
 
 // LABOUR RATES SCHEDULES (1073) - stored on the project record as
 //   project.labourSchedules = {
@@ -29,16 +35,42 @@ const empty = () => ({ rates: {}, packages: [] })
 const clean = (s) => ({ rates: (s && typeof s.rates === 'object' && s.rates) || {}, packages: Array.isArray(s?.packages) ? s.packages : [] })
 const num = (v) => { if (v === '' || v == null) return null; const x = parseFloat(v); return isNaN(x) ? null : round2(x) }
 
-async function handler(req, res) {
+// WHERE THE SCHEDULES COME FROM (1167): a PROJECT (its contracted rates and
+// variations - Contracted Rates > Labour Rates), or an ESTIMATE (its take-off -
+// Estimating > Labour Schedule). Everything else is the same.
+async function ownerOf(req, res) {
+  const pick = (k) => String((req.method === 'GET' ? req.query[k] : (req.body || {})[k]) || '')
+  const estimateId = pick('estimateId')
+  if (estimateId) {
+    const session = requireArea(req, res, 'estimating')
+    if (!session) return null
+    const est = await loadEstimate(estimateId)
+    if (!est) { res.status(404).json({ error: 'That estimate no longer exists.' }); return null }
+    const key = `estimate:labsched:${est.id}`
+    return { session, sched: clean(await get(key)), save: (sc) => set(key, sc),
+      lines: async () => buildEstimateLabourLines(est, await estimateLib()),
+      doc: { jobNo: est.quoteRef || '', name: est.title || 'Estimate' } }
+  }
   const session = requireArea(req, res, 'commercial')
-  if (!session) return
-  const projectId = String((req.method === 'GET' ? req.query.projectId : req.body?.projectId) || '')
-  if (!projectId) return res.status(400).json({ error: 'Choose a project first.' })
+  if (!session) return null
+  const projectId = pick('projectId')
+  if (!projectId) { res.status(400).json({ error: 'Choose a project first.' }); return null }
   const project = await loadProject(projectId)
-  const sched = clean(project.labourSchedules)
+  return { session, sched: clean(project.labourSchedules), save: (sc) => { project.labourSchedules = sc; return persistProject(projectId, project) },
+    lines: async () => buildLabourLines(project.contractedRates?.items || [], project.variations || []), doc: project }
+}
+async function estimateLib() {
+  const [{ products }, { items }] = await Promise.all([loadPriceList(), loadLabour()])
+  return { product: Object.fromEntries(products.map(p => [p.ref, p])), labour: Object.fromEntries(items.map(i => [i.ref, i])) }
+}
+
+async function handler(req, res) {
+  const owner = await ownerOf(req, res)
+  if (!owner) return
+  const { session, sched } = owner
 
   if (req.method === 'GET') {
-    if (req.query.download) return download(req, res, project, sched)
+    if (req.query.download) return download(req, res, owner.doc, sched)
     return res.status(200).json({ schedules: sched })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -51,8 +83,7 @@ async function handler(req, res) {
       const r = num(v)
       if (r == null) delete sched.rates[k]; else sched.rates[k] = r
     }
-    project.labourSchedules = sched
-    await persistProject(projectId, project)
+    await owner.save(sched)
     return res.status(200).json({ schedules: sched })
   }
 
@@ -63,7 +94,7 @@ async function handler(req, res) {
     if (!keys.length) return res.status(400).json({ error: 'Tick the items to include first.' })
     // Typed rates sent with the request are saved first, so nothing typed is lost.
     for (const [k, v] of Object.entries(req.body.rates || {})) { const r = num(v); if (r == null) delete sched.rates[k]; else sched.rates[k] = r }
-    const lines = buildLabourLines(project.contractedRates?.items || [], project.variations || []).filter(l => l.kind === 'item')
+    const lines = (await owner.lines()).filter(l => l.kind === 'item')
     const byKey = new Map(lines.map(l => [l.key, l]))
     const missing = keys.filter(k => !byKey.has(k))
     if (missing.length) return res.status(409).json({ error: `${missing.length} item(s) are no longer on the schedule - reload and try again.` })
@@ -81,8 +112,7 @@ async function handler(req, res) {
       }),
     }
     sched.packages.push(pkg)
-    project.labourSchedules = sched
-    await persistProject(projectId, project)
+    await owner.save(sched)
     return res.status(200).json({ schedules: sched, created: pkg.id })
   }
 
@@ -90,8 +120,7 @@ async function handler(req, res) {
     const before = sched.packages.length
     sched.packages = sched.packages.filter(p => p.id !== req.body.id)
     if (sched.packages.length === before) return res.status(404).json({ error: 'That schedule no longer exists.' })
-    project.labourSchedules = sched
-    await persistProject(projectId, project)
+    await owner.save(sched)
     return res.status(200).json({ schedules: sched })
   }
 
@@ -111,22 +140,55 @@ async function download(req, res, project, sched) {
   const fname = `Labour-schedule-${safe(pkg.name)}`
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
+  // THE COMPANY LOGO (1074) - the same source as every other generated
+  // document (lib/pdfBrand.js), so it is each company's own. Fetched once. If
+  // it cannot be fetched or read, the file goes out without it rather than not
+  // at all.
+  let logo = null
+  try {
+    const url = pdfLogoUrl(req)
+    if (url) {
+      const r = await fetch(url)
+      if (r.ok) {
+        const bytes = new Uint8Array(await r.arrayBuffer())
+        const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+        const isJpg = bytes[0] === 0xff && bytes[1] === 0xd8
+        if (isPng || isJpg) logo = { bytes, kind: isPng ? 'png' : 'jpeg' }
+      }
+    }
+  } catch { logo = null }
+
   if (format === 'xlsx') {
-    const XLSX = (await import('xlsx')).default || (await import('xlsx'))
-    const rows = [
-      [`${co ? co + ' - ' : ''}Labour rates schedule`], [`Project: ${projName}`], [`Schedule: ${pkg.name}`], [`Issued: ${today}`], [],
-      ['Ref', 'Description', 'Qty', 'Unit', 'Rate', 'Total'],
-      ...pkg.lines.map(l => [l.ref || '', l.description || '', l.qty ?? '', l.unit || '', l.rate ?? '', l.total ?? '']),
-      [], ['', '', '', '', 'Total', total],
-    ]
-    const ws = XLSX.utils.aoa_to_sheet(rows)
-    ws['!cols'] = [{ wch: 10 }, { wch: 60 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 14 }]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Labour rates')
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    // ExcelJS (1074), not SheetJS: the community SheetJS cannot hold a picture.
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Labour rates')
+    ws.columns = [{ width: 10 }, { width: 60 }, { width: 10 }, { width: 8 }, { width: 12 }, { width: 14 }]
+    let first = 1
+    if (logo) {
+      const id = wb.addImage({ buffer: Buffer.from(logo.bytes), extension: logo.kind })
+      // About 180 x 60 px, top left; the text starts below it.
+      ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 180, height: 60 } })
+      for (let r = 1; r <= 4; r++) ws.getRow(r).height = 15
+      first = 5
+    }
+    const put = (rowNo, values, opts = {}) => { const row = ws.getRow(rowNo); row.values = values; if (opts.bold) row.font = { bold: true }; if (opts.size) row.font = { ...(row.font || {}), size: opts.size }; return row }
+    let r = first
+    put(r++, [`${co ? co + ' - ' : ''}Labour rates schedule`], { bold: true, size: 14 })
+    put(r++, [`Project: ${projName}`]); put(r++, [`Schedule: ${pkg.name}`]); put(r++, [`Issued: ${today}`]); r++
+    const head = put(r++, ['Ref', 'Description', 'Qty', 'Unit', 'Rate', 'Total'], { bold: true })
+    head.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F1EF' } } })
+    for (const l of pkg.lines) {
+      const row = put(r++, [l.ref || '', l.description || '', l.qty ?? null, l.unit || '', l.rate ?? null, l.total ?? null])
+      row.getCell(2).alignment = { wrapText: true, vertical: 'top' }
+      row.getCell(5).numFmt = '#,##0.00'; row.getCell(6).numFmt = '#,##0.00'
+    }
+    r++
+    const tr = put(r, ['', '', '', '', 'Total', total], { bold: true }); tr.getCell(6).numFmt = '#,##0.00'
+    const buf = await wb.xlsx.writeBuffer()
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="${fname}.xlsx"`)
-    return res.status(200).send(buf)
+    return res.status(200).send(Buffer.from(buf))
   }
 
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
@@ -146,7 +208,18 @@ async function download(req, res, project, sched) {
     ;['Ref', 'Description', 'Qty', 'Unit', 'Rate', 'Total'].forEach((h, i) => cell(h, i, bold, 8.5))
     y -= 18
   }
-  page.drawText(t(`${co ? co + ' - ' : ''}Labour rates schedule`), { x: M, y: y - 16, size: 15, font: bold, color: INK }); y -= 24
+  // Logo top left, title beside it (1074).
+  let titleX = M
+  if (logo) {
+    try {
+      const img = logo.kind === 'png' ? await pdf.embedPng(logo.bytes) : await pdf.embedJpg(logo.bytes)
+      const h = 40, w = Math.min(140, img.width * (h / img.height))
+      page.drawImage(img, { x: M, y: y - h, width: w, height: h })
+      titleX = M + w + 14
+    } catch { /* unreadable image - title only */ }
+  }
+  page.drawText(t(`${co ? co + ' - ' : ''}Labour rates schedule`), { x: titleX, y: y - 16, size: 15, font: bold, color: INK }); y -= 24
+  if (titleX !== M) y -= 20
   for (const line of [`Project: ${projName}`, `Schedule: ${pkg.name}`, `Issued: ${today}`]) { page.drawText(t(line), { x: M, y: y - 10, size: 9.5, font, color: GREY }); y -= 14 }
   y -= 8; header()
   for (const l of pkg.lines) {

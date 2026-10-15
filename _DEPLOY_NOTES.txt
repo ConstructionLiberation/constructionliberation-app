@@ -1,47 +1,33 @@
-PACKAGE 1166 - Admin > Company details (name, address, logo) used across the
-portal; the quote's letterhead  (part 1 of 4 of this request)
+PACKAGE 1167 - Estimating: a Labour Schedule tab, to get rates from subbies
 
-Twelve files: six NEW, six complete replacements. No re-seed. No env changes.
-Built on 1165.
+Four files: one NEW, three complete replacements. No re-seed. No env changes.
+Built on 1166.
 
-  NEW       lib/companyDetails.js
-            lib/companyFields.js
-            pages/admin/company-details.js
-            pages/api/admin/company-details.js
-            pages/api/company-logo.js
-  REPLACED  lib/tenantContext.js
-            lib/withTenant.js
-            lib/tenantSettings.js
-            pages/api/tenant-brand.js
-            components/TenantProvider.js
-            components/AdminShell.js
-            components/QuoteTabs.js
+  NEW       lib/estimateLabour.js
+  REPLACED  components/LabourRates.js
+            pages/api/labour-schedules.js
+            pages/estimating/estimate/[id].js      (folder literally named [id])
 
-ADMIN > COMPANY DETAILS (admins) - company name, address, phone, email,
-website, company number, VAT number, and the LOGO (uploaded, resized in the
-browser). Saved in the company's own database.
-USED ACROSS THE PORTAL - they take priority over the platform registry's name
-and logo:
-  - every page (through the tenant-brand feed - 81 pages read it)
-  - the server: companyName() and logoUrl() - emails and documents - because
-    each request now loads the company details once (cached 30s)
-  - the logo is served from /api/company-logo
-THE QUOTE'S LETTERHEAD - the logo LARGE (100px tall), NO company name written
-(only when there is no logo), and the address, phone, email, website, company
-and VAT numbers from Company details.
+LABOUR SCHEDULE - a new tab on each estimate (after Materials). Exactly the
+Contracted Rates > Labour Rates screen, off the estimate's take-off instead:
+  - the take-off's labour: its sections as headings, each item WITH labour -
+    quantity, unit, its description (with the build-up's), and OUR labour rate
+    per unit (before profit) and total; below-the-line items under their own
+    heading; materials-only items left out
+  - type a subbie's rate (Match copies ours) -> their total, and the saving
+  - tick lines -> Create schedule -> a named schedule for that subbie
+  - each schedule downloads as EXCEL or PDF - their rates only, NEVER ours
+Schedules are kept with the estimate (separately from the take-off). They are
+made from the SAVED take-off - the tab says "save first" if there are unsaved
+changes. Contracted Rates > Labour Rates works exactly as before.
 
-AFTER DEPLOYING: Admin > Company details - fill it in and upload the logo.
-
-Checked through the real routes (with the request set up as withTenant now
-does): before - the registry's name, no logo or address; saved -> the brand
-feed carries "Rock Roofing Ltd", the logo link and the address; companyName()
-and logoUrl() on the server return them; the logo route serves the image; a
-non-image refused. In a REAL browser (Chromium): the Admin page - seven fields,
-a logo uploaded and previewed, saved; the quote - the logo 100px tall, no
-name, the address and contact lines beneath. All server routes compile; all
-165 pages pass the browser check. Built from your deployed packages
-(1022-1165, verified against their zips).
-
-STILL TO COME (this request): 2 - the Quote page on separate pages (Letter,
-Clarifications, Rates, Documents) with revisions to flick between; 3 -
-Documents appended per revision; 4 - the take-off exported to Excel.
+Checked through the real route with the converted build-ups, price list and
+labour rates: Mech Fixed SP on a 450 m² item -> "Roof area A", "1. Main roof
+450 m² @ our 11.00 = 4,950.00"; a materials-only item left out; ABC Roofing's
+rate 9.50 saved; schedule created (4,275.00); the Excel file - "Project:
+Q-1042 - Market Drayton", 450 m² @ 9.50 = 4,275.00 and NO 11.00 / 4,950.00;
+the PDF likewise. In a REAL browser (Chromium): the tab after Materials; Mech
+fixed single ply 1000 m²; 9.50 typed -> 9,500.00 beside our 11.00 /
+11,000.00, saving 1,500.00. All server routes compile; all 166 pages pass the
+browser check. Built from your deployed packages (1022-1166, verified against
+their zips).
