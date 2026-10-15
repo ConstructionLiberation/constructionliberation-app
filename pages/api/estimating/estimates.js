@@ -138,7 +138,7 @@ async function handler(req, res) {
     const dl = (await liveDeals())(est.dealId)
     if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
     const lib = await loadLib()
-    const { totals } = priceEstimate(est, lib)
+    const { totals, priced: pricedNow } = priceEstimate(est, lib)
     if (est.settings?.profit == null) return res.status(400).json({ error: 'Set the profit % before issuing' })
     // Mandatory sizes (1113): every one needs a number before a quote goes out.
     const noSize = itemsMissingSizes(est)
@@ -159,7 +159,7 @@ async function handler(req, res) {
     const crmNow = (await liveDeals())(est.dealId)
     // ...and the Terms & Conditions version it went out with (1092).
     const terms = currentTerms(await get('quote:templates'))
-    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow, terms: terms ? { v: terms.v, text: terms.text } : null })
+    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow, terms: terms ? { v: terms.v, text: terms.text } : null , priced: JSON.parse(JSON.stringify(pricedNow)), totals: JSON.parse(JSON.stringify(totals)) })   // as issued (1151)
     let crm = null
     if (est.dealId) {
       const deals = (await get('crm:deals')) || []
@@ -179,9 +179,41 @@ async function handler(req, res) {
       }
     }
     const next = { ...est, revision: nextRevision(rev), updatedAt: issuedAt, updatedBy: by,
-      revisions: [...(est.revisions || []), { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, changes, termsVersion: terms ? terms.v : null }] }
+      revisions: [...(est.revisions || []), { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, changes, termsVersion: terms ? terms.v : null, ...(b.sent ? { sent: { at: issuedAt, by } } : {}) }] }
     await saveEstimate(next, await summaryOf(next, lib))
     return res.status(200).json({ ok: true, estimate: next, issued: rev, total, crm, changes })
+  }
+  // SENT (1151): a revision is SENT when "Download and mark as sent" issued it, or
+  // it is marked here; it can be UNMARKED (downloaded and marked by mistake, or a
+  // change needed before it really went). A sent revision cannot be edited.
+  if (b.action === 'mark-sent') {
+    const est = await loadEstimate(String(b.id))
+    if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
+    const k = (est.revisions || []).findIndex(r => r.revision === b.revision)
+    if (k < 0) return res.status(404).json({ error: `Rev ${b.revision} was not found` })
+    const revisions = est.revisions.map((r, i) => i !== k ? r : (b.sent ? { ...r, sent: { at: new Date().toISOString(), by } } : (({ sent, ...rest }) => rest)(r)))
+    const next = { ...est, revisions, updatedAt: new Date().toISOString(), updatedBy: by }
+    await saveEstimate(next, await summaryOf(next, await loadLib()))
+    return res.status(200).json({ ok: true, estimate: next })
+  }
+  // EDIT A REVISION (1151) - only the LATEST, and only if NOT SENT: it becomes the
+  // working take-off again (as issued), so the next issue REPLACES it (same
+  // letter) rather than making a new one. The draft since it is replaced.
+  if (b.action === 'reopen') {
+    const est = await loadEstimate(String(b.id))
+    if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
+    if (b.baseUpdatedAt && est.updatedAt !== b.baseUpdatedAt) return res.status(409).json({ error: 'This estimate has changed since you opened it - reload, then try again' })
+    const dl = (await liveDeals())(est.dealId)
+    if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
+    const last = (est.revisions || []).slice(-1)[0]
+    if (!last || last.revision !== b.revision) return res.status(400).json({ error: 'Only the latest revision can be edited - issue a new revision instead' })
+    if (last.sent) return res.status(400).json({ error: `Rev ${last.revision} has been sent - unmark it as sent on the Quote tab to edit it, or issue a new revision` })
+    const snap = await loadRevision(est.id, last.revision)
+    if (!snap || !snap.estimate) return res.status(404).json({ error: 'That revision could not be loaded' })
+    const at = new Date().toISOString()
+    const next = { ...snap.estimate, id: est.id, revisions: est.revisions.slice(0, -1), revision: last.revision, reopened: { revision: last.revision, at, by }, updatedAt: at, updatedBy: by }
+    await saveEstimate(next, await summaryOf(next, await loadLib()))
+    return res.status(200).json({ ok: true, estimate: next })
   }
   // LINK a deal (1090) - an estimate started without one, or moved to another.
   if (b.action === 'link') {

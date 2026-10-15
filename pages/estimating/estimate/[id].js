@@ -9,7 +9,7 @@ import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import { placeholderValues, checklistOf } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
-import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
+import { normalizeTemplate, needsNormalizing, descriptionParts, descriptionText, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
 import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, labelBudget, NO_SUPPLIER, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
@@ -80,6 +80,27 @@ export default function EstimatePage() {
   const [linking, setLinking] = useState(false)
   const [who, setWho] = useState({ canDelete: false, admins: [] })
   const [tab, setTab] = useState('takeoff')
+  // A REVISION'S TAKE-OFF, as issued (1151)
+  const [revView, setRevView] = useState(null)      // { loading } | { snap } | { error }
+  async function openRevision(rev) {
+    setRevView({ loading: true, revision: rev })
+    try { const r = await fetch(`${API}?id=${encodeURIComponent(est.id)}&rev=${encodeURIComponent(rev)}`); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not load it'); setRevView({ snap: d.revision }) }
+    catch (e) { setRevView({ error: e.message, revision: rev }) }
+  }
+  async function reopenRevision(rev) {
+    if (!window.confirm(`Edit Rev ${rev}? It becomes the working take-off again, exactly as issued - your current draft is replaced. Issuing then replaces Rev ${rev} (no new letter).`)) return
+    if (dirty && !(await flushSave())) { setErr('The estimate could not be saved'); return }
+    setBusy(true); setErr('')
+    try { const d = await estApi(API, { action: 'reopen', id: est.id, revision: rev, baseUpdatedAt: base }); setEst(d.estimate); setBase(d.estimate.updatedAt); setRevView(null); setTab('takeoff'); setIssueMsg(`Rev ${rev} is open for editing - issue it again when ready.`) }
+    catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  async function markSent(rev, sent) {
+    setBusy(true); setErr('')
+    try { const d = await estApi(API, { action: 'mark-sent', id: est.id, revision: rev, sent }); setEst(d.estimate); setBase(d.estimate.updatedAt) }
+    catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
   const [warnList, setWarnList] = useState(null)   // 'cost' | 'qty' - the list behind a red warning (1146)
   const [showChecklist, setShowChecklist] = useState(false)   // re-open a completed checklist (1142)
   const [ckNew, setCkNew] = useState('')
@@ -272,7 +293,7 @@ export default function EstimatePage() {
     const asSent = JSON.parse(JSON.stringify(est))
     setBusy(true); setErr(''); setIssueMsg('')
     try {
-      const d = await estApi(API, { action: 'issue', id: est.id, note, baseUpdatedAt: base })
+      const d = await estApi(API, { action: 'issue', id: est.id, note, baseUpdatedAt: base, sent: !!andPrint })
       setLastRev({ revision: d.issued, total: d.total, estimate: JSON.parse(JSON.stringify(est)) })
       setEst(d.estimate); setBase(d.estimate.updatedAt)
       if (andPrint) {
@@ -322,11 +343,32 @@ export default function EstimatePage() {
         </div>
       )}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #e8e7e3', marginBottom: 14 }}>
-        {[['takeoff', 'Take-off'], ['budgets', 'Budgets'], ['materials', 'Materials'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
+        {[['takeoff', 'Take-off'], ['budgets', 'Summary'], ['materials', 'Materials'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{ border: 'none', borderBottom: `2px solid ${tab === k ? '#0f766e' : 'transparent'}`, background: 'none', padding: '8px 14px', fontSize: 13.5, fontWeight: tab === k ? 700 : 500, color: tab === k ? '#0f766e' : '#666', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{label}</button>
         ))}
       </div>
       {/* BUDGETS (1146) - the cost breakdown and material budgets, on their own tab */}
+      {tab === 'budgets' && (() => {
+        // THE SUMMARY CARDS (1151) - above the cost breakdown and material budgets
+        const rateOnlyN = (est.rows || []).filter(r => r.kind === 'item' && priced[r.id]?.belowLine && !priced[r.id]?.optional).length
+        const margin = totals.total > 0 ? totals.profit / totals.total : null
+        const card = (title, value, sub, accent) => (
+          <div style={{ background: '#fff', border: `1px solid ${accent || '#e8e7e3'}`, borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontSize: 11.5, color: '#888', textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{title}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: accent ? '#0f766e' : '#1a1a19', marginTop: 4 }}>{value}</div>
+            {sub && <div style={{ fontSize: 11.5, color: '#888', marginTop: 2 }}>{sub}</div>}
+          </div>
+        )
+        return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))', gap: 12, marginTop: 14 }}>
+          {card('Margin', margin == null ? '—' : `${(margin * 100).toFixed(1)}%`, margin == null ? 'nothing priced above the line yet' : `profit ${money(totals.profit, { dp: 2 })} on ${money(totals.total, { dp: 2 })} - MCD ${money(totals.profitAndMcd - totals.profit, { dp: 2 })} on top`, '#99f6e4')}
+          {(() => { const n = (est.rows || []).filter(r => r.kind === 'item' && priced[r.id] && !priced[r.id].belowLine).length
+            return card('Above the line', money(totals.total, { dp: 2 }), `${n} item${n === 1 ? '' : 's'} - the quote total`) })()}
+          {card('Below the line', money(totals.optional || 0, { dp: 2 }), `optional items${rateOnlyN ? ` + ${rateOnlyN} rate-only (no total)` : ''} - not in the quote total`)}
+          {card('Above + below', money((totals.total || 0) + (totals.optional || 0), { dp: 2 }), 'if every optional item is taken')}
+        </div>
+        )
+      })()}
       {tab === 'budgets' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 12, marginTop: 14, alignItems: 'start' }}>
         <div style={panel}>
@@ -343,7 +385,12 @@ export default function EstimatePage() {
         actions={<>
           <button onClick={() => issue(true)} disabled={busy || dirty || s.profit == null || !!crm?.archived} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ fontSize: 12.5, padding: '6px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: busy || dirty || s.profit == null || crm?.archived ? 0.5 : 1 }}>Download and mark as sent (Rev {est.revision})</button>
           {dirty && <span style={{ fontSize: 12, color: '#b45309' }}>Save first</span>}
+          {(() => { const last = (est.revisions || []).slice(-1)[0]; if (!last) return null
+            return last.sent
+              ? <span style={{ fontSize: 12, color: '#15803d' }}>Rev {last.revision} sent {new Date(last.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · <button onClick={() => { if (window.confirm(`Unmark Rev ${last.revision} as sent? It can then be edited (Revisions > View > Edit) and issued again as Rev ${last.revision}.`)) markSent(last.revision, false) }} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12, padding: 0 }}>Unmark sent</button></span>
+              : <span style={{ fontSize: 12, color: '#666' }}>Rev {last.revision} issued, not sent · <button onClick={() => markSent(last.revision, true)} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12, padding: 0 }}>Mark as sent</button></span> })()}
         </>} />}
+      {revView && <RevisionViewer view={revView} est={est} lib={lib} money={money} onClose={() => setRevView(null)} onEdit={reopenRevision} busy={busy} />}
       {(tab === 'letter' || tab === 'clar' || tab === 'docs') && (
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {tab === 'letter' && <LetterTab est={est} change={change} templates={quoteDocs} values={values} />}
@@ -699,9 +746,10 @@ export default function EstimatePage() {
             <div style={{ fontWeight: 600, marginBottom: 3 }}>Changes since Rev {lastRev.revision}{since.length ? '' : ' - none'}</div>
             {since.map((c, i) => <div key={i} style={{ color: c.kind === 'removed' ? '#b42318' : c.kind === 'added' ? '#15803d' : '#444', padding: '1px 0' }}>{c.text}</div>)}
           </div>}
+          {est.reopened && <div style={{ fontSize: 12.5, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '6px 10px', marginBottom: 8, color: '#92400e' }}>Editing <strong>Rev {est.reopened.revision}</strong> - issuing replaces it (no new revision letter).</div>}
           {(est.revisions || []).slice().reverse().map(r => (
             <details key={r.revision} style={{ fontSize: 12.5, borderTop: '1px solid #f0efec', padding: '6px 0' }}>
-              <summary style={{ cursor: 'pointer' }}><strong>Rev {r.revision}</strong> · {money(r.total, { dp: 2 })} · {new Date(r.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {r.issuedBy}{r.note ? ` · ${r.note}` : ''}</summary>
+              <summary style={{ cursor: 'pointer' }}><button onClick={(e) => { e.preventDefault(); openRevision(r.revision) }} style={{ ...smallBtn, marginRight: 8, padding: '2px 8px', fontSize: 11.5 }}>View</button>{r.sent ? <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 8, padding: '1px 7px', marginRight: 6 }} title={`Sent ${new Date(r.sent.at).toLocaleString('en-GB')} by ${r.sent.by || ''}`}>SENT</span> : null}<strong>Rev {r.revision}</strong> · {money(r.total, { dp: 2 })} · {new Date(r.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {r.issuedBy}{r.note ? ` · ${r.note}` : ''}</summary>
               <div style={{ paddingLeft: 12, marginTop: 4, color: '#555' }}>{(r.changes || []).length ? r.changes.map((c, i) => <div key={i}>{c.text}</div>) : 'First issue.'}</div>
             </details>
           ))}
@@ -1021,3 +1069,83 @@ function RateAttachments({ est }) {
 }
 
 const warnBtn = { color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit' }
+
+// A REVISION'S TAKE-OFF AS ISSUED (1151) - read-only: sections, items with their
+// descriptions, highlights and notes, blank lines, below the line, totals and the
+// estimate's notes. Figures stored at issue are used; a revision issued before
+// they were stored is priced at today's prices, and says so. EDIT only for the
+// latest revision, and only if it has not been sent.
+function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy }) {
+  const snap = view.snap
+  const m2 = (v) => v == null ? '' : money(v, { dp: 2 })
+  const HLC = { yellow: '#fef9c3', orange: '#ffedd5', red: '#fee2e2', green: '#dcfce7' }
+  let body = null
+  if (view.loading) body = <div style={{ color: '#888', fontSize: 13 }}>Loading Rev {view.revision}…</div>
+  else if (view.error) body = <div style={{ color: '#b42318', fontSize: 13 }}>{view.error}</div>
+  else {
+    const e = snap.estimate || {}
+    const live = priceEstimate(e, lib)
+    const priced = snap.priced || live.priced, totals = snap.totals || live.totals
+    const latest = (est.revisions || []).slice(-1)[0]
+    const entry = (est.revisions || []).find(r => r.revision === snap.revision) || {}
+    const canEdit = latest && latest.revision === snap.revision && !entry.sent
+    const why = entry.sent ? `Sent ${new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} - unmark it as sent on the Quote tab to edit it, or issue a new revision.` : 'Only the latest revision can be edited - issue a new revision instead.'
+    let past = false
+    body = <>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+        <span style={{ fontSize: 12.5, color: '#666' }}>Issued {new Date(snap.issuedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} by {snap.issuedBy}{snap.note ? ` - "${snap.note}"` : ''}</span>
+        {entry.sent ? <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 8, padding: '2px 8px' }}>SENT</span> : <span style={{ fontSize: 11, color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '2px 8px' }}>not sent</span>}
+        <span style={{ flex: 1 }} />
+        {canEdit ? <button onClick={() => onEdit(snap.revision)} disabled={busy} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e' }}>Edit Rev {snap.revision}</button> : <span style={{ fontSize: 12, color: '#888', maxWidth: 380 }}>{why}</span>}
+      </div>
+      {!snap.priced && <div style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 10px', marginBottom: 8 }}>This revision was issued before figures were stored with it, so rates and totals are worked out at today's prices. Issued total: {m2(snap.total)}.</div>}
+      <div style={{ overflow: 'auto', border: '1px solid #e8e7e3', borderRadius: 10 }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+          <thead><tr>{['Description', 'Qty', 'Unit', 'Rate', 'Total'].map((h, i) => <th key={h} style={{ ...th, textAlign: i ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {(e.rows || []).map(r => {
+              if (r.kind === 'line') { past = true; return <tr key={r.id} style={{ background: '#f5f3ff', borderTop: '3px double #6d28d9' }}><td colSpan={5} style={{ ...td, fontWeight: 700, color: '#6d28d9' }}>BELOW THE LINE <span style={{ fontWeight: 400, fontSize: 12, color: '#6b6b80' }}>- not in the total</span></td></tr> }
+              if (r.kind === 'spacer') return <tr key={r.id}><td colSpan={5} style={{ ...td, height: 18 }} /></tr>
+              const bg = r.highlight ? HLC[r.highlight] : undefined
+              if (r.kind === 'section') return <tr key={r.id} style={{ background: bg || '#f4f4f2' }}><td colSpan={5} style={{ ...td, fontWeight: 700, textDecoration: 'underline' }}>{r.title}</td></tr>
+              const p = priced[r.id] || {}
+              const text = r.buildup ? descriptionText(r.buildup, lib) : ''
+              return (
+                <tr key={r.id} style={{ background: bg }}>
+                  <td style={{ ...td, minWidth: 280 }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ flex: 1 }}><div style={{ fontWeight: 600 }}>{r.description}</div>{text && <div style={{ fontSize: 11.5, color: '#666', whiteSpace: 'pre-line', marginTop: 2 }}>{text}</div>}</div>
+                      {r.note ? <div style={{ width: 190, flexShrink: 0, background: '#fde047', borderRadius: 4, padding: '5px 7px', fontSize: 11.5, color: '#422006', whiteSpace: 'pre-wrap' }}>{r.note}</div> : null}
+                    </div>
+                  </td>
+                  <td style={tdR}>{r.rateOnly ? 'TBC' : (r.qty ?? '')}</td>
+                  <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : ''}</td>
+                  <td style={tdR}>{m2(p.rate)}</td>
+                  <td style={{ ...tdR, fontWeight: 600, color: (past || r.rateOnly) ? '#6d28d9' : undefined }}>{r.rateOnly || (past && p.total == null) ? 'Rate only' : past ? <>{m2(p.total)} <span style={{ fontSize: 10.5 }}>optional</span></> : m2(p.total)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: 'flex', gap: 20, marginTop: 10, fontSize: 13, flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: 15, color: '#0f766e' }}>Total {m2(totals.total)}</strong>
+        <span>Materials {m2(totals.materials)}</span><span>Labour {m2(totals.labour)}</span><span>Profit & MCD {m2(totals.profitAndMcd)}</span>
+        {totals.optional ? <span style={{ color: '#6d28d9' }}>Below the line (optional) {m2(totals.optional)}</span> : null}
+      </div>
+      {e.notes ? <div style={{ marginTop: 10, fontSize: 12.5 }}><strong>Notes</strong><div style={{ whiteSpace: 'pre-wrap', color: '#444', marginTop: 2 }}>{e.notes}</div></div> : null}
+    </>
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '30px 20px', overflowY: 'auto' }} onMouseDown={ev => { if (ev.target === ev.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1150, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+          <strong style={{ fontSize: 17 }}>Rev {view.revision || snap?.revision} - take-off as issued</strong>
+          <span style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer', color: '#888' }}>×</button>
+        </div>
+        {body}
+      </div>
+    </div>
+  )
+}
