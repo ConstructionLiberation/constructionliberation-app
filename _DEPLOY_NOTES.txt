@@ -1,26 +1,33 @@
-PACKAGE 1170 - Export the take-off to Excel  (part 4 of 4)
+PACKAGE 1171 - Red text in the clarifications template; a fix to typing over
+red
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1169.
+Five files. Complete replacements. No re-seed. No env changes. Built on 1170.
 
+  lib/quoteDocs.js
+  components/QuoteTabs.js
+  pages/admin/quote-documents.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/estimating/estimates.js
 
-"⬇ Export to Excel" beside "⚙ Columns" on the take-off downloads it as an
-Excel file, as it is on screen:
-  - columns: Description, Build-up description, Qty, Unit, Rate, Total, then
-    the optional columns SHOWING under Columns, in the same order (materials,
-    labour, profit, the item's profit %, rate only, each supplier shown)
-  - rows: the section headers, the items, blank lines, the Totals row, and
-    BELOW THE LINE with its items
-  - money formatted to the penny; profit % as a percentage
-The file is named e.g. "Q-1042-Rev-A-take-off.xlsx". The Excel library loads
-only when the button is used.
+RED IN THE CLARIFICATIONS TEMPLATE - in Edit template (and Admin > Quote
+Documents) select PART of a sentence or ALL of it and "Make red" - for what may
+not apply to every quote; "Clear red" removes it. Make / Clear red sit once
+above the list and act on the clarification your selection is in.
+ON A QUOTE'S CLARIFICATIONS PAGE the red shows red (no markers), with a warning
+"N red parts - check each applies". Select the red (or click in it) and
+"Clear red" to keep it as it is, or type over it - it turns black - or delete
+the line. Like the letter, the quote CANNOT BE SENT while any red is left (the
+server refuses too, also for Mark as sent).
+FIX - TYPING OVER RED (letter and clarifications): the first key turned the red
+black and the cursor lost its place, so the rest of the typing went in before
+the first letter ("7:30am" came out ":30am...7"). The cursor now stays put.
 
-Checked in a REAL browser (Chromium): Profit rate hidden and Renolit shown ->
-the downloaded file's 15 columns match the screen (plus Build-up
-description); Mech fixed single ply 1000 m2 @ 17.54 = 17,540.00 with its
-materials / labour / profit and Renolit 0.60 / 595.20; Edge trim with no
-quantity; Totals 20,804.00 (materials 2,646.02, labour 13,200.00, Renolit
-595.20); BELOW THE LINE - the optional walkway; money formatted #,##0.00. All
-166 pages pass the browser check. Built from your deployed packages
-(1022-1169, verified against their zips); the file checked identical to the
-tested version before zipping.
+Checked through the real route: sending with a red clarification refused ("1
+red part to check"); cleared -> sent as Rev A. In a REAL browser (Chromium):
+"erected to BS EN 12811" made red on its own within its sentence, saved as
+part of it; on the quote both red parts red with no markers and the warning;
+one selected -> Clear red -> black; the other typed over -> "Working hours
+7:30am to 4:30pm, Monday to Friday." (no red, warning gone); the letter typed
+over -> "Programme: six weeks on site." All server routes compile; all 166
+pages pass the browser check. Built from your deployed packages (1022-1170,
+verified against their zips).

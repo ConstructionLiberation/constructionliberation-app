@@ -93,13 +93,46 @@ function serialize(el) {
   walk(el)
   return out
 }
+// TURN TYPED-OVER RED BLACK, KEEPING THE CURSOR WHERE IT WAS (1171) - swapping the red
+// section for plain text loses the cursor, so the rest of the typing went in
+// before the first letter. The cursor is saved as a character count and put back.
+function unredTyped(el) {
+  const spans = [...el.querySelectorAll('span[data-red]')].filter(sp => sp.textContent !== sp.dataset.orig)
+  if (!spans.length) return
+  const s = window.getSelection()
+  let at = null
+  if (s && s.rangeCount && el.contains(s.getRangeAt(0).endContainer)) { const r = document.createRange(); r.selectNodeContents(el); r.setEnd(s.getRangeAt(0).endContainer, s.getRangeAt(0).endOffset); at = r.toString().length }
+  for (const sp of spans) sp.replaceWith(document.createTextNode(sp.textContent))
+  el.normalize()
+  if (at == null) return
+  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let n, left = at
+  while ((n = walk.nextNode())) { if (left <= n.nodeValue.length) { const r = document.createRange(); r.setStart(n, left); r.collapse(true); s.removeAllRanges(); s.addRange(r); return } left -= n.nodeValue.length }
+}
+// SHARED RED EDITING (1171) - the editor the selection is in, and Make / Clear red on it
+const editorOfSelection = () => { const s = window.getSelection(); if (!s || !s.rangeCount) return null; const n = s.getRangeAt(0).commonAncestorContainer; const el = (n.nodeType === 1 ? n : n.parentElement); return el && el.closest ? el.closest('[data-redit]') : null }
+function makeRedSel() { const el = editorOfSelection(); const s = window.getSelection(); if (!el || !s.rangeCount) return; const r = s.getRangeAt(0); if (r.collapsed) return; const sp = document.createElement('span'); sp.dataset.red = '1'; sp.style.color = '#dc2626'; sp.appendChild(r.extractContents()); sp.dataset.orig = sp.textContent; r.insertNode(sp); el.__emit && el.__emit() }
+function clearRedSel() { const el = editorOfSelection(); const s = window.getSelection(); if (!el || !s.rangeCount) return; const r = s.getRangeAt(0); for (const sp of [...el.querySelectorAll('span[data-red]')]) if (r.intersectsNode(sp) || sp.contains(r.startContainer)) sp.replaceWith(document.createTextNode(sp.textContent)); el.__emit && el.__emit() }
+// A one-paragraph editor that shows [red]...[/red] as red (clarifications, 1171).
+// keepRed (the template): red stays red while typing; otherwise typing inside red
+// turns it black, like the letter.
+function RedLine({ text, setText, keepRed, placeholder }) {
+  const ref = useRef(null), last = useRef(null)
+  useEffect(() => { const el = ref.current; if (el && text !== last.current) { el.innerHTML = toHtml(text); last.current = text } }, [text])
+  const emit = () => { const el = ref.current; if (!el) return; const t = serialize(el); last.current = t; setText(t) }
+  useEffect(() => { if (ref.current) ref.current.__emit = emit })
+  const onInput = () => { const el = ref.current; if (!keepRed) unredTyped(el); emit() }
+  return <div ref={ref} data-redit="1" contentEditable suppressContentEditableWarning onInput={onInput} data-placeholder={placeholder}
+    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+    onPaste={e => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain').replace(/\s*\n\s*/g, ' ')) }}
+    style={{ ...area, flex: 1, fontSize: 12.5, minHeight: 38, whiteSpace: 'pre-wrap', outline: 'none', background: '#fff' }} />
+}
 function LetterRich({ text, setText, template }) {
   const ref = useRef(null), last = useRef(null)
   useEffect(() => { const el = ref.current; if (el && text !== last.current) { el.innerHTML = toHtml(text); last.current = text } }, [text])
   const emit = () => { const el = ref.current; if (!el) return; const t = serialize(el); last.current = t; setText(t) }
   const onInput = () => {
     const el = ref.current
-    if (!template) for (const sp of el.querySelectorAll('span[data-red]')) if (sp.textContent !== sp.dataset.orig) { sp.replaceWith(document.createTextNode(sp.textContent)) }
+    if (!template) unredTyped(el)
     emit()
   }
   const inEditor = () => { const s = window.getSelection(); return s && s.rangeCount && ref.current && ref.current.contains(s.getRangeAt(0).commonAncestorContainer) ? s.getRangeAt(0) : null }
@@ -168,7 +201,7 @@ export function ClarificationsTab({ est, change, templates, canEditTemplate, onS
       {tpl != null ? (
         <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: 10 }}>
           <div style={{ fontSize: 12.5, color: '#0f766e', marginBottom: 8 }}>Every quote using the template follows it (customised ones keep their own).{!Array.isArray(templates && templates.clarTemplate) ? ' Started from your old company list - remove what should not be on every quote.' : ''}</div>
-          <ClarListEditor list={tpl} setList={setTpl} />
+          <ClarListEditor list={tpl} setList={setTpl} template />
           {err && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 6 }}>{err}</div>}
           <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
             <button onClick={() => { setTpl(null); setErr('') }} style={small}>Cancel</button>
@@ -185,14 +218,26 @@ export function ClarificationsTab({ est, change, templates, canEditTemplate, onS
 }
 // THE CLARIFICATIONS LIST EDITOR (1165) - headers (bold) and clarifications;
 // drag by the handle or use the arrows to sort; + Add clarification / + Add header.
-export function ClarListEditor({ list, setList }) {
+export function ClarListEditor({ list, setList, template }) {
   const [drag, setDrag] = useState(null), [dropAt, setDropAt] = useState(null)
   const nid = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const set = (id, patch) => setList(list.map(x => x.id === id ? { ...x, ...patch } : x))
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; const l = [...list]; [l[i], l[j]] = [l[j], l[i]]; setList(l) }
   const drop = (targetId, after) => { if (!drag || drag === targetId) return; const moving = list.find(x => x.id === drag); const rest = list.filter(x => x.id !== drag); let k = rest.findIndex(x => x.id === targetId); if (after) k++; rest.splice(k, 0, moving); setList(rest) }
   let n = 0
+  const reds = list.reduce((n, x) => n + ((String(x.text || '').match(/\[red\][\s\S]*?\[\/red\]/g) || []).length), 0)
+  const redBar = template
+    ? <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+        <button onMouseDown={e => e.preventDefault()} onClick={makeRedSel} title="Select words in a clarification, then Make red - for what may not apply to every quote" style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Make red</button>
+        <button onMouseDown={e => e.preventDefault()} onClick={clearRedSel} title="Click in red text (or select it), then Clear red" style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>Clear red</button>
+        <span style={{ fontSize: 11.5, color: '#888' }}>red = check it applies on each quote - part of a sentence or all of it</span>
+      </div>
+    : reds > 0 ? <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '6px 10px' }}>
+        <span style={{ fontSize: 12.5, color: '#b91c1c' }}>⚠ {reds} red part{reds === 1 ? '' : 's'} - check each applies to this quote: select it and Clear red to keep it, type over it, or delete the line. The quote cannot be sent until none are left.</span>
+        <button onMouseDown={e => e.preventDefault()} onClick={clearRedSel} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap', marginLeft: 'auto' }}>Clear red</button>
+      </div> : null
   return <>
+    {redBar}
     {!list.length && <div style={{ fontSize: 12.5, color: '#bbb', margin: '4px 0 8px' }}>None yet.</div>}
     {list.map((x, i) => {
       if (x.kind !== 'header') n++
@@ -206,7 +251,7 @@ export function ClarListEditor({ list, setList }) {
           {x.kind === 'header'
             ? <input value={x.text} onChange={e => set(x.id, { text: e.target.value })} placeholder="Header - e.g. Access" style={{ ...area, flex: 1, fontWeight: 700, fontSize: 13.5, background: '#f4f4f2' }} />
             : <><span style={{ fontSize: 12.5, color: '#888', padding: '7px 0', minWidth: 22, textAlign: 'right' }}>{n}.</span>
-                <textarea value={x.text} onChange={e => set(x.id, { text: e.target.value })} rows={2} placeholder="Clarification" style={{ ...area, flex: 1, fontSize: 12.5 }} /></>}
+                <RedLine text={x.text} setText={(t) => set(x.id, { text: t })} keepRed={template} placeholder="Clarification" /></>}
           <button onClick={() => move(i, -1)} title="Move up" style={{ border: 'none', background: 'none', color: '#999', cursor: 'pointer', padding: '6px 2px' }}>↑</button>
           <button onClick={() => move(i, 1)} title="Move down" style={{ border: 'none', background: 'none', color: '#999', cursor: 'pointer', padding: '6px 2px' }}>↓</button>
           <button onClick={() => setList(list.filter(y => y.id !== x.id))} title="Remove" style={{ border: 'none', background: 'none', color: '#999', cursor: 'pointer', padding: '6px 2px' }}>✕</button>
@@ -295,7 +340,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
       <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Clarifications</h3>
       {clarItems.map(x => x.kind === 'header'
         ? <div key={x.id} style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 4px' }}>{x.text}</div>
-        : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{++clarN}.</span><span>{x.text}</span></div>)}
+        : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{++clarN}.</span><span>{redNodes(x.text)}</span></div>)}
     </>,
     rates: <>
       {sheetHead('Schedule of rates and prices')}
@@ -378,3 +423,6 @@ function QuoteLetterhead({ companyName, compact }) {
     </div>
   )
 }
+
+// [red]...[/red] drawn red (1171)
+export const redNodes = (text) => String(text || '').split(/(\[red\][\s\S]*?\[\/red\])/).map((part, i) => { const m = part.match(/^\[red\]([\s\S]*?)\[\/red\]$/); return m ? <span key={i} style={{ color: '#dc2626' }}>{m[1]}</span> : <span key={i}>{part}</span> })

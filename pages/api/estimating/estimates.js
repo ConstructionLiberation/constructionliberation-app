@@ -4,7 +4,7 @@ import { get, set, getPortalUsers } from '../../../lib/db'
 import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
-import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues, clarOf } from '../../../lib/quoteDocs'
+import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues, clarOf, clarRedCount } from '../../../lib/quoteDocs'
 import { detailsFor } from '../../../lib/estimate'
 import { DEFAULT_FIELD_SCHEMA } from '../../../lib/crmFieldSchema'
 import { itemsMissingSizes } from '../../../lib/buildups'
@@ -194,6 +194,8 @@ async function handler(req, res) {
       const vals = placeholderValues({ est, details: detailsFor(est, crmNow), total, companyName: 'x', money: (v) => String(v), dateText: issuedAt })
       const p = letterProblems(letterOf(est, qtNow), vals)
       if (p.missing.length || p.red) return res.status(400).json({ error: `The letter cannot go to the customer yet: ${letterProblemText(p)}. Fix it on the Letter tab, then send.` })
+      const cr = clarRedCount(clarOf(est, qtNow))
+      if (cr) return res.status(400).json({ error: `The clarifications have ${cr} red part${cr === 1 ? '' : 's'} to check - keep (Clear red) or delete each on the Clarifications tab, then send.` })
     }
     const terms = currentTerms(qtNow)
     // the LETTER as it reads now goes with the revision - a later template change never rewrites it (1163)
@@ -252,6 +254,8 @@ async function handler(req, res) {
         const vals = placeholderValues({ est: snap.estimate, details: detailsFor(snap.estimate, snap.crm), total: snap.total, companyName: 'x', money: (v) => String(v), dateText: snap.issuedAt })
         const p = letterProblems(letterOf(snap.estimate, await get('quote:templates')), vals)
         if (p.missing.length || p.red) return res.status(400).json({ error: `Rev ${b.revision}'s letter cannot go to the customer: ${letterProblemText(p)}. Edit Rev ${b.revision} (or issue a new revision) to fix it.` })
+        const cr = clarRedCount(clarOf(snap.estimate, await get('quote:templates')))
+        if (cr) return res.status(400).json({ error: `Rev ${b.revision}'s clarifications have ${cr} red part${cr === 1 ? '' : 's'} still to check. Edit Rev ${b.revision} (or issue a new revision) to fix it.` })
       }
     }
     const revisions = est.revisions.map((r, i) => i !== k ? r : (b.sent ? { ...r, sent: { at: new Date().toISOString(), by } } : (({ sent, ...rest }) => rest)(r)))

@@ -60,7 +60,7 @@ export default function QuoteDocuments() {
 
           {/* THE CLARIFICATIONS TEMPLATE (1165) - one list under headers; every quote follows it */}
           <Card title="Clarifications template" hint={`Every quote follows this until it is changed on that quote. Sort them under headers.${Array.isArray(tpl.clarTemplate) ? '' : ' Started from your old company list - remove what should not be on every quote, then save.'}`}>
-            <ClarListEditor list={Array.isArray(tpl.clarTemplate) ? tpl.clarTemplate : clarStarter(tpl)} setList={(l) => edit(t => ({ ...t, clarTemplate: l }))} />
+            <ClarListEditor template list={Array.isArray(tpl.clarTemplate) ? tpl.clarTemplate : clarStarter(tpl)} setList={(l) => edit(t => ({ ...t, clarTemplate: l }))} />
           </Card>
           {/* THE PRICING CHECKLIST (1142) - shown above the total on every take-off */}
           <Card title="Pricing checklist" hint={`Reminders on every take-off, above the total - estimators tick them, and can add their own per estimate.${Array.isArray(tpl.checklist) ? '' : ' This is the starter list until you save your own.'}`}>
