@@ -1,25 +1,28 @@
-PACKAGE 1174 - The Letter and Clarifications tabs follow the revisions
+PACKAGE 1175 - Terms & Conditions: a prompt when there are none; formatting
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1173.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1174.
 
+  components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
 
-The Letter and Clarifications tabs now have the same revision bar as the Quote
-tab - "Draft Rev C | Rev B SENT | Rev A":
-  - the DRAFT (or a revision being edited) is editable as before - where the
-    new revision's letter and clarifications are amended
-  - an EARLIER revision shows its letter / clarifications EXACTLY AS ISSUED,
-    read-only, with a note ("Rev B, sent 11 Oct 2026 - as it went out,
-    read-only") and a link back to the draft
-  - the choice is shared by Letter, Clarifications and Quote - looking at Rev B
-    on one shows Rev B on the others
-When a revision is issued, the new draft carries its letter and
-clarifications over (as before), ready to amend.
+(Terms & Conditions are managed in Admin > Quote Documents: each save is a new
+version; every quote prints the latest as its final section; each issued
+revision keeps the version it went out with.)
 
-Checked in a REAL browser (Chromium): Letter on Draft Rev B - the bar, the
-editable draft letter; Rev A clicked - Rev A's letter as sent, read-only, with
-the note; Clarifications then on Rev A too - its own list, read-only, its red
-part red; the Quote tab on Rev A; "the draft" -> back to the editable Rev B
-letter. All 166 pages pass the browser check. Built from your deployed
-packages (1022-1173, verified against their zips); the file checked identical
-to the tested version before zipping.
+NO TERMS YET - the Quote tab shows "No Terms & Conditions yet - add them in
+Admin > Quote Documents" (a link; on screen only, never printed), and
+"Download and mark as sent" asks before a quote goes out without them.
+FORMATTING - worked out from the text as pasted, no codes needed:
+  - HEADINGS in bold: a line in CAPITALS; a short numbered line with no full
+    stop ("1. Definitions"); a line starting "#"
+  - NUMBERED CLAUSES - "1.1", "2.3.1", "(a)", "(i)" - the number in its own
+    column with the text aligned beside it; deeper ones indented further
+  - ordinary lines as they are
+
+Checked in a REAL browser (Chromium): with no terms - the prompt and its link,
+hidden in print; "Download and mark as sent" asked, cancelling stopped it. With
+terms - the prompt gone; the Terms page: the capitals title and "1.
+Definitions" / "2. Payment" bold; 1.1, 1.2, 2.1 indented with their numbers in
+a column; 2.1.1, (a), (b) indented further; the closing paragraph plain. All
+166 pages pass the browser check. Built from your deployed packages
+(1022-1174, verified against their zips).

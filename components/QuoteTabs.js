@@ -388,7 +388,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
     ] }] : []),
     ...(terms ? [{ key: 'terms', title: 'Terms & Conditions', blocks: [
       { id: 't', el: h3('Terms & Conditions', <span style={{ fontWeight: 400, fontSize: 11.5, color: '#888' }}> version {terms.v}</span>) },
-      ...String(terms.text || '').split('\n').map((l, i) => ({ id: `t${i}`, el: <div style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, lineHeight: 1.5, color: '#333' }}>{l || '\u00a0'}</div> })),
+      ...String(terms.text || '').split('\n').map((l, i) => ({ id: `t${i}`, el: termsLine(l) })),
     ] }] : []),
   ]
   // MEASURE every piece at the page's content width, then lay out the pages
@@ -426,6 +426,8 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
       {revBar && <div className="no-print" style={{ marginBottom: 10 }}>{revBar}</div>}
       <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         {actions}
+        {/* NO TERMS YET (1175) - on screen only */}
+        {!terms && <span style={{ fontSize: 12.5, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '4px 10px' }}>⚠ No Terms &amp; Conditions yet - add them in <a href="/admin/quote-documents" style={{ color: '#b45309', fontWeight: 600 }}>Admin &gt; Quote Documents</a></span>}
         <button onClick={() => window.print()} style={small}>{draft ? 'Print draft' : 'Print'}</button>
         <span style={{ fontSize: 12, color: '#888' }}>Choose "Save as PDF" in the print window. {sheets.length ? `${sheets.length} A4 pages, as they print.` : ''}</span>
       </div>
@@ -489,3 +491,27 @@ function QuoteLetterhead({ companyName, compact, draft, refText, title }) {
 
 // [red]...[/red] drawn red (1171)
 export const redNodes = (text) => String(text || '').split(/(\[red\][\s\S]*?\[\/red\])/).map((part, i) => { const m = part.match(/^\[red\]([\s\S]*?)\[\/red\]$/); return m ? <span key={i} style={{ color: '#dc2626' }}>{m[1]}</span> : <span key={i}>{part}</span> })
+
+// TERMS & CONDITIONS FORMATTING (1175) - from the text as pasted, no codes needed:
+//   HEADINGS (bold)   a line in CAPITALS; a short numbered line with no full stop
+//                     at the end ("1. Definitions"); a line starting "#"
+//   CLAUSES           "1.1", "2.3.1", "(a)", "(i)", "a)" - the number in its own
+//                     column, the text beside it; deeper ones indented further
+export function termsLine(raw) {
+  const l = String(raw || '')
+  const t = l.trim()
+  if (!t) return <div style={{ height: 8 }} />
+  const base = { fontSize: 11.5, lineHeight: 1.5, color: '#333' }
+  if (/^#+\s*/.test(t)) return <div style={{ ...base, fontWeight: 700, fontSize: 12.5, color: '#1a1a19', marginTop: 8 }}>{t.replace(/^#+\s*/, '')}</div>
+  const letters = t.replace(/[^A-Za-z]/g, '')
+  if (letters.length >= 3 && letters === letters.toUpperCase() && t.length <= 90) return <div style={{ ...base, fontWeight: 700, fontSize: 12, color: '#1a1a19', marginTop: 8 }}>{t}</div>
+  const m = t.match(/^(\d+(?:\.\d+)*\.?|\(?[a-z]{1,3}\)|\([ivxlc]+\))\s+(.*)$/i)
+  if (m) {
+    const num = m[1], text = m[2]
+    const top = /^\d+\.?$/.test(num)
+    if (top && text.length <= 70 && !/[.;:]$/.test(text)) return <div style={{ ...base, fontWeight: 700, fontSize: 12, color: '#1a1a19', marginTop: 8, display: 'flex', gap: 8 }}><span style={{ minWidth: 34 }}>{num}</span><span>{text}</span></div>
+    const depth = /^\d/.test(num) ? Math.max(0, num.replace(/\.$/, '').split('.').length - 1) : 2
+    return <div style={{ ...base, display: 'flex', gap: 8, paddingLeft: depth * 18 }}><span style={{ minWidth: 34, flexShrink: 0 }}>{num}</span><span>{text}</span></div>
+  }
+  return <div style={{ ...base, whiteSpace: 'pre-wrap' }}>{l}</div>
+}

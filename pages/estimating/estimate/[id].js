@@ -9,7 +9,7 @@ import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import LabourRates from '../../../components/LabourRates'
 import { buildEstimateLabourLines } from '../../../lib/estimateLabour'
-import { placeholderValues, checklistOf, letterOf, letterProblems, letterProblemText, clarOf, clarRedCount } from '../../../lib/quoteDocs'
+import { placeholderValues, checklistOf, currentTerms, letterOf, letterProblems, letterProblemText, clarOf, clarRedCount } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, descriptionText, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
@@ -380,6 +380,8 @@ export default function EstimatePage() {
 
   async function issue(andPrint) {
     // SENT TO THE CUSTOMER (1164) - not with a gap in the letter or red text to edit
+    // no Terms & Conditions saved yet - confirm before a quote goes out without them (1175)
+    if (andPrint && !currentTerms(quoteDocs) && !window.confirm('There are no Terms & Conditions yet (Admin > Quote Documents). Send this quote without them?')) return
     if (andPrint) { const p = letterProblems(letterOf(est, quoteDocs), values); if (p.missing.length || p.red) { setErr(`The letter cannot go to the customer yet: ${letterProblemText(p)}. Fix it on the Letter tab, then send.`); setTab('letter'); return }
       const cr = clarRedCount(clarOf(est, quoteDocs)); if (cr) { setErr(`The clarifications have ${cr} red part${cr === 1 ? '' : 's'} to check - keep (Clear red) or delete each, then send.`); setTab('clar'); return } }
     // Every line costed first (1142) - the server refuses it too.
