@@ -1,16 +1,14 @@
-PACKAGE 1160 - Labour lump sums are not materials
+PACKAGE 1161 - Take-off: thin, light grey lines between stacked descriptions
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1159.
+One file. Complete replacement. No re-seed. No env changes. Built on 1160.
 
-  lib/materials.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-A lump sum costed to LABOUR is no longer pulled into the Materials tab - it is
-labour, not material. Lump sums in other categories (Materials, Plant,
-Scaffold...) are still listed, to arrange or buy.
+On the take-off sheet (and the revision window, which shows a take-off as
+issued), the lines between an item's stacked descriptions are now THIN and
+LIGHT GREY (1px). The QUOTE keeps its thick charcoal rule.
 
-Checked: an item with a Labour lump sum, a Plant lump sum and an own-item
-Primer -> the Materials list shows the Plant lump sum and the Primer, not the
-Labour one. In a REAL browser (Chromium) on the Materials tab: "Extra labour
-gang" (Labour) not listed; "Skip hire" (Plant) listed. All 165 pages pass the
-browser check. Built from your deployed packages (1022-1159, verified against
-their zips); the file checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium): the take-off's separators 1px light grey
+(#d4d4d0); the quote's still 3px charcoal. All 165 pages pass the browser
+check. Built from your deployed packages (1022-1160, verified against their
+zips); the file checked identical to the tested version before zipping.

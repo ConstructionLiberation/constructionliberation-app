@@ -1198,6 +1198,7 @@ function ChangeList({ changes }) {
     : <div key={i} style={{ color: colour(c.kind), padding: '1px 0 1px 15px', fontWeight: c.kind === 'total' ? 600 : 400 }}>{c.text}</div>)}</div>
 }
 
-// The separator between stacked descriptions (1147) drawn as a THICK CHARCOAL
-// RULE (1155) rather than a row of dashes.
-const ruled = (text, key = '') => String(text ?? '').split(/\n?————————\n?/).flatMap((t, i) => i ? [<span key={`${key}r${i}`} style={{ display: 'block', borderTop: '3px solid #36454f', margin: '6px 0' }} />, t] : [t])
+// The separator between stacked descriptions (1147) drawn as a rule rather than a
+// row of dashes - on the take-off THIN AND LIGHT GREY (1161); the quote keeps its
+// thick charcoal rule (QuoteTabs).
+const ruled = (text, key = '') => String(text ?? '').split(/\n?————————\n?/).flatMap((t, i) => i ? [<span key={`${key}r${i}`} style={{ display: 'block', borderTop: '1px solid #d4d4d0', margin: '5px 0' }} />, t] : [t])
