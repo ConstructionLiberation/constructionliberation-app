@@ -1,24 +1,22 @@
-PACKAGE 1144 - Build-up lines: a taller, resizable box; the item list never clipped
+PACKAGE 1145 - Attachments on the rates, listed on the take-off
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1143.
+One file. Complete replacement. No re-seed. No env changes. Built on 1144.
 
-  components/BuildupEditor.js     (the take-off pop-out AND the Build-ups page)
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-Why the list was cut off: the lines sit in a scrolling box (so wide build-ups
-scroll sideways), and a browser clips anything inside it - on a new unique item
-with one line the box was one line high, so the item search showed a sliver.
-  - The lines box is TALLER BY DEFAULT (about 230px, room even for one line)
-    and has a DRAG CORNER (bottom right) to pull it taller.
-  - The item SEARCH LIST now floats on the screen, placed from the search box,
-    so nothing can clip it: below the box (up to 320px), or upwards when near
-    the bottom of the screen; it follows the box when you scroll.
+At the foot of the take-off, "Attachments on the rates" lists, item by item in
+take-off order:
+  - documents on the RATE BUILD-UP the item came from (data sheets, warranty
+    conditions... added on the Build-ups page) - tagged "on the build-up"
+  - documents on the ITEM itself (added in its pop-out) - tagged "this item"
+Each opens with View, through the same access-checked private link as
+everywhere else. Documents on the whole estimate (not on a rate) stay on the
+Documents tab.
 
-Checked in a REAL browser (Chromium), on an estimate: a new unique item's
-lines box 238px with a drag corner; with "any" ticked, "membrane" -> the list
-showed in full (23 matches, 322px, on top and on screen, nothing clipping
-it); picking "Renolit Alkorplan F 1.5mm..." filled the item; dragging the
-corner took the box from 238 to 391px. On the Build-ups page the earlier tests
-pass again (own items typed, products in descriptions, copying lines), and a
-whole line still fits at 1366px and 1600px. All 165 pages pass the browser
-check. Built from your deployed packages (1022-1143, verified against their
-zips); the file checked identical to the tested version before zipping.
+Checked in a REAL browser (Chromium): Mech fixed single ply listed its build-
+up's "Alkorplan F datasheet.pdf" and "Renolit warranty conditions.pdf"; Primer
+to upstands its own "Site photo - upstands.jpg"; each View link pointed at the
+documents route (build-up / estimate, with the file's id); a whole-estimate
+document was not listed. All 165 pages pass the browser check. Built from your
+deployed packages (1022-1144, verified against their zips); the file checked
+identical to the tested version before zipping.

@@ -629,6 +629,7 @@ export default function EstimatePage() {
           <BudgetPanel bud={bud} est={est} change={change} money={money} />
         </div>
       </div>
+      <RateAttachments est={est} />
 
       </fieldset>
 
@@ -886,3 +887,50 @@ function BudgetPanel({ bud, est, change, money }) {
   )
 }
 const linkBtn = { border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', padding: 0, fontSize: 11, textDecoration: 'underline' }
+
+// ATTACHMENTS ON THE RATES (1145) - at the foot of the take-off, item by item:
+// documents on the rate build-up an item came from (data sheets, specs - added
+// on the Build-ups page) and documents on the item itself (its pop-out). Each
+// opens through the same access-checked link as everywhere else.
+const DOCS_API = '/api/estimating/documents'
+function RateAttachments({ est }) {
+  const items = (est.rows || []).filter(r => r.kind === 'item')
+  const refs = [...new Set(items.map(r => r.templateRef).filter(Boolean))]
+  const [byRef, setByRef] = useState({})
+  const [estDocs, setEstDocs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const refKey = refs.join('|')
+  useEffect(() => {
+    let live = true
+    const get = (type, id) => fetch(`${DOCS_API}?ownerType=${type}&ownerId=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : { documents: [] }).catch(() => ({ documents: [] }))
+    setLoading(true)
+    Promise.all([get('estimate', est.id), ...refs.map(ref => get('buildup', ref).then(d => [ref, d.documents || []]))]).then(([e, ...pairs]) => {
+      if (!live) return
+      setEstDocs(e.documents || []); setByRef(Object.fromEntries(pairs)); setLoading(false)
+    })
+    return () => { live = false }
+  }, [est.id, refKey, (est.rows || []).length])
+  const link = (type, id, d) => `${DOCS_API}?ownerType=${type}&ownerId=${encodeURIComponent(id)}&download=${d.id}`
+  const groups = items.map(r => ({ r, fromBuildup: (r.templateRef && byRef[r.templateRef]) || [], own: estDocs.filter(d => d.itemId === r.id) })).filter(g => g.fromBuildup.length || g.own.length)
+  const fileRow = (href, d, tag) => (
+    <div key={`${tag}${d.id}`} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 12.5, padding: '3px 0' }}>
+      <a href={href} target="_blank" rel="noreferrer" style={{ color: '#0f766e', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 520 }}>{d.name}</a>
+      <span style={{ fontSize: 10.5, color: '#666', background: '#f4f4f2', borderRadius: 10, padding: '1px 8px', whiteSpace: 'nowrap' }}>{tag}</span>
+      <a href={href} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: '#0f766e', marginLeft: 'auto' }}>View</a>
+    </div>
+  )
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: '12px 16px', marginTop: 12 }}>
+      <strong style={{ fontSize: 14 }}>Attachments on the rates</strong> <span style={{ fontSize: 11.5, color: '#999' }}>documents on each item's build-up and on the item - private, opened through the portal</span>
+      {loading ? <div style={{ fontSize: 12.5, color: '#aaa', marginTop: 6 }}>Loading…</div>
+        : !groups.length ? <div style={{ fontSize: 12.5, color: '#aaa', marginTop: 6 }}>No attachments on these rates.</div>
+        : groups.map(({ r, fromBuildup, own }) => (
+          <div key={r.id} style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #f4f3f0' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{r.description}</div>
+            {fromBuildup.map(d => fileRow(link('buildup', r.templateRef, d), d, 'on the build-up'))}
+            {own.map(d => fileRow(link('estimate', est.id, d), d, 'this item'))}
+          </div>
+        ))}
+    </div>
+  )
+}
