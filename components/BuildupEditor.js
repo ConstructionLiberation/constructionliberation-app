@@ -34,6 +34,35 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
   const move = (i, d) => setT(x => { const ls = [...x.lines]; const j = i + d; if (j < 0 || j >= ls.length) return x; [ls[i], ls[j]] = [ls[j], ls[i]]; return { ...x, lines: ls } })
   const nextId = () => `L${Math.max(0, ...t.lines.map(l => parseInt(String(l.id).replace(/\D/g, ''), 10) || 0)) + 1}`
   // COPY A LINE (1120): an exact copy - everything but its id - directly underneath.
+  // TICK, COPY / PASTE / DELETE SEVERAL LINES (1141). Copy goes to this browser,
+  // so lines paste into ANOTHER build-up too (or an item's build-up on a take-off).
+  const LCLIP = 'rock:buildup-lines-clipboard'
+  const [lsel, setLsel] = useState(() => new Set())
+  const [lclipN, setLclipN] = useState(0)
+  const [lmsg, setLmsg] = useState('')
+  useEffect(() => { try { setLclipN(JSON.parse(localStorage.getItem(LCLIP) || 'null')?.lines?.length || 0) } catch {} }, [])
+  const toggleLine = (id) => setLsel(x => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const copyLines = () => {
+    const lines = t.lines.filter(l => lsel.has(l.id)); if (!lines.length) return
+    try { localStorage.setItem(LCLIP, JSON.stringify({ lines, at: Date.now() })) } catch {}
+    setLclipN(lines.length); setLmsg(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'} - Paste puts them below the last ticked line (or at the end), here or in another build-up.`)
+  }
+  const pasteLines = () => {
+    let c = null; try { c = JSON.parse(localStorage.getItem(LCLIP) || 'null') } catch {}
+    if (!c?.lines?.length) return
+    // worked out first, from the current lines, so the pasted lines can be ticked
+    let top = Math.max(0, ...t.lines.map(l => parseInt(String(l.id).replace(/\D/g, ''), 10) || 0))
+    const fresh = c.lines.map(l => ({ ...JSON.parse(JSON.stringify(l)), id: `L${++top}` }))
+    const last = Math.max(-1, ...t.lines.map((l, k) => lsel.has(l.id) ? k : -1))
+    const at = last >= 0 ? last + 1 : t.lines.length
+    setT(x => ({ ...x, lines: [...x.lines.slice(0, at), ...fresh, ...x.lines.slice(at)] }))
+    setLsel(new Set(fresh.map(l => l.id)))
+    setLmsg(`Pasted ${c.lines.length} line${c.lines.length === 1 ? '' : 's'}.`)
+  }
+  const deleteLines = () => {
+    const n = lsel.size; if (!n || !window.confirm(`Delete ${n} line${n === 1 ? '' : 's'}?`)) return
+    setT(x => ({ ...x, lines: x.lines.filter(l => !lsel.has(l.id)), rules: (x.rules || []).filter(rr => !lsel.has(rr.line)) })); setLsel(new Set()); setLmsg('')
+  }
   const copyLine = (id) => setT(x => {
     const k = x.lines.findIndex(l => l.id === id)
     if (k < 0) return x
@@ -91,6 +120,22 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
       </Block>
 
       <Block title="Lines">
+        {(lsel.size > 0 || lclipN > 0) && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: lsel.size ? '#0f766e' : '#f0fdfa', color: lsel.size ? '#fff' : '#0f766e', border: '1px solid #0f766e', borderRadius: 10, padding: '6px 12px', marginBottom: 8, fontSize: 12.5 }}>
+            {lsel.size > 0 ? <>
+              <strong>{lsel.size} line{lsel.size === 1 ? '' : 's'} ticked</strong>
+              <button onClick={copyLines} style={lineBannerBtn}>Copy</button>
+              {lclipN > 0 && <button onClick={pasteLines} style={lineBannerBtn} title="Paste below the last ticked line">Paste {lclipN}</button>}
+              <button onClick={deleteLines} style={lineBannerBtn}>Delete</button>
+              <button onClick={() => { setLsel(new Set()); setLmsg('') }} style={{ ...lineBannerBtn, marginLeft: 'auto' }}>Untick all</button>
+            </> : <>
+              <span>{lclipN} line{lclipN === 1 ? '' : 's'} copied</span>
+              <button onClick={pasteLines} style={{ ...lineBannerBtn, borderColor: '#0f766e' }}>Paste at the end</button>
+              <button onClick={() => { try { localStorage.removeItem(LCLIP) } catch {} setLclipN(0) }} style={{ ...lineBannerBtn, borderColor: '#99f6e4' }}>Clear</button>
+            </>}
+            {lmsg && lsel.size > 0 && <span style={{ flexBasis: '100%', fontSize: 11.5, opacity: 0.9 }}>{lmsg}</span>}
+          </div>
+        )}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
             <thead><tr>{['', 'Type', 'Label', 'Item', 'Apply size', 'Qty', 'Rate', 'Waste %', 'Incr %', '= Line rate', 'Cost cat.', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 9 ? 'right' : 'left', ...(i === 9 ? { color: '#1a1a19' } : {}) }} title={i === 9 ? "Rate x Qty (x waste / increase): this line's part of the build-up's rate" : ''}>{h}</th>)}</tr></thead>
@@ -102,10 +147,10 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
                 const qp = qtyProblem(l.qty, sizeNames)
                 return (
                   <tr key={l.id} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}><input type="checkbox" checked={lsel.has(l.id)} onChange={() => toggleLine(l.id)} title="Tick to copy or delete several lines" style={{ verticalAlign: 'middle', marginRight: 2 }} /><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
                     <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => setLine(l.id, { type: e.target.value })} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
                     <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 118 }} /></td>
-                    <td style={{ ...td, minWidth: 210 }}>
+                    <td style={{ ...td, minWidth: 194 }}>
                       {isProd && <>
                         <ItemSearch red={isVariable(l, 'item')} kind={l.type} value={l.default || ''} choices={choices} label={label} findText={findText}
                           onPick={(v) => setLine(l.id, { default: v, ownName: v ? undefined : l.ownName, override: v ? null : l.override, offers: v && !(l.offers || []).includes(v) ? [...(l.offers || []), v] : l.offers })}
@@ -629,3 +674,5 @@ function SizePicker({ value, t, onChange }) {
     </div>
   )
 }
+
+const lineBannerBtn = { fontSize: 12, padding: '3px 9px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.7)', background: 'transparent', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' }

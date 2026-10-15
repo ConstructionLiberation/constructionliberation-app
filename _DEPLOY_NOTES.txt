@@ -1,40 +1,21 @@
-PACKAGE 1140 - Below the line; a Notes panel beside Revisions
-(take-off part 2 of 3)
+PACKAGE 1141 - Copy, paste and delete several build-up lines at once
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1139.
+One file. Complete replacement. No re-seed. No env changes. Built on 1140.
 
-  lib/estimate.js
-  lib/materials.js
-  components/QuoteTabs.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
+  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
 
-BELOW THE LINE: "+ Below the line" adds the line - a purple band, with
-"Totals above the line" just above it. Everything after it is priced and goes
-on the quote, but is NOT in the total, the budgets or ordering:
-  - with a quantity it is OPTIONAL - its total shown in purple, "optional"
-  - without, RATE ONLY
-The line has its own add buttons (item from build-ups, unique item, blank line)
-for BELOW it; the normal buttons now add ABOVE it. Drag items across it either
-way. ✕ removes the line (asks first - items below would join the total).
-The totals bar says "N items below the line (optional GBPx) - not in the
-total"; items below without a quantity are not flagged as missing one.
-THE QUOTE: a "Below the line" section - optional items with quantity, rate and
-total "optional"; rate-only items "TBC" and "Rate only". Items ticked Rate only
-above the line still go there too, as before.
-NOTES: a panel beside Revisions for general notes on the estimate - saved with
-it, for the team, not on the quote.
+Each build-up line has a TICK BOX beside its ↑ ↓. Ticking brings up a banner:
+COPY / PASTE / DELETE for all the ticked lines. Copy uses this browser, so the
+lines paste into ANOTHER build-up too (or an item's build-up on a take-off);
+Paste goes below the last ticked line ("Paste at the end" when none is ticked),
+each line with a new id, and the pasted lines are left ticked. The single-line
+⧉ copy stays. (The Item column is 16px narrower so a whole line still fits at
+1366px.)
 
-Checked: one item above (10 x 5) and two below - total 50; the optional keeps
-its 20 outside the total; the rate-only one not flagged; section subtotal,
-budgets and ordering (10, not 14) leave the below items out; a second line is
-refused; copying never duplicates the line. In a REAL browser (Chromium): the
-line added with the totals above it; the main + Unique item adds ABOVE, the
-line's adds BELOW; Primer dragged below -> total 20,804.00 -> 17,540.00, its
-3,264.00 purple "optional", the bar "2 items below the line (optional
-3,264.00)"; the note and the line saved; the quote's Below the line section
-shows the optional (200 m², 3,264.00 optional) and the rate-only (TBC). Part
-1's take-off test passes in full again. All server routes compile; all 165
-pages pass the browser check. Built from your deployed packages (1022-1139,
-verified against their zips).
-
-STILL TO COME (part 3): blocking issue with a GBP0 item; the pricing checklist.
+Checked in a REAL browser (Chromium) at 1366px: VCL and Tape ticked -> "2 lines
+ticked"; Copy + Paste -> the two copies directly below Tape, and ticked; Delete
+-> back to 18 lines, originals kept; in Fully Adhered SP "2 lines copied" ->
+Paste at the end -> saved with new, unique ids (L17, L18); a whole line fits at
+1366px and 1600px. All 165 pages pass the browser check. Built from your
+deployed packages (1022-1140, verified against their zips); the file checked
+identical to the tested version before zipping.
