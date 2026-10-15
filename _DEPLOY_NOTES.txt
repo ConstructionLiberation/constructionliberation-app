@@ -1,19 +1,24 @@
-PACKAGE 1156 - Nr added to the sizes
+PACKAGE 1157 - Drag and drop build-up lines; purple for any labour-costed line
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1155.
+One file. Complete replacement. No re-seed. No env changes. Built on 1156.
 
-  lib/buildups.js
-  components/BuildupEditor.js     (the Build-ups page AND the take-off pop-out)
+  components/BuildupEditor.js     (the Build-ups page, unique items and every
+                                   item's build-up on the take-off)
 
-A seventh size, NR - a count, shown in "nr" (e.g. 2 outlets, 4 fixings per
-item) - beside Width, Height, Girth, Length, Area and Volume. Like the others
-it can be Mandatory, and it is an Apply size choice multiplying a line's
-quantity (on its own or added to others). The build-ups file reads and writes
-it.
+DRAG AND DROP LINES - each build-up line has a ⋮⋮ handle beside its tick box
+and arrows: drag it to a new place (a teal line shows where it will land);
+ticked lines move together; an added build-up's heading moves with its line.
+The arrows still work. (Item and Label are slightly narrower so a whole line
+still fits at 1366px.)
+PURPLE LINES - a line is lined purple when it is a labour line OR its cost
+category is Labour - so a lump sum or lump spread costed to Labour is purple
+too. (A line added with "+ labour" was already purple in testing - on the
+Build-ups page and in a unique item's pop-out; if one shows grey after this
+deploy, a hard refresh - Ctrl+Shift+R - clears an old cached page.)
 
-Checked: Nr 3 x a 45.00 outlet = 135.00. In a REAL browser (Chromium): the
-sizes row ends "Nr (nr)"; Apply size offers "Nr 3 nr"; Tubes applying it ->
-"x Nr 3 = 15", Nr "used by Tubes"; a whole line still fits at 1366px and
-1600px. All 165 pages pass the browser check. Built from your deployed
-packages (1022-1155, verified against their zips); each file checked identical
-to the tested version before zipping.
+Checked in a REAL browser (Chromium) at 1366px: Discs dragged onto VCL -> top;
+Tape and Insulation ticked, Tape dragged below Tubes -> both moved; a lump sum
+costed to Labour -> purple 2px; the new order saved; a whole line fits at
+1366px and 1600px. All 165 pages pass the browser check. Built from your
+deployed packages (1022-1156, verified against their zips); the file checked
+identical to the tested version before zipping.

@@ -63,7 +63,21 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
     const n = lsel.size; if (!n || !window.confirm(`Delete ${n} line${n === 1 ? '' : 's'}?`)) return
     setT(x => ({ ...x, lines: x.lines.filter(l => !lsel.has(l.id)), rules: (x.rules || []).filter(rr => !lsel.has(rr.line)) })); setLsel(new Set()); setLmsg('')
   }
-  const [addingBu, setAddingBu] = useState(false)   // the "+ rate build-up" picker (1147)
+  const [addingBu, setAddingBu] = useState(false)
+  // DRAG AND DROP LINES (1157) - by the handle; ticked lines move together
+  const [dragL, setDragL] = useState(null)
+  const [dropL, setDropL] = useState(null)
+  const moveLines = (ids, targetId, after) => setT(x => {
+    if (!ids || !ids.length || ids.includes(targetId)) return x
+    const moving = x.lines.filter(l => ids.includes(l.id)), rest = x.lines.filter(l => !ids.includes(l.id))
+    let k = rest.findIndex(l => l.id === targetId); if (k < 0) return x
+    if (after) k++
+    rest.splice(k, 0, ...moving); return { ...x, lines: rest }
+  })
+  const lineDrop = (l) => ({
+    onDragOver: (e) => { if (!dragL) return; e.preventDefault(); const b = e.currentTarget.getBoundingClientRect(); setDropL({ id: l.id, after: e.clientY > b.top + b.height / 2 }) },
+    onDrop: (e) => { e.preventDefault(); if (dragL && dropL) moveLines(dragL, dropL.id, dropL.after); setDragL(null); setDropL(null) },
+  })   // the "+ rate build-up" picker (1147)
   const copyLine = (id) => setT(x => {
     const k = x.lines.findIndex(l => l.id === id)
     if (k < 0) return x
@@ -156,11 +170,11 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                   {/* AN ADDED RATE BUILD-UP starts here (1155) - its name, a thick charcoal line */}
                   {l.groupStart && <tr><td colSpan={12} style={{ borderTop: '4px solid #36454f', padding: '5px 8px 3px', fontSize: 11.5, fontWeight: 700, color: '#36454f', letterSpacing: 0.3 }}>
                     {l.groupStart} <button onClick={() => setLine(l.id, { groupStart: undefined })} title="Remove this heading" style={{ border: 'none', background: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 12, marginLeft: 4 }}>×</button></td></tr>}
-                  <tr className={l.type === 'labour' ? 'bu-labour' : undefined} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}><input type="checkbox" checked={lsel.has(l.id)} onChange={() => toggleLine(l.id)} title="Tick to copy or delete several lines" style={{ verticalAlign: 'middle', marginRight: 2 }} /><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
+                  <tr className={l.type === 'labour' || l.cost === 'Labour' ? 'bu-labour' : undefined} {...lineDrop(l)} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined, opacity: dragL && dragL.includes(l.id) ? 0.4 : 1, boxShadow: dropL && dropL.id === l.id ? (dropL.after ? 'inset 0 -3px 0 #0f766e' : 'inset 0 3px 0 #0f766e') : undefined }}>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}><input type="checkbox" checked={lsel.has(l.id)} onChange={() => toggleLine(l.id)} title="Tick to copy or delete several lines" style={{ verticalAlign: 'middle', marginRight: 2 }} /><span draggable onDragStart={(e) => { const ids = lsel.has(l.id) ? t.lines.filter(x => lsel.has(x.id)).map(x => x.id) : [l.id]; setDragL(ids); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', ids.join(',')) } catch {} }} onDragEnd={() => { setDragL(null); setDropL(null) }} title="Drag to move (ticked lines move together)" style={{ cursor: 'grab', color: '#aaa', padding: '0 1px', userSelect: 'none', fontSize: 12 }}>⋮⋮</span><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
                     <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => { const ty = e.target.value; setLine(l.id, { type: ty, cost: ty === 'labour' ? 'Labour' : ty === 'material' ? 'Materials' : '' }) }} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
-                    <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 118 }} /></td>
-                    <td style={{ ...td, minWidth: 194 }}>
+                    <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 108 }} /></td>
+                    <td style={{ ...td, minWidth: 178 }}>
                       {isProd && <>
                         <ItemSearch red={isVariable(l, 'item')} kind={l.type} value={l.default || ''} choices={choices} label={label} findText={findText}
                           onPick={(v) => setLine(l.id, { default: v, ownName: v ? undefined : l.ownName, override: v ? null : l.override, offers: v && !(l.offers || []).includes(v) ? [...(l.offers || []), v] : l.offers })}
