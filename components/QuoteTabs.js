@@ -220,6 +220,22 @@ export function ClarificationsTab({ est, change, templates, canEditTemplate, onS
 // drag by the handle or use the arrows to sort; + Add clarification / + Add header.
 export function ClarListEditor({ list, setList, template }) {
   const [drag, setDrag] = useState(null), [dropAt, setDropAt] = useState(null)
+  // TICK AND ACT ON SEVERAL (1172) - a header takes the clarifications under it
+  const [sel, setSel] = useState(() => new Set())
+  const live = new Set(list.map(x => x.id))
+  const ticked = new Set([...sel].filter(id => live.has(id)))
+  const toggle = (id) => setSel(cur => {
+    const n = new Set(cur), on = !n.has(id), k = list.findIndex(x => x.id === id), ids = [id]
+    if (k >= 0 && list[k].kind === 'header') for (let j = k + 1; j < list.length && list[j].kind !== 'header'; j++) ids.push(list[j].id)
+    for (const i of ids) { if (on) n.add(i); else n.delete(i) }
+    return n
+  })
+  const allTicked = list.length > 0 && list.every(x => ticked.has(x.id))
+  const plain = (t) => String(t || '').replace(/\[\/?red\]/g, '')
+  const bulkRed = () => setList(list.map(x => ticked.has(x.id) && x.kind !== 'header' && plain(x.text).trim() ? { ...x, text: `[red]${plain(x.text)}[/red]` } : x))
+  const bulkClear = () => setList(list.map(x => ticked.has(x.id) ? { ...x, text: plain(x.text) } : x))
+  const bulkDelete = () => { if (window.confirm(`Delete ${ticked.size} ticked row${ticked.size === 1 ? '' : 's'}?`)) { setList(list.filter(x => !ticked.has(x.id))); setSel(new Set()) } }
+  const bb = { fontSize: 12, padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }
   const nid = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const set = (id, patch) => setList(list.map(x => x.id === id ? { ...x, ...patch } : x))
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; const l = [...list]; [l[i], l[j]] = [l[j], l[i]]; setList(l) }
@@ -238,6 +254,17 @@ export function ClarListEditor({ list, setList, template }) {
       </div> : null
   return <>
     {redBar}
+    {list.length > 0 && <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666', margin: '0 0 6px 2px', cursor: 'pointer' }}>
+      <input type="checkbox" checked={allTicked} onChange={() => setSel(allTicked ? new Set() : new Set(list.map(x => x.id)))} /> Tick all</label>}
+    {ticked.size > 0 && (
+      <div style={{ position: 'sticky', top: 6, zIndex: 20, display: 'flex', gap: 8, alignItems: 'center', background: '#0f766e', color: '#fff', borderRadius: 8, padding: '7px 10px', marginBottom: 8, fontSize: 13 }}>
+        <strong>{ticked.size} ticked</strong>
+        <button onClick={bulkRed} title="Make each ticked clarification red - to check on each quote" style={{ ...bb, border: '1px solid #dc2626', background: '#dc2626', color: '#fff' }}>Mark red</button>
+        <button onClick={bulkClear} style={{ ...bb, border: '1px solid #fff', background: '#fff', color: '#dc2626' }}>Clear red</button>
+        <button onClick={bulkDelete} style={{ ...bb, border: '1px solid #fca5a5', background: 'transparent', color: '#fff' }}>Delete</button>
+        <button onClick={() => setSel(new Set())} style={{ ...bb, marginLeft: 'auto', fontWeight: 400, border: '1px solid rgba(255,255,255,0.7)', background: 'transparent', color: '#fff' }}>Untick</button>
+      </div>
+    )}
     {!list.length && <div style={{ fontSize: 12.5, color: '#bbb', margin: '4px 0 8px' }}>None yet.</div>}
     {list.map((x, i) => {
       if (x.kind !== 'header') n++
@@ -246,6 +273,7 @@ export function ClarListEditor({ list, setList, template }) {
           onDrop={e => { e.preventDefault(); if (dropAt) drop(dropAt.id, dropAt.after); setDrag(null); setDropAt(null) }}
           style={{ display: 'flex', gap: 6, alignItems: 'flex-start', padding: '3px 0', marginTop: x.kind === 'header' && i ? 10 : 0, opacity: drag === x.id ? 0.4 : 1,
             boxShadow: dropAt && dropAt.id === x.id ? (dropAt.after ? 'inset 0 -3px 0 #0f766e' : 'inset 0 3px 0 #0f766e') : undefined }}>
+          <input type="checkbox" checked={ticked.has(x.id)} onChange={() => toggle(x.id)} title={x.kind === 'header' ? 'Tick this header and the clarifications under it' : 'Tick'} style={{ marginTop: 10 }} />
           <span draggable onDragStart={e => { setDrag(x.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', x.id) } catch {} }} onDragEnd={() => { setDrag(null); setDropAt(null) }}
             title="Drag to move" style={{ cursor: 'grab', color: '#aaa', padding: '6px 2px', userSelect: 'none', fontSize: 13 }}>⋮⋮</span>
           {x.kind === 'header'

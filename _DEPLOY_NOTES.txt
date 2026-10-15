@@ -1,33 +1,22 @@
-PACKAGE 1171 - Red text in the clarifications template; a fix to typing over
-red
+PACKAGE 1172 - Clarifications: tick several, then Mark red / Clear red / Delete
 
-Five files. Complete replacements. No re-seed. No env changes. Built on 1170.
+One file. Complete replacement. No re-seed. No env changes. Built on 1171.
 
-  lib/quoteDocs.js
   components/QuoteTabs.js
-  pages/admin/quote-documents.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/estimates.js
 
-RED IN THE CLARIFICATIONS TEMPLATE - in Edit template (and Admin > Quote
-Documents) select PART of a sentence or ALL of it and "Make red" - for what may
-not apply to every quote; "Clear red" removes it. Make / Clear red sit once
-above the list and act on the clarification your selection is in.
-ON A QUOTE'S CLARIFICATIONS PAGE the red shows red (no markers), with a warning
-"N red parts - check each applies". Select the red (or click in it) and
-"Clear red" to keep it as it is, or type over it - it turns black - or delete
-the line. Like the letter, the quote CANNOT BE SENT while any red is left (the
-server refuses too, also for Mark as sent).
-FIX - TYPING OVER RED (letter and clarifications): the first key turned the red
-black and the cursor lost its place, so the rest of the typing went in before
-the first letter ("7:30am" came out ":30am...7"). The cursor now stays put.
+In the clarifications - each quote's Clarifications page, Edit template, and
+Admin > Quote Documents:
+  - a TICK BOX on every row, and "Tick all" at the top
+  - ticking a HEADER ticks the clarifications under it (to the next header)
+  - with any ticked, a bar: "N ticked · Mark red · Clear red · Delete · Untick"
+      Mark red   - each ticked clarification wholly red (headers stay plain)
+      Clear red  - takes the red off them
+      Delete     - removes the ticked rows (asks first)
 
-Checked through the real route: sending with a red clarification refused ("1
-red part to check"); cleared -> sent as Rev A. In a REAL browser (Chromium):
-"erected to BS EN 12811" made red on its own within its sentence, saved as
-part of it; on the quote both red parts red with no markers and the warning;
-one selected -> Clear red -> black; the other typed over -> "Working hours
-7:30am to 4:30pm, Monday to Friday." (no red, warning gone); the letter typed
-over -> "Programme: six weeks on site." All server routes compile; all 166
-pages pass the browser check. Built from your deployed packages (1022-1170,
-verified against their zips).
+Checked in a REAL browser (Chromium): ticking "Access" ticked it and its two
+clarifications (3 ticked), not Programme's; Mark red -> both red; Clear red ->
+black; one ticked and deleted -> gone, the quote customised; in Edit template
+Tick all -> Mark red -> saved every clarification as red, the headers plain.
+All 166 pages pass the browser check. Built from your deployed packages
+(1022-1171, verified against their zips); the file checked identical to the
+tested version before zipping.
