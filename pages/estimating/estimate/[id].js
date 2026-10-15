@@ -742,15 +742,17 @@ export default function EstimatePage() {
             <button onClick={issue} disabled={busy || dirty || s.profit == null} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ ...btn, opacity: busy || dirty || s.profit == null ? 0.5 : 1 }}>Issue Rev {est.revision}</button>
           </div>
           {dirty && <div style={{ fontSize: 12, color: '#b45309', marginBottom: 6 }}>Save before issuing.</div>}
-          {lastRev && <div style={{ fontSize: 12.5, marginBottom: 8 }}>
-            <div style={{ fontWeight: 600, marginBottom: 3 }}>Changes since Rev {lastRev.revision}{since.length ? '' : ' - none'}</div>
-            {since.map((c, i) => <div key={i} style={{ color: c.kind === 'removed' ? '#b42318' : c.kind === 'added' ? '#15803d' : '#444', padding: '1px 0' }}>{c.text}</div>)}
-          </div>}
+          {lastRev && (since.length
+            ? <details style={{ fontSize: 12.5, marginBottom: 8 }}>
+                <summary style={{ fontWeight: 600, cursor: 'pointer', marginBottom: 3 }}>Changes since Rev {lastRev.revision} <span style={{ fontWeight: 400, color: '#888' }}>- {since.length} change{since.length === 1 ? '' : 's'}</span></summary>
+                <ChangeList changes={since} />
+              </details>
+            : <div style={{ fontSize: 12.5, marginBottom: 8, fontWeight: 600 }}>Changes since Rev {lastRev.revision} - none</div>)}
           {est.reopened && <div style={{ fontSize: 12.5, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '6px 10px', marginBottom: 8, color: '#92400e' }}>Editing <strong>Rev {est.reopened.revision}</strong> - issuing replaces it (no new revision letter).</div>}
           {(est.revisions || []).slice().reverse().map(r => (
             <details key={r.revision} style={{ fontSize: 12.5, borderTop: '1px solid #f0efec', padding: '6px 0' }}>
               <summary style={{ cursor: 'pointer' }}><button onClick={(e) => { e.preventDefault(); openRevision(r.revision) }} style={{ ...smallBtn, marginRight: 8, padding: '2px 8px', fontSize: 11.5 }}>View</button>{r.sent ? <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 8, padding: '1px 7px', marginRight: 6 }} title={`Sent ${new Date(r.sent.at).toLocaleString('en-GB')} by ${r.sent.by || ''}`}>SENT</span> : null}<strong>Rev {r.revision}</strong> · {money(r.total, { dp: 2 })} · {new Date(r.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {r.issuedBy}{r.note ? ` · ${r.note}` : ''}</summary>
-              <div style={{ paddingLeft: 12, marginTop: 4, color: '#555' }}>{(r.changes || []).length ? r.changes.map((c, i) => <div key={i}>{c.text}</div>) : 'First issue.'}</div>
+              <div style={{ paddingLeft: 12, marginTop: 4, color: '#555' }}>{(r.changes || []).length ? <ChangeList changes={r.changes} /> : 'First issue.'}</div>
             </details>
           ))}
           {!(est.revisions || []).length && <div style={{ fontSize: 12.5, color: '#888' }}>Not issued yet. Issuing freezes the quote as Rev {est.revision}{est.dealId ? ' and sets the CRM deal value' : ''}.</div>}
@@ -1148,4 +1150,18 @@ function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy }) {
       </div>
     </div>
   )
+}
+
+// CHANGES (1152) - each summary line; one with exact changes behind it opens with
+// its own triangle (quantities, descriptions, lines and their costs, sizes...).
+function ChangeList({ changes }) {
+  const colour = (k) => k === 'removed' ? '#b42318' : k === 'added' ? '#15803d' : k === 'total' ? '#0f766e' : '#444'
+  return <div style={{ paddingLeft: 4 }}>{changes.map((c, i) => (c.detail && c.detail.length)
+    ? <details key={i} style={{ padding: '1px 0' }}>
+        <summary style={{ cursor: 'pointer', color: colour(c.kind) }}>{c.text}</summary>
+        <div style={{ paddingLeft: 18, margin: '2px 0 4px', borderLeft: '2px solid #e8e7e3' }}>
+          {c.detail.map((x, k) => <div key={k} style={{ fontSize: 12, color: /^Line removed/.test(x) ? '#b42318' : /^Line added/.test(x) ? '#15803d' : '#555', padding: '1px 0' }}>{x}</div>)}
+        </div>
+      </details>
+    : <div key={i} style={{ color: colour(c.kind), padding: '1px 0 1px 15px', fontWeight: c.kind === 'total' ? 600 : 400 }}>{c.text}</div>)}</div>
 }

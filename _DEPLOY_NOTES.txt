@@ -1,40 +1,31 @@
-PACKAGE 1151 - Summary tab; view and edit a revision; sent / unmark sent
+PACKAGE 1152 - The exact changes since a revision, under triangles
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1150.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1151.
 
+  lib/estimate.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/estimates.js
 
-SUMMARY (was Budgets): four cards above the cost breakdown and material
-budgets - MARGIN (profit on the total above the line, MCD shown alongside),
-ABOVE THE LINE (the quote total), BELOW THE LINE (the optional items; rate-only
-items have no total and are noted), ABOVE + BELOW.
+"Changes since Rev X" (Take-off > Revisions) now opens with a ▸ TRIANGLE
+("- N changes"). Inside, each item's summary line has its own ▸ opening the
+EXACT changes:
+  - the item: name, unit, quantity, rate only, item profit, rate, total, note,
+    moved above / below the line
+  - its DESCRIPTION as it reads ("20 year warranty" -> "25 year warranty")
+  - its build-up LINES: added, removed, and per line - product, own item, rate,
+    amount, qty, waste, increase, apply size, cost category and the LINE COST
+  - its SIZES and VARIABLES
+Also listed: section headers added / removed / renamed, and the estimate's
+notes (before and after). Each issued revision's history in the list opens the
+same way - for revisions issued from now on (earlier ones kept only the
+summary lines).
 
-A REVISION'S TAKE-OFF: "View" on each revision (Take-off > Revisions) opens it
-AS ISSUED, read-only - sections, items and descriptions, highlights, notes,
-blank lines, below the line, totals and the estimate's notes - with who issued
-it, when, and whether it was sent. Issuing now STORES the priced figures with
-the revision, so it shows exactly as issued; revisions issued before this
-deploy are worked out at today's prices, and the window says so.
-
-EDIT A REVISION: "Edit Rev A" in that window - only for the LATEST revision and
-only if NOT SENT. It becomes the working take-off again, exactly as issued (it
-asks first - the current draft is replaced), and issuing then REPLACES Rev A -
-no new letter. A sent revision says to unmark it or issue a new revision; an
-older one, that only the latest can be edited. The server refuses too.
-
-SENT: "Download and mark as sent" records the revision as SENT (who, when);
-"Issue Rev A" issues it NOT sent. The Quote tab shows "Rev A sent 14 Oct ·
-Unmark sent" or "Rev A issued, not sent · Mark as sent". Revisions show SENT.
-
-Checked through the real route: Rev A issued (not sent) with its figures
-stored; the draft changed (150); Edit Rev A -> back to 100 with its note,
-letter A, nothing issued; re-issued -> Rev A again (1,328.40), next letter B;
-marked sent -> Edit refused; unmarked -> Edit allowed; Rev B issued as sent ->
-editing A refused (not the latest). In a REAL browser (Chromium): the Summary
-cards (margin 21.3%, above 20,804.00 - 3 items, below 652.80, both 21,456.80);
-View -> "Rev A - take-off as issued" with its highlight, note, below the line,
-optional item and notes, and Edit Rev A; the Quote tab "Rev A issued, not sent
-· Mark as sent". All server routes compile; all 165 pages pass the browser
-check. Built from your deployed packages (1022-1150, verified against their
-zips).
+Checked: a realistic before / after - qty 100 -> 150; Membrane waste 5% ->
+10% with its line cost; Lab rate 5.00 -> 6.00; Primer added; Tape removed;
+Girth 0.45 -> 0.6; Warranty 20 -> 25 year with the description wording; a
+note; the item moved below the line; a section renamed; the notes - all
+listed exactly. In a REAL browser (Chromium): "Changes since Rev A - 2
+changes" closed; opened -> the item line and the total; the item opened ->
+Quantity 1000 -> 1250, Rate, Total, the description, "Line Lab: rate list ->
+12.00, line cost 11.00 -> 12.00", Warranty 20 -> 25 year. All server routes
+compile; all 165 pages pass the browser check. Built from your deployed
+packages (1022-1151, verified against their zips).
