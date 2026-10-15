@@ -83,7 +83,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
 
   return (
     <>
-      <Block title="Sizes" hint="For this build-up - a line's Apply size multiplies its quantity by one of them. Width, Height, Girth and Length in metres (600mm = 0.6), Area in m², Volume in m³. Length suits single items - e.g. 4 lineal metres around a rooflight.">
+      <Block title="Sizes" hint="For this build-up - a line's Apply size multiplies its quantity by one of them. Width, Height, Girth and Length in metres (600mm = 0.6), Area in m², Volume in m³. Length suits single items - e.g. 4 lineal metres around a rooflight. Nr is a count - e.g. 2 outlets.">
         {/* Side by side (1135) - six sizes in one row, wrapping on a narrow screen. */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         {SIZE_NAMES.map(nm => {
