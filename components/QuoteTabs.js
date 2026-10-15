@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
 import { useFormat } from './TenantProvider'
 import DocumentsPanel from './DocumentsPanel'
@@ -331,93 +331,119 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
   const th = { textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #1a1a19', fontSize: 12 }
   const td = { padding: '5px 8px', borderBottom: '1px solid #eee', fontSize: 12.5, verticalAlign: 'top' }
   const num = { ...td, textAlign: 'right', whiteSpace: 'nowrap' }
-  // THE QUOTE IN PAGES (1168) - Letter, Clarifications, Rates (inc. below the
-  // line), Documents, then the Terms & Conditions: each its own sheet on screen,
-  // each starting a new page when printed or saved as PDF. A page with nothing
-  // on it is left out and the numbering closes up.
+  // THE QUOTE ON REAL A4 PAGES (1168, 1173) - Letter, Clarifications, Rates (inc.
+  // below the line), Documents, Terms & Conditions. Each section starts a new
+  // page; content that does not fit FLOWS ONTO THE NEXT SHEET ("Rates
+  // (continued)"), the rates headings repeated. Each piece (a letter line, a
+  // clarification, a rates row) is measured at the page width, off screen, and
+  // placed onto 210 x 297 mm sheets - the size they print at, so the screen shows
+  // the pages as they will print.
+  const PAGE_W = 794, PAGE_H = 1123, PAD_X = 52, PAD_Y = 46
+  const CONTENT_W = PAGE_W - 2 * PAD_X, CONTENT_H = PAGE_H - 2 * PAD_Y
   const clarItems = clarOf(est, templates).filter(x => String(x.text || '').trim())
-  const hasClar = clarItems.some(x => x.kind !== 'header')
   const docs = (documents || []).filter(d => d && d.name)
-  const pages = [['letter', 'Letter'], ...(hasClar ? [['clar', 'Clarifications']] : []), ['rates', 'Rates'], ...(docs.length ? [['docs', 'Documents']] : []), ...(terms ? [['terms', 'Terms & Conditions']] : [])]
-  const sheetHead = (title) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #1a1a19', paddingBottom: 8, marginBottom: 18 }}>
-      <QuoteLetterhead companyName={companyName} compact />
-      <div style={{ textAlign: 'right', fontSize: 11.5, color: '#444', lineHeight: 1.5 }}>
-        <div style={{ fontWeight: 700, fontSize: 13 }}>Quotation{est.quoteRef ? ` ${est.quoteRef}` : ''} · Rev {est.revision}</div>
-        <div>{title}</div>
-      </div>
-    </div>
-  )
+  const COLS = <colgroup><col style={{ width: '51%' }} /><col style={{ width: '10%' }} /><col style={{ width: '8%' }} /><col style={{ width: '14%' }} /><col style={{ width: '17%' }} /></colgroup>
+  const tbl = (rows) => <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>{COLS}<tbody>{rows}</tbody></table>
+  const h3 = (t, extra) => <h3 style={{ fontSize: 15, margin: '0 0 10px' }}>{t}{extra}</h3>
+  // letter lines, each keeping its own red (a red part across lines is closed and reopened)
+  const letterLines = (() => { let inRed = false; return String(letterOf(est, templates) || '').split('\n').map(line => {
+    let l = (inRed ? '[red]' : '') + line
+    const opens = (l.match(/\[red\]/g) || []).length, closes = (l.match(/\[\/red\]/g) || []).length
+    inRed = opens > closes; if (inRed) l += '[/red]'
+    return l }) })()
   let clarN = 0
-  const content = {
-    letter: <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <QuoteLetterhead companyName={companyName} />
-        <div style={{ textAlign: 'right', fontSize: 12.5, lineHeight: 1.6 }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Quotation</div>
-          {est.quoteRef && <div>Ref {est.quoteRef} · Rev {est.revision}</div>}
-          {values.date && <div>{values.date}</div>}
-          {draft && <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', letterSpacing: 1 }}>DRAFT - not yet sent</div>}
-        </div>
-      </div>
-      {letterOf(est, templates).trim() ? <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6 }}>{letterNodes(letterOf(est, templates), values)}</div>
-        : <div style={{ color: '#aaa', fontSize: 13 }}>No letter written yet.</div>}
-    </>,
-    clar: <>
-      {sheetHead('Clarifications')}
-      <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Clarifications</h3>
-      {clarItems.map(x => x.kind === 'header'
-        ? <div key={x.id} style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 4px' }}>{x.text}</div>
-        : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{++clarN}.</span><span>{redNodes(x.text)}</span></div>)}
-    </>,
-    rates: <>
-      {sheetHead('Schedule of rates and prices')}
-      <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Schedule of rates and prices</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead><tr><th style={th}>Description</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Unit</th><th style={{ ...th, textAlign: 'right' }}>Rate</th><th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
-        <tbody>
-          {shown.map(r => r.kind === 'section'
-            ? <tr key={r.id}><td colSpan={5} style={{ ...td, fontWeight: 700, textDecoration: 'underline', background: '#f6f6f4', paddingTop: 10 }}>{r.title}</td></tr>
-            : <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{r.qty ?? ''}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={num}>{m2(priced[r.id]?.total)}</td></tr>)}
-          <tr><td colSpan={4} style={{ ...td, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>Total</td><td style={{ ...num, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>{m2(totals.total)}</td></tr>
-        </tbody>
-      </table>
-      {s.mcd > 0 && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>Our prices include a {+(s.mcd * 100).toFixed(2)}% main contractor's discount.</div>}
-      {below.length > 0 && <>
-        <h3 style={{ fontSize: 14, margin: '24px 0 6px' }}>Below the line <span style={{ fontWeight: 400, fontSize: 12, color: '#666' }}>(rate-only and optional items - not included in the total)</span></h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tbody>{below.map(r => { const pr = priced[r.id] || {}; const opt = pr.optional && pr.total != null
-            return <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{opt ? pr.qty : 'TBC'}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(pr.rate)}</td><td style={{ ...num, color: '#6d28d9' }}>{opt ? `${m2(pr.total)} optional` : 'Rate only'}</td></tr> })}</tbody>
-        </table>
-      </>}
-    </>,
-    docs: <>
-      {sheetHead('Documents')}
-      <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Documents</h3>
-      <div style={{ fontSize: 12.5, color: '#555', marginBottom: 8 }}>The following documents accompany and form part of this quotation:</div>
-      {docs.map((d, i) => <div key={d.id || i} style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.7, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{i + 1}.</span>{d.href ? <a href={d.href} target="_blank" rel="noreferrer" style={{ color: '#1a1a19' }}>{d.name}</a> : <span>{d.name}</span>}</div>)}
-    </>,
-    terms: terms ? <>
-      {sheetHead('Terms & Conditions')}
-      <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Terms &amp; Conditions <span style={{ fontWeight: 400, fontSize: 11.5, color: '#888' }}>version {terms.v}</span></h3>
-      <div style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, lineHeight: 1.5, color: '#333' }}>{terms.text}</div>
-    </> : null,
+  const sections = [
+    { key: 'letter', title: 'Letter', full: true, blocks: [
+      { id: 'head', el: <QuoteLetterhead companyName={companyName} draft={draft} /> },
+      ...(letterLines.join('').trim() ? letterLines.map((l, i) => ({ id: `l${i}`, el: <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6 }}>{l.trim() ? letterNodes(l, values) : '\u00a0'}</div> }))
+        : [{ id: 'none', el: <div style={{ color: '#aaa', fontSize: 13 }}>No letter written yet.</div> }]),
+    ] },
+    ...(clarItems.some(x => x.kind !== 'header') ? [{ key: 'clar', title: 'Clarifications', blocks: [
+      { id: 't', el: h3('Clarifications') },
+      ...clarItems.map(x => ({ id: x.id, el: x.kind === 'header'
+        ? <div style={{ fontSize: 13, fontWeight: 700, padding: '10px 0 4px' }}>{x.text}</div>
+        : <div style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 22, color: '#555' }}>{++clarN}.</span><span>{redNodes(x.text)}</span></div> })),
+    ] }] : []),
+    { key: 'rates', title: 'Rates', heads: {
+        rates: { id: 'rh', el: tbl(<tr><th style={th}>Description</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Unit</th><th style={{ ...th, textAlign: 'right' }}>Rate</th><th style={{ ...th, textAlign: 'right' }}>Total</th></tr>) },
+        below: { id: 'bh', el: <div style={{ paddingTop: 4 }}>{h3('Below the line', <span style={{ fontWeight: 400, fontSize: 12, color: '#666' }}> (rate-only and optional items - not included in the total)</span>)}</div> } },
+      blocks: [
+        { id: 't', el: h3('Schedule of rates and prices') },
+        ...shown.map(r => ({ id: r.id, table: 'rates', el: tbl(r.kind === 'section'
+          ? <tr><td colSpan={5} style={{ ...td, fontWeight: 700, textDecoration: 'underline', background: '#f6f6f4', paddingTop: 10 }}>{r.title}</td></tr>
+          : <tr><td style={td}>{lineText(r)}</td><td style={num}>{r.qty ?? ''}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={num}>{m2(priced[r.id]?.total)}</td></tr>) })),
+        { id: 'total', table: 'rates', el: tbl(<tr><td colSpan={4} style={{ ...td, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>Total</td><td style={{ ...num, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>{m2(totals.total)}</td></tr>) },
+        ...(s.mcd > 0 ? [{ id: 'mcd', el: <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>Our prices include a {+(s.mcd * 100).toFixed(2)}% main contractor's discount.</div> }] : []),
+        ...(below.length ? [{ id: 'gap', el: <div style={{ height: 18 }} /> }] : []),
+        ...below.map(r => { const pr = priced[r.id] || {}; const opt = pr.optional && pr.total != null
+          return { id: `b${r.id}`, table: 'below', el: tbl(<tr><td style={td}>{lineText(r)}</td><td style={num}>{opt ? pr.qty : 'TBC'}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(pr.rate)}</td><td style={{ ...num, color: '#6d28d9' }}>{opt ? `${m2(pr.total)} optional` : 'Rate only'}</td></tr>) } }),
+      ] },
+    ...(docs.length ? [{ key: 'docs', title: 'Documents', blocks: [
+      { id: 't', el: h3('Documents') },
+      { id: 'i', el: <div style={{ fontSize: 12.5, color: '#555', marginBottom: 8 }}>The following documents accompany and form part of this quotation:</div> },
+      // clickable on screen for the team; plain names when printed - a customer
+      // cannot open a portal link (it needs a portal sign-in)
+      ...docs.map((d, i) => ({ id: `d${d.id || i}`, el: <div style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.7, paddingLeft: 4 }}><span style={{ minWidth: 22, color: '#555' }}>{i + 1}.</span>
+        {d.href ? <><a className="q-screen" href={d.href} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>{d.name}</a><span className="q-print">{d.name}</span></> : <span>{d.name}</span>}</div> })),
+    ] }] : []),
+    ...(terms ? [{ key: 'terms', title: 'Terms & Conditions', blocks: [
+      { id: 't', el: h3('Terms & Conditions', <span style={{ fontWeight: 400, fontSize: 11.5, color: '#888' }}> version {terms.v}</span>) },
+      ...String(terms.text || '').split('\n').map((l, i) => ({ id: `t${i}`, el: <div style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, lineHeight: 1.5, color: '#333' }}>{l || '\u00a0'}</div> })),
+    ] }] : []),
+  ]
+  // MEASURE every piece at the page's content width, then lay out the pages
+  const measureRef = useRef(null)
+  const [heights, setHeights] = useState(null)
+  useLayoutEffect(() => {
+    const el = measureRef.current; if (!el) return
+    const h = {}; for (const c of el.children) h[c.dataset.mk] = c.getBoundingClientRect().height
+    if (JSON.stringify(h) !== JSON.stringify(heights)) setHeights(h)
+  })
+  const sheets = []
+  if (heights) {
+    const compactH = heights.__compact || 60
+    for (const sec of sections) {
+      let page = null, used = 0, cont = false
+      const start = () => { page = { sec, cont, blocks: [], oversize: false }; sheets.push(page); used = sec.full && !cont ? 0 : compactH + 4; cont = true; page.tables = new Set() }
+      start()
+      for (const b of sec.blocks) {
+        const bh = heights[`${sec.key}:${b.id}`] || 0
+        const head = b.table && sec.heads && sec.heads[b.table]
+        const hh = head && !page.tables.has(b.table) ? (heights[`${sec.key}:head:${b.table}`] || 0) : 0
+        if (used + hh + bh > CONTENT_H && page.blocks.length) { start() }
+        if (b.table && head && !page.tables.has(b.table)) { page.blocks.push({ ...head, id: `head-${b.table}`, isHead: true }); page.tables.add(b.table); used += heights[`${sec.key}:head:${b.table}`] || 0 }
+        page.blocks.push(b); used += bh
+        if (used > CONTENT_H) page.oversize = true
+      }
+    }
   }
   return (
     <div>
-      <style>{`@media print { body * { visibility: hidden !important; } .quote-doc, .quote-doc * { visibility: visible !important; } .quote-doc { position: absolute; left: 0; top: 0; width: 100%; } .quote-sheet { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; padding: 0 !important; } .quote-label, .no-print { display: none !important; } .quote-sheet + .quote-label + .quote-sheet, .quote-break { page-break-before: always; break-before: page; } }`}</style>
+      <style>{`.q-print { display: none; }
+@media print { @page { size: A4; margin: 0; } body * { visibility: hidden !important; } .quote-doc, .quote-doc * { visibility: visible !important; } .quote-doc { position: absolute; left: 0; top: 0; width: 210mm; }
+  .quote-sheet { width: 210mm !important; height: 297mm !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; margin: 0 !important; overflow: hidden !important; page-break-after: always; break-after: page; }
+  .quote-sheet.q-last { page-break-after: auto; break-after: auto; } .quote-label, .no-print, .q-screen { display: none !important; } .q-print { display: inline !important; } }`}</style>
       {revBar && <div className="no-print" style={{ marginBottom: 10 }}>{revBar}</div>}
       <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         {actions}
         <button onClick={() => window.print()} style={small}>{draft ? 'Print draft' : 'Print'}</button>
-        <span style={{ fontSize: 12, color: '#888' }}>Choose "Save as PDF" in the print window. {pages.length} pages - each starts a new page.</span>
+        <span style={{ fontSize: 12, color: '#888' }}>Choose "Save as PDF" in the print window. {sheets.length ? `${sheets.length} A4 pages, as they print.` : ''}</span>
+      </div>
+      {/* the measuring room - off screen, at the page's content width */}
+      <div ref={measureRef} aria-hidden="true" style={{ position: 'absolute', left: -20000, top: 0, width: CONTENT_W, visibility: 'hidden', color: '#1a1a19' }}>
+        <div data-mk="__compact" style={{ display: 'flow-root' }}><QuoteLetterhead companyName={companyName} compact refText={`Ref ${est.quoteRef || '-'} · Rev ${est.revision}`} title="Rates (continued)" /></div>
+        {sections.flatMap(sec => [
+          ...sec.blocks.map(b => <div key={`${sec.key}:${b.id}`} data-mk={`${sec.key}:${b.id}`} style={{ display: 'flow-root' }}>{b.el}</div>),
+          ...Object.entries(sec.heads || {}).map(([k, h]) => <div key={`${sec.key}:head:${k}`} data-mk={`${sec.key}:head:${k}`} style={{ display: 'flow-root' }}>{h.el}</div>),
+        ])}
       </div>
       <div className="quote-doc" style={{ color: '#1a1a19' }}>
-        {pages.map(([k, title], i) => (
-          <div key={k}>
-            <div className="quote-label no-print" style={{ maxWidth: 860, margin: '18px auto 6px', fontSize: 11.5, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.6 }}>Page {i + 1} · {title}</div>
-            <div className={`quote-sheet${i ? ' quote-break' : ''}`} style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 4, padding: '36px 44px', maxWidth: 860, margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', minHeight: 300 }}>
-              {content[k]}
+        {sheets.map((pg, i) => (
+          <div key={i}>
+            <div className="quote-label no-print" style={{ width: PAGE_W, margin: '18px auto 6px', fontSize: 11.5, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.6 }}>Page {i + 1} of {sheets.length} · {pg.sec.title}{pg.cont && !(pg.sec.full && pg === sheets.find(x => x.sec === pg.sec)) && sheets.find(x => x.sec === pg.sec) !== pg ? ' (continued)' : ''}</div>
+            <div className={`quote-sheet${i === sheets.length - 1 ? ' q-last' : ''}`} style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 3, padding: `${PAD_Y}px ${PAD_X}px`, width: PAGE_W, height: pg.oversize ? 'auto' : PAGE_H, minHeight: PAGE_H, boxSizing: 'border-box', margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+              {!(pg.sec.full && sheets.find(x => x.sec === pg.sec) === pg) && <div style={{ marginBottom: 4 }}><QuoteLetterhead companyName={companyName} compact refText={`Ref ${est.quoteRef || '-'} · Rev ${est.revision}`} title={`${pg.sec.title}${sheets.find(x => x.sec === pg.sec) !== pg ? ' (continued)' : ''}`} /></div>}
+              {pg.blocks.map(b => <div key={b.id} style={{ display: 'flow-root' }}>{b.el}</div>)}
             </div>
           </div>
         ))}
@@ -433,21 +459,30 @@ const ruled = (text, key = '') => String(text ?? '').split(/\n?—————�
 // THE QUOTE'S LETTERHEAD (1166) - the logo, large, and the company's address and
 // contact details from Admin > Company details. The name is written only when
 // there is no logo.
-function QuoteLetterhead({ companyName, compact }) {
+function QuoteLetterhead({ companyName, compact, draft, refText, title }) {
+  // (1166, 1173) the logo on the left; OUR DETAILS TOP RIGHT - name, address,
+  // contact, VAT and company registration numbers (Admin > Company details).
   const { logoUrl, company } = useFormat()
   const c = company || {}
+  const logo = (h, w) => logoUrl ? <img src={logoUrl} alt={companyName || ''} style={{ height: h, maxWidth: w, width: 'auto', objectFit: 'contain', display: 'block' }} /> : null
+  if (compact) return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #1a1a19', paddingBottom: 8, marginBottom: 14 }}>
+      {logo(38, 160) || <div style={{ fontSize: 13, fontWeight: 800 }}>{companyName}</div>}
+      <div style={{ textAlign: 'right', fontSize: 11.5, color: '#444', lineHeight: 1.5 }}><div style={{ fontWeight: 700, fontSize: 12.5 }}>{refText}</div><div>{title}</div></div>
+    </div>
+  )
   const contact = [c.phone, c.email, c.website].filter(Boolean)
-  const reg = [c.companyNumber ? `Company no. ${c.companyNumber}` : '', c.vatNumber ? `VAT no. ${c.vatNumber}` : ''].filter(Boolean)
-  if (compact) return logoUrl ? <img src={logoUrl} alt={companyName || ''} style={{ height: 38, maxWidth: 160, width: 'auto', objectFit: 'contain', display: 'block' }} /> : <div style={{ fontSize: 13, fontWeight: 800 }}>{companyName}</div>
   return (
-    <div>
-      {logoUrl ? <img src={logoUrl} alt={companyName || ''} style={{ height: 100, maxWidth: 320, width: 'auto', objectFit: 'contain', display: 'block' }} />
-        : <div style={{ fontSize: 20, fontWeight: 800 }}>{companyName}</div>}
-      {(c.address || contact.length > 0) && <div style={{ fontSize: 11.5, color: '#555', lineHeight: 1.5, marginTop: 8, whiteSpace: 'pre-line' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 26 }}>
+      <div>{logo(100, 300)}</div>
+      <div style={{ textAlign: 'right', fontSize: 11.5, color: '#444', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1a19' }}>{companyName}</div>
         {c.address}
-        {contact.length > 0 && <div>{contact.join(' · ')}</div>}
-        {reg.length > 0 && <div style={{ color: '#888' }}>{reg.join(' · ')}</div>}
-      </div>}
+        {contact.map(x => <div key={x}>{x}</div>)}
+        {c.vatNumber && <div>VAT no. {c.vatNumber}</div>}
+        {c.companyNumber && <div>Company reg. no. {c.companyNumber}</div>}
+        {draft && <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: '#b45309', letterSpacing: 1 }}>DRAFT - not yet sent</div>}
+      </div>
     </div>
   )
 }

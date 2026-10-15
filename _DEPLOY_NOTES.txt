@@ -1,22 +1,31 @@
-PACKAGE 1172 - Clarifications: tick several, then Mark red / Clear red / Delete
+PACKAGE 1173 - The quote on real A4 pages; our details top right
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1171.
+One file. Complete replacement. No re-seed. No env changes. Built on 1172.
 
   components/QuoteTabs.js
 
-In the clarifications - each quote's Clarifications page, Edit template, and
-Admin > Quote Documents:
-  - a TICK BOX on every row, and "Tick all" at the top
-  - ticking a HEADER ticks the clarifications under it (to the next header)
-  - with any ticked, a bar: "N ticked · Mark red · Clear red · Delete · Untick"
-      Mark red   - each ticked clarification wholly red (headers stay plain)
-      Clear red  - takes the red off them
-      Delete     - removes the ticked rows (asks first)
+REAL A4 PAGES - each sheet on the Quote tab is now an A4 page (210 x 297 mm,
+the size it prints at). Content that does not fit FLOWS ONTO THE NEXT SHEET:
+long clarifications show as two or three pages, a long schedule as several,
+labelled "Page 3 of 8 · Clarifications (continued)". On each rates page the
+column headings repeat; on each below-the-line page its heading repeats. Each
+section still starts on a new page. Printed / saved as PDF, the pages are the
+same as on screen.
+OUR DETAILS TOP RIGHT - page 1: the logo on the left; top right the company
+name, address, contact details, VAT number and company registration number
+(Admin > Company details), and "DRAFT - not yet sent" on a draft. The word
+"Quotation" is gone; later pages' header reads "Ref Q-1042 · Rev B" and the
+page title.
+DOCUMENT LINKS - open only for signed-in portal users with estimating access
+(each goes through a portal sign-in check, then a private link that lasts 5
+minutes). So the PRINTED / PDF quote lists the documents' names as plain text;
+on screen they stay clickable for the team.
 
-Checked in a REAL browser (Chromium): ticking "Access" ticked it and its two
-clarifications (3 ticked), not Programme's; Mark red -> both red; Clear red ->
-black; one ticked and deleted -> gone, the quote customised; in Edit template
-Tick all -> Mark red -> saved every clarification as red, the headers plain.
-All 166 pages pass the browser check. Built from your deployed packages
-(1022-1171, verified against their zips); the file checked identical to the
-tested version before zipping.
+Checked in a REAL browser (Chromium) with 45 clarifications and an 80-row
+schedule: 8 sheets, every one 794 x 1123 (A4) with nothing overflowing -
+Letter, Clarifications over 3 pages, Rates over 3 pages (the headings on each),
+Documents; a real PDF came out at exactly 8 pages; page 1 - our details on the
+right (name, address, phone, email, VAT no., company reg. no.), no
+"Quotation"; printed, the document as a plain name. All 166 pages pass the
+browser check. Built from your deployed packages (1022-1172, verified against
+their zips); the file checked identical to the tested version before zipping.
