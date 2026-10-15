@@ -90,7 +90,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
   // for amending prints normally - that red is for the take-off only.
   const lineText = (r) => {
     if (!(lib && r.buildup && descriptionText(r.buildup, lib))) return r.description
-    return <>{descriptionParts(r.buildup, lib).map((x, k) => x.red === 'missing' ? <span key={k} style={{ color: '#b91c1c', fontWeight: 700 }}>{x.text}</span> : <span key={k}>{x.text}</span>)}</>
+    return <span style={{ whiteSpace: 'pre-line' }}>{descriptionParts(r.buildup, lib).map((x, k) => x.red === 'missing' ? <span key={k} style={{ color: '#b91c1c', fontWeight: 700 }}>{x.text}</span> : <span key={k}>{x.text}</span>)}</span>
   }
   const m2 = (v) => v == null ? '' : money(v, { dp: 2 })
   const s = est.settings || {}

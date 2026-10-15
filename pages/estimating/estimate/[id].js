@@ -194,6 +194,17 @@ export default function EstimatePage() {
     const n = sel.size; if (!n || !window.confirm(`Delete ${n} line${n === 1 ? '' : 's'}?`)) return
     change(e => ({ ...e, rows: e.rows.filter(r => !sel.has(r.id)) })); setSel(new Set()); setSelMsg('')
   }
+  // MOVE ACROSS THE LINE (1147) - the ticked lines, in their order: below goes to
+  // the end of the below-the-line items (adding the line if there is none);
+  // above goes just above the line.
+  const moveAcross = (below) => change(e => {
+    const moving = e.rows.filter(r => sel.has(r.id) && r.kind !== 'line')
+    if (!moving.length) return e
+    let rest = e.rows.filter(r => !sel.has(r.id) || r.kind === 'line')
+    if (!rest.some(r => r.kind === 'line')) { if (!below) return e; rest = [...rest, lineRow()] }
+    const k = rest.findIndex(r => r.kind === 'line')
+    return { ...e, rows: below ? [...rest, ...moving] : [...rest.slice(0, k), ...moving, ...rest.slice(k)] }
+  })
   const highlightSel = (colour) => change(e => ({ ...e, rows: e.rows.map(r => sel.has(r.id) ? { ...r, highlight: colour || undefined } : r) }))
   const noteSel = () => change(e => ({ ...e, rows: e.rows.map(r => sel.has(r.id) && r.kind === 'item' && r.note == null ? { ...r, note: '' } : r) }))
   const moveRows = (ids, targetId, after) => change(e => {
@@ -433,6 +444,9 @@ export default function EstimatePage() {
                   <button onClick={() => highlightSel(null)} style={bannerBtn}>Clear highlight</button>
                   <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.4)' }} />
                   <button onClick={noteSel} style={bannerBtn}>Add note</button>
+                  <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.4)' }} />
+                  <button onClick={() => moveAcross(true)} style={bannerBtn} title="Rate-only / optional - not in the total">Move below the line</button>
+                  {hasLine && <button onClick={() => moveAcross(false)} style={bannerBtn} title="Into the total">Move above the line</button>}
                   <button onClick={() => { setSel(new Set()); setSelMsg('') }} style={{ ...bannerBtn, marginLeft: 'auto' }}>Untick all</button>
                 </> : <>
                   <span>{clipN} line{clipN === 1 ? '' : 's'} copied</span>
@@ -508,7 +522,7 @@ export default function EstimatePage() {
                         {/* The item's description, as the quote will word it - parts marked for
                             amending shown RED here, never on the quote (1110). */}
                         {(() => { const parts = r.buildup ? descriptionParts(r.buildup, lib) : []; return parts.length ? (
-                          <div style={{ fontSize: 11.5, color: '#666', marginTop: 3, lineHeight: 1.45, maxWidth: 560 }}>
+                          <div style={{ fontSize: 11.5, color: '#666', marginTop: 3, lineHeight: 1.45, maxWidth: 560, whiteSpace: 'pre-line' }}>
                             {parts.map((x, k) => x.red === 'amend' ? <span key={k} style={{ color: '#b91c1c', background: '#fee2e2', fontWeight: 600, borderRadius: 3 }}>{x.text}</span>
                               : x.red === 'missing' ? <span key={k} style={{ color: '#b91c1c', fontWeight: 700 }} title="Not chosen yet - choose it in the item's Build-up">{x.text}</span>
                               : <span key={k}>{x.text}</span>)}
@@ -568,7 +582,7 @@ export default function EstimatePage() {
         <button onClick={() => addRow(uniqueItem('m2'), true)} style={btn}>+ Unique item</button>
         <button onClick={() => addRow(spacerRow())} style={btn} title="A blank line - layout only, not on the quote">+ Blank line</button>
         {!hasLine && <button onClick={() => change(e => ({ ...e, rows: [...e.rows, lineRow()] }))} style={{ ...btn, marginLeft: 'auto', color: '#6d28d9', borderColor: '#ddd6fe' }} title="Rate-only and optional items - shown and priced, not in the total">+ Below the line</button>}
-        <button onClick={() => { const [sec, it] = prelimsRows(); change(e => ({ ...e, rows: placeRows(e.rows, [sec, it]) })); setPopout(it.id) }} style={btn} title="Lodge, management, attendances - lump sums for the job">+ Prelims</button>
+        {/* + Prelims removed (1147) - prelims come from the rate build-ups like anything else */}
       </div>
 
       {/* THE PRICING CHECKLIST (1142) - the company's reminders plus this estimate's own.
@@ -750,7 +764,7 @@ function Popout({ item, est, lib: libIn, templates = [], money, onChange, setRow
         {msg && <div style={{ fontSize: 12.5, color: '#0f766e', marginTop: 8 }}>{msg}</div>}
         <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Changes here belong to this estimate only - the library is never changed from here (Add as new template adds a new one).</div>
         <div style={{ marginTop: 10 }}><DocumentsPanel ownerType="estimate" ownerId={est.id} itemId={item.id} title="Documents on this item" /></div>
-        <BuildupEditor varLibrary={variableLibrary(templates)} value={value} onChange={(fn) => onChange((b) => { const n = fn({ ...b, unit: item.unit }); const { unit, ...rest } = n; return rest })}
+        <BuildupEditor varLibrary={variableLibrary(templates)} addSources={{ library: templates.filter(t => !t.hidden && !t.catHidden), estimate: (est.rows || []).filter(r => r.kind === 'item' && r.id !== item.id && r.buildup && (r.buildup.lines || []).length).map(r => ({ id: r.id, description: r.description, unit: r.unit, buildup: r.buildup })) }} value={value} onChange={(fn) => onChange((b) => { const n = fn({ ...b, unit: item.unit }); const { unit, ...rest } = n; return rest })}
           lib={lib} money={money} rateTitle="Rate on this quote"
           rateOpts={{ profit: item.profit != null ? item.profit : (s.profit || 0), mcd: s.mcd || 0, labourFactor: s.labourFactor ?? 1, jobQty: item.rateOnly || item.qty == null ? null : Number(item.qty) }}>
           <div style={{ fontSize: 12.5, color: '#555' }}>

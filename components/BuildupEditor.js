@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, SIZE_NAMES, SIZE_UNIT, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, applyList, applyText, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
+import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, mergeBuildup, SIZE_NAMES, SIZE_UNIT, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, applyList, applyText, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
 // THE BUILD-UP EDITOR (1088) - ONE component for the Build-ups page (a library
@@ -14,7 +14,7 @@ export const fromPct = (s) => { if (s === '' || s == null) return null; const n 
 // The shared unit names (1103) - so m³, weeks and days show here too.
 const UNIT_LABEL = BU_UNIT_LABEL
 
-export default function BuildupEditor({ varLibrary, value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children, summary }) {
+export default function BuildupEditor({ addSources, varLibrary, value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children, summary }) {
   const t = value
   // Changes pass through as STEPS (functions), so two in one click apply in
   // order. onChange must be a state setter (or accept a function).
@@ -63,6 +63,7 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
     const n = lsel.size; if (!n || !window.confirm(`Delete ${n} line${n === 1 ? '' : 's'}?`)) return
     setT(x => ({ ...x, lines: x.lines.filter(l => !lsel.has(l.id)), rules: (x.rules || []).filter(rr => !lsel.has(rr.line)) })); setLsel(new Set()); setLmsg('')
   }
+  const [addingBu, setAddingBu] = useState(false)   // the "+ rate build-up" picker (1147)
   const copyLine = (id) => setT(x => {
     const k = x.lines.findIndex(l => l.id === id)
     if (k < 0) return x
@@ -215,6 +216,8 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           {LINE_TYPES.map(x => <button key={x} onClick={() => addLine(x)} style={smallBtn}>+ {LINE_TYPE_LABEL[x]}</button>)}
+          {addSources && <button onClick={() => setAddingBu(true)} style={{ ...smallBtn, color: '#0f766e', borderColor: '#99f6e4', fontWeight: 600 }} title="Bring in a rate build-up's lines, sizes, variables and description">+ rate build-up</button>}
+          {addingBu && <AddBuildupPicker sources={addSources} unit={t.unit} onClose={() => setAddingBu(false)} onPick={(src) => { setT(x => mergeBuildup(x, src, lib)); setAddingBu(false) }} />}
         </div>
       </Block>
 
@@ -694,3 +697,45 @@ function SizePicker({ value, t, onChange }) {
 }
 
 const lineBannerBtn = { fontSize: 12, padding: '3px 9px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.7)', background: 'transparent', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' }
+
+// "+ RATE BUILD-UP" (1147) - pick a build-up from the library, or (on a take-off)
+// a completed one from another item on this estimate; its lines, sizes,
+// variables and description are added to this one (mergeBuildup).
+function AddBuildupPicker({ sources, unit, onClose, onPick }) {
+  const lib = (sources && sources.library) || [], mine = (sources && sources.estimate) || []
+  const [tab, setTab] = useState(mine.length ? 'estimate' : 'library')
+  const [q, setQ] = useState('')
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const match = (s) => words.every(w => s.toLowerCase().includes(w))
+  const list = tab === 'library'
+    ? lib.filter(t => match(`${t.section} ${t.description}`)).map(t => ({ key: t.ref, title: t.description, sub: t.section || 'No category', unit: t.unit, n: (t.lines || []).length, src: t }))
+    : mine.filter(x => match(x.description || '')).map(x => ({ key: x.id, title: x.description, sub: 'on this estimate', unit: x.unit, n: (x.buildup.lines || []).length, src: x.buildup }))
+  const tabBtn = (k, label, n) => <button onClick={() => setTab(k)} style={{ fontSize: 12.5, padding: '4px 12px', borderRadius: 6, border: `1px solid ${tab === k ? '#0f766e' : '#d4d4d0'}`, background: tab === k ? '#f0fdfa' : '#fff', color: tab === k ? '#0f766e' : '#555', fontWeight: tab === k ? 600 : 400, cursor: 'pointer' }}>{label} <span style={{ color: '#999', fontWeight: 400 }}>{n}</span></button>
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <strong style={{ fontSize: 15 }}>Add a rate build-up</strong>
+          <span style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+        </div>
+        <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Its lines, sizes and variables are added to this one, and its description stacked underneath with a line between.</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          {sources && sources.estimate && tabBtn('estimate', 'This estimate', mine.length)}
+          {tabBtn('library', 'Rate build-ups', lib.length)}
+        </div>
+        <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search…" style={{ ...cellInp, width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '7px 9px' }} />
+        <div style={{ overflowY: 'auto', flex: 1, border: '1px solid #f0efec', borderRadius: 8 }}>
+          {!list.length && <div style={{ padding: 12, fontSize: 12.5, color: '#aaa' }}>{tab === 'estimate' ? 'No other item on this estimate has a build-up yet.' : 'Nothing matches.'}</div>}
+          {list.map(x => (
+            <button key={x.key} onClick={() => onPick(x.src)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderBottom: '1px solid #f4f3f0', background: '#fff', padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{x.title}</div>
+              <div style={{ fontSize: 11.5, color: '#888' }}>{x.sub} · {x.unit ? `per ${UNIT_LABEL[x.unit] || x.unit}` : 'no unit'} · {x.n} line{x.n === 1 ? '' : 's'}
+                {unit && x.unit && x.unit !== unit && <span style={{ color: '#b45309', marginLeft: 6 }}>- priced per {UNIT_LABEL[x.unit] || x.unit}, this is per {UNIT_LABEL[unit] || unit}</span>}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}

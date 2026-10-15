@@ -247,7 +247,7 @@ export default function BuildUpsPage() {
           </>}
           <div style={{ minWidth: 0 }}>
             {edit && <button onClick={() => setEdit(null)} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '0 0 8px', fontFamily: 'inherit' }}>← All build-ups{edit.t?.section ? ` · ${edit.t.section}` : ''}</button>}
-            {edit ? <Editor key={edit.key || edit.originalRef || 'new'} edit={edit} lib={lib} money={money} varLibrary={variableLibrary(templates)} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
+            {edit ? <Editor key={edit.key || edit.originalRef || 'new'} edit={edit} lib={lib} money={money} varLibrary={variableLibrary(templates)} allTemplates={templates} categories={cats.map(c => c[0]).filter(c => c !== NOCAT)}
               onAddCategory={(n) => addCategory(n, true)}
               onCopy={(t) => {
                 // COPY (1115): a new, unsaved build-up - everything copied, named
@@ -269,7 +269,7 @@ export default function BuildUpsPage() {
   )
 }
 
-function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onCopy, onAddCategory, varLibrary }) {
+function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onCopy, onAddCategory, varLibrary, allTemplates }) {
   const [t, setT] = useState(edit.t)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -308,7 +308,7 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onC
 
       {/* "Try the rate" is gone (1123): the summary shows the rate by supplier and
           cost category, at this build-up's own profit % - no quote settings. */}
-      <BuildupEditor value={t} onChange={setT} lib={lib} money={money} varLibrary={varLibrary} summary
+      <BuildupEditor value={t} onChange={setT} lib={lib} money={money} varLibrary={varLibrary} summary addSources={{ library: (allTemplates || []).filter(x => x.ref !== edit.originalRef) }}
         rateOpts={{ profit: t.profit ?? 0, mcd: 0, labourFactor: 1 }} />
 
       {edit.originalRef && <div style={{ marginTop: 12 }}><DocumentsPanel ownerType="buildup" ownerId={edit.originalRef} title="Documents on this build-up" /></div>}

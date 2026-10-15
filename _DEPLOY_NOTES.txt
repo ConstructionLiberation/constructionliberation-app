@@ -1,28 +1,39 @@
-PACKAGE 1146 - Budgets tab; clickable warnings; edit the checklist on the take-off
+PACKAGE 1147 - Move across the line; no Prelims button; "+ rate build-up"
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1145.
+Five files. Complete replacements. No re-seed. No env changes. Built on 1146.
 
+  lib/buildups.js
+  components/BuildupEditor.js     (the take-off pop-out AND the Build-ups page)
+  components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/estimating/build-ups.js
 
-BUDGETS TAB - right of Take-off: the Cost breakdown and Material budgets have
-moved there. Revisions and Notes stay on the take-off.
-CLICKABLE WARNINGS - in the totals bar:
-  "N items not fully costed" -> a list of the items, each naming its lines
-    without a cost; click an item -> its build-up opens
-  "N items without a quantity" -> a list of the items; click one -> the page
-    goes to it with the cursor in its Qty box
-EDIT THE CHECKLIST HERE - admins see "Edit company list" on the take-off's
-pricing checklist: change, reorder, remove or add reminders and "Save company
-list" - every estimate shows the change (the same list as Admin > Quote
-Documents). Everyone can still add reminders for one estimate only.
+MOVE ACROSS THE LINE - tick any items: the banner has "Move below the line"
+(adds the line if there is none) and "Move above the line" (they land just
+above the line - drag them under a heading if needed). Dragging across the
+line works as before.
+"+ PRELIMS" REMOVED - prelims come from the rate build-ups like anything else.
+"+ RATE BUILD-UP" - beside + material / + labour... in any build-up. Pick from:
+  THIS ESTIMATE - completed build-ups on other items (take-off pop-out only)
+  RATE BUILD-UPS - the library (in use only; not the one being edited)
+Its LINES are added (new ids); its SIZES added where missing (a blank one
+filled); its VARIABLES merged by name (options combined, values kept); its
+DESCRIPTION stacked underneath with a separator line (————————). The added
+description's product list comes in as plain text of THAT build-up's
+products - a second live list would show both. A build-up priced per a
+different unit is flagged in the picker. Descriptions keep their line breaks
+on the take-off and the quote.
 
-Checked in a REAL browser (Chromium): tabs Take-off | Budgets | Materials |
-Letter | Clarifications | Documents | Quote; Cost breakdown and Material
-budgets only on Budgets, Revisions and Notes on the take-off; "not fully
-costed" listed 9 items with their lines, clicking one opened its build-up;
-"without a quantity" listed the 8 Edge trims, clicking Edge trim 12 put the
-cursor in Edge trim 12's Qty; Edit company list -> a new reminder saved, the
-checklist showing 13 with it. The take-off part 1 test passes in full again.
-All 165 pages pass the browser check. Built from your deployed packages
-(1022-1145, verified against their zips); the file checked identical to the
-tested version before zipping.
+Checked: the merge - a roof (VCL, Membrane; Girth blank; Warranty 20 year)
+plus an upstand (Insulation, Lab; Girth 0.6, Height 0.3; warranty 25 year,
+Colour) -> 4 lines (L3, L4 new), Girth 0.6 + Height 0.3, Warranty kept 20
+year with 25 year added, Colour added, the descriptions stacked; the original
+untouched. In a REAL browser (Chromium): no + Prelims; two ticked items moved
+below (line created, total -> 0.00 with only an unquantified item left
+above) and back above (20,804.00); Edge trim's build-up: + rate build-up ->
+This estimate (2) and Rate build-ups (152); Mech fixed single ply then Fully
+Adhered SP added - 3 -> 21 -> 36 lines, descriptions stacked with the
+separator, on the take-off too. On the Build-ups page: library only, the
+build-up being edited left out, 18 -> 33 lines; a whole line still fits at
+1366px and 1600px. All 165 pages pass the browser check. Built from your
+deployed packages (1022-1146, verified against their zips).
