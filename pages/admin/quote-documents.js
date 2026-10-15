@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AdminShell from '../../components/AdminShell'
-import { PLACEHOLDERS, CLAR_KINDS, currentTerms } from '../../lib/quoteDocs'
+import { PLACEHOLDERS, CLAR_KINDS, currentTerms, checklistOf } from '../../lib/quoteDocs'
 
 // ADMIN > QUOTE DOCUMENTS (1092). The company's standard quote text:
 //   - the covering LETTER, with {{placeholders}} filled from each quote
@@ -37,7 +37,7 @@ export default function QuoteDocuments() {
     setTimeout(() => { if (el) { el.focus(); el.selectionStart = el.selectionEnd = at + tag.length } }, 0)
   }
   async function save() {
-    setErr(''); try { const d = await api({ action: 'save', letter: tpl.letter, library: tpl.library }); setTpl(d.templates); setDirty(false); setMsg('Saved.') } catch (e) { setErr(e.message) }
+    setErr(''); try { const d = await api({ action: 'save', letter: tpl.letter, library: tpl.library, checklist: checklistOf(tpl) }); setTpl(d.templates); setDirty(false); setMsg('Saved.') } catch (e) { setErr(e.message) }
   }
   async function saveTerms() {
     setErr(''); try { const d = await api({ action: 'terms', text: terms }); setTpl(d.templates); setMsg(d.unchanged ? 'The Terms & Conditions are unchanged.' : `Saved as version ${currentTerms(d.templates).v}.`) } catch (e) { setErr(e.message) }
@@ -76,8 +76,19 @@ export default function QuoteDocuments() {
               ))}
             </div>
           </Card>
+          {/* THE PRICING CHECKLIST (1142) - shown above the total on every take-off */}
+          <Card title="Pricing checklist" hint={`Reminders on every take-off, above the total - estimators tick them, and can add their own per estimate.${Array.isArray(tpl.checklist) ? '' : ' This is the starter list until you save your own.'}`}>
+            {checklistOf(tpl).map((x, i) => (
+              <div key={x.id} style={{ display: 'flex', gap: 4, marginBottom: 5, maxWidth: 760 }}>
+                <input value={x.text} onChange={e => edit(t => ({ ...t, checklist: checklistOf(t).map(y => y.id === x.id ? { ...y, text: e.target.value } : y) }))} style={{ ...area, fontSize: 13, padding: '6px 9px' }} />
+                <button onClick={() => edit(t => { const l = [...checklistOf(t)]; if (i > 0) [l[i - 1], l[i]] = [l[i], l[i - 1]]; return { ...t, checklist: l } })} style={icon} title="Move up">↑</button>
+                <button onClick={() => edit(t => ({ ...t, checklist: checklistOf(t).filter(y => y.id !== x.id) }))} style={icon} title="Remove">✕</button>
+              </div>
+            ))}
+            <button onClick={() => edit(t => ({ ...t, checklist: [...checklistOf(t), { id: uid(), text: '' }] }))} style={small}>+ Reminder</button>
+          </Card>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button onClick={save} disabled={!dirty} style={{ ...btn, background: '#1a1a2e', color: '#fff', opacity: dirty ? 1 : 0.5 }}>Save letter and clarifications</button>
+            <button onClick={save} disabled={!dirty} style={{ ...btn, background: '#1a1a2e', color: '#fff', opacity: dirty ? 1 : 0.5 }}>Save letter, clarifications and checklist</button>
             {dirty && <span style={{ fontSize: 12.5, color: '#b45309' }}>Unsaved changes</span>}
             {msg && <span style={{ fontSize: 12.5, color: '#15803d' }}>{msg}</span>}
           </div>

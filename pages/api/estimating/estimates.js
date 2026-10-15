@@ -6,6 +6,7 @@ import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDe
 import { resolveMerged } from '../../../lib/crmMerge'
 import { currentTerms } from '../../../lib/quoteDocs'
 import { itemsMissingSizes } from '../../../lib/buildups'
+import { uncostedItems, uncostedText } from '../../../lib/estimate'
 import { deleteAllDocs } from '../../../lib/documentsStore'
 import { removeFile, privateReady } from '../../../lib/privateFiles'
 import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision } from '../../../lib/estimateStore'
@@ -142,6 +143,9 @@ async function handler(req, res) {
     // Mandatory sizes (1113): every one needs a number before a quote goes out.
     const noSize = itemsMissingSizes(est)
     if (noSize.length) return res.status(400).json({ error: `Enter the mandatory sizes first: ${noSize.slice(0, 6).map(x => `${x.description} (${x.sizes.join(', ')})`).join('; ')}${noSize.length > 6 ? ` and ${noSize.length - 6} more` : ''}` })
+    // Every line costed (1142) - no £0 lines (comments aside), no £0 items.
+    const unc = uncostedItems(est, lib)
+    if (unc.length) return res.status(400).json({ error: `Every line needs a cost before the quote is issued - not yet costed: ${uncostedText(unc)}` })
     const total = Math.round(totals.total * 100) / 100
     const prev = (est.revisions || []).slice(-1)[0]
     const prevSnap = prev ? await loadRevision(est.id, prev.revision) : null

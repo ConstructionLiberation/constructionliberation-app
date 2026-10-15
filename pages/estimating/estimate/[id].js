@@ -7,11 +7,11 @@ import BuildupEditor, { pct, fromPct, NumBox } from '../../../components/Buildup
 import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
-import { placeholderValues } from '../../../lib/quoteDocs'
+import { placeholderValues, checklistOf } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -80,6 +80,8 @@ export default function EstimatePage() {
   const [linking, setLinking] = useState(false)
   const [who, setWho] = useState({ canDelete: false, admins: [] })
   const [tab, setTab] = useState('takeoff')
+  const [showChecklist, setShowChecklist] = useState(false)   // re-open a completed checklist (1142)
+  const [ckNew, setCkNew] = useState('')
   const [quoteDocs, setQuoteDocs] = useState(null)   // the company letter, clarifications library, T&Cs
   const [lastRev, setLastRev] = useState(null)    // the last ISSUED revision's estimate - for 'changes since'
   const [issueMsg, setIssueMsg] = useState('')
@@ -207,6 +209,9 @@ export default function EstimatePage() {
   )
 
   const { priced, totals } = useMemo(() => est ? priceEstimate(est, lib) : { priced: {}, totals: {} }, [est, lib])
+  // Items not fully costed (1142) - the same list that stops the quote being issued.
+  const uncosted = useMemo(() => est ? uncostedItems(est, lib) : [], [est, lib])
+  const uncMap = useMemo(() => Object.fromEntries(uncosted.map(x => [x.id, x])), [uncosted])
   const secTot = useMemo(() => est ? sectionTotals(est, priced) : {}, [est, priced])
   const bud = useMemo(() => est ? budgets(est, lib) : { byCategory: {}, bySupplier: {} }, [est, lib])
   const values = useMemo(() => {
@@ -220,6 +225,8 @@ export default function EstimatePage() {
   const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
 
   async function issue(andPrint) {
+    // Every line costed first (1142) - the server refuses it too.
+    if (uncosted.length) { setErr(`Every line needs a cost before the quote is issued - not yet costed: ${uncostedText(uncosted)}`); return }
     // Mandatory sizes (1113): no quote goes out until each has a number.
     const noSize = itemsMissingSizes(est)
     if (noSize.length) { setErr(`Enter the mandatory sizes first (Build-up on each item): ${noSize.slice(0, 6).map(x => `${x.description} - ${x.sizes.join(', ')}`).join('; ')}${noSize.length > 6 ? ` and ${noSize.length - 6} more` : ''}`); return }
@@ -470,7 +477,7 @@ export default function EstimatePage() {
                         <input value={r.description} onChange={e => setRow(r.id, { description: e.target.value })} style={{ ...cellInp, width: '100%' }} />
                         <div style={{ fontSize: 11, color: p.missing?.length ? '#b45309' : '#aaa', marginTop: 2 }}>
                           {r.templateRef ? 'from the build-ups' : 'unique item'}
-                          {p.missing?.length ? <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 12.5 }}> · ⚠ {p.missing.length} line{p.missing.length === 1 ? '' : 's'} without a cost - not yet in the rate</span> : null}
+                          {uncMap[r.id] ? <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 12.5 }} title={uncMap[r.id].lines.join(', ')}> · ⚠ {uncMap[r.id].lines.length ? `${uncMap[r.id].lines.length} line${uncMap[r.id].lines.length === 1 ? '' : 's'} without a cost` : ''}{uncMap[r.id].lines.length && uncMap[r.id].zeroRate ? ' - ' : ''}{uncMap[r.id].zeroRate ? 'rate £0' : ''}</span> : null}
                           {r.buildup && needsAmending(r.buildup) && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · description needs amending</span>}
                           {r.buildup && missingSizes(r.buildup).length > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {missingSizes(r.buildup).join(', ')} required</span>}
                           {r.buildup && [...missingProducts(r.buildup, lib), ...missingVars(r.buildup)].length > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {[...missingProducts(r.buildup, lib), ...missingVars(r.buildup)].join(', ')} not chosen</span>}
@@ -541,12 +548,50 @@ export default function EstimatePage() {
         <button onClick={() => { const [sec, it] = prelimsRows(); change(e => ({ ...e, rows: placeRows(e.rows, [sec, it]) })); setPopout(it.id) }} style={btn} title="Lodge, management, attendances - lump sums for the job">+ Prelims</button>
       </div>
 
+      {/* THE PRICING CHECKLIST (1142) - the company's reminders plus this estimate's own.
+          Tick all; once everything is ticked it shrinks to a single line. */}
+      {(() => {
+        const ck = est.checklist || {}
+        const ticked = ck.ticked || {}
+        const items = [...checklistOf(quoteDocs).map(x => ({ ...x, company: true })), ...(ck.own || [])]
+        const done = items.length > 0 && items.every(x => ticked[x.id])
+        const setCk = (fn) => change(e => ({ ...e, checklist: fn(e.checklist || {}) }))
+        if (!items.length) return null
+        if (done && !showChecklist) return (
+          <div style={{ marginTop: 14, fontSize: 12.5, color: '#15803d' }}>✓ Pricing checklist complete · <button onClick={() => setShowChecklist(true)} style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 12.5 }}>show</button></div>
+        )
+        return (
+          <div style={{ marginTop: 14, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, padding: '12px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <strong style={{ fontSize: 14 }}>Pricing checklist</strong>
+              <span style={{ fontSize: 12, color: '#92400e' }}>{items.filter(x => ticked[x.id]).length} of {items.length} ticked</span>
+              <span style={{ flex: 1 }} />
+              <button onClick={() => setCk(c => ({ ...c, ticked: Object.fromEntries(items.map(x => [x.id, true])) }))} disabled={!!est.archived} style={smallBtn}>Tick all</button>
+              {done && <button onClick={() => setShowChecklist(false)} style={smallBtn}>Hide</button>}
+            </div>
+            <div style={{ columns: '2 360px', columnGap: 24 }}>
+              {items.map(x => (
+                <label key={x.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, padding: '3px 0', breakInside: 'avoid', cursor: 'pointer', color: ticked[x.id] ? '#888' : '#1a1a19', textDecoration: ticked[x.id] ? 'line-through' : 'none' }}>
+                  <input type="checkbox" checked={!!ticked[x.id]} disabled={!!est.archived} onChange={e => setCk(c => ({ ...c, ticked: { ...(c.ticked || {}), [x.id]: e.target.checked || undefined } }))} style={{ marginTop: 2 }} />
+                  <span style={{ flex: 1 }}>{x.text}{!x.company && <span style={{ fontSize: 10.5, color: '#92400e', marginLeft: 6 }}>this estimate</span>}</span>
+                  {!x.company && <button onClick={(ev) => { ev.preventDefault(); setCk(c => ({ ...c, own: (c.own || []).filter(y => y.id !== x.id) })) }} style={iconBtn} title="Remove this reminder">✕</button>}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <input value={ckNew} onChange={e => setCkNew(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && ckNew.trim()) { setCk(c => ({ ...c, own: [...(c.own || []), { id: `o${Date.now().toString(36)}`, text: ckNew.trim() }] })); setCkNew('') } }} placeholder="Add a reminder for this estimate…" disabled={!!est.archived} style={{ ...inp, maxWidth: 420, padding: '6px 9px' }} />
+              <button onClick={() => { if (!ckNew.trim()) return; setCk(c => ({ ...c, own: [...(c.own || []), { id: `o${Date.now().toString(36)}`, text: ckNew.trim() }] })); setCkNew('') }} disabled={!ckNew.trim()} style={smallBtn}>Add</button>
+            </div>
+          </div>
+        )
+      })()}
       <div style={{ display: 'flex', gap: 24, marginTop: 16, background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '12px 16px', flexWrap: 'wrap', alignItems: 'baseline', fontSize: 13 }}>
         <strong style={{ fontSize: 17, color: '#0f766e' }}>Total {money(totals.total || 0, { dp: 2 })}</strong>
         <span>Materials {money(totals.materials || 0, { dp: 2 })}</span>
         <span>Labour {money(totals.labour || 0, { dp: 2 })}</span>
         <span>Profit &amp; MCD {money(totals.profitAndMcd || 0, { dp: 2 })}</span>
         {totals.belowLine > 0 && <span style={{ color: '#6d28d9' }}>{totals.belowLine} item{totals.belowLine === 1 ? '' : 's'} below the line{totals.optional ? ` (optional ${money(totals.optional, { dp: 2 })})` : ''} - not in the total</span>}
+        {uncosted.length > 0 && <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px' }} title={uncostedText(uncosted)}>⚠ {uncosted.length} item{uncosted.length === 1 ? '' : 's'} not fully costed - the quote cannot be issued</span>}
         {totals.noQty > 0 && <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px' }}>⚠ {totals.noQty} item{totals.noQty === 1 ? '' : 's'} without a quantity - not in the total</span>}
       </div>
 

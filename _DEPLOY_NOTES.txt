@@ -1,21 +1,39 @@
-PACKAGE 1141 - Copy, paste and delete several build-up lines at once
+PACKAGE 1142 - No quote with an uncosted line; the pricing checklist
+(take-off part 3 of 3)
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1140.
+Six files. Complete replacements. No re-seed. No env changes. Built on 1141.
 
-  components/BuildupEditor.js     (Build-ups page AND the take-off pop-out)
+  lib/estimate.js, lib/quoteDocs.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/admin/quote-documents.js
+  pages/api/estimating/estimates.js
+  pages/api/estimating/quote-templates.js
 
-Each build-up line has a TICK BOX beside its ↑ ↓. Ticking brings up a banner:
-COPY / PASTE / DELETE for all the ticked lines. Copy uses this browser, so the
-lines paste into ANOTHER build-up too (or an item's build-up on a take-off);
-Paste goes below the last ticked line ("Paste at the end" when none is ticked),
-each line with a new id, and the pasted lines are left ticked. The single-line
-⧉ copy stays. (The Item column is 16px narrower so a whole line still fits at
-1366px.)
+EVERY LINE COSTED BEFORE A QUOTE GOES OUT. An item is "not fully costed" if any
+of its lines (comments aside) has no cost or a £0 cost, or the item's rate
+is £0. (A lump spread on a rate-only item cannot be spread, so it is not
+counted.) Then:
+  - the item says "⚠ N lines without a cost" in red (the same lines)
+  - the totals bar: "⚠ N items not fully costed - the quote cannot be issued"
+  - Issue / Download and mark as sent are REFUSED, naming them - and the
+    server refuses too: "not yet costed: Membrane roof (Insulation)"
+THE PRICING CHECKLIST - just above the total on every take-off: the company's
+reminders plus any this estimate adds ("Add a reminder for this estimate…",
+✕ to remove). Ticked ones are struck through; "Tick all"; once everything is
+ticked it shrinks to "✓ Pricing checklist complete · show". Ticks and the
+estimate's own reminders save with the estimate.
+THE COMPANY LIST: Admin > Quote Documents > "Pricing checklist" - edit, reorder,
+add, remove; saved with the letter and clarifications. Until an admin saves
+one, a 12-item starter list is used (documents read, access, prelims,
+programme, deliveries, waste, protection, warranty, price list current,
+below the line, clarifications checked, retention / MCD / terms).
 
-Checked in a REAL browser (Chromium) at 1366px: VCL and Tape ticked -> "2 lines
-ticked"; Copy + Paste -> the two copies directly below Tape, and ticked; Delete
--> back to 18 lines, originals kept; in Fully Adhered SP "2 lines copied" ->
-Paste at the end -> saved with new, unique ids (L17, L18); a whole line fits at
-1366px and 1600px. All 165 pages pass the browser check. Built from your
-deployed packages (1022-1140, verified against their zips); the file checked
-identical to the tested version before zipping.
+Checked: the rule - a costed item passes (its comment ignored); a missing
+product, a £0 line and an empty item caught; a rate-only spread not counted.
+Through the real routes: issue refused naming the Insulation line; costed ->
+Rev A issued; the company checklist saved (blanks dropped). In a REAL browser
+(Chromium): the red bar and "13 lines without a cost"; sending refused, naming
+the lines; the checklist 2 of 12, struck through; an own reminder (13); Tick
+all -> "✓ complete · show"; show -> 13 of 13; saved. All server routes
+compile; all 165 pages pass the browser check. Built from your deployed
+packages (1022-1141, verified against their zips).

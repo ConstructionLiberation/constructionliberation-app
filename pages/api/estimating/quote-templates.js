@@ -23,6 +23,8 @@ async function handler(req, res) {
   const b = req.body || {}
   if (b.action === 'save') {
     const next = { ...cur, letter: { body: String(b.letter?.body ?? cur.letter.body ?? ''), updatedAt: new Date().toISOString(), updatedBy: by }, library: b.library || cur.library }
+    // the pricing checklist (1142)
+    if (Array.isArray(b.checklist)) next.checklist = b.checklist.map(x => ({ id: String(x.id), text: String(x.text || '').slice(0, 500) })).filter(x => x.text.trim())
     const errors = checkTemplates(next)
     if (errors.length) return res.status(400).json({ error: errors.join('; ') })
     for (const k of Object.keys(next.library)) next.library[k] = next.library[k].map(x => ({ id: String(x.id), text: String(x.text || '').slice(0, 2000) })).filter(x => x.text.trim())
