@@ -4,7 +4,7 @@ import { get, set, getPortalUsers } from '../../../lib/db'
 import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
-import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues } from '../../../lib/quoteDocs'
+import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues, clarOf } from '../../../lib/quoteDocs'
 import { detailsFor } from '../../../lib/estimate'
 import { DEFAULT_FIELD_SCHEMA } from '../../../lib/crmFieldSchema'
 import { itemsMissingSizes } from '../../../lib/buildups'
@@ -198,6 +198,7 @@ async function handler(req, res) {
     const terms = currentTerms(qtNow)
     // the LETTER as it reads now goes with the revision - a later template change never rewrites it (1163)
     frozen.letter = { ...(frozen.letter || {}), body: letterOf(est, qtNow) }
+    frozen.clarList = clarOf(est, qtNow)   // ...and the clarifications as they read (1165)
     await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow, terms: terms ? { v: terms.v, text: terms.text } : null , priced: JSON.parse(JSON.stringify(pricedNow)), totals: JSON.parse(JSON.stringify(totals)), priceLib: priceLibOf(est, withLock(lib, est.priceLock)) })   // as issued, with its PRICES (1151/1154)
     let crm = null
     if (est.dealId) {

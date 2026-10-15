@@ -2,7 +2,7 @@ import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
 import { get, set } from '../../../lib/db'
 import { normRole } from '../../../lib/roles'
-import { emptyTemplates, checkTemplates } from '../../../lib/quoteDocs'
+import { emptyTemplates, checkTemplates, cleanClarList } from '../../../lib/quoteDocs'
 
 // QUOTE DOCUMENTS (1092) - the company's letter template, standard
 // clarifications library and Terms & Conditions.
@@ -24,6 +24,7 @@ async function handler(req, res) {
   if (b.action === 'save') {
     const next = { ...cur, letter: { body: String(b.letter?.body ?? cur.letter.body ?? ''), updatedAt: new Date().toISOString(), updatedBy: by }, library: b.library || cur.library }
     // the pricing checklist (1142)
+    if (Array.isArray(b.clarTemplate)) next.clarTemplate = cleanClarList(b.clarTemplate)   // the clarifications template (1165)
     if (Array.isArray(b.checklist)) next.checklist = b.checklist.map(x => ({ id: String(x.id), text: String(x.text || '').slice(0, 500) })).filter(x => x.text.trim())
     const errors = checkTemplates(next)
     if (errors.length) return res.status(400).json({ error: errors.join('; ') })

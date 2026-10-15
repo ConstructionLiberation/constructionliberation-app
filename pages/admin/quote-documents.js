@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AdminShell from '../../components/AdminShell'
-import { PLACEHOLDERS, CLAR_KINDS, currentTerms, checklistOf } from '../../lib/quoteDocs'
+import { PLACEHOLDERS, CLAR_KINDS, currentTerms, checklistOf, clarStarter } from '../../lib/quoteDocs'
+import { ClarListEditor } from '../../components/QuoteTabs'
 
 // ADMIN > QUOTE DOCUMENTS (1092). The company's standard quote text:
 //   - the covering LETTER, with {{placeholders}} filled from each quote
@@ -37,7 +38,7 @@ export default function QuoteDocuments() {
     setTimeout(() => { if (el) { el.focus(); el.selectionStart = el.selectionEnd = at + tag.length } }, 0)
   }
   async function save() {
-    setErr(''); try { const d = await api({ action: 'save', letter: tpl.letter, library: tpl.library, checklist: checklistOf(tpl) }); setTpl(d.templates); setDirty(false); setMsg('Saved.') } catch (e) { setErr(e.message) }
+    setErr(''); try { const d = await api({ action: 'save', letter: tpl.letter, library: tpl.library, checklist: checklistOf(tpl), ...(Array.isArray(tpl.clarTemplate) ? { clarTemplate: tpl.clarTemplate } : {}) }); setTpl(d.templates); setDirty(false); setMsg('Saved.') } catch (e) { setErr(e.message) }
   }
   async function saveTerms() {
     setErr(''); try { const d = await api({ action: 'terms', text: terms }); setTpl(d.templates); setMsg(d.unchanged ? 'The Terms & Conditions are unchanged.' : `Saved as version ${currentTerms(d.templates).v}.`) } catch (e) { setErr(e.message) }
@@ -57,24 +58,9 @@ export default function QuoteDocuments() {
             <textarea ref={letterRef} value={tpl.letter.body || ''} onChange={e => edit(t => ({ ...t, letter: { ...t.letter, body: e.target.value } }))} rows={16} placeholder={'Dear {{contactFirstName}},\n\nRe: {{project}}, {{location}}\n\nThank you for the opportunity to quote...'} style={area} />
           </Card>
 
-          <Card title="Standard clarifications" hint="Estimators tick these per quote, and can add their own.">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-              {CLAR_KINDS.map(([k, label]) => (
-                <div key={k}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                  {(tpl.library[k] || []).map((x, i) => (
-                    <div key={x.id} style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
-                      <textarea value={x.text} onChange={e => edit(t => ({ ...t, library: { ...t.library, [k]: t.library[k].map(y => y.id === x.id ? { ...y, text: e.target.value } : y) } }))} rows={2} style={{ ...area, fontSize: 12.5 }} />
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <button onClick={() => edit(t => { const l = [...t.library[k]]; if (i > 0) [l[i - 1], l[i]] = [l[i], l[i - 1]]; return { ...t, library: { ...t.library, [k]: l } } })} style={icon}>↑</button>
-                        <button onClick={() => edit(t => ({ ...t, library: { ...t.library, [k]: t.library[k].filter(y => y.id !== x.id) } }))} style={icon}>✕</button>
-                      </div>
-                    </div>
-                  ))}
-                  <button onClick={() => edit(t => ({ ...t, library: { ...t.library, [k]: [...(t.library[k] || []), { id: uid(), text: '' }] } }))} style={small}>+ {label.replace(/s$/, '')}</button>
-                </div>
-              ))}
-            </div>
+          {/* THE CLARIFICATIONS TEMPLATE (1165) - one list under headers; every quote follows it */}
+          <Card title="Clarifications template" hint={`Every quote follows this until it is changed on that quote. Sort them under headers.${Array.isArray(tpl.clarTemplate) ? '' : ' Started from your old company list - remove what should not be on every quote, then save.'}`}>
+            <ClarListEditor list={Array.isArray(tpl.clarTemplate) ? tpl.clarTemplate : clarStarter(tpl)} setList={(l) => edit(t => ({ ...t, clarTemplate: l }))} />
           </Card>
           {/* THE PRICING CHECKLIST (1142) - shown above the total on every take-off */}
           <Card title="Pricing checklist" hint={`Reminders on every take-off, above the total - estimators tick them, and can add their own per estimate.${Array.isArray(tpl.checklist) ? '' : ' This is the starter list until you save your own.'}`}>

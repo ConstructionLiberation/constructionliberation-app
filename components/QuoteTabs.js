@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
 import DocumentsPanel from './DocumentsPanel'
-import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders, letterOf, letterIsCustom, letterProblems, letterProblemText } from '../lib/quoteDocs'
+import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders, letterOf, letterIsCustom, letterProblems, letterProblemText, clarOf, clarIsCustom, clarTemplateOf, clarStarter } from '../lib/quoteDocs'
 import { BU_UNIT_LABEL, descriptionText, descriptionParts } from '../lib/buildups'
 
 // THE ESTIMATE'S QUOTE TABS (1092): Letter, Clarifications, Documents, Quote.
@@ -143,39 +143,80 @@ export function letterNodes(text, values) {
   })
 }
 
-export function ClarificationsTab({ est, change, templates }) {
-  const mine = est.clarifications || {}
-  const lib = templates?.library || {}
-  const setKind = (k, list) => change(e => ({ ...e, clarifications: { ...(e.clarifications || {}), [k]: list } }))
+export function ClarificationsTab({ est, change, templates, canEditTemplate, onSaveTemplate }) {
+  // CLARIFICATIONS (1165) - one list, sorted under headers; the company template
+  // unless changed for this quote.
+  const custom = clarIsCustom(est)
+  const company = clarTemplateOf(templates)
+  const list = clarOf(est, templates)
+  const setList = (l) => change(e => ({ ...e, clarList: l }))
+  const [tpl, setTpl] = useState(null)
+  const [err, setErr] = useState(''), [busy, setBusy] = useState(false)
+  async function saveTemplate() { setBusy(true); setErr(''); try { await onSaveTemplate(tpl); setTpl(null) } catch (e) { setErr(e.message) } setBusy(false) }
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, alignItems: 'start' }}>
-      {CLAR_KINDS.map(([k, label]) => {
-        const list = mine[k] || []
-        const ticked = new Set(list.map(x => x.id))
-        return (
-          <div key={k} style={box}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{label}</div>
-            {(lib[k] || []).length > 0 && <div style={{ fontSize: 11.5, color: '#999', marginBottom: 4 }}>From the company list - tick to include</div>}
-            {(lib[k] || []).map(x => (
-              <label key={x.id} style={{ display: 'flex', gap: 7, fontSize: 12.5, marginBottom: 6, cursor: 'pointer', alignItems: 'flex-start' }}>
-                <input type="checkbox" checked={ticked.has(x.id)} onChange={e => setKind(k, e.target.checked ? [...list, { id: x.id, text: x.text }] : list.filter(y => y.id !== x.id))} style={{ marginTop: 3 }} />
-                <span>{x.text}</span>
-              </label>
-            ))}
-            <div style={{ fontSize: 11.5, color: '#999', margin: '10px 0 4px' }}>On this quote</div>
-            {list.map((x, i) => (
-              <div key={x.id} style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
-                <textarea value={x.text} onChange={e => setKind(k, list.map(y => y.id === x.id ? { ...y, text: e.target.value } : y))} rows={2} style={{ ...area, fontSize: 12.5 }} />
-                <button onClick={() => setKind(k, list.filter(y => y.id !== x.id))} style={{ border: 'none', background: 'none', color: '#999', cursor: 'pointer' }}>✕</button>
-              </div>
-            ))}
-            {!list.length && <div style={{ fontSize: 12.5, color: '#bbb', marginBottom: 6 }}>None yet.</div>}
-            <button onClick={() => setKind(k, [...list, { id: uid(), text: '' }])} style={small}>+ Add your own</button>
+    <div style={{ ...box, maxWidth: 980 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: 15 }}>{tpl != null ? 'Clarifications template' : 'Clarifications'}</strong>
+        {tpl == null && (custom
+          ? <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '2px 8px' }}>customised for this quote</span>
+          : <span style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', background: '#f0fdfa', borderRadius: 8, padding: '2px 8px' }}>using the company template</span>)}
+        <span style={{ flex: 1 }} />
+        {tpl == null && custom && <button onClick={() => { if (window.confirm('Go back to the company template? This quote\'s own clarifications are dropped.')) change(e => ({ ...e, clarList: null, clarifications: null })) }} style={small}>Reset to template</button>}
+        {canEditTemplate && tpl == null && <button onClick={() => setTpl(clarStarter(templates).map(x => ({ ...x })))} style={{ ...small, color: '#0f766e', borderColor: '#99f6e4' }} title="Edit the clarifications every quote follows">Edit template</button>}
+      </div>
+      {tpl != null ? (
+        <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: 10 }}>
+          <div style={{ fontSize: 12.5, color: '#0f766e', marginBottom: 8 }}>Every quote using the template follows it (customised ones keep their own).{!Array.isArray(templates && templates.clarTemplate) ? ' Started from your old company list - remove what should not be on every quote.' : ''}</div>
+          <ClarListEditor list={tpl} setList={setTpl} />
+          {err && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 6 }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => { setTpl(null); setErr('') }} style={small}>Cancel</button>
+            <button onClick={saveTemplate} disabled={busy} style={{ ...small, background: '#0f766e', color: '#fff', borderColor: '#0f766e' }}>Save template</button>
           </div>
-        )
-      })}
+        </div>
+      ) : <>
+        {!company.length && !custom && <div style={{ fontSize: 12.5, color: '#92400e', marginBottom: 8 }}>No clarifications template yet{canEditTemplate ? ' - use Edit template to write it.' : ' - an admin writes it with Edit template.'} You can add this quote's here.</div>}
+        <ClarListEditor list={list} setList={setList} />
+        {!custom && company.length > 0 && <div style={{ fontSize: 11.5, color: '#888', marginTop: 6 }}>Changing these makes a copy for this quote only - the template is not changed.</div>}
+      </>}
     </div>
   )
+}
+// THE CLARIFICATIONS LIST EDITOR (1165) - headers (bold) and clarifications;
+// drag by the handle or use the arrows to sort; + Add clarification / + Add header.
+export function ClarListEditor({ list, setList }) {
+  const [drag, setDrag] = useState(null), [dropAt, setDropAt] = useState(null)
+  const nid = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+  const set = (id, patch) => setList(list.map(x => x.id === id ? { ...x, ...patch } : x))
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; const l = [...list]; [l[i], l[j]] = [l[j], l[i]]; setList(l) }
+  const drop = (targetId, after) => { if (!drag || drag === targetId) return; const moving = list.find(x => x.id === drag); const rest = list.filter(x => x.id !== drag); let k = rest.findIndex(x => x.id === targetId); if (after) k++; rest.splice(k, 0, moving); setList(rest) }
+  let n = 0
+  return <>
+    {!list.length && <div style={{ fontSize: 12.5, color: '#bbb', margin: '4px 0 8px' }}>None yet.</div>}
+    {list.map((x, i) => {
+      if (x.kind !== 'header') n++
+      return (
+        <div key={x.id} onDragOver={e => { if (!drag) return; e.preventDefault(); const b = e.currentTarget.getBoundingClientRect(); setDropAt({ id: x.id, after: e.clientY > b.top + b.height / 2 }) }}
+          onDrop={e => { e.preventDefault(); if (dropAt) drop(dropAt.id, dropAt.after); setDrag(null); setDropAt(null) }}
+          style={{ display: 'flex', gap: 6, alignItems: 'flex-start', padding: '3px 0', marginTop: x.kind === 'header' && i ? 10 : 0, opacity: drag === x.id ? 0.4 : 1,
+            boxShadow: dropAt && dropAt.id === x.id ? (dropAt.after ? 'inset 0 -3px 0 #0f766e' : 'inset 0 3px 0 #0f766e') : undefined }}>
+          <span draggable onDragStart={e => { setDrag(x.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', x.id) } catch {} }} onDragEnd={() => { setDrag(null); setDropAt(null) }}
+            title="Drag to move" style={{ cursor: 'grab', color: '#aaa', padding: '6px 2px', userSelect: 'none', fontSize: 13 }}>⋮⋮</span>
+          {x.kind === 'header'
+            ? <input value={x.text} onChange={e => set(x.id, { text: e.target.value })} placeholder="Header - e.g. Access" style={{ ...area, flex: 1, fontWeight: 700, fontSize: 13.5, background: '#f4f4f2' }} />
+            : <><span style={{ fontSize: 12.5, color: '#888', padding: '7px 0', minWidth: 22, textAlign: 'right' }}>{n}.</span>
+                <textarea value={x.text} onChange={e => set(x.id, { text: e.target.value })} rows={2} placeholder="Clarification" style={{ ...area, flex: 1, fontSize: 12.5 }} /></>}
+          <button onClick={() => move(i, -1)} title="Move up" style={{ border: 'none', background: 'none', color: '#999', cursor: 'pointer', padding: '6px 2px' }}>↑</button>
+          <button onClick={() => move(i, 1)} title="Move down" style={{ border: 'none', background: 'none', color: '#999', cursor: 'pointer', padding: '6px 2px' }}>↓</button>
+          <button onClick={() => setList(list.filter(y => y.id !== x.id))} title="Remove" style={{ border: 'none', background: 'none', color: '#999', cursor: 'pointer', padding: '6px 2px' }}>✕</button>
+        </div>
+      )
+    })}
+    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+      <button onClick={() => setList([...list, { id: nid(), kind: 'item', text: '' }])} style={small}>+ Add clarification</button>
+      <button onClick={() => setList([...list, { id: nid(), kind: 'header', text: '' }])} style={{ ...small, fontWeight: 700 }}>+ Add header</button>
+    </div>
+  </>
 }
 
 export function DocumentsTab({ est, readOnly }) {
@@ -207,7 +248,6 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
   }
   // a section header with no priced items under it before the next header is left off
   const shown = above.filter((r, i) => r.kind !== 'section' || above[i + 1]?.kind === 'item')
-  const clar = est.clarifications || {}
   const th = { textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #1a1a19', fontSize: 12 }
   const td = { padding: '5px 8px', borderBottom: '1px solid #eee', fontSize: 12.5, verticalAlign: 'top' }
   const num = { ...td, textAlign: 'right', whiteSpace: 'nowrap' }
@@ -251,12 +291,14 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
           </table>
         </>}
 
-        {CLAR_KINDS.map(([k, label]) => (clar[k] || []).filter(x => x.text.trim()).length > 0 && (
-          <div key={k} style={{ marginTop: 22 }}>
-            <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>{label}</h3>
-            <ol style={{ margin: 0, paddingLeft: 20, fontSize: 12.5, lineHeight: 1.55 }}>{clar[k].filter(x => x.text.trim()).map(x => <li key={x.id}>{x.text}</li>)}</ol>
-          </div>
-        ))}
+        {/* CLARIFICATIONS (1165) - under their headers, numbered */}
+        {(() => { const items = clarOf(est, templates).filter(x => String(x.text || '').trim()); if (!items.some(x => x.kind !== 'header')) return null; let n = 0
+          return <div style={{ marginTop: 22 }}>
+            <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Clarifications</h3>
+            {items.map(x => x.kind === 'header'
+              ? <div key={x.id} style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{x.text}</div>
+              : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{++n}.</span><span>{x.text}</span></div>)}
+          </div> })()}
 
         {terms && <div style={{ marginTop: 28, pageBreakBefore: 'always' }}>
           <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Terms &amp; Conditions <span style={{ fontWeight: 400, fontSize: 11.5, color: '#888' }}>version {terms.v}</span></h3>

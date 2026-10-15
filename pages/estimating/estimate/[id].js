@@ -428,7 +428,8 @@ export default function EstimatePage() {
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {tab === 'letter' && <LetterTab est={est} change={change} templates={quoteDocs} values={values} canEditTemplate={canEditDocs}
             onSaveTemplate={async (body) => { const d = await estApi('/api/estimating/quote-templates', { action: 'save', letter: { body } }); setQuoteDocs(d.templates) }} />}
-          {tab === 'clar' && <ClarificationsTab est={est} change={change} templates={quoteDocs} />}
+          {tab === 'clar' && <ClarificationsTab est={est} change={change} templates={quoteDocs} canEditTemplate={canEditDocs}
+            onSaveTemplate={async (list) => { const d = await estApi('/api/estimating/quote-templates', { action: 'save', clarTemplate: list }); setQuoteDocs(d.templates) }} />}
           {tab === 'docs' && <DocumentsTab est={est} readOnly={!!crm?.archived} />}
         </fieldset>
       )}

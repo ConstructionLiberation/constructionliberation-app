@@ -1,36 +1,34 @@
-PACKAGE 1164 - Letter: red to edit, nothing incomplete sent, CRM address,
-rates date per revision
+PACKAGE 1165 - Clarifications: one list under headers, from a company template
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1163.
+Six files. Complete replacements. No re-seed. No env changes. Built on 1164.
 
   lib/quoteDocs.js
   components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/admin/quote-documents.js
   pages/api/estimating/estimates.js
+  pages/api/estimating/quote-templates.js
 
-CUSTOMER ADDRESS FROM THE CRM - organisation and contact details (address, job
-role, email, phone) are now read the way the CRM shows them: the deal's own
-value first, then the ORGANISATION's / CONTACT's record. The address lives on
-the organisation, so it was missing before.
-RED = TO EDIT - the letter is now edited as it reads: red text shows RED (no
-[red] markers). On a quote, typing over red text turns it black - the flag is
-done. The placeholder buttons and MAKE RED / CLEAR RED are now only in EDIT
-TEMPLATE (Make / Clear red on their own line, solid red) - mark in the template
-whatever an estimator must edit on each quote.
-NOTHING INCOMPLETE TO THE CUSTOMER - a placeholder with nothing to fill it
-shows RED on the letter and quote ([Customer address]), and the Letter tab
-says "Cannot be sent yet: ...". Download and mark as sent, and Mark as sent,
-are REFUSED while the letter has a gap or red text - the server refuses too.
-(Issuing without sending is still allowed.)
-RATES HELD UNTIL PER REVISION - once a revision is sent, the next revision's
-"Rates held until" is cleared, so it shows red until set for the new quote.
+ONE LIST - the Clarifications tab is just "Clarifications" (no Inclusions /
+Exclusions): headers and clarifications, "+ Add clarification" and "+ Add
+header"; sort by dragging the ⋮⋮ handle or the arrows; ✕ removes.
+A TEMPLATE EVERY QUOTE FOLLOWS - the company clarifications template is
+brought into every quote, live, until it is changed on that quote ("customised
+for this quote", "Reset to template"). Admins: "Edit template" on the tab, or
+Admin > Quote Documents > Clarifications template. Issuing freezes them with
+the revision.
+THE QUOTE prints "Clarifications" with the headers and the clarifications
+numbered beneath them.
+NOTHING LOST - a quote that already had inclusions / exclusions keeps them,
+under "Inclusions" / "Exclusions" headers in the one list (customised). The
+first time the template is edited it starts from your old company list under
+those headers - remove what should not be on every quote, then save.
 
-Checked through the real route: address and job role from the organisation /
-contact records; sending refused ("Rates held until not filled in; 1 part
-still marked red"); fixed -> sent, the next draft's date cleared; marking a
-revision with red text sent refused. In a REAL browser (Chromium): the quote's
-letter has no placeholder / red buttons; template red shows red without
-markers; gaps red in the preview with the warning; typing over red turned it
-black; Edit template: Make / Clear red on their own line, Make red worked. All
-server routes compile; all 165 pages pass the browser check. Built from your
-deployed packages (1022-1163, verified against their zips).
+Checked: an old quote's lists shown under their headers; the starter from the
+old company list; through the real routes - the template saved; Rev A kept its
+2 lines after the template gained a third, the draft followed. In a REAL
+browser (Chromium): one list from the template; + Add header "Programme" and a
+clarification dragged under it -> customised; the quote prints "Access 1.
+Scaffold... Programme 2. Normal working hours..."; Reset to template -> back.
+All server routes compile; all 165 pages pass the browser check. Built from
+your deployed packages (1022-1164, verified against their zips).
