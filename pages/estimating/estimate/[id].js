@@ -80,8 +80,19 @@ export default function EstimatePage() {
   const [linking, setLinking] = useState(false)
   const [who, setWho] = useState({ canDelete: false, admins: [] })
   const [tab, setTab] = useState('takeoff')
+  const [warnList, setWarnList] = useState(null)   // 'cost' | 'qty' - the list behind a red warning (1146)
   const [showChecklist, setShowChecklist] = useState(false)   // re-open a completed checklist (1142)
   const [ckNew, setCkNew] = useState('')
+  const [canEditDocs, setCanEditDocs] = useState(false)   // an admin - may edit the company checklist here (1146)
+  const [ckEdit, setCkEdit] = useState(null)               // the company list being edited
+  const [ckErr, setCkErr] = useState('')
+  async function saveCompanyChecklist() {
+    setCkErr('')
+    try {
+      const d = await estApi('/api/estimating/quote-templates', { action: 'save', checklist: ckEdit.filter(x => x.text.trim()) })
+      setQuoteDocs(d.templates); setCkEdit(null)
+    } catch (e) { setCkErr(e.message) }
+  }
   const [quoteDocs, setQuoteDocs] = useState(null)   // the company letter, clarifications library, T&Cs
   const [lastRev, setLastRev] = useState(null)    // the last ISSUED revision's estimate - for 'changes since'
   const [issueMsg, setIssueMsg] = useState('')
@@ -91,7 +102,7 @@ export default function EstimatePage() {
     if (!id) return
     Promise.all([estApi(`${API}?id=${id}`), estApi('/api/estimating/price-list'), estApi('/api/estimating/labour-rates'), estApi('/api/estimating/build-ups'), estApi('/api/estimating/quote-templates').catch(() => ({ templates: null }))])
       .then(([e, p, l, b, q]) => {
-        setQuoteDocs(q.templates)
+        setQuoteDocs(q.templates); setCanEditDocs(!!q.canEdit)
         // Items cleaned on opening (1102): notes and old comment lines removed - saved
         // with the next change.
         setEst({ ...e.estimate, rows: (e.estimate.rows || []).map(r => r.kind === 'item' && r.buildup && needsNormalizing(r.buildup) ? { ...r, buildup: normalizeTemplate(r.buildup) } : r) }); setBase(e.estimate.updatedAt); setCrm(e.crm || null); setWho({ canDelete: !!e.canDelete, admins: e.admins || [] })
@@ -292,10 +303,22 @@ export default function EstimatePage() {
         </div>
       )}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #e8e7e3', marginBottom: 14 }}>
-        {[['takeoff', 'Take-off'], ['materials', 'Materials'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
+        {[['takeoff', 'Take-off'], ['budgets', 'Budgets'], ['materials', 'Materials'], ['letter', 'Letter'], ['clar', 'Clarifications'], ['docs', 'Documents'], ['quote', 'Quote']].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{ border: 'none', borderBottom: `2px solid ${tab === k ? '#0f766e' : 'transparent'}`, background: 'none', padding: '8px 14px', fontSize: 13.5, fontWeight: tab === k ? 700 : 500, color: tab === k ? '#0f766e' : '#666', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{label}</button>
         ))}
       </div>
+      {/* BUDGETS (1146) - the cost breakdown and material budgets, on their own tab */}
+      {tab === 'budgets' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 12, marginTop: 14, alignItems: 'start' }}>
+        <div style={panel}>
+          <strong style={{ fontSize: 14 }}>Cost breakdown</strong> <span style={{ fontSize: 11.5, color: '#999' }}>before profit and MCD</span>
+          <Breakdown rows={bud.byCategory} money={money} />
+        </div>
+        <div style={panel}>
+          <BudgetPanel bud={bud} est={est} change={change} money={money} />
+        </div>
+        </div>
+      )}
       {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived} />}
       {tab === 'quote' && <QuotePreview est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView}
         actions={<>
@@ -469,7 +492,7 @@ export default function EstimatePage() {
                 ) : (() => {
                   const p = priced[r.id] || {}
                   return (
-                    <tr key={r.id} style={rowLook(r, r.rateOnly ? '#fafaf7' : undefined)} {...dropProps(r)}>
+                    <tr key={r.id} data-row={r.id} style={rowLook(r, r.rateOnly ? '#fafaf7' : undefined)} {...dropProps(r)}>
                       {lead(r, i)}
                       <td style={{ ...td, minWidth: 260 }}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -501,7 +524,7 @@ export default function EstimatePage() {
                         )}
                         </div>
                       </td>
-                      <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
+                      <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input data-qty="1" value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
                       <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
                       <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{m2(p.rate)}</td>
                       <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>Rate only</span>
@@ -566,9 +589,30 @@ export default function EstimatePage() {
               <strong style={{ fontSize: 14 }}>Pricing checklist</strong>
               <span style={{ fontSize: 12, color: '#92400e' }}>{items.filter(x => ticked[x.id]).length} of {items.length} ticked</span>
               <span style={{ flex: 1 }} />
+              {canEditDocs && !ckEdit && <button onClick={() => setCkEdit(checklistOf(quoteDocs).map(x => ({ ...x })))} style={smallBtn} title="Change the reminders every estimate shows (admins)">Edit company list</button>}
               <button onClick={() => setCk(c => ({ ...c, ticked: Object.fromEntries(items.map(x => [x.id, true])) }))} disabled={!!est.archived} style={smallBtn}>Tick all</button>
               {done && <button onClick={() => setShowChecklist(false)} style={smallBtn}>Hide</button>}
             </div>
+            {/* EDITING THE COMPANY LIST (1146) - admins; the same list as Admin > Quote Documents */}
+            {ckEdit && (
+              <div style={{ background: '#fff', border: '1px solid #fcd34d', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                <div style={{ fontSize: 12, color: '#92400e', marginBottom: 6 }}>The company list - every estimate shows these. (Reminders for this estimate only are added below.)</div>
+                {ckEdit.map((x, k) => (
+                  <div key={x.id} style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                    <input value={x.text} onChange={e => setCkEdit(l => l.map(y => y.id === x.id ? { ...y, text: e.target.value } : y))} style={{ ...inp, padding: '5px 8px', fontSize: 13 }} />
+                    <button onClick={() => setCkEdit(l => { const n = [...l]; if (k > 0) [n[k - 1], n[k]] = [n[k], n[k - 1]]; return n })} style={iconBtn} title="Move up">↑</button>
+                    <button onClick={() => setCkEdit(l => l.filter(y => y.id !== x.id))} style={iconBtn} title="Remove">✕</button>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                  <button onClick={() => setCkEdit(l => [...l, { id: `c${Date.now().toString(36)}`, text: '' }])} style={smallBtn}>+ Reminder</button>
+                  <span style={{ flex: 1 }} />
+                  {ckErr && <span style={{ fontSize: 12, color: '#b42318' }}>{ckErr}</span>}
+                  <button onClick={() => { setCkEdit(null); setCkErr('') }} style={smallBtn}>Cancel</button>
+                  <button onClick={saveCompanyChecklist} style={{ ...smallBtn, background: '#0f766e', color: '#fff', borderColor: '#0f766e' }}>Save company list</button>
+                </div>
+              </div>
+            )}
             <div style={{ columns: '2 360px', columnGap: 24 }}>
               {items.map(x => (
                 <label key={x.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, padding: '3px 0', breakInside: 'avoid', cursor: 'pointer', color: ticked[x.id] ? '#888' : '#1a1a19', textDecoration: ticked[x.id] ? 'line-through' : 'none' }}>
@@ -591,9 +635,35 @@ export default function EstimatePage() {
         <span>Labour {money(totals.labour || 0, { dp: 2 })}</span>
         <span>Profit &amp; MCD {money(totals.profitAndMcd || 0, { dp: 2 })}</span>
         {totals.belowLine > 0 && <span style={{ color: '#6d28d9' }}>{totals.belowLine} item{totals.belowLine === 1 ? '' : 's'} below the line{totals.optional ? ` (optional ${money(totals.optional, { dp: 2 })})` : ''} - not in the total</span>}
-        {uncosted.length > 0 && <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px' }} title={uncostedText(uncosted)}>⚠ {uncosted.length} item{uncosted.length === 1 ? '' : 's'} not fully costed - the quote cannot be issued</span>}
-        {totals.noQty > 0 && <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px' }}>⚠ {totals.noQty} item{totals.noQty === 1 ? '' : 's'} without a quantity - not in the total</span>}
+        {uncosted.length > 0 && <button onClick={() => setWarnList(w => w === 'cost' ? null : 'cost')} style={{ ...warnBtn }} title="Click to see which items and lines">⚠ {uncosted.length} item{uncosted.length === 1 ? '' : 's'} not fully costed - the quote cannot be issued ▾</button>}
+        {totals.noQty > 0 && <button onClick={() => setWarnList(w => w === 'qty' ? null : 'qty')} style={{ ...warnBtn }} title="Click to see which items">⚠ {totals.noQty} item{totals.noQty === 1 ? '' : 's'} without a quantity - not in the total ▾</button>}
       </div>
+      {/* WHICH ITEMS (1146) - opened from the red warnings above */}
+      {warnList && (() => {
+        const noQtyItems = (est.rows || []).filter(r => r.kind === 'item' && !r.rateOnly && priced[r.id] && !priced[r.id].belowLine && priced[r.id].qty == null)
+        const list = warnList === 'cost' ? uncosted.map(x => ({ id: x.id, name: x.description, detail: [x.lines.length ? `${x.lines.length} line${x.lines.length === 1 ? '' : 's'} without a cost: ${x.lines.join(', ')}` : '', x.zeroRate ? 'rate £0' : ''].filter(Boolean).join(' - ') }))
+          : noQtyItems.map(r => ({ id: r.id, name: r.description, detail: 'no quantity - type one in its Qty box' }))
+        const go = (id) => {
+          const tr = document.querySelector(`tr[data-row="${id}"]`); if (tr) tr.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          if (warnList === 'cost') setPopout(id)
+          else setTimeout(() => { const q = document.querySelector(`tr[data-row="${id}"] input[data-qty]`); if (q) q.focus() }, 350)
+        }
+        return (
+          <div style={{ marginTop: 8, background: '#fff', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+              <strong style={{ fontSize: 13, color: '#b91c1c' }}>{warnList === 'cost' ? 'Not fully costed' : 'Without a quantity'}</strong>
+              <span style={{ fontSize: 11.5, color: '#888', marginLeft: 8 }}>{warnList === 'cost' ? 'click an item to open its build-up' : 'click an item to go to its quantity'}</span>
+              <button onClick={() => setWarnList(null)} style={{ ...iconBtn, marginLeft: 'auto' }} title="Close">✕</button>
+            </div>
+            {!list.length ? <div style={{ fontSize: 12.5, color: '#15803d' }}>✓ None now.</div> : list.map(x => (
+              <button key={x.id} onClick={() => go(x.id)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderTop: '1px solid #fdecec', background: 'none', padding: '6px 2px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1a19' }}>{x.name}</span>
+                <span style={{ fontSize: 12, color: '#b91c1c', marginLeft: 8 }}>{x.detail}</span>
+              </button>
+            ))}
+          </div>
+        )
+      })()}
 
       {issueMsg && <div style={{ marginTop: 10, fontSize: 13, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, padding: '8px 12px' }}>{issueMsg}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14, alignItems: 'start' }}>
@@ -620,13 +690,6 @@ export default function EstimatePage() {
           <strong style={{ fontSize: 14 }}>Notes</strong> <span style={{ fontSize: 11.5, color: '#999' }}>general notes on this estimate - not on the quote</span>
           <textarea value={est.notes || ''} onChange={e => change(x => ({ ...x, notes: e.target.value }))} disabled={!!est.archived} placeholder="Anything worth knowing about this estimate…" rows={6}
             style={{ ...inp, marginTop: 8, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
-        </div>
-        <div style={panel}>
-          <strong style={{ fontSize: 14 }}>Cost breakdown</strong> <span style={{ fontSize: 11.5, color: '#999' }}>before profit and MCD</span>
-          <Breakdown rows={bud.byCategory} money={money} />
-        </div>
-        <div style={panel}>
-          <BudgetPanel bud={bud} est={est} change={change} money={money} />
         </div>
       </div>
       <RateAttachments est={est} />
@@ -934,3 +997,5 @@ function RateAttachments({ est }) {
     </div>
   )
 }
+
+const warnBtn = { color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit' }

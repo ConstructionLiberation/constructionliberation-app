@@ -1,22 +1,28 @@
-PACKAGE 1145 - Attachments on the rates, listed on the take-off
+PACKAGE 1146 - Budgets tab; clickable warnings; edit the checklist on the take-off
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1144.
+One file. Complete replacement. No re-seed. No env changes. Built on 1145.
 
   pages/estimating/estimate/[id].js      (folder literally named [id])
 
-At the foot of the take-off, "Attachments on the rates" lists, item by item in
-take-off order:
-  - documents on the RATE BUILD-UP the item came from (data sheets, warranty
-    conditions... added on the Build-ups page) - tagged "on the build-up"
-  - documents on the ITEM itself (added in its pop-out) - tagged "this item"
-Each opens with View, through the same access-checked private link as
-everywhere else. Documents on the whole estimate (not on a rate) stay on the
-Documents tab.
+BUDGETS TAB - right of Take-off: the Cost breakdown and Material budgets have
+moved there. Revisions and Notes stay on the take-off.
+CLICKABLE WARNINGS - in the totals bar:
+  "N items not fully costed" -> a list of the items, each naming its lines
+    without a cost; click an item -> its build-up opens
+  "N items without a quantity" -> a list of the items; click one -> the page
+    goes to it with the cursor in its Qty box
+EDIT THE CHECKLIST HERE - admins see "Edit company list" on the take-off's
+pricing checklist: change, reorder, remove or add reminders and "Save company
+list" - every estimate shows the change (the same list as Admin > Quote
+Documents). Everyone can still add reminders for one estimate only.
 
-Checked in a REAL browser (Chromium): Mech fixed single ply listed its build-
-up's "Alkorplan F datasheet.pdf" and "Renolit warranty conditions.pdf"; Primer
-to upstands its own "Site photo - upstands.jpg"; each View link pointed at the
-documents route (build-up / estimate, with the file's id); a whole-estimate
-document was not listed. All 165 pages pass the browser check. Built from your
-deployed packages (1022-1144, verified against their zips); the file checked
-identical to the tested version before zipping.
+Checked in a REAL browser (Chromium): tabs Take-off | Budgets | Materials |
+Letter | Clarifications | Documents | Quote; Cost breakdown and Material
+budgets only on Budgets, Revisions and Notes on the take-off; "not fully
+costed" listed 9 items with their lines, clicking one opened its build-up;
+"without a quantity" listed the 8 Edge trims, clicking Edge trim 12 put the
+cursor in Edge trim 12's Qty; Edit company list -> a new reminder saved, the
+checklist showing 13 with it. The take-off part 1 test passes in full again.
+All 165 pages pass the browser check. Built from your deployed packages
+(1022-1145, verified against their zips); the file checked identical to the
+tested version before zipping.
