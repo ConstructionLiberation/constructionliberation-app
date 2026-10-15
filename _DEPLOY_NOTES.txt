@@ -1,27 +1,24 @@
-PACKAGE 1143 - Material budgets: the balance, by label, and combined groups
+PACKAGE 1144 - Build-up lines: a taller, resizable box; the item list never clipped
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1142.
+One file. Complete replacement. No re-seed. No env changes. Built on 1143.
 
-  lib/estimate.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
+  components/BuildupEditor.js     (the take-off pop-out AND the Build-ups page)
 
-"Budgets by supplier" is now MATERIAL BUDGETS, covering EVERY material line
-(above the line, with a quantity):
-  BY SUPPLIER - each supplier, plus "No supplier (own items)" for own items
-    and products with no supplier, so it adds up to the materials in full
-  BY LABEL - the same money by line label (Insulation, VCL, Membrane...),
-    merged across items whatever the capitals
-  COMBINE - in By label, tick labels -> "Combine N ticked…" -> name it (e.g.
-    "XXXX Supplier"): one row, its labels listed underneath, with rename and
-    split. Groups save with the estimate.
+Why the list was cut off: the lines sit in a scrolling box (so wide build-ups
+scroll sideways), and a browser clips anything inside it - on a new unique item
+with one line the box was one line high, so the item search showed a sliver.
+  - The lines box is TALLER BY DEFAULT (about 230px, room even for one line)
+    and has a DRAG CORNER (bottom right) to pull it taller.
+  - The item SEARCH LIST now floats on the screen, placed from the search box,
+    so nothing can clip it: below the box (up to 320px), or upwards when near
+    the bottom of the screen; it follows the box when you scroll.
 
-Checked: on two items, by supplier Renolit 75 + "No supplier (own items)" 245
-= 320; by label Membrane 75, Insulation 200 ("Insulation" and "insulation"
-merged), VCL 30, Glue 15 = 320; both equal the 320 of materials; Insulation +
-VCL combined "XXXX Supplier" 230. In a REAL browser (Chromium): by supplier
-Valro, Renolit, Sika-Trocal and "No supplier (own items)" 600.00 = 2,646.02
-(the materials figure); by label the same total; Solvent + White (LPVC)
-combined "XXXX SUPPLIER" 600.00 with its labels, total unchanged; renamed;
-saved with the estimate; split -> back as it was. All 165 pages pass the
-browser check. Built from your deployed packages (1022-1142, verified against
-their zips).
+Checked in a REAL browser (Chromium), on an estimate: a new unique item's
+lines box 238px with a drag corner; with "any" ticked, "membrane" -> the list
+showed in full (23 matches, 322px, on top and on screen, nothing clipping
+it); picking "Renolit Alkorplan F 1.5mm..." filled the item; dragging the
+corner took the box from 238 to 391px. On the Build-ups page the earlier tests
+pass again (own items typed, products in descriptions, copying lines), and a
+whole line still fits at 1366px and 1600px. All 165 pages pass the browser
+check. Built from your deployed packages (1022-1143, verified against their
+zips); the file checked identical to the tested version before zipping.

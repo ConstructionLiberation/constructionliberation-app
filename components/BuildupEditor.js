@@ -136,7 +136,8 @@ export default function BuildupEditor({ varLibrary, value, onChange, lib, money,
             {lmsg && lsel.size > 0 && <span style={{ flexBasis: '100%', fontSize: 11.5, opacity: 0.9 }}>{lmsg}</span>}
           </div>
         )}
-        <div style={{ overflowX: 'auto' }}>
+        {/* Taller by default, and resizable from the bottom-right corner (1144) */}
+        <div style={{ overflow: 'auto', minHeight: 230, resize: 'vertical', paddingBottom: 6, border: '1px solid #f0efec', borderRadius: 8 }} title="Drag the bottom-right corner to make this taller">
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
             <thead><tr>{['', 'Type', 'Label', 'Item', 'Apply size', 'Qty', 'Rate', 'Waste %', 'Incr %', '= Line rate', 'Cost cat.', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 9 ? 'right' : 'left', ...(i === 9 ? { color: '#1a1a19' } : {}) }} title={i === 9 ? "Rate x Qty (x waste / increase): this line's part of the build-up's rate" : ''}>{h}</th>)}</tr></thead>
             <tbody>
@@ -308,6 +309,23 @@ const smallBtn = { fontSize: 12, padding: '5px 10px', border: '1px solid #d4d4d0
 function ItemSearch({ kind, value, choices, label, findText, onPick, red, ownName, onOwn }) {
   const [q, setQ] = useState(null)        // null = not searching: show the chosen item
   const [open, setOpen] = useState(false)
+  // THE LIST FLOATS ON THE SCREEN (1144), placed from the search box - inside the
+  // lines' scrolling box it was clipped (a new unique item showed one row of it).
+  // Opens upwards when there is not room below; follows the box on scroll.
+  const [pos, setPos] = useState(null)
+  useEffect(() => {
+    if (!open) return
+    const place = () => {
+      const el = inputRef.current; if (!el) return
+      const r = el.getBoundingClientRect(), below = window.innerHeight - r.bottom - 12, above = r.top - 12
+      const up = below < 200 && above > below
+      setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - Math.max(r.width, 280) - 8)), width: Math.max(r.width, 280),
+        ...(up ? { bottom: window.innerHeight - r.top + 2, maxH: Math.min(320, above) } : { top: r.bottom + 2, maxH: Math.min(320, Math.max(140, below)) }) })
+    }
+    place()
+    window.addEventListener('scroll', place, true); window.addEventListener('resize', place)
+    return () => { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place) }
+  }, [open])
   const box = useRef(null)
   // Typed a name and did not pick a product? That name is the OWN ITEM (1102).
   const qRef = useRef(null); qRef.current = q
@@ -333,7 +351,7 @@ function ItemSearch({ kind, value, choices, label, findText, onPick, red, ownNam
         onFocus={() => { setOpen(true); setQ(isOwn ? (ownName || '') : '') }} onChange={e => { const v = e.target.value; setQ(v); setOpen(true); if (isOwn && onOwn) onOwn(v) }}
         style={{ ...cellInp, width: '100%', background: red ? RED : undefined }} />
       {open && (
-        <div style={{ position: 'absolute', zIndex: 30, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', maxHeight: 260, overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', zIndex: 1200, left: pos?.left ?? 0, width: pos?.width ?? 280, ...(pos?.bottom != null ? { bottom: pos.bottom } : { top: pos?.top ?? 0 }), visibility: pos ? 'visible' : 'hidden', background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.16)', maxHeight: pos?.maxH ?? 320, overflowY: 'auto' }}>
           <div onMouseDown={(e) => { e.preventDefault(); const t = (q || '').trim(); onPick(''); if (t && onOwn) onOwn(t); setOpen(false); setQ(null) }} style={{ padding: '6px 9px', fontSize: 12, color: '#555', cursor: 'pointer', borderBottom: '1px solid #f0efec', background: !value ? '#f0fdfa' : undefined }}>{(q || '').trim() ? <>Own item: <strong>{q.trim()}</strong> (Enter) - then type its rate</> : 'Own item (no product) - type its name here, then its rate'}</div>
           {matches.map(ref => (
             <div key={ref} onMouseDown={(e) => { e.preventDefault(); pick(ref) }} style={{ padding: '6px 9px', fontSize: 12.5, cursor: 'pointer', background: ref === value ? '#f0fdfa' : undefined, borderBottom: '1px solid #f8f7f5' }}>
