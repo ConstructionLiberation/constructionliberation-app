@@ -1,31 +1,33 @@
-PACKAGE 1152 - The exact changes since a revision, under triangles
+PACKAGE 1153 - Materials: allocate lines not from the price list
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1151.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1152.
 
-  lib/estimate.js
+  lib/materials.js, lib/estimate.js
+  components/MaterialsTab.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
 
-"Changes since Rev X" (Take-off > Revisions) now opens with a ▸ TRIANGLE
-("- N changes"). Inside, each item's summary line has its own ▸ opening the
-EXACT changes:
-  - the item: name, unit, quantity, rate only, item profit, rate, total, note,
-    moved above / below the line
-  - its DESCRIPTION as it reads ("20 year warranty" -> "25 year warranty")
-  - its build-up LINES: added, removed, and per line - product, own item, rate,
-    amount, qty, waste, increase, apply size, cost category and the LINE COST
-  - its SIZES and VARIABLES
-Also listed: section headers added / removed / renamed, and the estimate's
-notes (before and after). Each issued revision's history in the list opens the
-same way - for revisions issued from now on (earlier ones kept only the
-summary lines).
+On the MATERIALS tab, lines not from the price list (own items, typed rates,
+lump sums) are now a table - "Not from the price list - not allocated" - with
+an ALLOCATE TO column:
+  - suppliers on this estimate
+  - suppliers in the price list
+  - categories already made
+  - + Add new... (e.g. Insulation, Mansafe, Sub-Contractor)
+An allocated line moves to that supplier's card ("Lines allocated to Renolit",
+its cost added to the card's total) or a card for the category; it keeps its
+Allocate box there, to move it or set it back to not allocated. "Materials to
+order" includes allocated lines. Allocations save with the estimate.
+SUMMARY > Material budgets follows: an allocated own item counts under its
+supplier or category, not "No supplier (own items)" (which is hidden when it
+comes to nothing).
 
-Checked: a realistic before / after - qty 100 -> 150; Membrane waste 5% ->
-10% with its line cost; Lab rate 5.00 -> 6.00; Primer added; Tape removed;
-Girth 0.45 -> 0.6; Warranty 20 -> 25 year with the description wording; a
-note; the item moved below the line; a section renamed; the notes - all
-listed exactly. In a REAL browser (Chromium): "Changes since Rev A - 2
-changes" closed; opened -> the item line and the total; the item opened ->
-Quantity 1000 -> 1250, Rate, Total, the description, "Line Lab: rate list ->
-12.00, line cost 11.00 -> 12.00", Warranty 20 -> 25 year. All server routes
-compile; all 165 pages pass the browser check. Built from your deployed
-packages (1022-1151, verified against their zips).
+Checked: Solvent allocated to Renolit and White (LPVC) to a new "Sub-
+Contractor" - Renolit's card 620.00 + Solvent 300.00; a Sub-Contractor card
+300.00; one left unallocated; the materials total 2,111.68 -> 2,711.68;
+budgets Renolit +300, Sub-Contractor 300. In a REAL browser (Chromium): the
+choices (3 on this estimate, 12 in the price list, + Add new...); Solvent ->
+Renolit (620.00 -> 920.00); White -> + Add new "Sub-Contractor" -> its own
+card 300.00; total 2,711.68; saved; the Summary's budgets Renolit 895.20,
+Sub-Contractor 300.00, total unchanged 2,646.02. All 165 pages pass the
+browser check. Built from your deployed packages (1022-1152, verified against
+their zips).

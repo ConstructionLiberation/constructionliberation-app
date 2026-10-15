@@ -969,7 +969,7 @@ function BudgetPanel({ bud, est, change, money }) {
   const [renaming, setRenaming] = useState(null)   // { id, name }
   const groups = est.budgetGroups || []
   const rows = view === 'label' ? labelBudget(bud.byLabel || {}, groups)
-    : Object.entries(bud.bySupplier || {}).map(([k, v]) => ({ key: k, name: k, amount: v, labels: [], group: null })).sort((a, b) => (a.name === NO_SUPPLIER) - (b.name === NO_SUPPLIER) || b.amount - a.amount)
+    : Object.entries(bud.bySupplier || {}).filter(([k, v]) => !(k === NO_SUPPLIER && Math.abs(v) < 0.005)).map(([k, v]) => ({ key: k, name: k, amount: v, labels: [], group: null })).sort((a, b) => (a.name === NO_SUPPLIER) - (b.name === NO_SUPPLIER) || b.amount - a.amount)
   const total = rows.reduce((t, r) => t + r.amount, 0)
   const keysOf = (r) => r.group ? (groups.find(g => g.id === r.group)?.labels || []) : [r.key]
   const combine = (name) => {
