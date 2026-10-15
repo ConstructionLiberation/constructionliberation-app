@@ -1,36 +1,36 @@
-PACKAGE 1163 - The letter: a company template every quote follows; Edit
-template; red text
+PACKAGE 1164 - Letter: red to edit, nothing incomplete sent, CRM address,
+rates date per revision
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1162.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1163.
 
   lib/quoteDocs.js
   components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
   pages/api/estimating/estimates.js
 
-A TEMPLATE EVERY QUOTE FOLLOWS: a quote's letter IS the company template -
-live - unless it is changed for that quote. The Letter tab says "using the
-company template" or "customised for this quote"; typing makes a copy for this
-quote only (the template is not changed); "Reset to template" goes back.
-Change the template and every quote using it follows. ISSUING freezes the
-letter as it reads with the revision - a later template change never rewrites
-a quote that has gone out.
-EDIT TEMPLATE - admins have "Edit template" on the Letter tab: edit the company
-letter there, with the placeholder buttons, and Save template. (Admin > Quote
-Documents edits the same template.)
-RED TEXT - select words in the letter and "Make red": they show red on the
-letter and on the printed quote ([red]...[/red] in the text box). "Clear red"
-- click inside red text, or select it - removes it.
+CUSTOMER ADDRESS FROM THE CRM - organisation and contact details (address, job
+role, email, phone) are now read the way the CRM shows them: the deal's own
+value first, then the ORGANISATION's / CONTACT's record. The address lives on
+the organisation, so it was missing before.
+RED = TO EDIT - the letter is now edited as it reads: red text shows RED (no
+[red] markers). On a quote, typing over red text turns it black - the flag is
+done. The placeholder buttons and MAKE RED / CLEAR RED are now only in EDIT
+TEMPLATE (Make / Clear red on their own line, solid red) - mark in the template
+whatever an estimator must edit on each quote.
+NOTHING INCOMPLETE TO THE CUSTOMER - a placeholder with nothing to fill it
+shows RED on the letter and quote ([Customer address]), and the Letter tab
+says "Cannot be sent yet: ...". Download and mark as sent, and Mark as sent,
+are REFUSED while the letter has a gap or red text - the server refuses too.
+(Issuing without sending is still allowed.)
+RATES HELD UNTIL PER REVISION - once a revision is sent, the next revision's
+"Rates held until" is cleared, so it shows red until set for the new quote.
 
-NOTE: quotes whose letter was copied in before this change (e.g. TEST PROJECT)
-count as customised - use "Reset to template" on them to follow the template.
-
-Checked through the real route: a draft with no letter of its own issued as
-Rev A, then the template changed - Rev A kept the letter it was issued with
-(version ONE, with its red text); the draft follows version TWO. In a REAL
-browser (Chromium): "using the company template"; Edit template -> Save -> this
-quote reads the new template at once; "thank you" selected -> Make red -> red
-in the preview, the quote now "customised"; the Quote tab prints it red with
-no markers; Reset to template -> back. All server routes compile; all 165
-pages pass the browser check. Built from your deployed packages (1022-1162,
-verified against their zips).
+Checked through the real route: address and job role from the organisation /
+contact records; sending refused ("Rates held until not filled in; 1 part
+still marked red"); fixed -> sent, the next draft's date cleared; marking a
+revision with red text sent refused. In a REAL browser (Chromium): the quote's
+letter has no placeholder / red buttons; template red shows red without
+markers; gaps red in the preview with the warning; typing over red turned it
+black; Edit template: Make / Clear red on their own line, Make red worked. All
+server routes compile; all 165 pages pass the browser check. Built from your
+deployed packages (1022-1163, verified against their zips).

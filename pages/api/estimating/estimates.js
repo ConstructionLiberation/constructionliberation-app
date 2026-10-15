@@ -4,7 +4,9 @@ import { get, set, getPortalUsers } from '../../../lib/db'
 import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
-import { currentTerms, letterOf } from '../../../lib/quoteDocs'
+import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues } from '../../../lib/quoteDocs'
+import { detailsFor } from '../../../lib/estimate'
+import { DEFAULT_FIELD_SCHEMA } from '../../../lib/crmFieldSchema'
 import { itemsMissingSizes } from '../../../lib/buildups'
 import { uncostedItems, uncostedText, priceLibOf, withLock } from '../../../lib/estimate'
 // WORKING COPIES (1154): an estimate has ONE active working copy (the draft, or a
@@ -30,13 +32,26 @@ import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
 
 // THE DEAL, LIVE (1090): followed through any CRM merge to the deal it became.
 // -> { dealId, title, organisation, details } or { missing: true }
+// THE CRM's OWN RULE for organisation and contact details (1164): the deal's value
+// first, then the ORGANISATION's / CONTACT's master record, matched by name - as
+// the CRM page shows them. (The customer address lives on the organisation.)
+const GROUP_OF = Object.fromEntries(DEFAULT_FIELD_SCHEMA.filter(f => f.group === 'organization' || f.group === 'person').map(f => [f.key, f.group]))
+const blank = (v) => v == null || String(v).trim() === '' || String(v).trim() === '-'
 async function liveDeals() {
-  const [deals, merged] = await Promise.all([get('crm:deals'), get('crm:merged')])
+  const [deals, merged, orgs, contacts] = await Promise.all([get('crm:deals'), get('crm:merged'), get('crm:orgs'), get('crm:contacts')])
   const byId = new Map((Array.isArray(deals) ? deals : []).map(d => [String(d.id), d]))
+  const byName = (list) => new Map((Array.isArray(list) ? list : []).map(x => [String(x.name || '').trim().toLowerCase(), x]))
+  const orgOf = byName(orgs), contactOf = byName(contacts)
   return (dealId) => {
     if (!dealId) return null
-    const d = byId.get(resolveMerged(merged || {}, dealId))
-    if (!d) return { missing: true }
+    const d0 = byId.get(resolveMerged(merged || {}, dealId))
+    if (!d0) return { missing: true }
+    const f0 = d0.fields || {}
+    const org = orgOf.get(String(f0.organization || '').trim().toLowerCase()) || {}
+    const person = contactOf.get(String(f0.contact_person || '').trim().toLowerCase()) || {}
+    const filled = { ...f0 }
+    for (const [k, g] of Object.entries(GROUP_OF)) if (blank(filled[k])) { const v = (g === 'organization' ? org : person)[k]; if (!blank(v)) filled[k] = v }
+    const d = { ...d0, fields: filled }
     const f = d.fields || {}
     // ARCHIVED (1091): the deal was LOST in the CRM. Read live, so a deal
     // reopened in the CRM brings its estimate back by itself.
@@ -174,6 +189,12 @@ async function handler(req, res) {
     const crmNow = (await liveDeals())(est.dealId)
     // ...and the Terms & Conditions version it went out with (1092).
     const qtNow = await get('quote:templates')
+    // SENT TO THE CUSTOMER (1164) - not with a gap in the letter or red text still to edit
+    if (b.sent) {
+      const vals = placeholderValues({ est, details: detailsFor(est, crmNow), total, companyName: 'x', money: (v) => String(v), dateText: issuedAt })
+      const p = letterProblems(letterOf(est, qtNow), vals)
+      if (p.missing.length || p.red) return res.status(400).json({ error: `The letter cannot go to the customer yet: ${letterProblemText(p)}. Fix it on the Letter tab, then send.` })
+    }
     const terms = currentTerms(qtNow)
     // the LETTER as it reads now goes with the revision - a later template change never rewrites it (1163)
     frozen.letter = { ...(frozen.letter || {}), body: letterOf(est, qtNow) }
@@ -209,6 +230,8 @@ async function handler(req, res) {
       // a new draft - following today's price list again (no lock)
       const { reopened: _ro, priceLock: _pl, ...rest } = est
       next = { ...rest, revision: nextRevision(rev), revisions: revList, parked: [], priceLock: null, updatedAt: issuedAt, updatedBy: by }
+      // the next revision needs its own rates-held date once this one is SENT (1164)
+      if (b.sent) next.ratesHeldUntil = null
     }
     await saveEstimate(next, await summaryOf(next, lib))
     return res.status(200).json({ ok: true, estimate: next, issued: rev, total, crm, changes, replaced: !!reo, setAside })
@@ -221,8 +244,19 @@ async function handler(req, res) {
     if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
     const k = (est.revisions || []).findIndex(r => r.revision === b.revision)
     if (k < 0) return res.status(404).json({ error: `Rev ${b.revision} was not found` })
+    // marking SENT (1164): the letter it was issued with must be complete
+    if (b.sent) {
+      const snap = await loadRevision(est.id, b.revision)
+      if (snap && snap.estimate) {
+        const vals = placeholderValues({ est: snap.estimate, details: detailsFor(snap.estimate, snap.crm), total: snap.total, companyName: 'x', money: (v) => String(v), dateText: snap.issuedAt })
+        const p = letterProblems(letterOf(snap.estimate, await get('quote:templates')), vals)
+        if (p.missing.length || p.red) return res.status(400).json({ error: `Rev ${b.revision}'s letter cannot go to the customer: ${letterProblemText(p)}. Edit Rev ${b.revision} (or issue a new revision) to fix it.` })
+      }
+    }
     const revisions = est.revisions.map((r, i) => i !== k ? r : (b.sent ? { ...r, sent: { at: new Date().toISOString(), by } } : (({ sent, ...rest }) => rest)(r)))
     const next = { ...est, revisions, updatedAt: new Date().toISOString(), updatedBy: by }
+    // the latest revision sent -> the draft after it needs its own rates-held date (1164)
+    if (b.sent && k === est.revisions.length - 1 && !est.reopened) next.ratesHeldUntil = null
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next })
   }

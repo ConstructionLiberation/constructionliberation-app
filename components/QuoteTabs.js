@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
 import DocumentsPanel from './DocumentsPanel'
-import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders, letterOf, letterIsCustom } from '../lib/quoteDocs'
+import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders, letterOf, letterIsCustom, letterProblems, letterProblemText } from '../lib/quoteDocs'
 import { BU_UNIT_LABEL, descriptionText, descriptionParts } from '../lib/buildups'
 
 // THE ESTIMATE'S QUOTE TABS (1092): Letter, Clarifications, Documents, Quote.
@@ -13,15 +13,17 @@ const chip = { fontSize: 11.5, padding: '3px 8px', border: '1px solid #99f6e4', 
 const small = { fontSize: 12, padding: '5px 10px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }
 
 export function LetterTab({ est, change, templates, values, canEditTemplate, onSaveTemplate }) {
-  // THE LETTER (1163) - the company template unless changed for this quote
-  const ref = useRef(null)
+  // THE LETTER (1163, 1164) - the company template unless changed for this quote.
+  // The quote's letter is edited as it reads (red shows red; typing inside red
+  // clears it); placeholders and Make / Clear red are in EDIT TEMPLATE only.
   const custom = letterIsCustom(est)
   const company = (templates && templates.letter && templates.letter.body) || ''
   const body = letterOf(est, templates)
   const setBody = (b) => change(e => ({ ...e, letter: { ...(e.letter || {}), body: b } }))
-  const [tpl, setTpl] = useState(null)        // the template being edited (admins)
+  const [tpl, setTpl] = useState(null)
   const [tplErr, setTplErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const probs = letterProblems(tpl != null ? tpl : body, values)
   async function saveTemplate() {
     setBusy(true); setTplErr('')
     try { await onSaveTemplate(tpl); setTpl(null) } catch (e) { setTplErr(e.message) }
@@ -31,18 +33,18 @@ export function LetterTab({ est, change, templates, values, canEditTemplate, onS
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
       <div style={box}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          <strong>Letter for this quote</strong>
-          {custom
+          <strong>{tpl != null ? 'Company letter template' : 'Letter for this quote'}</strong>
+          {tpl == null && (custom
             ? <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '2px 8px' }}>customised for this quote</span>
-            : <span style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', background: '#f0fdfa', borderRadius: 8, padding: '2px 8px' }}>using the company template</span>}
+            : <span style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', background: '#f0fdfa', borderRadius: 8, padding: '2px 8px' }}>using the company template</span>)}
           <span style={{ flex: 1 }} />
-          {custom && company && <button onClick={() => { if (window.confirm('Go back to the company template? This quote\'s own changes to the letter are dropped.')) change(e => ({ ...e, letter: { ...(e.letter || {}), body: null } })) }} style={small}>Reset to template</button>}
-          {canEditTemplate && !tpl && <button onClick={() => setTpl(company)} style={{ ...small, color: '#0f766e', borderColor: '#99f6e4' }} title="Edit the company letter every quote starts from">Edit template</button>}
+          {tpl == null && custom && company && <button onClick={() => { if (window.confirm('Go back to the company template? This quote\'s own changes to the letter are dropped.')) change(e => ({ ...e, letter: { ...(e.letter || {}), body: null } })) }} style={small}>Reset to template</button>}
+          {canEditTemplate && tpl == null && <button onClick={() => setTpl(company)} style={{ ...small, color: '#0f766e', borderColor: '#99f6e4' }} title="Edit the company letter every quote follows">Edit template</button>}
         </div>
         {tpl != null ? (
           <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: 10 }}>
-            <div style={{ fontSize: 12.5, color: '#0f766e', fontWeight: 600, marginBottom: 6 }}>Company letter template - every quote using the template follows it (customised ones keep their own).</div>
-            <LetterEditor text={tpl} setText={setTpl} />
+            <div style={{ fontSize: 12.5, color: '#0f766e', marginBottom: 8 }}>Every quote using the template follows it (customised ones keep their own). Mark in red anything an estimator must edit on each quote.</div>
+            <LetterRich text={tpl} setText={setTpl} template />
             {tplErr && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 6 }}>{tplErr}</div>}
             <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => { setTpl(null); setTplErr('') }} style={small}>Cancel</button>
@@ -51,55 +53,93 @@ export function LetterTab({ est, change, templates, values, canEditTemplate, onS
           </div>
         ) : <>
           {!company && !custom && <div style={{ fontSize: 12.5, color: '#92400e', marginBottom: 8 }}>No company letter yet{canEditTemplate ? ' - use Edit template to write it.' : ' - an admin writes it with Edit template.'} You can write this one here.</div>}
-          {/* RATES HELD UNTIL (1162) - fills {{ratesHeldUntil}}; blank shows [Rates held until] */}
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#555', marginBottom: 8 }}>
             Rates held until
             <input type="date" value={est.ratesHeldUntil || ''} onChange={e => change(x => ({ ...x, ratesHeldUntil: e.target.value || null }))}
-              style={{ fontSize: 12.5, padding: '4px 7px', border: `1px solid ${est.ratesHeldUntil ? '#d4d4d0' : '#fcd34d'}`, borderRadius: 6, background: est.ratesHeldUntil ? '#fff' : '#fffbeb' }} />
-            <span style={{ fontSize: 11.5, color: '#999' }}>{'{{ratesHeldUntil}}'} in the letter</span>
+              style={{ fontSize: 12.5, padding: '4px 7px', border: `1px solid ${est.ratesHeldUntil ? '#d4d4d0' : '#fca5a5'}`, borderRadius: 6, background: est.ratesHeldUntil ? '#fff' : '#fef2f2', color: est.ratesHeldUntil ? undefined : '#b91c1c' }} />
+            {!est.ratesHeldUntil && <span style={{ fontSize: 11.5, color: '#b91c1c' }}>set it for this revision</span>}
           </label>
-          <LetterEditor text={body} setText={setBody} />
-          {!custom && company && <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>Typing here makes a copy for this quote only - the template is not changed.</div>}
+          <LetterRich text={body} setText={setBody} />
+          <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>Red = to edit before sending - type over it and it turns black.{!custom && company ? ' Typing here makes a copy for this quote only.' : ''}</div>
         </>}
       </div>
       <div style={box}>
-        <strong>As it will read</strong> <span style={{ fontSize: 11.5, color: '#999' }}>details live from the CRM deal; [gaps] show what is missing</span>
+        <strong>As it will read</strong> <span style={{ fontSize: 11.5, color: '#999' }}>details live from the CRM deal</span>
+        {(probs.missing.length > 0 || probs.red > 0) && <div style={{ fontSize: 12.5, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '6px 10px', marginTop: 8 }}>⚠ Cannot be sent yet: {letterProblemText(probs)}.</div>}
         <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, marginTop: 10 }}>{(tpl != null ? tpl : body) ? letterNodes(tpl != null ? tpl : body, values) : <span style={{ color: '#aaa' }}>Nothing written yet.</span>}</div>
       </div>
     </div>
   )
 }
-// The letter's text box with its placeholder buttons and MAKE RED / CLEAR RED (1163).
-// Red text is written [red]...[/red] and shows red on the letter and the quote.
-function LetterEditor({ text, setText }) {
-  const ref = useRef(null)
-  const sel = () => { const el = ref.current; return el ? [el.selectionStart, el.selectionEnd] : [text.length, text.length] }
-  const put = (next, a, b) => { setText(next); setTimeout(() => { const el = ref.current; if (el) { el.focus(); el.selectionStart = a; el.selectionEnd = b } }, 0) }
-  function insert(k) { const [a] = sel(), tag = `{{${k}}}`; put(text.slice(0, a) + tag + text.slice(a), a + tag.length, a + tag.length) }
-  function makeRed() { const [a, b] = sel(); if (a === b) return; put(text.slice(0, a) + '[red]' + text.slice(a, b) + '[/red]' + text.slice(b), a + 5, b + 5) }
-  function clearRed() {
-    let [a, b] = sel()
-    const open = text.lastIndexOf('[red]', a), close = text.indexOf('[/red]', Math.max(b - 6, a))
-    if (open >= 0 && close >= 0 && text.lastIndexOf('[/red]', a) < open) { put(text.slice(0, open) + text.slice(open + 5, close) + text.slice(close + 6), open, close - 5); return }
-    const inner = text.slice(a, b).replace(/\[\/?red\]/g, '')
-    if (inner !== text.slice(a, b)) put(text.slice(0, a) + inner + text.slice(b), a, a + inner.length)
+// THE LETTER EDITOR (1164) - shows red text RED (no markers). On a quote, typing
+// inside red text turns it black (the flag is done). In the TEMPLATE it stays red
+// until Clear red, and the placeholders and Make / Clear red sit above it.
+const escH = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const toHtml = (text) => String(text || '').split(/(\[red\][\s\S]*?\[\/red\])/).map(part => {
+  const m = part.match(/^\[red\]([\s\S]*?)\[\/red\]$/)
+  return m ? `<span data-red="1" data-orig="${escH(m[1])}" style="color:#dc2626">${escH(m[1])}</span>` : escH(part)
+}).join('')
+function serialize(el) {
+  let out = ''
+  const walk = (n) => {
+    for (const c of n.childNodes) {
+      if (c.nodeType === 3) out += c.nodeValue
+      else if (c.nodeName === 'BR') out += '\n'
+      else if (c.dataset && c.dataset.red) out += `[red]${c.textContent}[/red]`
+      else { if ((c.nodeName === 'DIV' || c.nodeName === 'P') && out && !out.endsWith('\n')) out += '\n'; walk(c) }
+    }
+  }
+  walk(el)
+  return out
+}
+function LetterRich({ text, setText, template }) {
+  const ref = useRef(null), last = useRef(null)
+  useEffect(() => { const el = ref.current; if (el && text !== last.current) { el.innerHTML = toHtml(text); last.current = text } }, [text])
+  const emit = () => { const el = ref.current; if (!el) return; const t = serialize(el); last.current = t; setText(t) }
+  const onInput = () => {
+    const el = ref.current
+    if (!template) for (const sp of el.querySelectorAll('span[data-red]')) if (sp.textContent !== sp.dataset.orig) { sp.replaceWith(document.createTextNode(sp.textContent)) }
+    emit()
+  }
+  const inEditor = () => { const s = window.getSelection(); return s && s.rangeCount && ref.current && ref.current.contains(s.getRangeAt(0).commonAncestorContainer) ? s.getRangeAt(0) : null }
+  const insert = (k) => { ref.current.focus(); const r = inEditor(); const tag = `{{${k}}}`; if (r) { r.deleteContents(); const n = document.createTextNode(tag); r.insertNode(n); r.setStartAfter(n); r.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r) } else ref.current.appendChild(document.createTextNode(tag)); emit() }
+  const makeRed = () => { const r = inEditor(); if (!r || r.collapsed) return; const sp = document.createElement('span'); sp.dataset.red = '1'; sp.style.color = '#dc2626'; sp.appendChild(r.extractContents()); sp.dataset.orig = sp.textContent; r.insertNode(sp); emit() }
+  const clearRed = () => {
+    const r = inEditor(); if (!r) return
+    for (const sp of [...ref.current.querySelectorAll('span[data-red]')]) if (r.intersectsNode(sp) || sp.contains(r.startContainer)) sp.replaceWith(document.createTextNode(sp.textContent))
+    emit()
   }
   return <>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
-      {PLACEHOLDERS.map(([k, label]) => <button key={k} onClick={() => insert(k)} style={chip}>{label}</button>)}
-      <span style={{ width: 1, background: '#e8e7e3', margin: '0 3px' }} />
-      <button onClick={makeRed} title="Select words, then Make red - they show red on the letter and the quote" style={{ ...chip, color: '#b91c1c', borderColor: '#fca5a5', background: '#fef2f2' }}>Make red</button>
-      <button onClick={clearRed} title="Click inside red text (or select it), then Clear red" style={chip}>Clear red</button>
-    </div>
-    <textarea ref={ref} value={text} onChange={e => setText(e.target.value)} rows={22} style={area} />
+    {template && <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+        {PLACEHOLDERS.map(([k, label]) => <button key={k} onMouseDown={e => e.preventDefault()} onClick={() => insert(k)} style={chip}>{label}</button>)}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+        <button onMouseDown={e => e.preventDefault()} onClick={makeRed} title="Select words, then Make red - an estimator must edit them on each quote" style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Make red</button>
+        <button onMouseDown={e => e.preventDefault()} onClick={clearRed} title="Click in red text (or select it), then Clear red" style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>Clear red</button>
+        <span style={{ fontSize: 11.5, color: '#888' }}>red = to edit on each quote before it is sent</span>
+      </div>
+    </>}
+    <div ref={ref} contentEditable suppressContentEditableWarning onInput={onInput}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.execCommand('insertLineBreak'); onInput() } }}
+      onPaste={e => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')) }}
+      style={{ ...area, minHeight: 420, whiteSpace: 'pre-wrap', outline: 'none', overflowY: 'auto', background: '#fff' }} />
   </>
 }
-// The letter as it reads: placeholders filled, [red]...[/red] in red (1163).
+// The letter as it reads (1163, 1164): placeholders filled - one with nothing to
+// fill it shows RED as [Its name]; text marked red shows red.
 export function letterNodes(text, values) {
-  const filled = fillPlaceholders(text, values)
-  return String(filled).split(/(\[red\][\s\S]*?\[\/red\])/).map((part, i) => {
+  const label = Object.fromEntries(PLACEHOLDERS), v = values || {}
+  let k = 0
+  const fill = (t) => String(t).split(/(\{\{\s*[a-zA-Z]+\s*\}\})/).map(part => {
+    const m = part.match(/^\{\{\s*([a-zA-Z]+)\s*\}\}$/)
+    if (!m) return <span key={k++}>{part}</span>
+    const val = String(v[m[1]] ?? '').trim()
+    return val ? <span key={k++}>{val}</span> : <span key={k++} style={{ color: '#dc2626', fontWeight: 600 }}>[{label[m[1]] || m[1]}]</span>
+  })
+  return String(text || '').split(/(\[red\][\s\S]*?\[\/red\])/).map(part => {
     const m = part.match(/^\[red\]([\s\S]*?)\[\/red\]$/)
-    return m ? <span key={i} style={{ color: '#dc2626' }}>{m[1]}</span> : <span key={i}>{part}</span>
+    return m ? <span key={k++} style={{ color: '#dc2626' }}>{fill(m[1])}</span> : <span key={k++}>{fill(part)}</span>
   })
 }
 

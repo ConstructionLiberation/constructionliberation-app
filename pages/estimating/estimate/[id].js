@@ -7,7 +7,7 @@ import BuildupEditor, { pct, fromPct, NumBox } from '../../../components/Buildup
 import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
-import { placeholderValues, checklistOf } from '../../../lib/quoteDocs'
+import { placeholderValues, checklistOf, letterOf, letterProblems, letterProblemText } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, descriptionText, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
@@ -286,6 +286,8 @@ export default function EstimatePage() {
   const since = useMemo(() => est && lastRev ? diffEstimates({ ...lastRev.estimate, priceLock: lastRev.priceLib || lastRev.estimate.priceLock || null }, est, libRaw) : [], [est, lastRev, libRaw])
 
   async function issue(andPrint) {
+    // SENT TO THE CUSTOMER (1164) - not with a gap in the letter or red text to edit
+    if (andPrint) { const p = letterProblems(letterOf(est, quoteDocs), values); if (p.missing.length || p.red) { setErr(`The letter cannot go to the customer yet: ${letterProblemText(p)}. Fix it on the Letter tab, then send.`); setTab('letter'); return } }
     // Every line costed first (1142) - the server refuses it too.
     if (uncosted.length) { setErr(`Every line needs a cost before the quote is issued - not yet costed: ${uncostedText(uncosted)}`); return }
     // Mandatory sizes (1113): no quote goes out until each has a number.
