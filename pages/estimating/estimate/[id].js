@@ -11,7 +11,7 @@ import { placeholderValues, checklistOf } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, descriptionText, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, labelBudget, NO_SUPPLIER, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, labelBudget, NO_SUPPLIER, withLock, priceLibOf, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -40,7 +40,9 @@ export default function EstimatePage() {
   const [saveState, setSaveState] = useState({ kind: 'idle' })   // idle | saving | saved {at} | retry {msg} | conflict {msg}
   const estRef = useRef(null), baseRef = useRef(null), seqRef = useRef(0), savingRef = useRef(false)
   const timerRef = useRef(null), stoppedRef = useRef(false), retryRef = useRef(0), waitersRef = useRef([])
-  const [lib, setLib] = useState({ product: {}, labour: {}, products: [], labourItems: [] })
+  const [libRaw, setLib] = useState({ product: {}, labour: {}, products: [], labourItems: [] })
+  // a revision being edited is priced AS AT ITS ISSUE (1154) - its own prices win
+  const lib = useMemo(() => withLock(libRaw, est && est.priceLock), [libRaw, est && est.priceLock])
   const [templates, setTemplates] = useState([])
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -88,10 +90,18 @@ export default function EstimatePage() {
     catch (e) { setRevView({ error: e.message, revision: rev }) }
   }
   async function reopenRevision(rev) {
-    if (!window.confirm(`Edit Rev ${rev}? It becomes the working take-off again, exactly as issued - your current draft is replaced. Issuing then replaces Rev ${rev} (no new letter).`)) return
+    if (!window.confirm(`Edit Rev ${rev}? It opens as issued, at its own prices. Your draft is KEPT - switch between them at the top. Issuing then replaces Rev ${rev} (no new letter).`)) return
     if (dirty && !(await flushSave())) { setErr('The estimate could not be saved'); return }
     setBusy(true); setErr('')
     try { const d = await estApi(API, { action: 'reopen', id: est.id, revision: rev, baseUpdatedAt: base }); setEst(d.estimate); setBase(d.estimate.updatedAt); setRevView(null); setTab('takeoff'); setIssueMsg(`Rev ${rev} is open for editing - issue it again when ready.`) }
+    catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  // SWITCH between the draft and a revision being edited (1154) - each keeps its changes
+  async function switchTo(key) {
+    if (dirty && !(await flushSave())) { setErr('The estimate could not be saved'); return }
+    setBusy(true); setErr('')
+    try { const d = await estApi(API, { action: 'switch', id: est.id, to: key, baseUpdatedAt: base }); setEst(d.estimate); setBase(d.estimate.updatedAt); setSel(new Set()) }
     catch (e) { setErr(e.message) }
     setBusy(false)
   }
@@ -273,7 +283,7 @@ export default function EstimatePage() {
     const dt = sentView ? new Date(sentView.at) : new Date()
     return placeholderValues({ est: sentView ? { ...est, ...sentView.est, revision: sentView.revision } : est, details: d, total: totals.total, companyName, money, dateText: dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })
   }, [est, crm, totals, companyName, sentView])
-  const since = useMemo(() => est && lastRev ? diffEstimates(lastRev.estimate, est, lib) : [], [est, lastRev, lib])
+  const since = useMemo(() => est && lastRev ? diffEstimates({ ...lastRev.estimate, priceLock: lastRev.priceLib || lastRev.estimate.priceLock || null }, est, libRaw) : [], [est, lastRev, libRaw])
 
   async function issue(andPrint) {
     // Every line costed first (1142) - the server refuses it too.
@@ -294,7 +304,7 @@ export default function EstimatePage() {
     setBusy(true); setErr(''); setIssueMsg('')
     try {
       const d = await estApi(API, { action: 'issue', id: est.id, note, baseUpdatedAt: base, sent: !!andPrint })
-      setLastRev({ revision: d.issued, total: d.total, estimate: JSON.parse(JSON.stringify(est)) })
+      setLastRev({ revision: d.issued, total: d.total, estimate: JSON.parse(JSON.stringify(est)), priceLib: priceLibOf(est, lib) })
       setEst(d.estimate); setBase(d.estimate.updatedAt)
       if (andPrint) {
         // Print the quote AS ISSUED (that revision, today's date) - then back to the draft.
@@ -302,6 +312,8 @@ export default function EstimatePage() {
         setTimeout(() => { window.print(); setTimeout(() => setSentView(null), 500) }, 300)
       }
       setIssueMsg(`Rev ${d.issued} issued at ${money(d.total, { dp: 2 })}.${d.crm ? (d.crm.updated ? ` CRM deal value ${money(d.crm.from, { dp: 2 })} → ${money(d.crm.to, { dp: 2 })}.` : d.crm.error ? ` ${d.crm.error}` : ` ${d.crm.note}`) : ''} Now working on Rev ${d.estimate.revision}.`)
+      if (d.replaced) setIssueMsg(m => `${m} Rev ${d.issued} replaced - back on the draft.`)
+      if (d.setAside) setIssueMsg(m => `${m} The edit of the previous revision was set aside - it is no longer the latest.`)
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
@@ -340,6 +352,25 @@ export default function EstimatePage() {
       {crm?.archived && (
         <div style={{ background: '#f4f4f2', border: '1px solid #d6d3cc', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#444' }}>
           <strong>Archived</strong> - the CRM deal was lost{crm.lostTime ? ` on ${new Date(crm.lostTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}{crm.lostReason ? ` (${crm.lostReason})` : ''}. The estimate is read-only. Reopen the deal in the CRM to work on it again.
+        </div>
+      )}
+      {/* WORKING ON (1154) - the draft, or a revision being edited; each keeps its changes */}
+      {(est.parked || []).length > 0 && (() => {
+        const copies = [{ key: est.reopened ? est.reopened.revision : 'draft', active: true, label: est.reopened ? `Rev ${est.reopened.revision} - editing` : `Draft Rev ${est.revision}` },
+          ...(est.parked || []).map(p => ({ key: p.content.reopened ? p.content.reopened.revision : 'draft', active: false, label: p.content.reopened ? `Rev ${p.content.reopened.revision} - editing` : `Draft Rev ${p.content.revision}` }))]
+          .sort((a, b) => (a.key === 'draft') - (b.key === 'draft'))
+        return (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0', fontSize: 13 }}>
+            <span style={{ color: '#666' }}>Working on:</span>
+            {copies.map(c => <button key={c.key} onClick={() => !c.active && switchTo(c.key)} disabled={busy || c.active} style={{ fontSize: 12.5, padding: '5px 12px', borderRadius: 7, cursor: c.active ? 'default' : 'pointer', border: `1px solid ${c.active ? '#0f766e' : '#d4d4d0'}`, background: c.active ? '#0f766e' : '#fff', color: c.active ? '#fff' : '#333', fontWeight: c.active ? 600 : 400 }}>{c.label}</button>)}
+            <span style={{ fontSize: 11.5, color: '#999' }}>each keeps its own changes</span>
+          </div>
+        )
+      })()}
+      {est.priceLock && (
+        <div style={{ margin: '6px 0', fontSize: 12.5, background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', borderRadius: 8, padding: '6px 10px', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span>Priced as at <strong>Rev {est.reopened ? est.reopened.revision : est.revision}</strong> - price-list changes since it was issued do not apply.</span>
+          {!est.archived && <button onClick={() => { if (window.confirm('Price this revision at today\'s price list instead?')) change(e => ({ ...e, priceLock: null })) }} style={{ ...smallBtn, marginLeft: 'auto' }}>Use today's prices</button>}
         </div>
       )}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #e8e7e3', marginBottom: 14 }}>
@@ -748,7 +779,7 @@ export default function EstimatePage() {
                 <ChangeList changes={since} />
               </details>
             : <div style={{ fontSize: 12.5, marginBottom: 8, fontWeight: 600 }}>Changes since Rev {lastRev.revision} - none</div>)}
-          {est.reopened && <div style={{ fontSize: 12.5, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '6px 10px', marginBottom: 8, color: '#92400e' }}>Editing <strong>Rev {est.reopened.revision}</strong> - issuing replaces it (no new revision letter).</div>}
+          {est.reopened && <div style={{ fontSize: 12.5, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '6px 10px', marginBottom: 8, color: '#92400e' }}>Editing <strong>Rev {est.reopened.revision}</strong> - issuing replaces it (no new revision letter). Your draft is kept - switch to it at the top.</div>}
           {(est.revisions || []).slice().reverse().map(r => (
             <details key={r.revision} style={{ fontSize: 12.5, borderTop: '1px solid #f0efec', padding: '6px 0' }}>
               <summary style={{ cursor: 'pointer' }}><button onClick={(e) => { e.preventDefault(); openRevision(r.revision) }} style={{ ...smallBtn, marginRight: 8, padding: '2px 8px', fontSize: 11.5 }}>View</button>{r.sent ? <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 8, padding: '1px 7px', marginRight: 6 }} title={`Sent ${new Date(r.sent.at).toLocaleString('en-GB')} by ${r.sent.by || ''}`}>SENT</span> : null}<strong>Rev {r.revision}</strong> · {money(r.total, { dp: 2 })} · {new Date(r.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {r.issuedBy}{r.note ? ` · ${r.note}` : ''}</summary>
@@ -1086,7 +1117,8 @@ function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy }) {
   else if (view.error) body = <div style={{ color: '#b42318', fontSize: 13 }}>{view.error}</div>
   else {
     const e = snap.estimate || {}
-    const live = priceEstimate(e, lib)
+    const libR = withLock(lib, snap.priceLib)   // its own prices (1154)
+    const live = priceEstimate({ ...e, priceLock: snap.priceLib || e.priceLock || null }, lib)
     const priced = snap.priced || live.priced, totals = snap.totals || live.totals
     const latest = (est.revisions || []).slice(-1)[0]
     const entry = (est.revisions || []).find(r => r.revision === snap.revision) || {}
@@ -1111,7 +1143,7 @@ function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy }) {
               const bg = r.highlight ? HLC[r.highlight] : undefined
               if (r.kind === 'section') return <tr key={r.id} style={{ background: bg || '#f4f4f2' }}><td colSpan={5} style={{ ...td, fontWeight: 700, textDecoration: 'underline' }}>{r.title}</td></tr>
               const p = priced[r.id] || {}
-              const text = r.buildup ? descriptionText(r.buildup, lib) : ''
+              const text = r.buildup ? descriptionText(r.buildup, libR) : ''
               return (
                 <tr key={r.id} style={{ background: bg }}>
                   <td style={{ ...td, minWidth: 280 }}>

@@ -6,7 +6,14 @@ import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDe
 import { resolveMerged } from '../../../lib/crmMerge'
 import { currentTerms } from '../../../lib/quoteDocs'
 import { itemsMissingSizes } from '../../../lib/buildups'
-import { uncostedItems, uncostedText } from '../../../lib/estimate'
+import { uncostedItems, uncostedText, priceLibOf, withLock } from '../../../lib/estimate'
+// WORKING COPIES (1154): an estimate has ONE active working copy (the draft, or a
+// revision being edited) and may PARK the other - est.parked = [{ content, at }].
+// The shell (id, revisions...) is shared; everything else is the copy's content.
+const SHELL = new Set(['id', 'revisions', 'parked', 'createdAt', 'createdBy', 'dealId', 'title', 'quoteRef', 'archived', 'updatedAt', 'updatedBy'])
+const shellOf = (e) => Object.fromEntries(Object.entries(e).filter(([k]) => SHELL.has(k)))
+const contentOf = (e) => Object.fromEntries(Object.entries(e).filter(([k]) => !SHELL.has(k)))
+const copyKey = (content) => content && content.reopened ? content.reopened.revision : 'draft'
 import { deleteAllDocs } from '../../../lib/documentsStore'
 import { removeFile, privateReady } from '../../../lib/privateFiles'
 import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision } from '../../../lib/estimateStore'
@@ -147,19 +154,27 @@ async function handler(req, res) {
     const unc = uncostedItems(est, lib)
     if (unc.length) return res.status(400).json({ error: `Every line needs a cost before the quote is issued - not yet costed: ${uncostedText(unc)}` })
     const total = Math.round(totals.total * 100) / 100
-    const prev = (est.revisions || []).slice(-1)[0]
+    // ISSUING A REVISION BEING EDITED (1154) replaces it - same letter, same place.
+    const reo = est.reopened && (est.revisions || []).some(r => r.revision === est.reopened.revision) ? est.reopened.revision : null
+    if (reo) {
+      const lastR = est.revisions.slice(-1)[0]
+      if (lastR.revision !== reo) return res.status(400).json({ error: `Rev ${reo} is no longer the latest revision - switch to the draft` })
+      if (lastR.sent) return res.status(400).json({ error: `Rev ${reo} has been sent - unmark it on the Quote tab first, or issue the draft as a new revision` })
+    }
+    const prev = reo ? (est.revisions || []).slice(-2, -1)[0] : (est.revisions || []).slice(-1)[0]
     const prevSnap = prev ? await loadRevision(est.id, prev.revision) : null
-    const changes = prevSnap ? diffEstimates(prevSnap.estimate, est, lib) : []
+    // compared at the earlier revision's OWN prices (1154), so a price change shows
+    const changes = prevSnap ? diffEstimates({ ...prevSnap.estimate, priceLock: prevSnap.priceLib || prevSnap.estimate.priceLock || null }, est, lib) : []
     const issuedAt = new Date().toISOString()
     const rev = est.revision || 'A'
-    const { revisions, ...frozen } = est
+    const { revisions, parked: _parked, ...frozen } = est
     // A TRUE copy - nothing that later edits the estimate can reach the issued revision.
     // The CRM details AS THEY WERE TODAY go with the issued revision, so its
     // letter can always be reproduced exactly.
     const crmNow = (await liveDeals())(est.dealId)
     // ...and the Terms & Conditions version it went out with (1092).
     const terms = currentTerms(await get('quote:templates'))
-    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow, terms: terms ? { v: terms.v, text: terms.text } : null , priced: JSON.parse(JSON.stringify(pricedNow)), totals: JSON.parse(JSON.stringify(totals)) })   // as issued (1151)
+    await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow, terms: terms ? { v: terms.v, text: terms.text } : null , priced: JSON.parse(JSON.stringify(pricedNow)), totals: JSON.parse(JSON.stringify(totals)), priceLib: priceLibOf(est, withLock(lib, est.priceLock)) })   // as issued, with its PRICES (1151/1154)
     let crm = null
     if (est.dealId) {
       const deals = (await get('crm:deals')) || []
@@ -178,10 +193,22 @@ async function handler(req, res) {
         } else crm = { updated: false, note: 'The deal already had this value' }
       }
     }
-    const next = { ...est, revision: nextRevision(rev), updatedAt: issuedAt, updatedBy: by,
-      revisions: [...(est.revisions || []), { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, changes, termsVersion: terms ? terms.v : null, ...(b.sent ? { sent: { at: issuedAt, by } } : {}) }] }
+    const entry = { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, changes, termsVersion: terms ? terms.v : null, ...(b.sent ? { sent: { at: issuedAt, by } } : {}) }
+    const revList = reo ? [...est.revisions.slice(0, -1), entry] : [...(est.revisions || []), entry]
+    const parked = est.parked || []
+    const draft = parked.find(p => copyKey(p.content) === 'draft')
+    const setAside = !reo && parked.some(p => copyKey(p.content) !== 'draft')
+    let next
+    if (reo && draft) {
+      // the revision being edited is re-issued - the draft comes back (1154)
+      next = { ...shellOf(est), ...draft.content, revisions: revList, parked: [], updatedAt: issuedAt, updatedBy: by }
+    } else {
+      // a new draft - following today's price list again (no lock)
+      const { reopened: _ro, priceLock: _pl, ...rest } = est
+      next = { ...rest, revision: nextRevision(rev), revisions: revList, parked: [], priceLock: null, updatedAt: issuedAt, updatedBy: by }
+    }
     await saveEstimate(next, await summaryOf(next, lib))
-    return res.status(200).json({ ok: true, estimate: next, issued: rev, total, crm, changes })
+    return res.status(200).json({ ok: true, estimate: next, issued: rev, total, crm, changes, replaced: !!reo, setAside })
   }
   // SENT (1151): a revision is SENT when "Download and mark as sent" issued it, or
   // it is marked here; it can be UNMARKED (downloaded and marked by mistake, or a
@@ -196,22 +223,31 @@ async function handler(req, res) {
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next })
   }
-  // EDIT A REVISION (1151) - only the LATEST, and only if NOT SENT: it becomes the
-  // working take-off again (as issued), so the next issue REPLACES it (same
-  // letter) rather than making a new one. The draft since it is replaced.
-  if (b.action === 'reopen') {
+  // EDIT A REVISION / SWITCH (1151, 1154) - the active working copy is PARKED,
+  // never overwritten, so you can move between the draft and a revision being
+  // edited and each keeps its changes. A revision can be opened for editing only
+  // if it is the LATEST and NOT SENT; it is priced as at its issue (its own prices).
+  if (b.action === 'reopen' || b.action === 'switch') {
     const est = await loadEstimate(String(b.id))
     if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
     if (b.baseUpdatedAt && est.updatedAt !== b.baseUpdatedAt) return res.status(409).json({ error: 'This estimate has changed since you opened it - reload, then try again' })
     const dl = (await liveDeals())(est.dealId)
     if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
-    const last = (est.revisions || []).slice(-1)[0]
-    if (!last || last.revision !== b.revision) return res.status(400).json({ error: 'Only the latest revision can be edited - issue a new revision instead' })
-    if (last.sent) return res.status(400).json({ error: `Rev ${last.revision} has been sent - unmark it as sent on the Quote tab to edit it, or issue a new revision` })
-    const snap = await loadRevision(est.id, last.revision)
-    if (!snap || !snap.estimate) return res.status(404).json({ error: 'That revision could not be loaded' })
+    const to = String(b.action === 'reopen' ? b.revision : b.to)
+    if (copyKey(est) === to) return res.status(200).json({ ok: true, estimate: est })
+    const parked = est.parked || []
+    let target = parked.find(p => copyKey(p.content) === to)
     const at = new Date().toISOString()
-    const next = { ...snap.estimate, id: est.id, revisions: est.revisions.slice(0, -1), revision: last.revision, reopened: { revision: last.revision, at, by }, updatedAt: at, updatedBy: by }
+    if (!target) {
+      if (to === 'draft') return res.status(404).json({ error: 'There is no draft to switch to' })
+      const last = (est.revisions || []).slice(-1)[0]
+      if (!last || last.revision !== to) return res.status(400).json({ error: 'Only the latest revision can be edited - issue a new revision instead' })
+      if (last.sent) return res.status(400).json({ error: `Rev ${last.revision} has been sent - unmark it as sent on the Quote tab to edit it, or issue a new revision` })
+      const snap = await loadRevision(est.id, to)
+      if (!snap || !snap.estimate) return res.status(404).json({ error: 'That revision could not be loaded' })
+      target = { content: { ...contentOf(snap.estimate), revision: to, reopened: { revision: to, at, by }, priceLock: snap.priceLib || null } }
+    }
+    const next = { ...shellOf(est), ...target.content, parked: [...parked.filter(p => p !== target), { content: contentOf(est), at }], updatedAt: at, updatedBy: by }
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next })
   }

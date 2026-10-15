@@ -1,33 +1,40 @@
-PACKAGE 1153 - Materials: allocate lines not from the price list
+PACKAGE 1154 - Revisions keep their own prices; editing one never wipes the draft
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1152.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1153.
 
-  lib/materials.js, lib/estimate.js
-  components/MaterialsTab.js
+  lib/estimate.js, lib/materials.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/estimating/estimates.js
 
-On the MATERIALS tab, lines not from the price list (own items, typed rates,
-lump sums) are now a table - "Not from the price list - not allocated" - with
-an ALLOCATE TO column:
-  - suppliers on this estimate
-  - suppliers in the price list
-  - categories already made
-  - + Add new... (e.g. Insulation, Mansafe, Sub-Contractor)
-An allocated line moves to that supplier's card ("Lines allocated to Renolit",
-its cost added to the card's total) or a card for the category; it keeps its
-Allocate box there, to move it or set it back to not allocated. "Materials to
-order" includes allocated lines. Allocations save with the estimate.
-SUMMARY > Material budgets follows: an allocated own item counts under its
-supplier or category, not "No supplier (own items)" (which is hidden when it
-comes to nothing).
+PRICES FROZEN WITH EACH REVISION. Issuing now stores, with the revision, the
+price-list entries its lines used (each product and labour rate, after
+supplier increases). Wherever that revision is priced, its own entries win -
+a later price-list change never alters it:
+  - viewing it (its stored figures, as since 1151)
+  - EDITING it - priced as at its issue; a blue banner says so, with "Use
+    today's prices" to re-price it deliberately
+  - "Changes since Rev X" - compared at Rev X's own prices, so a price-list
+    change now SHOWS as a change
+The current draft follows the price list as before. Revisions issued before
+this deploy did not store their prices, so they can only be priced at today's
+(their window says so).
 
-Checked: Solvent allocated to Renolit and White (LPVC) to a new "Sub-
-Contractor" - Renolit's card 620.00 + Solvent 300.00; a Sub-Contractor card
-300.00; one left unallocated; the materials total 2,111.68 -> 2,711.68;
-budgets Renolit +300, Sub-Contractor 300. In a REAL browser (Chromium): the
-choices (3 on this estimate, 12 in the price list, + Add new...); Solvent ->
-Renolit (620.00 -> 920.00); White -> + Add new "Sub-Contractor" -> its own
-card 300.00; total 2,711.68; saved; the Summary's budgets Renolit 895.20,
-Sub-Contractor 300.00, total unchanged 2,646.02. All 165 pages pass the
-browser check. Built from your deployed packages (1022-1152, verified against
-their zips).
+EDITING A REVISION NEVER WIPES THE DRAFT. "Edit Rev A" PARKS the draft instead
+of replacing it. "Working on: [Rev A - editing] [Draft Rev B]" at the top
+switches between them - each keeps its own changes. Re-issuing Rev A replaces
+Rev A (same letter) and brings the draft back. The rules stay: only the latest
+revision, only if not sent. Issuing the draft as a new revision while an edit
+of the previous one is parked sets that edit aside (it is no longer the
+latest) - the message says so.
+
+Checked through the real route, with a real 20% price rise in the middle: Rev
+A 1,107.00 with its price (185.85) stored; price raised to 223.02; Edit Rev A
+-> qty 100 still priced 1,107.00, the draft (150) parked; switch to the draft
+-> 150 at today's price (1,992.00), Rev A parked at its edit (110); back ->
+110 kept; re-issue -> Rev A (1,217.70, its own price), the draft back (150,
+letter B); issuing C with an edit of B parked -> set aside. In a REAL browser
+(Chromium): "Working on: Rev A - editing | Draft Rev B"; the banner; the total
+at Rev A's own price (21,594.00, its VCL price higher) -> Use today's prices
+-> 20,804.00; clicking the draft sends the switch. All server routes compile;
+all 165 pages pass the browser check. Built from your deployed packages
+(1022-1153, verified against their zips).
