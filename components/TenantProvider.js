@@ -42,6 +42,7 @@ const FALLBACK = {
   currency: 'GBP',
   currencySymbol: '\u00A3',
   terms: {},
+  company: { address: '', phone: '', email: '', website: '', companyNumber: '', vatNumber: '' },
   resolved: false,
 }
 
@@ -150,6 +151,7 @@ export function useFormat() {
     currencySymbol: t.currencySymbol,
     companyName: t.name,
     logoUrl: t.logoUrl,
+    company: t.company || {},   // the address and contact details (1166)
     localeKey: t.localeKey,
     loaded: t.loaded,
   }

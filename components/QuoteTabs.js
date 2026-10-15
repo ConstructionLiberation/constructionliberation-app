@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
+import { useFormat } from './TenantProvider'
 import DocumentsPanel from './DocumentsPanel'
 import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders, letterOf, letterIsCustom, letterProblems, letterProblemText, clarOf, clarIsCustom, clarTemplateOf, clarStarter } from '../lib/quoteDocs'
 import { BU_UNIT_LABEL, descriptionText, descriptionParts } from '../lib/buildups'
@@ -261,7 +262,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
       </div>
       <div className="quote-doc" style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 4, padding: '36px 44px', maxWidth: 860, margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', color: '#1a1a19' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-          <div><BrandLogo style={{ maxHeight: 54 }} /><div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{companyName}</div></div>
+          <QuoteLetterhead companyName={companyName} />
           <div style={{ textAlign: 'right', fontSize: 12.5, lineHeight: 1.6 }}>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Quotation</div>
             {est.quoteRef && <div>Ref {est.quoteRef} · Rev {est.revision}</div>}
@@ -312,3 +313,24 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
 // The separator between stacked descriptions (1147) drawn as a THICK CHARCOAL
 // RULE (1155) rather than a row of dashes.
 const ruled = (text, key = '') => String(text ?? '').split(/\n?————————\n?/).flatMap((t, i) => i ? [<span key={`${key}r${i}`} style={{ display: 'block', borderTop: '3px solid #36454f', margin: '6px 0' }} />, t] : [t])
+
+// THE QUOTE'S LETTERHEAD (1166) - the logo, large, and the company's address and
+// contact details from Admin > Company details. The name is written only when
+// there is no logo.
+function QuoteLetterhead({ companyName }) {
+  const { logoUrl, company } = useFormat()
+  const c = company || {}
+  const contact = [c.phone, c.email, c.website].filter(Boolean)
+  const reg = [c.companyNumber ? `Company no. ${c.companyNumber}` : '', c.vatNumber ? `VAT no. ${c.vatNumber}` : ''].filter(Boolean)
+  return (
+    <div>
+      {logoUrl ? <img src={logoUrl} alt={companyName || ''} style={{ height: 100, maxWidth: 320, width: 'auto', objectFit: 'contain', display: 'block' }} />
+        : <div style={{ fontSize: 20, fontWeight: 800 }}>{companyName}</div>}
+      {(c.address || contact.length > 0) && <div style={{ fontSize: 11.5, color: '#555', lineHeight: 1.5, marginTop: 8, whiteSpace: 'pre-line' }}>
+        {c.address}
+        {contact.length > 0 && <div>{contact.join(' · ')}</div>}
+        {reg.length > 0 && <div style={{ color: '#888' }}>{reg.join(' · ')}</div>}
+      </div>}
+    </div>
+  )
+}

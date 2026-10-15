@@ -19,6 +19,8 @@ const MGMT = ['management', 'admin']
 // AdminTabs below; nothing else imports it.
 export const adminTabs = (term) => [
   ['Portal Users', '/admin', ['admin']],
+  // 1166: the company's name, address and logo - used across the portal
+  ['Company details', '/admin/company-details', ['admin']],
   ['Templates', '/admin/templates', MGMT],
   // 1092: the letter, standard clarifications and T&Cs every quote starts from.
   ['Quote Documents', '/admin/quote-documents', ['admin']],

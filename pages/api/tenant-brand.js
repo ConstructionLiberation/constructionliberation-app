@@ -2,6 +2,8 @@ import withTenant from '../../lib/withTenant'
 import { currentTenant } from '../../lib/tenantContext'
 import { companyName, logoUrl } from '../../lib/tenantSettings'
 import { localePayload } from '../../lib/locale'
+import { currentCompany } from '../../lib/tenantContext'
+import { publicCompany, companyLogoPath } from '../../lib/companyDetails'
 
 // WHO IS THIS PORTAL, AND HOW DOES IT WRITE THINGS DOWN.
 //
@@ -57,6 +59,7 @@ async function handler(req, res) {
       // other is how a client ends up reading undefined and nobody notices.
       gleniganTrackingFrom: null,
       terms: {},
+      company: publicCompany(null),
       resolved: false,
     })
   }
@@ -77,10 +80,11 @@ async function handler(req, res) {
 
   return res.status(200).json({
     name: companyName(),
-    // Empty until logoUrl is wired up and a logo is uploaded per tenant.
-    // The client falls back to the name, so an empty logo is a plain portal
-    // rather than a broken image.
-    logoUrl: logoUrl() || '',
+    // The company's own logo (Admin > Company details, 1166) - a path on this
+    // site - else the registry's. Empty = the client shows the name instead.
+    logoUrl: companyLogoPath(currentCompany()) || logoUrl() || '',
+    // The letterhead details - public: they are on the company's letterhead.
+    company: publicCompany(currentCompany()),
     localeKey: payload.localeKey,
     localeCode: payload.localeCode,
     // A timezone is not sensitive - it is on their contact page. It is here
