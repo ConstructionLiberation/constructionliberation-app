@@ -35,13 +35,32 @@ export default function MaterialsTab({ est, lib, change, money, readOnly }) {
   })
   const Alloc = ({ f }) => <AllocSelect value={f.allocation || ''} disabled={readOnly} onPick={(v) => setAlloc(f.key, v)}
     onEstimate={m.suppliers.map(x => x.supplier)} priceList={priceListSuppliers} categories={categories} />
-  const OtherRows = ({ rows }) => {
+  // SORT (1159) - click a heading; again to reverse
+  const [sort, setSort] = useState(null)   // { k, dir }
+  const SORT_KEYS = [['label', 'Line (not from the price list)'], ['item', 'Item'], ['quantity', 'Quantity'], ['amount', 'Rate'], ['cost', 'Cost'], ['allocation', 'Allocate to']]
+  const sorted = (rows) => !sort ? rows : [...rows].sort((a, b) => {
+    const x = a[sort.k], y = b[sort.k]
+    const c = typeof x === 'number' || typeof y === 'number' ? (Number(x) || 0) - (Number(y) || 0) : String(x || '').localeCompare(String(y || ''), undefined, { numeric: true, sensitivity: 'base' })
+    return sort.dir === 'desc' ? -c : c
+  })
+  const OtherRows = ({ rows: rowsIn }) => {
+    const rows = sorted(rowsIn)
     const all = rows.length > 0 && rows.every(f => ticked.has(f.key))
-    return (
+    const mine = rows.filter(f => ticked.has(f.key)).map(f => f.key)
+    return (<>
+    {/* THE TICKED LINES' BAR (1159) - at the top of this table, for its ticked lines */}
+    {mine.length > 0 && !readOnly && (
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: '#0f766e', color: '#fff', padding: '7px 12px', fontSize: 13 }}>
+        <strong>{mine.length} line{mine.length === 1 ? '' : 's'} ticked</strong>
+        <span>Allocate to:</span>
+        <AllocSelect value="" onPick={(v) => { setAllocMany(mine, v); setTicked(x => { const n = new Set(x); mine.forEach(k => n.delete(k)); return n }) }} onEstimate={m.suppliers.map(x => x.supplier)} priceList={priceListSuppliers} categories={categories} wide />
+        <button onClick={() => setTicked(x => { const n = new Set(x); mine.forEach(k => n.delete(k)); return n })} style={{ marginLeft: 'auto', fontSize: 12.5, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.7)', background: 'transparent', color: '#fff', cursor: 'pointer' }}>Untick</button>
+      </div>
+    )}
     <table style={{ borderCollapse: 'collapse', width: '100%' }}>
       <thead><tr>
         <th style={{ ...th, width: 22 }}><input type="checkbox" checked={all} disabled={readOnly} title="Tick all in this list" onChange={() => setTicked(x => { const n = new Set(x); for (const f of rows) { if (all) n.delete(f.key); else n.add(f.key) } return n })} /></th>
-        {['Line (not from the price list)', 'Item', 'Quantity', 'Rate', 'Cost', 'Allocate to'].map((h, i) => <th key={h} style={{ ...th, textAlign: i >= 2 && i <= 4 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+        {SORT_KEYS.map(([k, h], i) => <th key={k} onClick={() => setSort(sv => sv && sv.k === k ? (sv.dir === 'asc' ? { k, dir: 'desc' } : null) : { k, dir: 'asc' })} title="Sort by this column" style={{ ...th, textAlign: i >= 2 && i <= 4 ? 'right' : 'left', cursor: 'pointer', userSelect: 'none', color: sort && sort.k === k ? '#0f766e' : th.color }}>{h}{sort && sort.k === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>)}</tr></thead>
       <tbody>{rows.map(f => (
         <tr key={f.key} style={{ background: ticked.has(f.key) ? '#f0fdfa' : undefined }}>
           <td style={td}><input type="checkbox" checked={ticked.has(f.key)} disabled={readOnly} onChange={() => setTicked(x => { const n = new Set(x); if (n.has(f.key)) n.delete(f.key); else n.add(f.key); return n })} /></td>
@@ -53,7 +72,7 @@ export default function MaterialsTab({ est, lib, change, money, readOnly }) {
           <td style={td}><Alloc f={f} /></td>
         </tr>))}</tbody>
     </table>
-    )
+    </>)
   }
   const th = { textAlign: 'left', padding: '7px 9px', fontSize: 11.5, color: '#666', fontWeight: 600, borderBottom: '1px solid #ecebe6', background: '#faf9f7', whiteSpace: 'nowrap' }
   const td = { padding: '6px 9px', fontSize: 12.5, borderBottom: '1px solid #f4f3f0', verticalAlign: 'top' }
@@ -65,14 +84,6 @@ export default function MaterialsTab({ est, lib, change, money, readOnly }) {
         <strong style={{ fontSize: 16 }}>Materials to order {money(m.total, { dp: 2 })}</strong>
         <span style={{ color: '#888' }}>{m.suppliers.length} supplier{m.suppliers.length === 1 ? '' : 's'} · packs rounded up · supplier prices incl. increases and this quote's adjustments</span>
       </div>
-      {ticked.size > 0 && !readOnly && (
-        <div style={{ position: 'sticky', top: 6, zIndex: 30, display: 'flex', gap: 10, alignItems: 'center', background: '#0f766e', color: '#fff', borderRadius: 10, padding: '8px 12px', marginBottom: 10, fontSize: 13 }}>
-          <strong>{ticked.size} line{ticked.size === 1 ? '' : 's'} ticked</strong>
-          <span>Allocate to:</span>
-          <AllocSelect value="" onPick={(v) => { setAllocMany([...ticked], v); setTicked(new Set()) }} onEstimate={m.suppliers.map(x => x.supplier)} priceList={priceListSuppliers} categories={categories} wide />
-          <button onClick={() => setTicked(new Set())} style={{ marginLeft: 'auto', fontSize: 12.5, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.7)', background: 'transparent', color: '#fff', cursor: 'pointer' }}>Untick all</button>
-        </div>
-      )}
       {m.suppliers.map(s => (
         <div key={s.supplier} style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, marginBottom: 12, overflow: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #ecebe6' }}>
@@ -126,6 +137,7 @@ function AllocSelect({ value, onPick, onEstimate, priceList, categories, disable
   // category from what was typed. The list floats on the screen (not clipped).
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const [adding, setAdding] = useState(false)   // "+ Add new name…" - what is typed is added as it is (1159)
   const [pos, setPos] = useState(null)
   const btn = useRef(null), box = useRef(null)
   useEffect(() => {
@@ -134,7 +146,7 @@ function AllocSelect({ value, onPick, onEstimate, priceList, categories, disable
       const below = window.innerHeight - r.bottom - 10, up = below < 220 && r.top > below
       setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 268)), ...(up ? { bottom: window.innerHeight - r.top + 2, maxH: Math.min(340, r.top - 12) } : { top: r.bottom + 2, maxH: Math.min(340, Math.max(160, below)) }) }) }
     place()
-    const close = (e) => { if (box.current && !box.current.contains(e.target) && btn.current && !btn.current.contains(e.target)) { setOpen(false); setQ('') } }
+    const close = (e) => { if (box.current && !box.current.contains(e.target) && btn.current && !btn.current.contains(e.target)) { setOpen(false); setQ(''); setAdding(false) } }
     window.addEventListener('scroll', place, true); window.addEventListener('resize', place); document.addEventListener('mousedown', close)
     return () => { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place); document.removeEventListener('mousedown', close) }
   }, [open])
@@ -144,7 +156,7 @@ function AllocSelect({ value, onPick, onEstimate, priceList, categories, disable
   const groups = [['Suppliers on this estimate', onEstimate], ['Categories', cats], ['Price-list suppliers', priceList.filter(x => !onEstimate.includes(x))]]
     .map(([label, list]) => [label, list.filter(hit)]).filter(([, list]) => list.length)
   const exact = [...onEstimate, ...cats, ...priceList].some(x => x.toLowerCase() === q.trim().toLowerCase())
-  const pick = (v) => { onPick(v); setOpen(false); setQ('') }
+  const pick = (v) => { onPick(v); setOpen(false); setQ(''); setAdding(false) }
   return (
     <>
       <button ref={btn} type="button" disabled={disabled} onClick={() => setOpen(o => !o)}
@@ -154,8 +166,8 @@ function AllocSelect({ value, onPick, onEstimate, priceList, categories, disable
       {open && (
         <div ref={box} style={{ position: 'fixed', zIndex: 1200, width: 260, left: pos?.left ?? 0, ...(pos?.bottom != null ? { bottom: pos.bottom } : { top: pos?.top ?? 0 }), visibility: pos ? 'visible' : 'hidden', background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', display: 'flex', flexDirection: 'column', maxHeight: pos?.maxH ?? 340, color: '#1a1a19' }}>
           <div style={{ padding: 6, borderBottom: '1px solid #f0efec' }}>
-            <input autoFocus value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const first = groups[0] && groups[0][1][0]; pick(exact ? [...onEstimate, ...cats, ...priceList].find(x => x.toLowerCase() === q.trim().toLowerCase()) : (first && words.length && !exact && groups.length ? first : q.trim())) } if (e.key === 'Escape') { setOpen(false); setQ('') } }}
-              placeholder="Type to find, or a new name…" style={{ width: '100%', boxSizing: 'border-box', fontSize: 12.5, padding: '5px 8px', border: '1px solid #d4d4d0', borderRadius: 6 }} />
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && q.trim() && adding) { pick(q.trim()); return } if (e.key === 'Enter' && q.trim()) { const first = groups[0] && groups[0][1][0]; pick(exact ? [...onEstimate, ...cats, ...priceList].find(x => x.toLowerCase() === q.trim().toLowerCase()) : (first && words.length && !exact && groups.length ? first : q.trim())) } if (e.key === 'Escape') { setOpen(false); setQ(''); setAdding(false) } }}
+              placeholder={adding ? 'Type the new name, then Enter' : 'Type to find, or a new name…'} style={{ width: '100%', boxSizing: 'border-box', fontSize: 12.5, padding: '5px 8px', border: '1px solid #d4d4d0', borderRadius: 6 }} />
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {!wide && <div onMouseDown={e => e.preventDefault()} onClick={() => pick('')} style={{ padding: '6px 10px', fontSize: 12, color: '#888', cursor: 'pointer', borderBottom: '1px solid #f4f3f0' }}>— not allocated —</div>}
@@ -167,6 +179,7 @@ function AllocSelect({ value, onPick, onEstimate, priceList, categories, disable
             ))}
             {!groups.length && !q.trim() && <div style={{ padding: 10, fontSize: 12, color: '#aaa' }}>Nothing yet - type a name to add one.</div>}
             {q.trim() && !exact && <div onMouseDown={e => e.preventDefault()} onClick={() => pick(q.trim())} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: '#0f766e', fontWeight: 600, borderTop: '1px solid #f0efec' }}>+ Add "{q.trim()}"</div>}
+            {!q.trim() && <div onMouseDown={e => e.preventDefault()} onClick={() => { setAdding(true); setTimeout(() => box.current && box.current.querySelector('input') && box.current.querySelector('input').focus(), 0) }} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: '#0f766e', fontWeight: 600, borderTop: '1px solid #f0efec' }}>+ Add new name…</div>}
           </div>
         </div>
       )}
