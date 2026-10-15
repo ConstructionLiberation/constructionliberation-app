@@ -121,6 +121,9 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
       </Block>
 
       <Block title="Lines">
+        {/* LABOUR LINES (1148) - their boxes lined purple and a touch thicker, so they
+            stand out; a red warning border (e.g. a bad qty sum) still wins. */}
+        <style>{`.bu-labour input:not([type=checkbox]):not([data-alert]), .bu-labour select, .bu-labour textarea, .bu-labour td > div > button[type=button] { border: 2px solid #8b5cf6 !important; }`}</style>
         {(lsel.size > 0 || lclipN > 0) && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: lsel.size ? '#0f766e' : '#f0fdfa', color: lsel.size ? '#fff' : '#0f766e', border: '1px solid #0f766e', borderRadius: 10, padding: '6px 12px', marginBottom: 8, fontSize: 12.5 }}>
             {lsel.size > 0 ? <>
@@ -148,7 +151,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                 const choices = showAll[l.id] ? (l.type === 'labour' ? lib.labourItems.map(x => x.ref) : lib.products.map(x => x.ref)) : [...new Set([...(l.offers || []), ...(l.default ? [l.default] : [])])]
                 const qp = qtyProblem(l.qty, sizeNames)
                 return (
-                  <tr key={l.id} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
+                  <tr key={l.id} className={l.type === 'labour' ? 'bu-labour' : undefined} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><input type="checkbox" checked={lsel.has(l.id)} onChange={() => toggleLine(l.id)} title="Tick to copy or delete several lines" style={{ verticalAlign: 'middle', marginRight: 2 }} /><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
                     <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => setLine(l.id, { type: e.target.value })} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
                     <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 118 }} /></td>
@@ -174,7 +177,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <SizePicker value={l.applySize} t={t}
                       onChange={(list) => setLine(l.id, { applySize: !list.length ? undefined : list.length === 1 ? list[0] : list, ...(list.length && (!String(l.qty ?? '').trim() || Number(l.qty) === 0) ? { qty: '1' } : {}) })} />}</td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per rate" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type !== 'comment' && l.type !== 'lump sum' && <VarFlag l={l} cell="qty" setLine={setLine} />}{l.type !== 'comment' && <input value={l.qty || ''} onChange={e => setLine(l.id, { qty: e.target.value })} placeholder="per rate" style={{ ...cellInp, background: isVariable(l, 'qty') ? RED : undefined, width: 58, borderColor: qp ? '#dc2626' : undefined }} data-alert={qp ? '1' : undefined}  title={qp || (l.qty && sizeNames.length ? `= ${evalQty(l.qty, Object.fromEntries((t.sizes || []).map(z => [z.name, z.value])))}` : '')} />}
                       {/* What the line uses (1126): qty x the size it applies - and a warning when qty is 0 */}
                       {l.applySize && l.type !== 'comment' && (() => {
                         // What the line uses (1126, 1136): qty x the size - or x the SUM of several
