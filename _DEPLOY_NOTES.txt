@@ -1,22 +1,16 @@
-PACKAGE 1159 - Materials: sort the lines; the ticked bar in the table; Add new name
+PACKAGE 1160 - Labour lump sums are not materials
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1158.
+One file. Complete replacement. No re-seed. No env changes. Built on 1159.
 
-  components/MaterialsTab.js
+  lib/materials.js
 
-SORT - click any heading of a lines table (Line, Item, Quantity, Rate, Cost,
-Allocate to) to sort it; again to reverse; a third time back to as listed. An
-arrow shows the sort.
-THE TICKED BAR - "N lines ticked - Allocate to: [...]" now sits at the TOP OF
-THE TABLE the lines are in (e.g. right above "Not from the price list - not
-allocated"), for that table's ticked lines - not at the top of the page.
-+ ADD NEW NAME... - always at the bottom of the allocate list, before you type:
-click it, type the name, Enter - it goes in exactly as typed.
+A lump sum costed to LABOUR is no longer pulled into the Materials tab - it is
+labour, not material. Lump sums in other categories (Materials, Plant,
+Scaffold...) are still listed, to arrange or buy.
 
-Checked in a REAL browser (Chromium): Cost sorted lowest first ("Cost ▲") then
-highest first; two lines ticked -> the bar inside the unallocated card, right
-above its table; "+ Add new name…" shown before typing -> "Type the new name,
-then Enter" -> "Roof Safety" made a category with both lines (2,000.00). All
-165 pages pass the browser check. Built from your deployed packages
-(1022-1158, verified against their zips); the file checked identical to the
-tested version before zipping.
+Checked: an item with a Labour lump sum, a Plant lump sum and an own-item
+Primer -> the Materials list shows the Plant lump sum and the Primer, not the
+Labour one. In a REAL browser (Chromium) on the Materials tab: "Extra labour
+gang" (Labour) not listed; "Skip hire" (Plant) listed. All 165 pages pass the
+browser check. Built from your deployed packages (1022-1159, verified against
+their zips); the file checked identical to the tested version before zipping.
