@@ -1,24 +1,24 @@
-PACKAGE 1157 - Drag and drop build-up lines; purple for any labour-costed line
+PACKAGE 1158 - Materials: type to find a supplier; allocate several lines at once
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1156.
+One file. Complete replacement. No re-seed. No env changes. Built on 1157.
 
-  components/BuildupEditor.js     (the Build-ups page, unique items and every
-                                   item's build-up on the take-off)
+  components/MaterialsTab.js
 
-DRAG AND DROP LINES - each build-up line has a ⋮⋮ handle beside its tick box
-and arrows: drag it to a new place (a teal line shows where it will land);
-ticked lines move together; an added build-up's heading moves with its line.
-The arrows still work. (Item and Label are slightly narrower so a whole line
-still fits at 1366px.)
-PURPLE LINES - a line is lined purple when it is a labour line OR its cost
-category is Labour - so a lump sum or lump spread costed to Labour is purple
-too. (A line added with "+ labour" was already purple in testing - on the
-Build-ups page and in a unique item's pop-out; if one shows grey after this
-deploy, a hard refresh - Ctrl+Shift+R - clears an old cached page.)
+ALLOCATE TO is now a searchable box: click it and TYPE TO SHORTEN THE LIST
+(suppliers on this estimate, your categories, price-list suppliers - still
+grouped). If what you typed is not there, "+ Add '...'" makes it a new
+category. Enter picks the first match (or adds the name). "— not allocated —"
+at the top sets a line back. The list floats on the screen, so a short card
+cannot clip it.
+SEVERAL AT ONCE: a tick box on the left of each line, and a tick-all in each
+table's header. With lines ticked, a banner - "N lines ticked - Allocate to:
+[the same searchable box]" - sends every ticked line to one supplier or
+category. Untick all clears the ticks.
 
-Checked in a REAL browser (Chromium) at 1366px: Discs dragged onto VCL -> top;
-Tape and Insulation ticked, Tape dragged below Tubes -> both moved; a lump sum
-costed to Labour -> purple 2px; the new order saved; a whole line fits at
-1366px and 1600px. All 165 pages pass the browser check. Built from your
-deployed packages (1022-1156, verified against their zips); the file checked
+Checked in a REAL browser (Chromium): typing "ren" cut 15 choices to Renolit;
+Solvent -> Renolit (620.00 -> 920.00); "Mansafe" -> + Add -> a Mansafe card;
+White (LPVC) and Walkway ticked -> "2 lines ticked" -> Sub-Contractor typed
+and Enter -> both in a new Sub-Contractor card, only Tape left unallocated;
+tick-all ticked the rest. All 165 pages pass the browser check. Built from your
+deployed packages (1022-1157, verified against their zips); the file checked
 identical to the tested version before zipping.
