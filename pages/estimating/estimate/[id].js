@@ -4,7 +4,7 @@ import EstimatingShell, { ErrorBar, estApi } from '../../../components/Estimatin
 import { useFormat } from '../../../components/TenantProvider'
 import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
 import BuildupEditor, { pct, fromPct, NumBox } from '../../../components/BuildupEditor'
-import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview } from '../../../components/QuoteTabs'
+import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview, letterNodes, redNodes } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import LabourRates from '../../../components/LabourRates'
@@ -184,6 +184,20 @@ export default function EstimatePage() {
         ))}
     </div>
   ) : null
+  // AN ISSUED REVISION, AS ISSUED (1168, 1174) - read the same way by the Quote,
+  // Letter and Clarifications tabs; null while it loads
+  const snapView = (rev) => {
+    const snap = revSnaps[rev]
+    if (!snap) return null
+    const entry = (est.revisions || []).find(r => r.revision === rev) || {}
+    const estS = { ...snap.estimate, revision: snap.revision }
+    const libS = withLock(libRaw, snap.priceLib)
+    const live = (!snap.priced || !snap.totals) ? priceEstimate({ ...snap.estimate, priceLock: snap.priceLib || snap.estimate.priceLock || null }, libRaw) : null
+    const pricedS = snap.priced || live.priced, totalsS = snap.totals || live.totals
+    const at = entry.sent ? entry.sent.at : snap.issuedAt
+    const valuesS = placeholderValues({ est: estS, details: detailsFor(estS, snap.crm), total: totalsS.total, companyName, money, dateText: new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })
+    return { snap, entry, estS, libS, pricedS, totalsS, valuesS }
+  }
   // the documents listed on the quote's Documents page
   const [quoteDocsList, setQuoteDocsList] = useState([])
   useEffect(() => {
@@ -514,22 +528,39 @@ export default function EstimatePage() {
       {/* AN ISSUED REVISION, AS ISSUED (1168) - its own letter, clarifications,
           prices, date and terms, from its snapshot */}
       {tab === 'quote' && quoteRev !== 'draft' && (() => {
-        const snap = revSnaps[quoteRev]
-        if (!snap) return <div>{revBar}<div style={{ color: '#888', fontSize: 13, marginTop: 10 }}>{revSnapErr || `Loading Rev ${quoteRev}…`}</div></div>
-        const entry = (est.revisions || []).find(r => r.revision === quoteRev) || {}
-        const estS = { ...snap.estimate, revision: snap.revision }
-        const libS = withLock(libRaw, snap.priceLib)
-        const live = (!snap.priced || !snap.totals) ? priceEstimate({ ...snap.estimate, priceLock: snap.priceLib || snap.estimate.priceLock || null }, libRaw) : null
-        const pricedS = snap.priced || live.priced, totalsS = snap.totals || live.totals
-        const at = entry.sent ? entry.sent.at : snap.issuedAt
-        const valuesS = placeholderValues({ est: estS, details: detailsFor(estS, snap.crm), total: totalsS.total, companyName, money, dateText: new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })
+        const v = snapView(quoteRev)
+        if (!v) return <div>{revBar}<div style={{ color: '#888', fontSize: 13, marginTop: 10 }}>{revSnapErr || `Loading Rev ${quoteRev}…`}</div></div>
+        const { snap, entry, estS, libS, pricedS, totalsS, valuesS } = v
         return <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === quoteRev)} est={estS} values={valuesS} priced={pricedS} totals={totalsS} templates={quoteDocs} money={money} companyName={companyName} termsOverride={snap.terms || null} lib={libS} draft={false}
           actions={entry.sent
             ? <span style={{ fontSize: 12.5, color: '#15803d' }}>Rev {quoteRev} sent {new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · <button onClick={() => { if (window.confirm(`Unmark Rev ${quoteRev} as sent?`)) markSent(quoteRev, false) }} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Unmark sent</button></span>
             : <span style={{ fontSize: 12.5, color: '#666' }}>Rev {quoteRev} issued {new Date(snap.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, not sent · <button onClick={() => markSent(quoteRev, true)} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Mark as sent</button></span>} />
       })()}
       {revView && <RevisionViewer view={revView} est={est} lib={lib} money={money} onClose={() => setRevView(null)} onEdit={reopenRevision} busy={busy} />}
-      {(tab === 'letter' || tab === 'clar' || tab === 'docs') && (
+      {/* LETTER / CLARIFICATIONS FOLLOW THE REVISIONS (1174) - the bar; an earlier
+          revision shown AS ISSUED, read-only; the draft (or a revision being
+          edited) is where the new revision's are amended */}
+      {(tab === 'letter' || tab === 'clar') && (est.revisions || []).length > 0 && <div style={{ marginBottom: 10 }}>{revBar}</div>}
+      {(tab === 'letter' || tab === 'clar') && quoteRev !== 'draft' && (() => {
+        const v = snapView(quoteRev)
+        if (!v) return <div style={{ color: '#888', fontSize: 13 }}>{revSnapErr || `Loading Rev ${quoteRev}…`}</div>
+        const { entry, estS, valuesS } = v
+        const note = <div style={{ fontSize: 12.5, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '7px 12px', marginBottom: 10 }}>
+          <strong>Rev {quoteRev}</strong>{entry.sent ? `, sent ${new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ', issued'} - as it went out, read-only. To change it for the next quote, switch to <button onClick={() => showRev('draft')} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>the draft</button>.</div>
+        if (tab === 'letter') return <div style={{ maxWidth: 900 }}>{note}
+          <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 18, whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6 }}>{letterOf(estS, quoteDocs).trim() ? letterNodes(letterOf(estS, quoteDocs), valuesS) : <span style={{ color: '#aaa' }}>No letter.</span>}</div></div>
+        let n = 0
+        const list = clarOf(estS, quoteDocs).filter(x => String(x.text || '').trim())
+        return <div style={{ maxWidth: 900 }}>{note}
+          <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 18 }}>
+            <strong style={{ fontSize: 15 }}>Clarifications</strong>
+            {!list.length && <div style={{ color: '#aaa', fontSize: 13, marginTop: 6 }}>None.</div>}
+            {list.map(x => x.kind === 'header'
+              ? <div key={x.id} style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 4px' }}>{x.text}</div>
+              : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 22, color: '#555' }}>{++n}.</span><span>{redNodes(x.text)}</span></div>)}
+          </div></div>
+      })()}
+      {(tab === 'docs' || ((tab === 'letter' || tab === 'clar') && quoteRev === 'draft')) && (
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {tab === 'letter' && <LetterTab est={est} change={change} templates={quoteDocs} values={values} canEditTemplate={canEditDocs}
             onSaveTemplate={async (body) => { const d = await estApi('/api/estimating/quote-templates', { action: 'save', letter: { body } }); setQuoteDocs(d.templates) }} />}
