@@ -1,17 +1,26 @@
-PACKAGE 1148 - Labour lines stand out: boxes lined purple, a touch thicker
+PACKAGE 1149 - Lump sums and lump spreads: the cost category must be chosen
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1147.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1148.
 
+  lib/buildups.js
   components/BuildupEditor.js     (the Build-ups page AND the take-off pop-out)
 
-On every LABOUR line in a rate build-up, the boxes - type, label, item, apply
-size, qty, rate, waste, cost category - are lined PURPLE and 2px (from grey
-1px), so labour lines are easy to pick out. Material, lump and comment lines
-are unchanged. A red warning border (e.g. a qty sum that does not work) still
-shows on a labour line - the purple never hides a mistake.
+A NEW LUMP SUM or LUMP SPREAD line starts with NO cost category ("— choose —")
+- before, a lump spread became Delivery and a lump sum Materials on their own.
+Until one is chosen:
+  - the category box is RED
+  - the line is NOT IN THE RATE - "Scaffold: choose a cost category"
+  - so the item counts as not fully costed, and the quote cannot be issued
+CHANGING A LINE'S TYPE now sets its category: to labour -> Labour; to material
+-> Materials; to lump sum / lump spread -> cleared, to be chosen. New material
+and labour lines still get Materials / Labour automatically. Existing lump
+lines that already have a category are unaffected.
 
-Checked in a REAL browser (Chromium): the Lab line's boxes 2px purple; the VCL
-material line's unchanged; a bad qty on the labour line stayed red; a whole
-line still fits at 1366px and 1600px. All 165 pages pass the browser check.
-Built from your deployed packages (1022-1147, verified against their zips);
-the file checked identical to the tested version before zipping.
+Checked: a lump sum with no category - not in the rate (5, not 355), "Scaffold:
+choose a cost category", and the issue check names it; with Plant - 355. In a
+REAL browser (Chromium): a new lump sum's category "— choose —" in red, listed
+as not in the rate; Plant chosen -> red gone, = 350.00; type changed -> Labour,
+Materials, then "— choose —" for lump spread and lump sum; a new lump spread
+"— choose —"; new material / labour lines Materials / Labour; a whole line
+still fits at 1366px and 1600px. All 165 pages pass the browser check. Built
+from your deployed packages (1022-1148, verified against their zips).

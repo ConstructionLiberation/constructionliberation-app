@@ -71,7 +71,8 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
     const copy = { ...JSON.parse(JSON.stringify(x.lines[k])), id: `L${top + 1}` }
     return { ...x, lines: [...x.lines.slice(0, k + 1), copy, ...x.lines.slice(k + 1)] }
   })
-  const addLine = (type) => setT(x => ({ ...x, lines: [...x.lines, { id: nextId(), type, label: '', offers: [], default: '', amount: null, qty: type === 'comment' ? '' : '1', waste: null, increase: null, cost: type === 'labour' ? 'Labour' : type === 'lump sum' ? 'Delivery' : type === 'comment' ? '' : 'Materials', comment: '' }] }))
+  // A new lump sum / lump spread has NO cost category - it must be chosen (1149).
+  const addLine = (type) => setT(x => ({ ...x, lines: [...x.lines, { id: nextId(), type, label: '', offers: [], default: '', amount: null, qty: type === 'comment' ? '' : '1', waste: null, increase: null, cost: type === 'labour' ? 'Labour' : type === 'material' ? 'Materials' : '', comment: '' }] }))
   const sizeNames = (t.sizes || []).map(z => z.name)
   const r = rateFor(t, lib, rateOpts || {})
   const lineCost = Object.fromEntries(r.lines.map(x => [x.id, x]))
@@ -153,7 +154,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                 return (
                   <tr key={l.id} className={l.type === 'labour' ? 'bu-labour' : undefined} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><input type="checkbox" checked={lsel.has(l.id)} onChange={() => toggleLine(l.id)} title="Tick to copy or delete several lines" style={{ verticalAlign: 'middle', marginRight: 2 }} /><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
-                    <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => setLine(l.id, { type: e.target.value })} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
+                    <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => { const ty = e.target.value; setLine(l.id, { type: ty, cost: ty === 'labour' ? 'Labour' : ty === 'material' ? 'Materials' : '' }) }} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
                     <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 118 }} /></td>
                     <td style={{ ...td, minWidth: 194 }}>
                       {isProd && <>
@@ -209,7 +210,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{l.type === 'material' && <><NumBox pct value={l.waste ?? null} onChange={v => setLine(l.id, { waste: v })} style={{ ...cellInp, width: 52, background: isVariable(l, 'waste') ? RED : undefined }} /><VarFlag l={l} cell="waste" setLine={setLine} /></>}</td>
                     <td style={td}>{l.type === 'material' && <NumBox pct value={l.increase ?? null} onChange={v => setLine(l.id, { increase: v })} style={{ ...cellInp, width: 52 }} />}</td>
                     <td style={{ ...tdR, fontWeight: 700, color: '#0f766e', whiteSpace: 'nowrap' }} title="Rate x Qty (x waste / increase)">{lc.cost != null ? `= ${money(lc.cost, { dp: 2 })}` : ''}</td>
-                    <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} style={{ ...cellInp, width: 92 }}><option value="">—</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
+                    <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} data-alert={(l.type === 'lump' || l.type === 'lump sum') && !l.cost ? '1' : undefined} title={(l.type === 'lump' || l.type === 'lump sum') && !l.cost ? 'Choose the cost category - until you do, this line is not in the rate' : ''} style={{ ...cellInp, width: 92, ...((l.type === 'lump' || l.type === 'lump sum') && !l.cost ? { background: RED, borderColor: '#dc2626', borderWidth: 2, color: '#b91c1c', fontWeight: 600 } : {}) }}><option value="">{(l.type === 'lump' || l.type === 'lump sum') ? '— choose —' : '—'}</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => copyLine(l.id)} style={{ ...iconBtn, marginRight: 2 }} title="Copy this line - an exact copy goes directly underneath">⧉</button><button onClick={() => setT(x => ({ ...x, lines: x.lines.filter(y => y.id !== l.id), rules: (x.rules || []).filter(rr => rr.line !== l.id) }))} style={iconBtn} title="Remove line">✕</button></td>
                   </tr>
                 )
