@@ -1,30 +1,38 @@
-PACKAGE 1138 - Hide categories that are not in use
+PACKAGE 1139 - Take-off: tick, copy/paste, delete, highlight, notes, drag and
+drop, blank lines; louder warnings  (take-off part 1 of 3)
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1137.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1138.
 
-  pages/estimating/build-ups.js
+  lib/estimate.js
+  components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/build-ups.js
 
-A ⚙ beside the search box at the top of the CATEGORIES column lists every
-category with an "In use" tick. Untick one and the whole category is hidden -
-gone from the categories list, and its build-ups from the search and from the
-take-off's "Item from build-ups" picker. "N categories hidden" shows; "Show
-hidden categories in the list" brings them back, greyed and marked "(hidden)".
-It works alongside hiding single build-ups (1137): showing a category again
-restores what was showing - build-ups hidden on their own stay hidden.
-Nothing is deleted; kept through renaming the category; stored apart.
+Each take-off line has a TICK BOX and a DRAG HANDLE (⋮⋮) beside the ↑ ↓ arrows.
+Ticking brings up a banner:
+  COPY / PASTE / DELETE - one or several lines. Copy uses this browser, so it
+    pastes into ANOTHER estimate too; Paste goes below the last ticked line (or
+    "Paste at the end" when nothing is ticked). Copies get new ids.
+  HIGHLIGHT - yellow at once; the swatches change it to orange, red or green;
+    Clear highlight removes it.
+  ADD NOTE - a yellow sticky note beside the item (also "Note" on each item).
+    Take-off only - never on the quote. × removes it.
+DRAG AND DROP - by the handle; ticked lines move together.
++ BLANK LINE - a spacer for layout; never priced, not on the quote.
+LOUDER WARNINGS - "⚠ N lines without a cost - not yet in the rate" in bold red
+on the item; "⚠ N items without a quantity - not in the total" big, red and
+boxed in the totals bar.
+(Server: estimates may now hold blank lines - previously any row other than an
+item or a section was refused.)
 
-The menu opens inside the column (with a Done button) rather than floating:
-floating, it was clipped by the scrolling column and covered by the next one,
-so its ticks could not be clicked - found in a real browser before shipping.
-
-Checked through the real route: Felt hidden -> all 15 Felt build-ups marked,
-no others; shown again -> the one hidden on its own stays hidden; the hidden
-category renamed "Felt Roofing" stays hidden; deleted -> cleared. In a REAL
-browser (Chromium): 21 categories; unticking Felt -> 20, "1 category hidden",
-saved; "felt" search finds nothing; Show hidden categories -> "Felt (hidden)";
-on an estimate the picker offers no Felt, in its categories or a search. All
+Checked in a REAL browser (Chromium): tick two -> "2 selected"; Highlight ->
+yellow, orange swatch -> orange; Add note -> two yellow notes; Copy + Paste ->
+two copies below, note kept; Delete -> removed, ticks cleared; one row dragged
+up; two ticked rows dragged together below "Roof area B"; + Blank line; the
+warnings at 12.5px / 15px red. The server accepts blank lines, highlights and
+notes, prices skip blank lines, an unknown row kind is still refused. All
 server routes compile; all 165 pages pass the browser check. Built from your
-deployed packages (1022-1137, verified against their zips); each file checked
-identical to the tested version before zipping.
+deployed packages (1022-1138, verified against their zips).
+
+STILL TO COME: part 2 - below the line (rate-only and optional items) and the
+notes box beside Revisions; part 3 - blocking issue with a GBP0 item, and the
+pricing checklist.

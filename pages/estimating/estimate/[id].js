@@ -11,7 +11,7 @@ import { placeholderValues } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -151,6 +151,57 @@ export default function EstimatePage() {
   const setSetting = (k, v) => change(e => ({ ...e, settings: { ...e.settings, [k]: v } }))
   const move = (i, d) => change(e => { const rs = [...e.rows]; const j = i + d; if (j < 0 || j >= rs.length) return e; [rs[i], rs[j]] = [rs[j], rs[i]]; return { ...e, rows: rs } })
   const addRow = (row, open) => { change(e => ({ ...e, rows: [...e.rows, row] })); if (open) setPopout(row.id) }
+  // SELECT, COPY / PASTE / DELETE, HIGHLIGHT, NOTE, DRAG AND DROP (1139).
+  // Copy goes to this browser's storage, so it pastes into another estimate too.
+  const [sel, setSel] = useState(() => new Set())
+  const [drag, setDrag] = useState(null)          // ids being dragged
+  const [dropAt, setDropAt] = useState(null)      // { id, after }
+  const [clipN, setClipN] = useState(0)
+  const [selMsg, setSelMsg] = useState('')
+  const CLIP = 'rock:takeoff-clipboard'
+  useEffect(() => { try { const c = JSON.parse(localStorage.getItem(CLIP) || 'null'); setClipN(c?.rows?.length || 0) } catch {} }, [])
+  const toggleSel = (id) => setSel(x => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const selRows = () => (est?.rows || []).filter(r => sel.has(r.id))
+  const copySel = () => {
+    const rows = selRows(); if (!rows.length) return
+    try { localStorage.setItem(CLIP, JSON.stringify({ rows, at: Date.now() })) } catch {}
+    setClipN(rows.length); setSelMsg(`Copied ${rows.length} line${rows.length === 1 ? '' : 's'} - Paste puts them below the ticked line (or at the end), here or in another estimate.`)
+  }
+  const pasteRows = () => {
+    let c = null; try { c = JSON.parse(localStorage.getItem(CLIP) || 'null') } catch {}
+    if (!c?.rows?.length) return
+    const fresh = copyRows(c.rows)
+    change(e => { const rs = [...e.rows]; const last = Math.max(-1, ...rs.map((r, i) => sel.has(r.id) ? i : -1)); rs.splice(last >= 0 ? last + 1 : rs.length, 0, ...fresh); return { ...e, rows: rs } })
+    setSel(new Set(fresh.map(r => r.id))); setSelMsg(`Pasted ${fresh.length} line${fresh.length === 1 ? '' : 's'}.`)
+  }
+  const deleteSel = () => {
+    const n = sel.size; if (!n || !window.confirm(`Delete ${n} line${n === 1 ? '' : 's'}?`)) return
+    change(e => ({ ...e, rows: e.rows.filter(r => !sel.has(r.id)) })); setSel(new Set()); setSelMsg('')
+  }
+  const highlightSel = (colour) => change(e => ({ ...e, rows: e.rows.map(r => sel.has(r.id) ? { ...r, highlight: colour || undefined } : r) }))
+  const noteSel = () => change(e => ({ ...e, rows: e.rows.map(r => sel.has(r.id) && r.kind === 'item' && r.note == null ? { ...r, note: '' } : r) }))
+  const moveRows = (ids, targetId, after) => change(e => {
+    if (!ids?.length || ids.includes(targetId)) return e
+    const moving = e.rows.filter(r => ids.includes(r.id)), rest = e.rows.filter(r => !ids.includes(r.id))
+    let k = rest.findIndex(r => r.id === targetId); if (k < 0) return e
+    if (after) k++
+    rest.splice(k, 0, ...moving); return { ...e, rows: rest }
+  })
+  const HL = { yellow: '#fef9c3', orange: '#ffedd5', red: '#fee2e2', green: '#dcfce7' }
+  const rowLook = (r, base) => ({ background: r.highlight ? HL[r.highlight] : base, opacity: drag?.includes(r.id) ? 0.4 : 1,
+    boxShadow: dropAt?.id === r.id ? (dropAt.after ? 'inset 0 -3px 0 #0f766e' : 'inset 0 3px 0 #0f766e') : undefined })
+  const dropProps = (r) => ({
+    onDragOver: (e) => { if (!drag) return; e.preventDefault(); const b = e.currentTarget.getBoundingClientRect(); setDropAt({ id: r.id, after: e.clientY > b.top + b.height / 2 }) },
+    onDrop: (e) => { e.preventDefault(); if (drag && dropAt) moveRows(drag, dropAt.id, dropAt.after); setDrag(null); setDropAt(null) },
+  })
+  const lead = (r, i) => (
+    <td style={{ ...td, whiteSpace: 'nowrap' }}>
+      <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} title="Tick to copy, delete, highlight, add a note or drag several" style={{ verticalAlign: 'middle', marginRight: 4 }} />
+      <span draggable onDragStart={(e) => { const ids = sel.has(r.id) ? est.rows.filter(x => sel.has(x.id)).map(x => x.id) : [r.id]; setDrag(ids); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', ids.join(',')) } catch {} }}
+        onDragEnd={() => { setDrag(null); setDropAt(null) }} title="Drag to move (ticked lines move together)" style={{ cursor: 'grab', color: '#aaa', padding: '0 3px', userSelect: 'none', fontSize: 13 }}>⋮⋮</span>
+      <Arrows i={i} move={move} />
+    </td>
+  )
 
   const { priced, totals } = useMemo(() => est ? priceEstimate(est, lib) : { priced: {}, totals: {} }, [est, lib])
   const secTot = useMemo(() => est ? sectionTotals(est, priced) : {}, [est, priced])
@@ -336,6 +387,28 @@ export default function EstimatePage() {
                 <div style={{ fontSize: 11, color: '#999', marginTop: 8 }}>Remembered in this browser.</div>
               </div>
             )}
+            {(sel.size > 0 || clipN > 0) && (
+              <div style={{ position: 'sticky', top: 6, zIndex: 30, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: sel.size ? '#0f766e' : '#f0fdfa', color: sel.size ? '#fff' : '#0f766e', border: '1px solid #0f766e', borderRadius: 10, padding: '7px 12px', marginBottom: 8, fontSize: 13 }}>
+                {sel.size > 0 ? <>
+                  <strong>{sel.size} selected</strong>
+                  <button onClick={copySel} style={bannerBtn}>Copy</button>
+                  {clipN > 0 && <button onClick={pasteRows} style={bannerBtn} title="Paste below the last ticked line">Paste {clipN}</button>}
+                  <button onClick={deleteSel} style={bannerBtn}>Delete</button>
+                  <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.4)' }} />
+                  <button onClick={() => highlightSel('yellow')} style={bannerBtn}>Highlight</button>
+                  {Object.entries(HL).map(([k, v]) => <button key={k} onClick={() => highlightSel(k)} title={k} style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #fff', background: v, cursor: 'pointer', padding: 0 }} />)}
+                  <button onClick={() => highlightSel(null)} style={bannerBtn}>Clear highlight</button>
+                  <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.4)' }} />
+                  <button onClick={noteSel} style={bannerBtn}>Add note</button>
+                  <button onClick={() => { setSel(new Set()); setSelMsg('') }} style={{ ...bannerBtn, marginLeft: 'auto' }}>Untick all</button>
+                </> : <>
+                  <span>{clipN} line{clipN === 1 ? '' : 's'} copied</span>
+                  <button onClick={pasteRows} style={{ ...bannerBtn, color: '#0f766e', borderColor: '#0f766e' }}>Paste at the end</button>
+                  <button onClick={() => { try { localStorage.removeItem(CLIP) } catch {} setClipN(0) }} style={{ ...bannerBtn, color: '#0f766e', borderColor: '#99f6e4' }}>Clear</button>
+                </>}
+                {selMsg && sel.size > 0 && <span style={{ flexBasis: '100%', fontSize: 11.5, opacity: 0.9 }}>{selMsg}</span>}
+              </div>
+            )}
             <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
               <thead><tr>
@@ -344,9 +417,16 @@ export default function EstimatePage() {
                 <th style={th} />
               </tr></thead>
               <tbody>
-                {est.rows.map((r, i) => r.kind === 'section' ? (
-                  <tr key={r.id} style={{ background: '#f4f4f2' }}>
-                    <td style={td}><Arrows i={i} move={move} /></td>
+                {est.rows.map((r, i) => r.kind === 'spacer' ? (
+                  // A BLANK LINE (1139) - layout only
+                  <tr key={r.id} style={rowLook(r)} {...dropProps(r)}>
+                    {lead(r, i)}
+                    <td style={{ ...td, height: 24 }} colSpan={5 + cells} />
+                    <td style={td}><button onClick={() => change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) }))} style={iconBtn} title="Remove blank line">✕</button></td>
+                  </tr>
+                ) : r.kind === 'section' ? (
+                  <tr key={r.id} style={rowLook(r, '#f4f4f2')} {...dropProps(r)}>
+                    {lead(r, i)}
                     <td style={td} colSpan={4}><input value={r.title} onChange={e => setRow(r.id, { title: e.target.value })} style={{ ...cellInp, fontWeight: 700, textDecoration: 'underline', width: '100%', background: 'transparent', border: 'none' }} /></td>
                     <td style={td} />
                     {cells > 0 && <td style={td} colSpan={cells} />}
@@ -355,12 +435,15 @@ export default function EstimatePage() {
                 ) : (() => {
                   const p = priced[r.id] || {}
                   return (
-                    <tr key={r.id} style={{ background: r.rateOnly ? '#fafaf7' : undefined }}>
-                      <td style={td}><Arrows i={i} move={move} /></td>
+                    <tr key={r.id} style={rowLook(r, r.rateOnly ? '#fafaf7' : undefined)} {...dropProps(r)}>
+                      {lead(r, i)}
                       <td style={{ ...td, minWidth: 260 }}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1, minWidth: 260 }}>
                         <input value={r.description} onChange={e => setRow(r.id, { description: e.target.value })} style={{ ...cellInp, width: '100%' }} />
                         <div style={{ fontSize: 11, color: p.missing?.length ? '#b45309' : '#aaa', marginTop: 2 }}>
-                          {r.templateRef ? 'from the build-ups' : 'unique item'}{p.missing?.length ? ` · ${p.missing.length} line${p.missing.length === 1 ? '' : 's'} not yet in the rate` : ''}
+                          {r.templateRef ? 'from the build-ups' : 'unique item'}
+                          {p.missing?.length ? <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 12.5 }}> · ⚠ {p.missing.length} line{p.missing.length === 1 ? '' : 's'} without a cost - not yet in the rate</span> : null}
                           {r.buildup && needsAmending(r.buildup) && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · description needs amending</span>}
                           {r.buildup && missingSizes(r.buildup).length > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {missingSizes(r.buildup).join(', ')} required</span>}
                           {r.buildup && [...missingProducts(r.buildup, lib), ...missingVars(r.buildup)].length > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {[...missingProducts(r.buildup, lib), ...missingVars(r.buildup)].join(', ')} not chosen</span>}
@@ -373,6 +456,16 @@ export default function EstimatePage() {
                               : x.red === 'missing' ? <span key={k} style={{ color: '#b91c1c', fontWeight: 700 }} title="Not chosen yet - choose it in the item's Build-up">{x.text}</span>
                               : <span key={k}>{x.text}</span>)}
                           </div>) : null })()}
+                        </div>
+                        {/* THE NOTE (1139) - a yellow sticky beside the item; take-off only */}
+                        {r.note != null && (
+                          <div style={{ width: 210, flexShrink: 0, background: '#fde047', borderRadius: 4, padding: '6px 8px', boxShadow: '0 2px 6px rgba(0,0,0,0.12)', position: 'relative' }}>
+                            <button onClick={() => setRow(r.id, { note: undefined })} title="Remove note" style={{ position: 'absolute', top: 2, right: 4, border: 'none', background: 'none', cursor: 'pointer', color: '#854d0e', fontSize: 13 }}>×</button>
+                            <textarea value={r.note} onChange={e => setRow(r.id, { note: e.target.value })} placeholder="Note…" rows={4} autoFocus={!r.note}
+                              style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', fontSize: 12, fontFamily: 'inherit', color: '#422006', marginTop: 8 }} />
+                          </div>
+                        )}
+                        </div>
                       </td>
                       <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
                       <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
@@ -381,6 +474,7 @@ export default function EstimatePage() {
                       {shown.flatMap(c => c.render(r, p))}
                       <td style={{ ...td, whiteSpace: 'nowrap' }}>
                         <button onClick={() => setPopout(r.id)} style={smallBtn}>Build-up</button>
+                        {r.note == null && <button onClick={() => setRow(r.id, { note: '' })} style={{ ...smallBtn, marginLeft: 4 }} title="Add a note beside this item">Note</button>}
                         <button onClick={() => { if (window.confirm(`Remove "${r.description}"?`)) change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) })) }} style={iconBtn} title="Remove item">✕</button>
                       </td>
                     </tr>
@@ -405,6 +499,7 @@ export default function EstimatePage() {
         <button onClick={() => addRow(sectionRow('New section'))} style={btn}>+ Section header</button>
         <button onClick={() => setPicking(true)} style={btn} disabled={!templates.length} title={templates.length ? '' : 'Upload build-ups first'}>+ Item from build-ups</button>
         <button onClick={() => addRow(uniqueItem('m2'), true)} style={btn}>+ Unique item</button>
+        <button onClick={() => addRow(spacerRow())} style={btn} title="A blank line - layout only, not on the quote">+ Blank line</button>
         <button onClick={() => { const [sec, it] = prelimsRows(); change(e => ({ ...e, rows: [...e.rows, sec, it] })); setPopout(it.id) }} style={btn} title="Lodge, management, attendances - lump sums for the job">+ Prelims</button>
       </div>
 
@@ -414,7 +509,7 @@ export default function EstimatePage() {
         <span>Labour {money(totals.labour || 0, { dp: 2 })}</span>
         <span>Profit &amp; MCD {money(totals.profitAndMcd || 0, { dp: 2 })}</span>
         {totals.belowLine > 0 && <span style={{ color: '#666' }}>{totals.belowLine} rate-only item{totals.belowLine === 1 ? '' : 's'} below the line</span>}
-        {totals.noQty > 0 && <span style={{ color: '#b45309' }}>{totals.noQty} item{totals.noQty === 1 ? '' : 's'} without a quantity - not in the total</span>}
+        {totals.noQty > 0 && <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px' }}>⚠ {totals.noQty} item{totals.noQty === 1 ? '' : 's'} without a quantity - not in the total</span>}
       </div>
 
       {issueMsg && <div style={{ marginTop: 10, fontSize: 13, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, padding: '8px 12px' }}>{issueMsg}</div>}
@@ -636,3 +731,5 @@ function SaveStatus({ state, dirty, archived }) {
   if (state.kind === 'saved') return <span style={{ fontSize: 12.5, color: '#15803d' }}>All changes saved {t(state.at)}</span>
   return <span style={{ fontSize: 12.5, color: '#aaa' }}>Saves automatically</span>
 }
+
+const bannerBtn = { fontSize: 12.5, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.7)', background: 'transparent', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' }

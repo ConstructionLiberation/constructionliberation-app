@@ -97,6 +97,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
   const terms = termsOverride || currentTerms(templates)
   const above = [], below = []
   for (const r of est.rows || []) {
+    if (r.kind === 'spacer') continue        // blank lines are take-off layout only (1139)
     if (r.kind === 'section') above.push(r)
     else if (r.rateOnly) below.push(r)
     else above.push(r)
