@@ -1,31 +1,26 @@
-PACKAGE 1169 - Documents appended to the quote, per revision  (part 3 of 4)
+PACKAGE 1170 - Export the take-off to Excel  (part 4 of 4)
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1168.
+One file. Complete replacement. No re-seed. No env changes. Built on 1169.
 
-  components/DocumentsPanel.js
-  components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/documents.js
 
-THE DOCUMENTS TAB is now the documents to APPEND TO THE QUOTE - mark-ups,
-technical documents... - with NO item dropdown (documents on an item, from its
-build-up, stay with the item and are not appended).
-PER REVISION: "Documents for Rev B" - add and remove the working revision's
-here. Earlier revisions' are listed read-only ("Rev A - 2 documents (issued -
-kept with Rev A, not carried forward)") - NEVER brought into the new revision.
-Once a revision is issued its documents are fixed - the server refuses adding
-to or removing from it.
-THE QUOTE's Documents page lists the documents of the revision being viewed -
-the draft's, or Rev A's when Rev A is shown.
-DOCUMENTS FROM BEFORE THIS CHANGE have no revision: they show as "Not yet on a
-revision", each with "Add to Rev X" (or Delete) - nothing is guessed.
+"⬇ Export to Excel" beside "⚙ Columns" on the take-off downloads it as an
+Excel file, as it is on screen:
+  - columns: Description, Build-up description, Qty, Unit, Rate, Total, then
+    the optional columns SHOWING under Columns, in the same order (materials,
+    labour, profit, the item's profit %, rate only, each supplier shown)
+  - rows: the section headers, the items, blank lines, the Totals row, and
+    BELOW THE LINE with its items
+  - money formatted to the penny; profit % as a percentage
+The file is named e.g. "Q-1042-Rev-A-take-off.xlsx". The Excel library loads
+only when the button is used.
 
-Checked through the real route: a document on draft Rev A stamped Rev A; Rev
-A issued -> adding to Rev A refused, removing its document refused; on draft
-Rev B a new document goes on Rev B; an old one placed on Rev B. In a REAL
-browser (Chromium): "Documents for Rev B" with only Rev B's data sheet, no
-item dropdown; Rev A's listed read-only (no Delete); the old one with "Add to
-Rev B"; the item photo not shown; the draft quote's Documents page lists the
-Rev B sheet only, Rev A's lists its mark-up only. All server routes compile;
-all 166 pages pass the browser check. Built from your deployed packages
-(1022-1168, verified against their zips).
+Checked in a REAL browser (Chromium): Profit rate hidden and Renolit shown ->
+the downloaded file's 15 columns match the screen (plus Build-up
+description); Mech fixed single ply 1000 m2 @ 17.54 = 17,540.00 with its
+materials / labour / profit and Renolit 0.60 / 595.20; Edge trim with no
+quantity; Totals 20,804.00 (materials 2,646.02, labour 13,200.00, Renolit
+595.20); BELOW THE LINE - the optional walkway; money formatted #,##0.00. All
+166 pages pass the browser check. Built from your deployed packages
+(1022-1169, verified against their zips); the file checked identical to the
+tested version before zipping.

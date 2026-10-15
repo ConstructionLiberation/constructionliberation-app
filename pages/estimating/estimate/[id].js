@@ -59,6 +59,55 @@ export default function EstimatePage() {
   const toggleCol = (k) => setCols(c => { const n = new Set(c); n.has(k) ? n.delete(k) : n.add(k); try { localStorage.setItem('takeoff:cols', JSON.stringify([...n])) } catch {}; return n })
   // The optional columns: cost rates and totals, profit, the item's own
   // profit % and rate only, and one per supplier WITH a budget here.
+  // EXPORT THE TAKE-OFF TO EXCEL (1170) - as it is on screen: Description (and
+  // its build-up description), Qty, Unit, Rate, Total, then the optional columns
+  // SHOWING, in the same order; sections, blank lines, the Totals row and the
+  // items below the line. The Excel library loads only when it is used.
+  async function exportTakeoff(shownCols) {
+    try {
+      const XLSX = await import('xlsx')
+      const VAL = {
+        matRate: (r, p) => [p.materialsRate], matTotal: (r, p) => [p.materialsTotal],
+        labRate: (r, p) => [p.labourRate], labTotal: (r, p) => [p.labourTotal],
+        profitRate: (r, p) => [p.profitRate], profitTotal: (r, p) => [p.profitTotal],
+        profitPct: (r) => [r.profit == null ? null : r.profit], rateOnly: (r) => [r.rateOnly ? 'Yes' : ''],
+      }
+      const FOOT = { matTotal: [totals.materials], labTotal: [totals.labour], profitTotal: [totals.profit] }
+      const valOf = (c, r, p) => c.supplier ? (() => { const sup = c.key.slice(4), v = (p.bySupplier || {})[sup]; return [v ?? null, v != null && p.qty != null && !p.belowLine ? v * p.qty : null] })() : (VAL[c.key] ? VAL[c.key](r, p) : (c.heads || []).map(() => null))
+      const footOf = (c) => c.supplier ? [null, (totals.bySupplier || {})[c.key.slice(4)] ?? null] : (FOOT[c.key] || (c.heads || []).map(() => null))
+      const head = ['Description', 'Build-up description', 'Qty', 'Unit', 'Rate', 'Total', ...shownCols.flatMap(c => c.heads)]
+      const money = new Set([4, 5]); let col = 6
+      for (const c of shownCols) for (const h of c.heads) { if (c.key !== 'profitPct' && c.key !== 'rateOnly') money.add(col); col++ }
+      const pctCol = head.indexOf('Profit %')
+      const out = [[`${est.quoteRef ? `${est.quoteRef} - ` : ''}${est.title || 'Estimate'} - take-off, Rev ${(est.reopened && est.reopened.revision) || est.revision}`], [`Exported ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`], [], head]
+      const rows = est.rows || []
+      const totalsRow = () => ['Totals', '', '', '', '', totals.total, ...shownCols.flatMap(footOf)]
+      let past = false
+      for (const r of rows) {
+        if (r.kind === 'line') { out.push(totalsRow(), [], ['BELOW THE LINE - rate-only and optional items, not in the total']); past = true; continue }
+        if (r.kind === 'spacer') { out.push([]); continue }
+        if (r.kind === 'section') { out.push([r.title || '']); continue }
+        if (r.kind !== 'item') continue
+        const p = priced[r.id] || {}
+        let spec = ''
+        try { spec = r.buildup ? descriptionText(r.buildup, lib).replace(/\n?————————\n?/g, ' / ').replace(/\s+/g, ' ').trim() : '' } catch {}
+        out.push([r.description || '', spec, r.rateOnly ? 'TBC' : (r.qty == null || r.qty === '' ? null : Number(r.qty)), BU_UNIT_LABEL[r.unit] || r.unit || '', p.rate ?? null, past || r.rateOnly ? (p.optional && p.total != null ? p.total : null) : (p.total ?? null), ...shownCols.flatMap(c => valOf(c, r, p))])
+      }
+      if (!past) out.push(totalsRow())
+      const ws = XLSX.utils.aoa_to_sheet(out)
+      const range = XLSX.utils.decode_range(ws['!ref'])
+      for (let R = 4; R <= range.e.r; R++) for (let C = 0; C <= range.e.c; C++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
+        if (!cell || cell.t !== 'n') continue
+        if (money.has(C)) cell.z = '#,##0.00'; else if (C === pctCol) cell.z = '0.00%'
+      }
+      ws['!cols'] = head.map((h, i) => ({ wch: i === 0 ? 38 : i === 1 ? 60 : Math.max(10, String(h).length + 2) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Take-off')
+      const safe = (x) => String(x || '').replace(/[^A-Za-z0-9 _.-]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60)
+      XLSX.writeFile(wb, `${safe(est.quoteRef || est.title || 'estimate')}-Rev-${(est.reopened && est.reopened.revision) || est.revision}-take-off.xlsx`)
+    } catch (e) { setErr(`Could not export: ${e.message}`) }
+  }
   function takeoffColumns(s, totals) {
     // The supporting figures recede - smaller and grey - so Rate and Total lead (1099).
     const R = (k, v) => <td key={k} style={{ ...tdR, color: '#9a9a96', fontSize: 11.5 }}>{m2(v)}</td>
@@ -563,6 +612,7 @@ export default function EstimatePage() {
                 const r = e.currentTarget.getBoundingClientRect()
                 setColMenu(v => v ? false : { top: Math.round(r.bottom + 4), right: Math.max(8, Math.round(window.innerWidth - r.right)), maxH: Math.max(220, Math.round(window.innerHeight - r.bottom - 16)) })
               }} title="Show or hide columns" style={{ ...smallBtn, padding: '3px 9px' }}>⚙ Columns</button>
+              <button onClick={() => exportTakeoff(optional.filter(c => cols.has(c.key)))} title="Download the take-off as an Excel file - with the columns showing" style={{ ...smallBtn, padding: '3px 9px', marginLeft: 6 }}>⬇ Export to Excel</button>
             </div>
             {colMenu && (
               <div style={{ position: 'fixed', right: colMenu.right, top: colMenu.top, zIndex: 60, maxHeight: colMenu.maxH, overflowY: 'auto', background: '#fff', border: '1px solid #d4d4d0', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.12)', padding: 12, width: 260, fontSize: 13 }}>
