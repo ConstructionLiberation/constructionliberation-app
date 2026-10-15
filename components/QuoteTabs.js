@@ -33,6 +33,13 @@ export function LetterTab({ est, change, templates, values }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
           {PLACEHOLDERS.map(([k, label]) => <button key={k} onClick={() => insert(k)} style={chip}>{label}</button>)}
         </div>
+        {/* RATES HELD UNTIL (1162) - fills {{ratesHeldUntil}}; blank shows [Rates held until] */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#555', marginBottom: 8 }}>
+          Rates held until
+          <input type="date" value={est.ratesHeldUntil || ''} onChange={e => change(x => ({ ...x, ratesHeldUntil: e.target.value || null }))}
+            style={{ fontSize: 12.5, padding: '4px 7px', border: `1px solid ${est.ratesHeldUntil ? '#d4d4d0' : '#fcd34d'}`, borderRadius: 6, background: est.ratesHeldUntil ? '#fff' : '#fffbeb' }} />
+          <span style={{ fontSize: 11.5, color: '#999' }}>{'{{ratesHeldUntil}}'} in the letter</span>
+        </label>
         <textarea ref={ref} value={body} onChange={e => setBody(e.target.value)} rows={22} style={area} />
       </div>
       <div style={box}>
