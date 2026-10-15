@@ -4,7 +4,7 @@ import { get, set, getPortalUsers } from '../../../lib/db'
 import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
-import { currentTerms } from '../../../lib/quoteDocs'
+import { currentTerms, letterOf } from '../../../lib/quoteDocs'
 import { itemsMissingSizes } from '../../../lib/buildups'
 import { uncostedItems, uncostedText, priceLibOf, withLock } from '../../../lib/estimate'
 // WORKING COPIES (1154): an estimate has ONE active working copy (the draft, or a
@@ -173,7 +173,10 @@ async function handler(req, res) {
     // letter can always be reproduced exactly.
     const crmNow = (await liveDeals())(est.dealId)
     // ...and the Terms & Conditions version it went out with (1092).
-    const terms = currentTerms(await get('quote:templates'))
+    const qtNow = await get('quote:templates')
+    const terms = currentTerms(qtNow)
+    // the LETTER as it reads now goes with the revision - a later template change never rewrites it (1163)
+    frozen.letter = { ...(frozen.letter || {}), body: letterOf(est, qtNow) }
     await saveRevision(est.id, rev, { revision: rev, issuedAt, issuedBy: by, note: String(b.note || '').slice(0, 500), total, estimate: JSON.parse(JSON.stringify(frozen)), crm: crmNow, terms: terms ? { v: terms.v, text: terms.text } : null , priced: JSON.parse(JSON.stringify(pricedNow)), totals: JSON.parse(JSON.stringify(totals)), priceLib: priceLibOf(est, withLock(lib, est.priceLock)) })   // as issued, with its PRICES (1151/1154)
     let crm = null
     if (est.dealId) {

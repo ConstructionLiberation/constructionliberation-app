@@ -1,25 +1,36 @@
-PACKAGE 1162 - Letter: a "Rates held until" placeholder
+PACKAGE 1163 - The letter: a company template every quote follows; Edit
+template; red text
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1161.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1162.
 
   lib/quoteDocs.js
   components/QuoteTabs.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/estimating/estimates.js
 
-A new placeholder, {{ratesHeldUntil}} ("Rates held until"), alongside the
-others - on each estimate's Letter tab and in Admin > Quote Documents. Each
-estimate's Letter tab has a "Rates held until" DATE box above the letter; the
-date fills the placeholder (e.g. "31 October 2026"). Until a date is set the
-letter shows [Rates held until], like the other gaps. The date saves with the
-estimate (and with each issued revision).
+A TEMPLATE EVERY QUOTE FOLLOWS: a quote's letter IS the company template -
+live - unless it is changed for that quote. The Letter tab says "using the
+company template" or "customised for this quote"; typing makes a copy for this
+quote only (the template is not changed); "Reset to template" goes back.
+Change the template and every quote using it follows. ISSUING freezes the
+letter as it reads with the revision - a later template change never rewrites
+a quote that has gone out.
+EDIT TEMPLATE - admins have "Edit template" on the Letter tab: edit the company
+letter there, with the placeholder buttons, and Save template. (Admin > Quote
+Documents edits the same template.)
+RED TEXT - select words in the letter and "Make red": they show red on the
+letter and on the printed quote ([red]...[/red] in the text box). "Clear red"
+- click inside red text, or select it - removes it.
 
-AFTER DEPLOYING: in Admin > Quote Documents, replace "XDATEX" in the company
-letter with {{ratesHeldUntil}} (the "Rates held until" button inserts it) - and
-on any estimate already started, "Reset to the company letter" on its Letter
-tab, or make the same change there.
+NOTE: quotes whose letter was copied in before this change (e.g. TEST PROJECT)
+count as customised - use "Reset to template" on them to follow the template.
 
-Checked in a REAL browser (Chromium): the "Rates held until" button shows;
-the letter read "...before the end of [Rates held until]." until a date was
-set, then "...31 October 2026."; the date saved with the estimate. All 165
-pages pass the browser check. Built from your deployed packages (1022-1161,
-verified against their zips); each file checked identical to the tested
-version before zipping.
+Checked through the real route: a draft with no letter of its own issued as
+Rev A, then the template changed - Rev A kept the letter it was issued with
+(version ONE, with its red text); the draft follows version TWO. In a REAL
+browser (Chromium): "using the company template"; Edit template -> Save -> this
+quote reads the new template at once; "thank you" selected -> Make red -> red
+in the preview, the quote now "customised"; the Quote tab prints it red with
+no markers; Reset to template -> back. All server routes compile; all 165
+pages pass the browser check. Built from your deployed packages (1022-1162,
+verified against their zips).

@@ -1,7 +1,7 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
 import DocumentsPanel from './DocumentsPanel'
-import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders } from '../lib/quoteDocs'
+import { PLACEHOLDERS, CLAR_KINDS, currentTerms, fillPlaceholders, letterOf, letterIsCustom } from '../lib/quoteDocs'
 import { BU_UNIT_LABEL, descriptionText, descriptionParts } from '../lib/buildups'
 
 // THE ESTIMATE'S QUOTE TABS (1092): Letter, Clarifications, Documents, Quote.
@@ -12,42 +12,95 @@ const area = { width: '100%', boxSizing: 'border-box', fontSize: 13.5, padding: 
 const chip = { fontSize: 11.5, padding: '3px 8px', border: '1px solid #99f6e4', background: '#f0fdfa', color: '#0f766e', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit' }
 const small = { fontSize: 12, padding: '5px 10px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }
 
-export function LetterTab({ est, change, templates, values }) {
+export function LetterTab({ est, change, templates, values, canEditTemplate, onSaveTemplate }) {
+  // THE LETTER (1163) - the company template unless changed for this quote
   const ref = useRef(null)
-  const body = est.letter?.body || ''
+  const custom = letterIsCustom(est)
+  const company = (templates && templates.letter && templates.letter.body) || ''
+  const body = letterOf(est, templates)
   const setBody = (b) => change(e => ({ ...e, letter: { ...(e.letter || {}), body: b } }))
-  const company = templates?.letter?.body || ''
-  function insert(k) {
-    const el = ref.current, tag = `{{${k}}}`, at = el ? el.selectionStart : body.length
-    setBody(body.slice(0, at) + tag + body.slice(at))
-    setTimeout(() => { if (el) { el.focus(); el.selectionStart = el.selectionEnd = at + tag.length } }, 0)
+  const [tpl, setTpl] = useState(null)        // the template being edited (admins)
+  const [tplErr, setTplErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function saveTemplate() {
+    setBusy(true); setTplErr('')
+    try { await onSaveTemplate(tpl); setTpl(null) } catch (e) { setTplErr(e.message) }
+    setBusy(false)
   }
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
       <div style={box}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
           <strong>Letter for this quote</strong>
-          {company && <button onClick={() => { if (!body || window.confirm('Replace this letter with the company letter?')) setBody(company) }} style={small}>{body ? 'Reset to the company letter' : 'Start from the company letter'}</button>}
+          {custom
+            ? <span style={{ fontSize: 11, fontWeight: 600, color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '2px 8px' }}>customised for this quote</span>
+            : <span style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', background: '#f0fdfa', borderRadius: 8, padding: '2px 8px' }}>using the company template</span>}
+          <span style={{ flex: 1 }} />
+          {custom && company && <button onClick={() => { if (window.confirm('Go back to the company template? This quote\'s own changes to the letter are dropped.')) change(e => ({ ...e, letter: { ...(e.letter || {}), body: null } })) }} style={small}>Reset to template</button>}
+          {canEditTemplate && !tpl && <button onClick={() => setTpl(company)} style={{ ...small, color: '#0f766e', borderColor: '#99f6e4' }} title="Edit the company letter every quote starts from">Edit template</button>}
         </div>
-        {!company && !body && <div style={{ fontSize: 12.5, color: '#92400e', marginBottom: 8 }}>No company letter yet - an admin writes it in Admin &gt; Quote Documents. You can write this one here.</div>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
-          {PLACEHOLDERS.map(([k, label]) => <button key={k} onClick={() => insert(k)} style={chip}>{label}</button>)}
-        </div>
-        {/* RATES HELD UNTIL (1162) - fills {{ratesHeldUntil}}; blank shows [Rates held until] */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#555', marginBottom: 8 }}>
-          Rates held until
-          <input type="date" value={est.ratesHeldUntil || ''} onChange={e => change(x => ({ ...x, ratesHeldUntil: e.target.value || null }))}
-            style={{ fontSize: 12.5, padding: '4px 7px', border: `1px solid ${est.ratesHeldUntil ? '#d4d4d0' : '#fcd34d'}`, borderRadius: 6, background: est.ratesHeldUntil ? '#fff' : '#fffbeb' }} />
-          <span style={{ fontSize: 11.5, color: '#999' }}>{'{{ratesHeldUntil}}'} in the letter</span>
-        </label>
-        <textarea ref={ref} value={body} onChange={e => setBody(e.target.value)} rows={22} style={area} />
+        {tpl != null ? (
+          <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: 10 }}>
+            <div style={{ fontSize: 12.5, color: '#0f766e', fontWeight: 600, marginBottom: 6 }}>Company letter template - every quote using the template follows it (customised ones keep their own).</div>
+            <LetterEditor text={tpl} setText={setTpl} />
+            {tplErr && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 6 }}>{tplErr}</div>}
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setTpl(null); setTplErr('') }} style={small}>Cancel</button>
+              <button onClick={saveTemplate} disabled={busy} style={{ ...small, background: '#0f766e', color: '#fff', borderColor: '#0f766e' }}>Save template</button>
+            </div>
+          </div>
+        ) : <>
+          {!company && !custom && <div style={{ fontSize: 12.5, color: '#92400e', marginBottom: 8 }}>No company letter yet{canEditTemplate ? ' - use Edit template to write it.' : ' - an admin writes it with Edit template.'} You can write this one here.</div>}
+          {/* RATES HELD UNTIL (1162) - fills {{ratesHeldUntil}}; blank shows [Rates held until] */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#555', marginBottom: 8 }}>
+            Rates held until
+            <input type="date" value={est.ratesHeldUntil || ''} onChange={e => change(x => ({ ...x, ratesHeldUntil: e.target.value || null }))}
+              style={{ fontSize: 12.5, padding: '4px 7px', border: `1px solid ${est.ratesHeldUntil ? '#d4d4d0' : '#fcd34d'}`, borderRadius: 6, background: est.ratesHeldUntil ? '#fff' : '#fffbeb' }} />
+            <span style={{ fontSize: 11.5, color: '#999' }}>{'{{ratesHeldUntil}}'} in the letter</span>
+          </label>
+          <LetterEditor text={body} setText={setBody} />
+          {!custom && company && <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>Typing here makes a copy for this quote only - the template is not changed.</div>}
+        </>}
       </div>
       <div style={box}>
         <strong>As it will read</strong> <span style={{ fontSize: 11.5, color: '#999' }}>details live from the CRM deal; [gaps] show what is missing</span>
-        <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, marginTop: 10 }}>{fillPlaceholders(body, values) || <span style={{ color: '#aaa' }}>Nothing written yet.</span>}</div>
+        <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, marginTop: 10 }}>{(tpl != null ? tpl : body) ? letterNodes(tpl != null ? tpl : body, values) : <span style={{ color: '#aaa' }}>Nothing written yet.</span>}</div>
       </div>
     </div>
   )
+}
+// The letter's text box with its placeholder buttons and MAKE RED / CLEAR RED (1163).
+// Red text is written [red]...[/red] and shows red on the letter and the quote.
+function LetterEditor({ text, setText }) {
+  const ref = useRef(null)
+  const sel = () => { const el = ref.current; return el ? [el.selectionStart, el.selectionEnd] : [text.length, text.length] }
+  const put = (next, a, b) => { setText(next); setTimeout(() => { const el = ref.current; if (el) { el.focus(); el.selectionStart = a; el.selectionEnd = b } }, 0) }
+  function insert(k) { const [a] = sel(), tag = `{{${k}}}`; put(text.slice(0, a) + tag + text.slice(a), a + tag.length, a + tag.length) }
+  function makeRed() { const [a, b] = sel(); if (a === b) return; put(text.slice(0, a) + '[red]' + text.slice(a, b) + '[/red]' + text.slice(b), a + 5, b + 5) }
+  function clearRed() {
+    let [a, b] = sel()
+    const open = text.lastIndexOf('[red]', a), close = text.indexOf('[/red]', Math.max(b - 6, a))
+    if (open >= 0 && close >= 0 && text.lastIndexOf('[/red]', a) < open) { put(text.slice(0, open) + text.slice(open + 5, close) + text.slice(close + 6), open, close - 5); return }
+    const inner = text.slice(a, b).replace(/\[\/?red\]/g, '')
+    if (inner !== text.slice(a, b)) put(text.slice(0, a) + inner + text.slice(b), a, a + inner.length)
+  }
+  return <>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+      {PLACEHOLDERS.map(([k, label]) => <button key={k} onClick={() => insert(k)} style={chip}>{label}</button>)}
+      <span style={{ width: 1, background: '#e8e7e3', margin: '0 3px' }} />
+      <button onClick={makeRed} title="Select words, then Make red - they show red on the letter and the quote" style={{ ...chip, color: '#b91c1c', borderColor: '#fca5a5', background: '#fef2f2' }}>Make red</button>
+      <button onClick={clearRed} title="Click inside red text (or select it), then Clear red" style={chip}>Clear red</button>
+    </div>
+    <textarea ref={ref} value={text} onChange={e => setText(e.target.value)} rows={22} style={area} />
+  </>
+}
+// The letter as it reads: placeholders filled, [red]...[/red] in red (1163).
+export function letterNodes(text, values) {
+  const filled = fillPlaceholders(text, values)
+  return String(filled).split(/(\[red\][\s\S]*?\[\/red\])/).map((part, i) => {
+    const m = part.match(/^\[red\]([\s\S]*?)\[\/red\]$/)
+    return m ? <span key={i} style={{ color: '#dc2626' }}>{m[1]}</span> : <span key={i}>{part}</span>
+  })
 }
 
 export function ClarificationsTab({ est, change, templates }) {
@@ -136,7 +189,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
             {draft && <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', letterSpacing: 1 }}>DRAFT - not yet sent</div>}
           </div>
         </div>
-        {(est.letter?.body || '').trim() && <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, marginBottom: 28 }}>{fillPlaceholders(est.letter.body, values)}</div>}
+        {letterOf(est, templates).trim() && <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, marginBottom: 28 }}>{letterNodes(letterOf(est, templates), values)}</div>}
 
         <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Schedule of rates and prices</h3>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
