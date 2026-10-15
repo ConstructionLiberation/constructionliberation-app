@@ -220,13 +220,19 @@ export function ClarListEditor({ list, setList }) {
   </>
 }
 
+// DOCUMENTS TO APPEND TO THE QUOTE (1169) - mark-ups, technical documents... -
+// per REVISION: these are the working revision's; earlier ones stay with theirs.
 export function DocumentsTab({ est, readOnly }) {
-  return <DocumentsPanel ownerType="estimate" ownerId={est.id} items={(est.rows || []).filter(r => r.kind === 'item')} title="Documents for this estimate" readOnly={readOnly} />
+  const rev = (est.reopened && est.reopened.revision) || est.revision
+  return <>
+    <div style={{ fontSize: 12.5, color: '#666', marginBottom: 8 }}>Documents to append to the quote - mark-ups, technical documents and the like. They are listed on the quote's Documents page. Each revision has its own: Rev {rev}'s are added here; earlier revisions keep theirs.</div>
+    <DocumentsPanel ownerType="estimate" ownerId={est.id} revision={rev} title={`Documents for Rev ${rev}`} readOnly={readOnly} />
+  </>
 }
 
 // THE QUOTE as the customer sees it. Prints to PDF (the browser's Print ->
 // Save as PDF) with only the quote on the page.
-export function QuotePreview({ est, values, priced, totals, templates, money, companyName, termsOverride, lib, draft, actions }) {
+export function QuotePreview({ est, values, priced, totals, templates, money, companyName, termsOverride, lib, draft, actions, revBar, documents }) {
   // An item's quote line: its build-up DESCRIPTION when written, else its name (1098).
   // ...with a variable not yet chosen printed RED as [Warranty] (1121). Text marked
   // for amending prints normally - that red is for the take-off only.
@@ -252,59 +258,96 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
   const th = { textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #1a1a19', fontSize: 12 }
   const td = { padding: '5px 8px', borderBottom: '1px solid #eee', fontSize: 12.5, verticalAlign: 'top' }
   const num = { ...td, textAlign: 'right', whiteSpace: 'nowrap' }
+  // THE QUOTE IN PAGES (1168) - Letter, Clarifications, Rates (inc. below the
+  // line), Documents, then the Terms & Conditions: each its own sheet on screen,
+  // each starting a new page when printed or saved as PDF. A page with nothing
+  // on it is left out and the numbering closes up.
+  const clarItems = clarOf(est, templates).filter(x => String(x.text || '').trim())
+  const hasClar = clarItems.some(x => x.kind !== 'header')
+  const docs = (documents || []).filter(d => d && d.name)
+  const pages = [['letter', 'Letter'], ...(hasClar ? [['clar', 'Clarifications']] : []), ['rates', 'Rates'], ...(docs.length ? [['docs', 'Documents']] : []), ...(terms ? [['terms', 'Terms & Conditions']] : [])]
+  const sheetHead = (title) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #1a1a19', paddingBottom: 8, marginBottom: 18 }}>
+      <QuoteLetterhead companyName={companyName} compact />
+      <div style={{ textAlign: 'right', fontSize: 11.5, color: '#444', lineHeight: 1.5 }}>
+        <div style={{ fontWeight: 700, fontSize: 13 }}>Quotation{est.quoteRef ? ` ${est.quoteRef}` : ''} 路 Rev {est.revision}</div>
+        <div>{title}</div>
+      </div>
+    </div>
+  )
+  let clarN = 0
+  const content = {
+    letter: <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <QuoteLetterhead companyName={companyName} />
+        <div style={{ textAlign: 'right', fontSize: 12.5, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Quotation</div>
+          {est.quoteRef && <div>Ref {est.quoteRef} 路 Rev {est.revision}</div>}
+          {values.date && <div>{values.date}</div>}
+          {draft && <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', letterSpacing: 1 }}>DRAFT - not yet sent</div>}
+        </div>
+      </div>
+      {letterOf(est, templates).trim() ? <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6 }}>{letterNodes(letterOf(est, templates), values)}</div>
+        : <div style={{ color: '#aaa', fontSize: 13 }}>No letter written yet.</div>}
+    </>,
+    clar: <>
+      {sheetHead('Clarifications')}
+      <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Clarifications</h3>
+      {clarItems.map(x => x.kind === 'header'
+        ? <div key={x.id} style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 4px' }}>{x.text}</div>
+        : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{++clarN}.</span><span>{x.text}</span></div>)}
+    </>,
+    rates: <>
+      {sheetHead('Schedule of rates and prices')}
+      <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Schedule of rates and prices</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead><tr><th style={th}>Description</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Unit</th><th style={{ ...th, textAlign: 'right' }}>Rate</th><th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
+        <tbody>
+          {shown.map(r => r.kind === 'section'
+            ? <tr key={r.id}><td colSpan={5} style={{ ...td, fontWeight: 700, textDecoration: 'underline', background: '#f6f6f4', paddingTop: 10 }}>{r.title}</td></tr>
+            : <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{r.qty ?? ''}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={num}>{m2(priced[r.id]?.total)}</td></tr>)}
+          <tr><td colSpan={4} style={{ ...td, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>Total</td><td style={{ ...num, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>{m2(totals.total)}</td></tr>
+        </tbody>
+      </table>
+      {s.mcd > 0 && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>Our prices include a {+(s.mcd * 100).toFixed(2)}% main contractor's discount.</div>}
+      {below.length > 0 && <>
+        <h3 style={{ fontSize: 14, margin: '24px 0 6px' }}>Below the line <span style={{ fontWeight: 400, fontSize: 12, color: '#666' }}>(rate-only and optional items - not included in the total)</span></h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>{below.map(r => { const pr = priced[r.id] || {}; const opt = pr.optional && pr.total != null
+            return <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{opt ? pr.qty : 'TBC'}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(pr.rate)}</td><td style={{ ...num, color: '#6d28d9' }}>{opt ? `${m2(pr.total)} optional` : 'Rate only'}</td></tr> })}</tbody>
+        </table>
+      </>}
+    </>,
+    docs: <>
+      {sheetHead('Documents')}
+      <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Documents</h3>
+      <div style={{ fontSize: 12.5, color: '#555', marginBottom: 8 }}>The following documents accompany and form part of this quotation:</div>
+      {docs.map((d, i) => <div key={d.id || i} style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.7, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{i + 1}.</span>{d.href ? <a href={d.href} target="_blank" rel="noreferrer" style={{ color: '#1a1a19' }}>{d.name}</a> : <span>{d.name}</span>}</div>)}
+    </>,
+    terms: terms ? <>
+      {sheetHead('Terms & Conditions')}
+      <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Terms &amp; Conditions <span style={{ fontWeight: 400, fontSize: 11.5, color: '#888' }}>version {terms.v}</span></h3>
+      <div style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, lineHeight: 1.5, color: '#333' }}>{terms.text}</div>
+    </> : null,
+  }
   return (
     <div>
-      <style>{`@media print { body * { visibility: hidden !important; } .quote-doc, .quote-doc * { visibility: visible !important; } .quote-doc { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; border: none !important; } .no-print { display: none !important; } }`}</style>
-      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+      <style>{`@media print { body * { visibility: hidden !important; } .quote-doc, .quote-doc * { visibility: visible !important; } .quote-doc { position: absolute; left: 0; top: 0; width: 100%; } .quote-sheet { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; padding: 0 !important; } .quote-label, .no-print { display: none !important; } .quote-sheet + .quote-label + .quote-sheet, .quote-break { page-break-before: always; break-before: page; } }`}</style>
+      {revBar && <div className="no-print" style={{ marginBottom: 10 }}>{revBar}</div>}
+      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         {actions}
-        <button onClick={() => window.print()} style={small}>Print draft</button>
-        <span style={{ fontSize: 12, color: '#888' }}>Choose "Save as PDF" in the print window.</span>
+        <button onClick={() => window.print()} style={small}>{draft ? 'Print draft' : 'Print'}</button>
+        <span style={{ fontSize: 12, color: '#888' }}>Choose "Save as PDF" in the print window. {pages.length} pages - each starts a new page.</span>
       </div>
-      <div className="quote-doc" style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 4, padding: '36px 44px', maxWidth: 860, margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', color: '#1a1a19' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-          <QuoteLetterhead companyName={companyName} />
-          <div style={{ textAlign: 'right', fontSize: 12.5, lineHeight: 1.6 }}>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>Quotation</div>
-            {est.quoteRef && <div>Ref {est.quoteRef} 路 Rev {est.revision}</div>}
-            {values.date && <div>{values.date}</div>}
-            {draft && <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', letterSpacing: 1 }}>DRAFT - not yet sent</div>}
+      <div className="quote-doc" style={{ color: '#1a1a19' }}>
+        {pages.map(([k, title], i) => (
+          <div key={k}>
+            <div className="quote-label no-print" style={{ maxWidth: 860, margin: '18px auto 6px', fontSize: 11.5, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.6 }}>Page {i + 1} 路 {title}</div>
+            <div className={`quote-sheet${i ? ' quote-break' : ''}`} style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 4, padding: '36px 44px', maxWidth: 860, margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', minHeight: 300 }}>
+              {content[k]}
+            </div>
           </div>
-        </div>
-        {letterOf(est, templates).trim() && <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, marginBottom: 28 }}>{letterNodes(letterOf(est, templates), values)}</div>}
-
-        <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Schedule of rates and prices</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr><th style={th}>Description</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Unit</th><th style={{ ...th, textAlign: 'right' }}>Rate</th><th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
-          <tbody>
-            {shown.map(r => r.kind === 'section'
-              ? <tr key={r.id}><td colSpan={5} style={{ ...td, fontWeight: 700, textDecoration: 'underline', background: '#f6f6f4', paddingTop: 10 }}>{r.title}</td></tr>
-              : <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{r.qty ?? ''}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={num}>{m2(priced[r.id]?.total)}</td></tr>)}
-            <tr><td colSpan={4} style={{ ...td, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>Total</td><td style={{ ...num, fontWeight: 700, borderTop: '2px solid #1a1a19', borderBottom: 'none' }}>{m2(totals.total)}</td></tr>
-          </tbody>
-        </table>
-        {s.mcd > 0 && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>Our prices include a {+(s.mcd * 100).toFixed(2)}% main contractor's discount.</div>}
-
-        {below.length > 0 && <>
-          <h3 style={{ fontSize: 14, margin: '22px 0 6px' }}>Below the line <span style={{ fontWeight: 400, fontSize: 12, color: '#666' }}>(rate-only and optional items - not included in the total)</span></h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <tbody>{below.map(r => { const pr = priced[r.id] || {}; const opt = pr.optional && pr.total != null
-              return <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{opt ? pr.qty : 'TBC'}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(pr.rate)}</td><td style={{ ...num, color: '#666' }}>{opt ? <>{m2(pr.total)} <span style={{ fontSize: 11 }}>optional</span></> : 'Rate only'}</td></tr> })}</tbody>
-          </table>
-        </>}
-
-        {/* CLARIFICATIONS (1165) - under their headers, numbered */}
-        {(() => { const items = clarOf(est, templates).filter(x => String(x.text || '').trim()); if (!items.some(x => x.kind !== 'header')) return null; let n = 0
-          return <div style={{ marginTop: 22 }}>
-            <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Clarifications</h3>
-            {items.map(x => x.kind === 'header'
-              ? <div key={x.id} style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{x.text}</div>
-              : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 20, color: '#555' }}>{++n}.</span><span>{x.text}</span></div>)}
-          </div> })()}
-
-        {terms && <div style={{ marginTop: 28, pageBreakBefore: 'always' }}>
-          <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>Terms &amp; Conditions <span style={{ fontWeight: 400, fontSize: 11.5, color: '#888' }}>version {terms.v}</span></h3>
-          <div style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, lineHeight: 1.5, color: '#333' }}>{terms.text}</div>
-        </div>}
+        ))}
       </div>
     </div>
   )
@@ -317,11 +360,12 @@ const ruled = (text, key = '') => String(text ?? '').split(/\n?鈥斺�斺�斺�斺�斺�
 // THE QUOTE'S LETTERHEAD (1166) - the logo, large, and the company's address and
 // contact details from Admin > Company details. The name is written only when
 // there is no logo.
-function QuoteLetterhead({ companyName }) {
+function QuoteLetterhead({ companyName, compact }) {
   const { logoUrl, company } = useFormat()
   const c = company || {}
   const contact = [c.phone, c.email, c.website].filter(Boolean)
   const reg = [c.companyNumber ? `Company no. ${c.companyNumber}` : '', c.vatNumber ? `VAT no. ${c.vatNumber}` : ''].filter(Boolean)
+  if (compact) return logoUrl ? <img src={logoUrl} alt={companyName || ''} style={{ height: 38, maxWidth: 160, width: 'auto', objectFit: 'contain', display: 'block' }} /> : <div style={{ fontSize: 13, fontWeight: 800 }}>{companyName}</div>
   return (
     <div>
       {logoUrl ? <img src={logoUrl} alt={companyName || ''} style={{ height: 100, maxWidth: 320, width: 'auto', objectFit: 'contain', display: 'block' }} />

@@ -1,33 +1,31 @@
-PACKAGE 1167 - Estimating: a Labour Schedule tab, to get rates from subbies
+PACKAGE 1169 - Documents appended to the quote, per revision  (part 3 of 4)
 
-Four files: one NEW, three complete replacements. No re-seed. No env changes.
-Built on 1166.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1168.
 
-  NEW       lib/estimateLabour.js
-  REPLACED  components/LabourRates.js
-            pages/api/labour-schedules.js
-            pages/estimating/estimate/[id].js      (folder literally named [id])
+  components/DocumentsPanel.js
+  components/QuoteTabs.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/estimating/documents.js
 
-LABOUR SCHEDULE - a new tab on each estimate (after Materials). Exactly the
-Contracted Rates > Labour Rates screen, off the estimate's take-off instead:
-  - the take-off's labour: its sections as headings, each item WITH labour -
-    quantity, unit, its description (with the build-up's), and OUR labour rate
-    per unit (before profit) and total; below-the-line items under their own
-    heading; materials-only items left out
-  - type a subbie's rate (Match copies ours) -> their total, and the saving
-  - tick lines -> Create schedule -> a named schedule for that subbie
-  - each schedule downloads as EXCEL or PDF - their rates only, NEVER ours
-Schedules are kept with the estimate (separately from the take-off). They are
-made from the SAVED take-off - the tab says "save first" if there are unsaved
-changes. Contracted Rates > Labour Rates works exactly as before.
+THE DOCUMENTS TAB is now the documents to APPEND TO THE QUOTE - mark-ups,
+technical documents... - with NO item dropdown (documents on an item, from its
+build-up, stay with the item and are not appended).
+PER REVISION: "Documents for Rev B" - add and remove the working revision's
+here. Earlier revisions' are listed read-only ("Rev A - 2 documents (issued -
+kept with Rev A, not carried forward)") - NEVER brought into the new revision.
+Once a revision is issued its documents are fixed - the server refuses adding
+to or removing from it.
+THE QUOTE's Documents page lists the documents of the revision being viewed -
+the draft's, or Rev A's when Rev A is shown.
+DOCUMENTS FROM BEFORE THIS CHANGE have no revision: they show as "Not yet on a
+revision", each with "Add to Rev X" (or Delete) - nothing is guessed.
 
-Checked through the real route with the converted build-ups, price list and
-labour rates: Mech Fixed SP on a 450 m² item -> "Roof area A", "1. Main roof
-450 m² @ our 11.00 = 4,950.00"; a materials-only item left out; ABC Roofing's
-rate 9.50 saved; schedule created (4,275.00); the Excel file - "Project:
-Q-1042 - Market Drayton", 450 m² @ 9.50 = 4,275.00 and NO 11.00 / 4,950.00;
-the PDF likewise. In a REAL browser (Chromium): the tab after Materials; Mech
-fixed single ply 1000 m²; 9.50 typed -> 9,500.00 beside our 11.00 /
-11,000.00, saving 1,500.00. All server routes compile; all 166 pages pass the
-browser check. Built from your deployed packages (1022-1166, verified against
-their zips).
+Checked through the real route: a document on draft Rev A stamped Rev A; Rev
+A issued -> adding to Rev A refused, removing its document refused; on draft
+Rev B a new document goes on Rev B; an old one placed on Rev B. In a REAL
+browser (Chromium): "Documents for Rev B" with only Rev B's data sheet, no
+item dropdown; Rev A's listed read-only (no Delete); the old one with "Add to
+Rev B"; the item photo not shown; the draft quote's Documents page lists the
+Rev B sheet only, Rev A's lists its mark-up only. All server routes compile;
+all 166 pages pass the browser check. Built from your deployed packages
+(1022-1168, verified against their zips).

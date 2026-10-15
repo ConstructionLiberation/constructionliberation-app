@@ -114,6 +114,33 @@ export default function EstimatePage() {
     setBusy(false)
   }
   const labourLines = useMemo(() => est ? buildEstimateLabourLines(est, lib) : [], [est, lib])   // (1167)
+  // THE QUOTE TAB'S REVISIONS (1168) - the draft, or an issued revision as issued
+  const [quoteRev, setQuoteRev] = useState('draft')
+  const [revSnaps, setRevSnaps] = useState({})
+  const [revSnapErr, setRevSnapErr] = useState('')
+  const showRev = (r) => {
+    setQuoteRev(r); setRevSnapErr('')
+    if (r !== 'draft' && !revSnaps[r]) estApi(`${API}?id=${encodeURIComponent(est.id)}&rev=${encodeURIComponent(r)}`).then(d => setRevSnaps(m => ({ ...m, [r]: d.revision }))).catch(e => setRevSnapErr(e.message))
+  }
+  const revBar = est ? (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px solid #e8e7e3', borderRadius: 10, padding: '8px 10px' }}>
+      <span style={{ fontSize: 12.5, color: '#666', marginRight: 4 }}>Revision:</span>
+      {[{ key: 'draft', label: est.reopened ? `Rev ${est.reopened.revision} - editing` : `Draft Rev ${est.revision}`, sent: false },
+        ...(est.revisions || []).slice().reverse().filter(r => !(est.reopened && r.revision === est.reopened.revision)).map(r => ({ key: r.revision, label: `Rev ${r.revision}`, sent: !!r.sent, at: r.issuedAt }))]
+        .map(b => (
+          <button key={b.key} onClick={() => showRev(b.key)} title={b.at ? `Issued ${new Date(b.at).toLocaleDateString('en-GB')}` : 'The working draft'}
+            style={{ fontSize: 12.5, padding: '5px 12px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${quoteRev === b.key ? '#0f766e' : '#d4d4d0'}`, background: quoteRev === b.key ? '#0f766e' : '#fff', color: quoteRev === b.key ? '#fff' : '#333', fontWeight: quoteRev === b.key ? 600 : 400 }}>
+            {b.label}{b.sent && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: quoteRev === b.key ? '#dcfce7' : '#15803d' }}>SENT</span>}
+          </button>
+        ))}
+    </div>
+  ) : null
+  // the documents listed on the quote's Documents page
+  const [quoteDocsList, setQuoteDocsList] = useState([])
+  useEffect(() => {
+    if (tab !== 'quote' || !est) return
+    fetch(`/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}`).then(r => r.ok ? r.json() : { documents: [] }).then(d => setQuoteDocsList((d.documents || []).filter(x => !x.itemId).map(x => ({ id: x.id, name: x.name, revision: x.revision || null, href: `/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}&download=${x.id}` })))).catch(() => {})
+  }, [tab, est && est.id])
   const [warnList, setWarnList] = useState(null)   // 'cost' | 'qty' - the list behind a red warning (1146)
   const [showChecklist, setShowChecklist] = useState(false)   // re-open a completed checklist (1142)
   const [ckNew, setCkNew] = useState('')
@@ -425,7 +452,7 @@ export default function EstimatePage() {
         </div>
       )}
       {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived} />}
-      {tab === 'quote' && <QuotePreview est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView}
+      {tab === 'quote' && quoteRev === 'draft' && <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === ((est.reopened && est.reopened.revision) || est.revision))} est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView}
         actions={<>
           <button onClick={() => issue(true)} disabled={busy || dirty || s.profit == null || !!crm?.archived} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ fontSize: 12.5, padding: '6px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: busy || dirty || s.profit == null || crm?.archived ? 0.5 : 1 }}>Download and mark as sent (Rev {est.revision})</button>
           {dirty && <span style={{ fontSize: 12, color: '#b45309' }}>Save first</span>}
@@ -434,6 +461,23 @@ export default function EstimatePage() {
               ? <span style={{ fontSize: 12, color: '#15803d' }}>Rev {last.revision} sent {new Date(last.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · <button onClick={() => { if (window.confirm(`Unmark Rev ${last.revision} as sent? It can then be edited (Revisions > View > Edit) and issued again as Rev ${last.revision}.`)) markSent(last.revision, false) }} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12, padding: 0 }}>Unmark sent</button></span>
               : <span style={{ fontSize: 12, color: '#666' }}>Rev {last.revision} issued, not sent · <button onClick={() => markSent(last.revision, true)} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12, padding: 0 }}>Mark as sent</button></span> })()}
         </>} />}
+      {/* AN ISSUED REVISION, AS ISSUED (1168) - its own letter, clarifications,
+          prices, date and terms, from its snapshot */}
+      {tab === 'quote' && quoteRev !== 'draft' && (() => {
+        const snap = revSnaps[quoteRev]
+        if (!snap) return <div>{revBar}<div style={{ color: '#888', fontSize: 13, marginTop: 10 }}>{revSnapErr || `Loading Rev ${quoteRev}…`}</div></div>
+        const entry = (est.revisions || []).find(r => r.revision === quoteRev) || {}
+        const estS = { ...snap.estimate, revision: snap.revision }
+        const libS = withLock(libRaw, snap.priceLib)
+        const live = (!snap.priced || !snap.totals) ? priceEstimate({ ...snap.estimate, priceLock: snap.priceLib || snap.estimate.priceLock || null }, libRaw) : null
+        const pricedS = snap.priced || live.priced, totalsS = snap.totals || live.totals
+        const at = entry.sent ? entry.sent.at : snap.issuedAt
+        const valuesS = placeholderValues({ est: estS, details: detailsFor(estS, snap.crm), total: totalsS.total, companyName, money, dateText: new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })
+        return <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === quoteRev)} est={estS} values={valuesS} priced={pricedS} totals={totalsS} templates={quoteDocs} money={money} companyName={companyName} termsOverride={snap.terms || null} lib={libS} draft={false}
+          actions={entry.sent
+            ? <span style={{ fontSize: 12.5, color: '#15803d' }}>Rev {quoteRev} sent {new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · <button onClick={() => { if (window.confirm(`Unmark Rev ${quoteRev} as sent?`)) markSent(quoteRev, false) }} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Unmark sent</button></span>
+            : <span style={{ fontSize: 12.5, color: '#666' }}>Rev {quoteRev} issued {new Date(snap.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, not sent · <button onClick={() => markSent(quoteRev, true)} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Mark as sent</button></span>} />
+      })()}
       {revView && <RevisionViewer view={revView} est={est} lib={lib} money={money} onClose={() => setRevView(null)} onEdit={reopenRevision} busy={busy} />}
       {(tab === 'letter' || tab === 'clar' || tab === 'docs') && (
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
