@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { BU_UNIT_LABEL, LINE_TYPES, LINE_TYPE_LABEL, COST_CATEGORIES, rateFor, evalQty, qtyProblem, normalizeTemplate, needsNormalizing, descriptionText, isVariable, mergeBuildup, SIZE_NAMES, SIZE_UNIT, APPLY_CHOICES, sizesUsed, sizeOf, isCombined, applyList, applyText, productList, lineWording, productItems, rateSummary } from '../lib/buildups'
 import { th, td, tdR, inp } from './LibraryParts'
 
@@ -52,7 +52,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
     if (!c?.lines?.length) return
     // worked out first, from the current lines, so the pasted lines can be ticked
     let top = Math.max(0, ...t.lines.map(l => parseInt(String(l.id).replace(/\D/g, ''), 10) || 0))
-    const fresh = c.lines.map(l => ({ ...JSON.parse(JSON.stringify(l)), id: `L${++top}` }))
+    const fresh = c.lines.map(l => ({ ...JSON.parse(JSON.stringify(l)), id: `L${++top}`, groupStart: undefined }))
     const last = Math.max(-1, ...t.lines.map((l, k) => lsel.has(l.id) ? k : -1))
     const at = last >= 0 ? last + 1 : t.lines.length
     setT(x => ({ ...x, lines: [...x.lines.slice(0, at), ...fresh, ...x.lines.slice(at)] }))
@@ -68,7 +68,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
     const k = x.lines.findIndex(l => l.id === id)
     if (k < 0) return x
     const top = Math.max(0, ...x.lines.map(l => parseInt(String(l.id).replace(/\D/g, ''), 10) || 0))
-    const copy = { ...JSON.parse(JSON.stringify(x.lines[k])), id: `L${top + 1}` }
+    const copy = { ...JSON.parse(JSON.stringify(x.lines[k])), id: `L${top + 1}`, groupStart: undefined }
     return { ...x, lines: [...x.lines.slice(0, k + 1), copy, ...x.lines.slice(k + 1)] }
   })
   // A new lump sum / lump spread has NO cost category - it must be chosen (1149).
@@ -152,7 +152,11 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                 const choices = showAll[l.id] ? (l.type === 'labour' ? lib.labourItems.map(x => x.ref) : lib.products.map(x => x.ref)) : [...new Set([...(l.offers || []), ...(l.default ? [l.default] : [])])]
                 const qp = qtyProblem(l.qty, sizeNames)
                 return (
-                  <tr key={l.id} className={l.type === 'labour' ? 'bu-labour' : undefined} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
+                  <Fragment key={l.id}>
+                  {/* AN ADDED RATE BUILD-UP starts here (1155) - its name, a thick charcoal line */}
+                  {l.groupStart && <tr><td colSpan={12} style={{ borderTop: '4px solid #36454f', padding: '5px 8px 3px', fontSize: 11.5, fontWeight: 700, color: '#36454f', letterSpacing: 0.3 }}>
+                    {l.groupStart} <button onClick={() => setLine(l.id, { groupStart: undefined })} title="Remove this heading" style={{ border: 'none', background: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 12, marginLeft: 4 }}>×</button></td></tr>}
+                  <tr className={l.type === 'labour' ? 'bu-labour' : undefined} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined }}>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><input type="checkbox" checked={lsel.has(l.id)} onChange={() => toggleLine(l.id)} title="Tick to copy or delete several lines" style={{ verticalAlign: 'middle', marginRight: 2 }} /><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
                     <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => { const ty = e.target.value; setLine(l.id, { type: ty, cost: ty === 'labour' ? 'Labour' : ty === 'material' ? 'Materials' : '' }) }} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
                     <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 118 }} /></td>
@@ -213,6 +217,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                     <td style={td}>{l.type !== 'comment' && <select value={l.cost || ''} onChange={e => setLine(l.id, { cost: e.target.value })} data-alert={(l.type === 'lump' || l.type === 'lump sum') && !l.cost ? '1' : undefined} title={(l.type === 'lump' || l.type === 'lump sum') && !l.cost ? 'Choose the cost category - until you do, this line is not in the rate' : ''} style={{ ...cellInp, width: 92, ...((l.type === 'lump' || l.type === 'lump sum') && !l.cost ? { background: RED, borderColor: '#dc2626', borderWidth: 2, color: '#b91c1c', fontWeight: 600 } : {}) }}><option value="">{(l.type === 'lump' || l.type === 'lump sum') ? '— choose —' : '—'}</option>{COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>}</td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => copyLine(l.id)} style={{ ...iconBtn, marginRight: 2 }} title="Copy this line - an exact copy goes directly underneath">⧉</button><button onClick={() => setT(x => ({ ...x, lines: x.lines.filter(y => y.id !== l.id), rules: (x.rules || []).filter(rr => rr.line !== l.id) }))} style={iconBtn} title="Remove line">✕</button></td>
                   </tr>
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -221,7 +226,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           {LINE_TYPES.map(x => <button key={x} onClick={() => addLine(x)} style={smallBtn}>+ {LINE_TYPE_LABEL[x]}</button>)}
           {addSources && <button onClick={() => setAddingBu(true)} style={{ ...smallBtn, color: '#0f766e', borderColor: '#99f6e4', fontWeight: 600 }} title="Bring in a rate build-up's lines, sizes, variables and description">+ rate build-up</button>}
-          {addingBu && <AddBuildupPicker sources={addSources} unit={t.unit} onClose={() => setAddingBu(false)} onPick={(src) => { setT(x => mergeBuildup(x, src, lib)); setAddingBu(false) }} />}
+          {addingBu && <AddBuildupPicker sources={addSources} unit={t.unit} onClose={() => setAddingBu(false)} onPick={(src, name) => { setT(x => mergeBuildup(x, src, lib, name)); setAddingBu(false) }} />}
         </div>
       </Block>
 
@@ -732,7 +737,7 @@ function AddBuildupPicker({ sources, unit, onClose, onPick }) {
         <div style={{ overflowY: 'auto', flex: 1, border: '1px solid #f0efec', borderRadius: 8 }}>
           {!list.length && <div style={{ padding: 12, fontSize: 12.5, color: '#aaa' }}>{tab === 'estimate' ? 'No other item on this estimate has a build-up yet.' : 'Nothing matches.'}</div>}
           {list.map(x => (
-            <button key={x.key} onClick={() => onPick(x.src)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderBottom: '1px solid #f4f3f0', background: '#fff', padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button key={x.key} onClick={() => onPick(x.src, x.title)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderBottom: '1px solid #f4f3f0', background: '#fff', padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{x.title}</div>
               <div style={{ fontSize: 11.5, color: '#888' }}>{x.sub} · {x.unit ? `per ${UNIT_LABEL[x.unit] || x.unit}` : 'no unit'} · {x.n} line{x.n === 1 ? '' : 's'}
                 {unit && x.unit && x.unit !== unit && <span style={{ color: '#b45309', marginLeft: 6 }}>- priced per {UNIT_LABEL[x.unit] || x.unit}, this is per {UNIT_LABEL[unit] || unit}</span>}</div>

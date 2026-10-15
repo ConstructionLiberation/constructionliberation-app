@@ -1,40 +1,25 @@
-PACKAGE 1154 - Revisions keep their own prices; editing one never wipes the draft
+PACKAGE 1155 - A thick charcoal line between rate build-ups added to one item
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1153.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1154.
 
-  lib/estimate.js, lib/materials.js
+  lib/buildups.js
+  components/BuildupEditor.js     (the take-off pop-out AND the Build-ups page)
+  components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/estimates.js
 
-PRICES FROZEN WITH EACH REVISION. Issuing now stores, with the revision, the
-price-list entries its lines used (each product and labour rate, after
-supplier increases). Wherever that revision is priced, its own entries win -
-a later price-list change never alters it:
-  - viewing it (its stored figures, as since 1151)
-  - EDITING it - priced as at its issue; a blue banner says so, with "Use
-    today's prices" to re-price it deliberately
-  - "Changes since Rev X" - compared at Rev X's own prices, so a price-list
-    change now SHOWS as a change
-The current draft follows the price list as before. Revisions issued before
-this deploy did not store their prices, so they can only be priced at today's
-(their window says so).
+IN THE BUILD-UP LINES: each rate build-up added with "+ rate build-up" starts
+with a header row - its name, on a THICK CHARCOAL line (4px, #36454f) - so you
+can see which lines came from where. × removes a heading; copying or pasting a
+line does not copy its heading.
+IN THE DESCRIPTION: the separator between stacked descriptions shows as a
+thick charcoal rule on the take-off, the quote and the revision window (it was
+a row of dashes). In the description box it stays as the dashes line - text
+you can edit or delete.
 
-EDITING A REVISION NEVER WIPES THE DRAFT. "Edit Rev A" PARKS the draft instead
-of replacing it. "Working on: [Rev A - editing] [Draft Rev B]" at the top
-switches between them - each keeps its own changes. Re-issuing Rev A replaces
-Rev A (same letter) and brings the draft back. The rules stay: only the latest
-revision, only if not sent. Issuing the draft as a new revision while an edit
-of the previous one is parked sets that edit aside (it is no longer the
-latest) - the message says so.
-
-Checked through the real route, with a real 20% price rise in the middle: Rev
-A 1,107.00 with its price (185.85) stored; price raised to 223.02; Edit Rev A
--> qty 100 still priced 1,107.00, the draft (150) parked; switch to the draft
--> 150 at today's price (1,992.00), Rev A parked at its edit (110); back ->
-110 kept; re-issue -> Rev A (1,217.70, its own price), the draft back (150,
-letter B); issuing C with an edit of B parked -> set aside. In a REAL browser
-(Chromium): "Working on: Rev A - editing | Draft Rev B"; the banner; the total
-at Rev A's own price (21,594.00, its VCL price higher) -> Use today's prices
--> 20,804.00; clicking the draft sends the switch. All server routes compile;
-all 165 pages pass the browser check. Built from your deployed packages
-(1022-1153, verified against their zips).
+Checked in a REAL browser (Chromium): on Edge trim, Mech fixed single ply (this
+estimate) then Fully Adhered SP (library) added -> two header rows with their
+names, 4px charcoal; copying a line -> still two headings; the take-off
+description shows a 3px charcoal rule and no dashes; the quote likewise. All
+165 pages pass the browser check. Built from your deployed packages
+(1022-1154, verified against their zips); each file checked identical to the
+tested version before zipping.

@@ -611,7 +611,7 @@ export default function EstimatePage() {
                           <div style={{ fontSize: 11.5, color: '#666', marginTop: 3, lineHeight: 1.45, maxWidth: 560, whiteSpace: 'pre-line' }}>
                             {parts.map((x, k) => x.red === 'amend' ? <span key={k} style={{ color: '#b91c1c', background: '#fee2e2', fontWeight: 600, borderRadius: 3 }}>{x.text}</span>
                               : x.red === 'missing' ? <span key={k} style={{ color: '#b91c1c', fontWeight: 700 }} title="Not chosen yet - choose it in the item's Build-up">{x.text}</span>
-                              : <span key={k}>{x.text}</span>)}
+                              : <span key={k}>{ruled(x.text, k)}</span>)}
                           </div>) : null })()}
                         </div>
                         {/* THE NOTE (1139) - a yellow sticky beside the item; take-off only */}
@@ -1148,7 +1148,7 @@ function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy }) {
                 <tr key={r.id} style={{ background: bg }}>
                   <td style={{ ...td, minWidth: 280 }}>
                     <div style={{ display: 'flex', gap: 10 }}>
-                      <div style={{ flex: 1 }}><div style={{ fontWeight: 600 }}>{r.description}</div>{text && <div style={{ fontSize: 11.5, color: '#666', whiteSpace: 'pre-line', marginTop: 2 }}>{text}</div>}</div>
+                      <div style={{ flex: 1 }}><div style={{ fontWeight: 600 }}>{r.description}</div>{text && <div style={{ fontSize: 11.5, color: '#666', whiteSpace: 'pre-line', marginTop: 2 }}>{ruled(text)}</div>}</div>
                       {r.note ? <div style={{ width: 190, flexShrink: 0, background: '#fde047', borderRadius: 4, padding: '5px 7px', fontSize: 11.5, color: '#422006', whiteSpace: 'pre-wrap' }}>{r.note}</div> : null}
                     </div>
                   </td>
@@ -1197,3 +1197,7 @@ function ChangeList({ changes }) {
       </details>
     : <div key={i} style={{ color: colour(c.kind), padding: '1px 0 1px 15px', fontWeight: c.kind === 'total' ? 600 : 400 }}>{c.text}</div>)}</div>
 }
+
+// The separator between stacked descriptions (1147) drawn as a THICK CHARCOAL
+// RULE (1155) rather than a row of dashes.
+const ruled = (text, key = '') => String(text ?? '').split(/\n?————————\n?/).flatMap((t, i) => i ? [<span key={`${key}r${i}`} style={{ display: 'block', borderTop: '3px solid #36454f', margin: '6px 0' }} />, t] : [t])
