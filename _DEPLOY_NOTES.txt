@@ -1,39 +1,27 @@
-PACKAGE 1142 - No quote with an uncosted line; the pricing checklist
-(take-off part 3 of 3)
+PACKAGE 1143 - Material budgets: the balance, by label, and combined groups
 
-Six files. Complete replacements. No re-seed. No env changes. Built on 1141.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1142.
 
-  lib/estimate.js, lib/quoteDocs.js
+  lib/estimate.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/admin/quote-documents.js
-  pages/api/estimating/estimates.js
-  pages/api/estimating/quote-templates.js
 
-EVERY LINE COSTED BEFORE A QUOTE GOES OUT. An item is "not fully costed" if any
-of its lines (comments aside) has no cost or a £0 cost, or the item's rate
-is £0. (A lump spread on a rate-only item cannot be spread, so it is not
-counted.) Then:
-  - the item says "⚠ N lines without a cost" in red (the same lines)
-  - the totals bar: "⚠ N items not fully costed - the quote cannot be issued"
-  - Issue / Download and mark as sent are REFUSED, naming them - and the
-    server refuses too: "not yet costed: Membrane roof (Insulation)"
-THE PRICING CHECKLIST - just above the total on every take-off: the company's
-reminders plus any this estimate adds ("Add a reminder for this estimate…",
-✕ to remove). Ticked ones are struck through; "Tick all"; once everything is
-ticked it shrinks to "✓ Pricing checklist complete · show". Ticks and the
-estimate's own reminders save with the estimate.
-THE COMPANY LIST: Admin > Quote Documents > "Pricing checklist" - edit, reorder,
-add, remove; saved with the letter and clarifications. Until an admin saves
-one, a 12-item starter list is used (documents read, access, prelims,
-programme, deliveries, waste, protection, warranty, price list current,
-below the line, clarifications checked, retention / MCD / terms).
+"Budgets by supplier" is now MATERIAL BUDGETS, covering EVERY material line
+(above the line, with a quantity):
+  BY SUPPLIER - each supplier, plus "No supplier (own items)" for own items
+    and products with no supplier, so it adds up to the materials in full
+  BY LABEL - the same money by line label (Insulation, VCL, Membrane...),
+    merged across items whatever the capitals
+  COMBINE - in By label, tick labels -> "Combine N ticked…" -> name it (e.g.
+    "XXXX Supplier"): one row, its labels listed underneath, with rename and
+    split. Groups save with the estimate.
 
-Checked: the rule - a costed item passes (its comment ignored); a missing
-product, a £0 line and an empty item caught; a rate-only spread not counted.
-Through the real routes: issue refused naming the Insulation line; costed ->
-Rev A issued; the company checklist saved (blanks dropped). In a REAL browser
-(Chromium): the red bar and "13 lines without a cost"; sending refused, naming
-the lines; the checklist 2 of 12, struck through; an own reminder (13); Tick
-all -> "✓ complete · show"; show -> 13 of 13; saved. All server routes
-compile; all 165 pages pass the browser check. Built from your deployed
-packages (1022-1141, verified against their zips).
+Checked: on two items, by supplier Renolit 75 + "No supplier (own items)" 245
+= 320; by label Membrane 75, Insulation 200 ("Insulation" and "insulation"
+merged), VCL 30, Glue 15 = 320; both equal the 320 of materials; Insulation +
+VCL combined "XXXX Supplier" 230. In a REAL browser (Chromium): by supplier
+Valro, Renolit, Sika-Trocal and "No supplier (own items)" 600.00 = 2,646.02
+(the materials figure); by label the same total; Solvent + White (LPVC)
+combined "XXXX SUPPLIER" 600.00 with its labels, total unchanged; renamed;
+saved with the estimate; split -> back as it was. All 165 pages pass the
+browser check. Built from your deployed packages (1022-1142, verified against
+their zips).

@@ -11,7 +11,7 @@ import { placeholderValues, checklistOf } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, labelBudget, NO_SUPPLIER, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -626,8 +626,7 @@ export default function EstimatePage() {
           <Breakdown rows={bud.byCategory} money={money} />
         </div>
         <div style={panel}>
-          <strong style={{ fontSize: 14 }}>Budgets by supplier</strong> <span style={{ fontSize: 11.5, color: '#999' }}>products only</span>
-          <Breakdown rows={bud.bySupplier} money={money} />
+          <BudgetPanel bud={bud} est={est} change={change} money={money} />
         </div>
       </div>
 
@@ -822,3 +821,68 @@ function SaveStatus({ state, dirty, archived }) {
 }
 
 const bannerBtn = { fontSize: 12.5, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.7)', background: 'transparent', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' }
+
+// MATERIAL BUDGETS (1143) - every material line, BY SUPPLIER (own items and
+// products without a supplier as the balance) or BY LABEL. In the label view
+// labels can be ticked and COMBINED into a named group (est.budgetGroups),
+// renamed, or split again.
+function BudgetPanel({ bud, est, change, money }) {
+  const [view, setView] = useState('supplier')
+  const [tick, setTick] = useState(() => new Set())
+  const [naming, setNaming] = useState(null)       // { name } while combining
+  const [renaming, setRenaming] = useState(null)   // { id, name }
+  const groups = est.budgetGroups || []
+  const rows = view === 'label' ? labelBudget(bud.byLabel || {}, groups)
+    : Object.entries(bud.bySupplier || {}).map(([k, v]) => ({ key: k, name: k, amount: v, labels: [], group: null })).sort((a, b) => (a.name === NO_SUPPLIER) - (b.name === NO_SUPPLIER) || b.amount - a.amount)
+  const total = rows.reduce((t, r) => t + r.amount, 0)
+  const keysOf = (r) => r.group ? (groups.find(g => g.id === r.group)?.labels || []) : [r.key]
+  const combine = (name) => {
+    const picked = rows.filter(r => tick.has(r.key))
+    const labels = [...new Set(picked.flatMap(keysOf))]
+    const drop = new Set(picked.filter(r => r.group).map(r => r.group))
+    change(e => ({ ...e, budgetGroups: [...(e.budgetGroups || []).filter(g => !drop.has(g.id)), { id: `g${Date.now().toString(36)}`, name, labels }] }))
+    setTick(new Set()); setNaming(null)
+  }
+  const tab = (k, label) => <button onClick={() => { setView(k); setTick(new Set()); setNaming(null) }} style={{ fontSize: 12, padding: '3px 10px', border: `1px solid ${view === k ? '#0f766e' : '#d4d4d0'}`, background: view === k ? '#f0fdfa' : '#fff', color: view === k ? '#0f766e' : '#555', borderRadius: 6, cursor: 'pointer', fontWeight: view === k ? 600 : 400 }}>{label}</button>
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: 14 }}>Material budgets</strong>
+        <span style={{ flex: 1 }} />
+        {tab('supplier', 'By supplier')}{tab('label', 'By label')}
+      </div>
+      {!rows.length ? <div style={{ fontSize: 12.5, color: '#aaa', marginTop: 6 }}>Nothing priced yet.</div> : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 6 }}>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.key} style={{ background: tick.has(r.key) ? '#f0fdfa' : undefined }}>
+                {view === 'label' && <td style={{ width: 20, verticalAlign: 'top', padding: '3px 0' }}><input type="checkbox" checked={tick.has(r.key)} disabled={!!est.archived} onChange={() => setTick(x => { const n = new Set(x); if (n.has(r.key)) n.delete(r.key); else n.add(r.key); return n })} /></td>}
+                <td style={{ padding: '3px 0', color: r.name === NO_SUPPLIER ? '#888' : undefined, fontStyle: r.name === NO_SUPPLIER ? 'italic' : undefined }}>
+                  {renaming?.id === r.group && r.group
+                    ? <input autoFocus value={renaming.name} onChange={e => setRenaming({ ...renaming, name: e.target.value })} onBlur={() => { if (renaming.name.trim()) change(e => ({ ...e, budgetGroups: (e.budgetGroups || []).map(g => g.id === r.group ? { ...g, name: renaming.name.trim() } : g) })); setRenaming(null) }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setRenaming(null) }} style={{ ...inp, padding: '3px 6px', fontSize: 12.5 }} />
+                    : <span style={{ fontWeight: r.group ? 700 : 400 }}>{r.name}</span>}
+                  {r.group && renaming?.id !== r.group && <>
+                    <div style={{ fontSize: 11, color: '#888' }}>{r.labels.join(' + ') || 'no priced lines'}</div>
+                    {!est.archived && <span style={{ fontSize: 11 }}><button onClick={() => setRenaming({ id: r.group, name: r.name })} style={linkBtn}>rename</button> · <button onClick={() => change(e => ({ ...e, budgetGroups: (e.budgetGroups || []).filter(g => g.id !== r.group) }))} style={linkBtn}>split</button></span>}
+                  </>}
+                </td>
+                <td style={{ padding: '3px 0', textAlign: 'right', verticalAlign: 'top' }}>{money(r.amount, { dp: 2 })}</td>
+              </tr>
+            ))}
+            <tr><td colSpan={view === 'label' ? 2 : 1} style={{ padding: '4px 0', fontWeight: 700, borderTop: '1px solid #eee' }}>Total <span style={{ fontWeight: 400, fontSize: 11, color: '#999' }}>material lines</span></td><td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 700, borderTop: '1px solid #eee' }}>{money(total, { dp: 2 })}</td></tr>
+          </tbody>
+        </table>
+      )}
+      {view === 'label' && tick.size > 0 && !est.archived && (
+        naming
+          ? <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <input autoFocus value={naming.name} onChange={e => setNaming({ name: e.target.value })} onKeyDown={e => { if (e.key === 'Enter' && naming.name.trim()) combine(naming.name.trim()); if (e.key === 'Escape') setNaming(null) }} placeholder="Name the group - e.g. a supplier" style={{ ...inp, padding: '5px 8px', fontSize: 12.5 }} />
+              <button onClick={() => naming.name.trim() && combine(naming.name.trim())} disabled={!naming.name.trim()} style={{ ...btn, padding: '4px 10px', fontSize: 12.5 }}>Combine</button>
+            </div>
+          : <button onClick={() => setNaming({ name: '' })} style={{ ...btn, marginTop: 8, padding: '4px 10px', fontSize: 12.5 }}>Combine {tick.size} ticked…</button>
+      )}
+      {view === 'label' && !tick.size && <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>Tick labels to combine them into a named group - e.g. Insulation + VCL as one supplier.</div>}
+    </div>
+  )
+}
+const linkBtn = { border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', padding: 0, fontSize: 11, textDecoration: 'underline' }
