@@ -176,7 +176,15 @@ export default function EstimatePage() {
   const [selMsg, setSelMsg] = useState('')
   const CLIP = 'rock:takeoff-clipboard'
   useEffect(() => { try { const c = JSON.parse(localStorage.getItem(CLIP) || 'null'); setClipN(c?.rows?.length || 0) } catch {} }, [])
-  const toggleSel = (id) => setSel(x => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  // A SECTION HEADER takes everything under it - to the next header or the line (1150).
+  const toggleSel = (id) => setSel(x => {
+    const n = new Set(x), on = !n.has(id)
+    const rows = est?.rows || [], k = rows.findIndex(r => r.id === id)
+    const ids = [id]
+    if (k >= 0 && rows[k].kind === 'section') for (let j = k + 1; j < rows.length && rows[j].kind !== 'section' && rows[j].kind !== 'line'; j++) ids.push(rows[j].id)
+    for (const i of ids) { if (on) n.add(i); else n.delete(i) }
+    return n
+  })
   const selRows = () => (est?.rows || []).filter(r => sel.has(r.id))
   const copySel = () => {
     const rows = selRows(); if (!rows.length) return
@@ -481,7 +489,7 @@ export default function EstimatePage() {
                           <span style={{ fontSize: 12, color: '#6b6b80' }}>rate-only and optional items - priced and on the quote, not in the total</span>
                           <span style={{ flex: 1 }} />
                           <button onClick={() => setPicking('below')} style={smallBtn} disabled={!templates.length}>+ Item from build-ups</button>
-                          <button onClick={() => addRow(uniqueItem('m2'), true, true)} style={smallBtn}>+ Unique item</button>
+                          <button onClick={() => addRow(uniqueItem(''), true, true)} style={smallBtn}>+ Unique item</button>
                           <button onClick={() => addRow(spacerRow(), false, true)} style={smallBtn}>+ Blank line</button>
                         </div>
                       </td>
@@ -539,7 +547,7 @@ export default function EstimatePage() {
                         </div>
                       </td>
                       <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input data-qty="1" value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
-                      <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
+                      <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : <span style={{ color: '#dc2626', fontWeight: 700 }} title="No unit yet - choose it in the item's Build-up">unit?</span>}</td>
                       <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{m2(p.rate)}</td>
                       <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>Rate only</span>
                         : p.belowLine ? (p.total != null ? <span style={{ color: '#6d28d9', fontWeight: 600 }} title="Below the line - not in the total">{m2(p.total)}<div style={{ fontSize: 10.5, fontWeight: 500 }}>optional</div></span> : <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>Rate only</span>)
@@ -579,7 +587,7 @@ export default function EstimatePage() {
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={() => addRow(sectionRow('New section'))} style={btn}>+ Section header</button>
         <button onClick={() => setPicking(true)} style={btn} disabled={!templates.length} title={templates.length ? '' : 'Upload build-ups first'}>+ Item from build-ups</button>
-        <button onClick={() => addRow(uniqueItem('m2'), true)} style={btn}>+ Unique item</button>
+        <button onClick={() => addRow(uniqueItem(''), true)} style={btn}>+ Unique item</button>
         <button onClick={() => addRow(spacerRow())} style={btn} title="A blank line - layout only, not on the quote">+ Blank line</button>
         {!hasLine && <button onClick={() => change(e => ({ ...e, rows: [...e.rows, lineRow()] }))} style={{ ...btn, marginLeft: 'auto', color: '#6d28d9', borderColor: '#ddd6fe' }} title="Rate-only and optional items - shown and priced, not in the total">+ Below the line</button>}
         {/* + Prelims removed (1147) - prelims come from the rate build-ups like anything else */}
@@ -745,7 +753,7 @@ function Popout({ item, est, lib: libIn, templates = [], money, onChange, setRow
       <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 'min(1500px, 96vw)', padding: 18 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <label style={lbl}>Item<input value={item.description} onChange={e => setRow({ description: e.target.value })} style={{ ...inp, minWidth: 340 }} /></label>
-          <label style={lbl}>Unit<select value={item.unit || ''} onChange={e => setRow({ unit: e.target.value })} style={inp}><option value="">—</option>{BU_UNITS.map(u => <option key={u} value={u}>{BU_UNIT_LABEL[u]}</option>)}</select></label>
+          <label style={lbl}>Unit<select value={item.unit || ''} onChange={e => setRow({ unit: e.target.value })} title={item.unit ? '' : 'Choose the unit'} style={{ ...inp, ...(item.unit ? {} : { background: '#fee2e2', borderColor: '#dc2626', borderWidth: 2, color: '#b91c1c', fontWeight: 600 }) }}><option value="">— choose —</option>{BU_UNITS.map(u => <option key={u} value={u}>{BU_UNIT_LABEL[u]}</option>)}</select></label>
           <label style={lbl}>Quantity<input value={item.rateOnly ? '' : (item.qty ?? '')} disabled={item.rateOnly} placeholder={item.rateOnly ? 'TBC (rate only)' : ''} onChange={e => setRow({ qty: e.target.value === '' ? null : e.target.value })} style={{ ...inp, width: 110 }} /></label>
           <label style={lbl}>Profit % (this item)<NumBox pct value={item.profit ?? null} onChange={v => setRow({ profit: v })} placeholder={s.profit != null ? `${pct(s.profit)} (quote)` : 'quote'} style={{ ...inp, width: 120 }} /></label>
           <div style={{ flex: 1 }} />
