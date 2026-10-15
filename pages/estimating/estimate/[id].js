@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import EstimatingShell, { ErrorBar, estApi } from '../../../components/EstimatingShell'
 import { useFormat } from '../../../components/TenantProvider'
@@ -11,7 +11,7 @@ import { placeholderValues } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -150,7 +150,10 @@ export default function EstimatePage() {
   const setRow = (rid, patch) => change(e => ({ ...e, rows: e.rows.map(r => r.id === rid ? { ...r, ...(typeof patch === 'function' ? patch(r) : patch) } : r) }))
   const setSetting = (k, v) => change(e => ({ ...e, settings: { ...e.settings, [k]: v } }))
   const move = (i, d) => change(e => { const rs = [...e.rows]; const j = i + d; if (j < 0 || j >= rs.length) return e; [rs[i], rs[j]] = [rs[j], rs[i]]; return { ...e, rows: rs } })
-  const addRow = (row, open) => { change(e => ({ ...e, rows: [...e.rows, row] })); if (open) setPopout(row.id) }
+  // New rows go ABOVE the line unless asked for below it (1140).
+  const placeRows = (rs, newRows, below) => { const k = rs.findIndex(r => r.kind === 'line'); if (below || k < 0) return [...rs, ...newRows]; return [...rs.slice(0, k), ...newRows, ...rs.slice(k)] }
+  const addRow = (row, open, below) => { change(e => ({ ...e, rows: placeRows(e.rows, [row], below) })); if (open) setPopout(row.id) }
+  const hasLine = (est?.rows || []).some(r => r.kind === 'line')
   // SELECT, COPY / PASTE / DELETE, HIGHLIGHT, NOTE, DRAG AND DROP (1139).
   // Copy goes to this browser's storage, so it pastes into another estimate too.
   const [sel, setSel] = useState(() => new Set())
@@ -417,7 +420,31 @@ export default function EstimatePage() {
                 <th style={th} />
               </tr></thead>
               <tbody>
-                {est.rows.map((r, i) => r.kind === 'spacer' ? (
+                {est.rows.map((r, i) => r.kind === 'line' ? (
+                  // THE LINE (1140): the totals above it, then everything below - not in the total
+                  <React.Fragment key={r.id}>
+                    <tr style={{ background: '#faf9f7' }}>
+                      <td style={td} /><td style={{ ...td, fontWeight: 700 }} colSpan={4}>Totals <span style={{ fontWeight: 400, color: '#999', fontSize: 11.5 }}>above the line</span></td>
+                      <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{m2(totals.total)}</td>
+                      {shown.flatMap(c => c.foot ? c.foot() : [<td key={c.key} style={td} />])}
+                      <td style={td} />
+                    </tr>
+                    <tr style={{ ...rowLook(r, '#f5f3ff'), borderTop: '3px double #6d28d9' }} {...dropProps(r)}>
+                      {lead(r, i)}
+                      <td style={{ ...td, paddingTop: 10, paddingBottom: 10 }} colSpan={5 + cells}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <strong style={{ color: '#6d28d9', letterSpacing: 0.5 }}>BELOW THE LINE</strong>
+                          <span style={{ fontSize: 12, color: '#6b6b80' }}>rate-only and optional items - priced and on the quote, not in the total</span>
+                          <span style={{ flex: 1 }} />
+                          <button onClick={() => setPicking('below')} style={smallBtn} disabled={!templates.length}>+ Item from build-ups</button>
+                          <button onClick={() => addRow(uniqueItem('m2'), true, true)} style={smallBtn}>+ Unique item</button>
+                          <button onClick={() => addRow(spacerRow(), false, true)} style={smallBtn}>+ Blank line</button>
+                        </div>
+                      </td>
+                      <td style={td}><button onClick={() => { if (window.confirm('Remove the line? Items below it will count in the total.')) change(e => ({ ...e, rows: e.rows.filter(x => x.id !== r.id) })) }} style={iconBtn} title="Remove the line">✕</button></td>
+                    </tr>
+                  </React.Fragment>
+                ) : r.kind === 'spacer' ? (
                   // A BLANK LINE (1139) - layout only
                   <tr key={r.id} style={rowLook(r)} {...dropProps(r)}>
                     {lead(r, i)}
@@ -470,7 +497,9 @@ export default function EstimatePage() {
                       <td style={tdR}>{r.rateOnly ? <span style={{ color: '#888' }}>TBC</span> : <input value={r.qty ?? ''} onChange={e => setRow(r.id, { qty: e.target.value === '' ? null : e.target.value })} placeholder="qty" inputMode="decimal" style={{ ...cellInp, width: 80, textAlign: 'right' }} />}</td>
                       <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : '—'}</td>
                       <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{m2(p.rate)}</td>
-                      <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>Rate only</span> : m2(p.total)}</td>
+                      <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{r.rateOnly ? <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>Rate only</span>
+                        : p.belowLine ? (p.total != null ? <span style={{ color: '#6d28d9', fontWeight: 600 }} title="Below the line - not in the total">{m2(p.total)}<div style={{ fontSize: 10.5, fontWeight: 500 }}>optional</div></span> : <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>Rate only</span>)
+                        : m2(p.total)}</td>
                       {shown.flatMap(c => c.render(r, p))}
                       <td style={{ ...td, whiteSpace: 'nowrap' }}>
                         <button onClick={() => setPopout(r.id)} style={smallBtn}>Build-up</button>
@@ -482,7 +511,15 @@ export default function EstimatePage() {
                 })())}
                 {!est.rows.length && <tr><td colSpan={7 + cells} style={{ ...td, textAlign: 'center', color: '#aaa', padding: 26 }}>Add a section header, then the items - from the build-ups, or unique.</td></tr>}
               </tbody>
-              {est.rows.some(r => r.kind === 'item') && (
+              {hasLine && (
+                <tfoot><tr style={{ background: '#f5f3ff' }}>
+                  <td style={td} /><td style={{ ...td, fontWeight: 700, color: '#6d28d9' }} colSpan={4}>Below the line <span style={{ fontWeight: 400, color: '#6b6b80', fontSize: 11.5 }}>{totals.belowLine} item{totals.belowLine === 1 ? '' : 's'} - not in the total</span></td>
+                  <td style={{ ...tdR, fontWeight: 600, color: '#6d28d9' }}>{totals.optional ? m2(totals.optional) : ''}<div style={{ fontSize: 10.5, fontWeight: 500 }}>{totals.optional ? 'optional' : ''}</div></td>
+                  {cells > 0 && <td style={td} colSpan={cells} />}
+                  <td style={td} />
+                </tr></tfoot>
+              )}
+              {!hasLine && est.rows.some(r => r.kind === 'item') && (
                 <tfoot><tr style={{ background: '#faf9f7' }}>
                   <td style={td} /><td style={{ ...td, fontWeight: 700 }} colSpan={4}>Totals <span style={{ fontWeight: 400, color: '#999', fontSize: 11.5 }}>above the line</span></td>
                   <td style={{ ...tdR, fontWeight: 700, fontSize: 14, color: '#1a1a19' }}>{m2(totals.total)}</td>
@@ -500,7 +537,8 @@ export default function EstimatePage() {
         <button onClick={() => setPicking(true)} style={btn} disabled={!templates.length} title={templates.length ? '' : 'Upload build-ups first'}>+ Item from build-ups</button>
         <button onClick={() => addRow(uniqueItem('m2'), true)} style={btn}>+ Unique item</button>
         <button onClick={() => addRow(spacerRow())} style={btn} title="A blank line - layout only, not on the quote">+ Blank line</button>
-        <button onClick={() => { const [sec, it] = prelimsRows(); change(e => ({ ...e, rows: [...e.rows, sec, it] })); setPopout(it.id) }} style={btn} title="Lodge, management, attendances - lump sums for the job">+ Prelims</button>
+        {!hasLine && <button onClick={() => change(e => ({ ...e, rows: [...e.rows, lineRow()] }))} style={{ ...btn, marginLeft: 'auto', color: '#6d28d9', borderColor: '#ddd6fe' }} title="Rate-only and optional items - shown and priced, not in the total">+ Below the line</button>}
+        <button onClick={() => { const [sec, it] = prelimsRows(); change(e => ({ ...e, rows: placeRows(e.rows, [sec, it]) })); setPopout(it.id) }} style={btn} title="Lodge, management, attendances - lump sums for the job">+ Prelims</button>
       </div>
 
       <div style={{ display: 'flex', gap: 24, marginTop: 16, background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '12px 16px', flexWrap: 'wrap', alignItems: 'baseline', fontSize: 13 }}>
@@ -508,12 +546,12 @@ export default function EstimatePage() {
         <span>Materials {money(totals.materials || 0, { dp: 2 })}</span>
         <span>Labour {money(totals.labour || 0, { dp: 2 })}</span>
         <span>Profit &amp; MCD {money(totals.profitAndMcd || 0, { dp: 2 })}</span>
-        {totals.belowLine > 0 && <span style={{ color: '#666' }}>{totals.belowLine} rate-only item{totals.belowLine === 1 ? '' : 's'} below the line</span>}
+        {totals.belowLine > 0 && <span style={{ color: '#6d28d9' }}>{totals.belowLine} item{totals.belowLine === 1 ? '' : 's'} below the line{totals.optional ? ` (optional ${money(totals.optional, { dp: 2 })})` : ''} - not in the total</span>}
         {totals.noQty > 0 && <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 15, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px' }}>⚠ {totals.noQty} item{totals.noQty === 1 ? '' : 's'} without a quantity - not in the total</span>}
       </div>
 
       {issueMsg && <div style={{ marginTop: 10, fontSize: 13, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, padding: '8px 12px' }}>{issueMsg}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 12, marginTop: 14, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14, alignItems: 'start' }}>
         <div style={panel}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <strong style={{ fontSize: 14 }}>Revisions</strong>
@@ -532,6 +570,12 @@ export default function EstimatePage() {
           ))}
           {!(est.revisions || []).length && <div style={{ fontSize: 12.5, color: '#888' }}>Not issued yet. Issuing freezes the quote as Rev {est.revision}{est.dealId ? ' and sets the CRM deal value' : ''}.</div>}
         </div>
+        {/* NOTES (1140) - general notes on this estimate; for the team, not on the quote */}
+        <div style={panel}>
+          <strong style={{ fontSize: 14 }}>Notes</strong> <span style={{ fontSize: 11.5, color: '#999' }}>general notes on this estimate - not on the quote</span>
+          <textarea value={est.notes || ''} onChange={e => change(x => ({ ...x, notes: e.target.value }))} disabled={!!est.archived} placeholder="Anything worth knowing about this estimate…" rows={6}
+            style={{ ...inp, marginTop: 8, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
+        </div>
         <div style={panel}>
           <strong style={{ fontSize: 14 }}>Cost breakdown</strong> <span style={{ fontSize: 11.5, color: '#999' }}>before profit and MCD</span>
           <Breakdown rows={bud.byCategory} money={money} />
@@ -548,7 +592,7 @@ export default function EstimatePage() {
         if (dirty) { setErr('Save first, then link the deal'); setLinking(false); return }
         try { const d = await estApi(API, { action: 'link', id: est.id, dealId }); setEst(d.estimate); setBase(d.estimate.updatedAt); setCrm(d.crm); setLinking(false) } catch (e) { setErr(e.message) }
       }} />}
-      {picking && <TemplatePicker templates={templates} onClose={() => setPicking(false)} onPick={(t) => { setPicking(false); addRow(itemFromTemplate(t), true) }} />}
+      {picking && <TemplatePicker templates={templates} onClose={() => setPicking(false)} onPick={(t) => { const below = picking === 'below'; setPicking(false); addRow(itemFromTemplate(t), true, below) }} />}
       {item && <Popout item={item} est={est} lib={lib} templates={templates} money={money} onChange={(fn) => setRow(item.id, (r) => ({ buildup: fn(r.buildup) }))} setRow={(patch) => setRow(item.id, patch)} onClose={() => setPopout(null)} />}
     </EstimatingShell>
   )

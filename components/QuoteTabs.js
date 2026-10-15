@@ -96,8 +96,11 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
   const s = est.settings || {}
   const terms = termsOverride || currentTerms(templates)
   const above = [], below = []
+  let pastLine = false
   for (const r of est.rows || []) {
     if (r.kind === 'spacer') continue        // blank lines are take-off layout only (1139)
+    if (r.kind === 'line') { pastLine = true; continue }
+    if (pastLine) { if (r.kind === 'item') below.push(r); continue }   // below the line (1140)
     if (r.kind === 'section') above.push(r)
     else if (r.rateOnly) below.push(r)
     else above.push(r)
@@ -141,9 +144,10 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
         {s.mcd > 0 && <div style={{ fontSize: 12, color: '#555', marginTop: 6 }}>Our prices include a {+(s.mcd * 100).toFixed(2)}% main contractor's discount.</div>}
 
         {below.length > 0 && <>
-          <h3 style={{ fontSize: 14, margin: '22px 0 6px' }}>Rate-only items <span style={{ fontWeight: 400, fontSize: 12, color: '#666' }}>(below the line - quantities to be confirmed, not included in the total)</span></h3>
+          <h3 style={{ fontSize: 14, margin: '22px 0 6px' }}>Below the line <span style={{ fontWeight: 400, fontSize: 12, color: '#666' }}>(rate-only and optional items - not included in the total)</span></h3>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <tbody>{below.map(r => <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>TBC</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(priced[r.id]?.rate)}</td><td style={{ ...num, color: '#666' }}>Rate only</td></tr>)}</tbody>
+            <tbody>{below.map(r => { const pr = priced[r.id] || {}; const opt = pr.optional && pr.total != null
+              return <tr key={r.id}><td style={td}>{lineText(r)}</td><td style={num}>{opt ? pr.qty : 'TBC'}</td><td style={td}>{BU_UNIT_LABEL[r.unit] || ''}</td><td style={num}>{m2(pr.rate)}</td><td style={{ ...num, color: '#666' }}>{opt ? <>{m2(pr.total)} <span style={{ fontSize: 11 }}>optional</span></> : 'Rate only'}</td></tr> })}</tbody>
           </table>
         </>}
 
