@@ -16,13 +16,13 @@ export default function PurchaseOrdersPage() {
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
-  const [show, setShow] = useState('open')    // open | sent | cancelled | all
+  const [show, setShow] = useState('open')    // open | draft | sent | cancelled | all
   const [numbering, setNumbering] = useState(false)
   const load = () => call().then(setData).catch(e => setErr(e.message))
   useEffect(() => { load() }, [])
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const shown = useMemo(() => (data ? data.pos : []).filter(p => show === 'all' || (show === 'open' ? p.status === 'approved' : p.status === show))
-    .filter(p => words.every(w => `${p.number} ${p.jobNo} ${p.projectName} ${p.supplier} ${p.raisedBy}`.toLowerCase().includes(w))), [data, q, show])
+    .filter(p => words.every(w => `${p.number || 'draft'} ${p.jobNo} ${p.projectName} ${p.supplier} ${p.raisedBy}`.toLowerCase().includes(w))), [data, q, show])
   const count = (st) => (data ? data.pos : []).filter(p => st === 'all' || (st === 'open' ? p.status === 'approved' : p.status === st)).length
   return (
     <OperationsShell active="purchasing:pos" section="purchasing" title="Purchase Orders" wide>
@@ -33,7 +33,7 @@ export default function PurchaseOrdersPage() {
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {data && !data.suppliers.length && <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>No supplier is linked to Xero yet - link them on <a href="/operations/purchasing/suppliers" style={{ color: '#0f766e' }}>Purchasing &gt; Suppliers</a> first; a PO can only be raised to a linked supplier.</div>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        {[['open', 'Not sent'], ['sent', 'Sent'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) =>
+        {[['open', 'Not sent'], ['draft', 'Drafts'], ['sent', 'Sent'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) =>
           <button key={k} onClick={() => setShow(k)} style={{ ...btn, background: show === k ? '#0f766e' : '#fff', color: show === k ? '#fff' : '#333', borderColor: show === k ? '#0f766e' : '#d4d4d0' }}>{l} ({count(k)})</button>)}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search number, project, supplier…" style={{ fontSize: 13, padding: '6px 10px', border: '1px solid #d4d4d0', borderRadius: 7, minWidth: 260 }} />
         <span style={{ flex: 1 }} />
@@ -46,7 +46,7 @@ export default function PurchaseOrdersPage() {
             <thead><tr>{['PO', 'Project', 'Supplier', 'Total (ex VAT)', 'Delivery required', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
             <tbody>{shown.map(p => (
               <tr key={p.id} onClick={() => { window.location.href = `/operations/purchasing/po/${p.id}` }} style={{ cursor: 'pointer' }}>
-                <td style={{ ...td, fontWeight: 700 }}>{p.number}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{p.number || <span style={{ color: '#64748b', fontWeight: 600 }}>Draft</span>}</td>
                 <td style={td}><strong>{p.jobNo}</strong> {p.projectName}</td>
                 <td style={td}>{p.supplier}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{money(p.total)}</td>

@@ -15,7 +15,7 @@ async function handler(req, res) {
   const t = verifyPoToken(String(req.query.token || ''), currentTenantId())
   if (!t) return res.status(403).json({ error: 'This link is not valid or has expired. Please ask us for a new one.' })
   const po = await loadPo(t.id)
-  if (!po) return res.status(404).json({ error: 'This purchase order no longer exists.' })
+  if (!po || po.status === 'draft') return res.status(404).json({ error: 'This purchase order no longer exists.' })
   // AN ACCESS-ROUTE DOCUMENT (1200) - only one attached to THIS PO, via a link that expires in minutes
   const docs = (await listDocs('po', po.id).catch(() => [])) || []
   if (req.query.doc) {

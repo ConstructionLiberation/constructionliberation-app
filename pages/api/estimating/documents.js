@@ -49,7 +49,7 @@ async function checkOwner(ownerType, ownerId, role) {
     if (!canAccessArea(role, 'purchasing')) return { error: 'You do not have access to purchase orders', code: 403 }
     const po = await loadPo(String(ownerId))
     if (!po) return { error: 'That purchase order no longer exists', code: 404 }
-    if (po.status !== 'approved') return { error: `${po.number} has been ${po.status} - its documents are fixed`, code: 409, readOnly: true }
+    if (po.status !== 'approved' && po.status !== 'draft') return { error: `${po.number} has been ${po.status} - its documents are fixed`, code: 409, readOnly: true }
     return { po }
   }
   return { error: "ownerType must be 'estimate', 'buildup' or 'po'", code: 400 }

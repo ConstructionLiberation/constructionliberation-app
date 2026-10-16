@@ -1,47 +1,39 @@
-PACKAGE 1200 - Purchase orders: delivery details
+PACKAGE 1201 - Purchase orders: click to add, quantities typed, drafts
 
-Seven files. Complete replacements. No re-seed. No env changes. Built on 1199.
+Seven files. Complete replacements. No re-seed. No env changes. Built on 1200.
 
+  lib/poShared.js
   lib/purchaseOrders.js
   pages/api/purchase-orders.js
   pages/api/po-view.js
   pages/api/estimating/documents.js
   pages/operations/purchasing/purchase-orders.js
   pages/operations/purchasing/po/[id].js     (folder literally named [id])
-  pages/po.js
 
-On a purchase order:
-  - DELIVER TO fills in automatically from the project's PROJECT DETAILS (the
-    commercial override, else the IHM) when the project is chosen; editable
-  - "Needed by" is now "DELIVERY REQUIRED" (editor, list, email, supplier page)
-  - "Notes to the supplier" is replaced by DELIVERY DETAILS:
-      Is Moffett offload required?  Yes / No   (required)
-      Are artics permitted?         Yes / No   (required)
-      Any special access routes?    text, plus ATTACHED DOCUMENTS (once the PO
-                                    is raised, until it is sent) - the supplier
-                                    opens them from their link
-      Site contact                  every active operative (Site App users) and
-                                    portal user, with mobile
-      Order confirmations sent to   prefilled from the company default
-                                    (PO settings, admins), editable per PO; the
-                                    supplier's reply goes there
-      Additional notes              free text
-The email and the supplier's page show all of it. "PO numbering..." is now
-"PO settings..." with the default order-confirmations address.
+CLICK A PRODUCT TO ADD IT - the whole product row is the button (the Add
+buttons are gone); the new line's quantity box takes the cursor.
+QUANTITIES TYPED BY HAND - a product or free line is added with its quantity
+BLANK and RED until typed. A PO cannot be raised until every line has a
+quantity: the button is held back and says what is missing ("To raise it:
+quantities (1), the Moffett question..."), and the server refuses it too
+("Line 2 (Primer) has no quantity") - a line is never quietly dropped. An
+approved PO changed to a blank quantity is refused the same way.
+DRAFTS - "Save as draft" on a new PO; a draft may be incomplete (no supplier,
+blank quantities, questions unanswered). It has NO number yet, is not
+approved, not in Deliveries, cannot be sent, and its link does not open. In
+the list under "Drafts", shown as "Draft". Reopen it: "Save draft", "Raise
+purchase order" (it then gets its number and goes into Deliveries), or
+"Delete draft" (only drafts can be deleted - a raised PO is cancelled).
+Documents can be attached to a draft.
 
-AFTER DEPLOYING: Purchase Orders > PO settings... - enter the default address
-for order confirmations.
-
-Checked through the real routes: J228's address from its IHM, J230's
-commercial override winning; site contacts - operatives and portal users with
-mobiles, a leaver left out; raising refused until artics answered; raised with
-the answers and the default confirmations address; the email reply-to that
-address with the delivery block (date, address, Moffett Yes, artics No, access
-routes + "1 document on the link", site contact, confirmations); a document
-attached by the office, refused for a designer and after sending; the
-supplier's link lists and opens it (a short-lived link), and refuses one not
-on the PO. In a REAL browser (Chromium): the new labels; the confirmations
-default; J228 -> its address; the site contact list; Raise held until both
-questions answered; the supplier's page with the delivery details and the
-document. All server routes compile; all pages pass the browser check. Built
-from your deployed packages (1022-1199, verified against their zips).
+Checked through the real routes: a draft saved incomplete (no number, not in
+Deliveries) and again; raising it refused while a quantity was blank, then
+raised as APP-PO-0001 into Deliveries; a new PO with a blank quantity refused
+by name, and an approved PO changed to one; a draft not sendable, its link
+not opening; deleting refused for a raised PO, done for a draft. In a REAL
+browser (Chromium): the Drafts filter; no Add buttons - a click on the product
+added it with a blank, red, focused quantity; Raise held with what is
+missing; Save as draft sent with the quantity blank; typing 12 cleared the red
+and, with the questions answered, enabled Raise. All server routes compile;
+all pages pass the browser check. Built from your deployed packages
+(1022-1200, verified against their zips).

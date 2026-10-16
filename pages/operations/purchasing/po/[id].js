@@ -43,10 +43,19 @@ export default function PoPage() {
     else call(null, `?id=${encodeURIComponent(id)}`).then(d => { setPo(d.po); setLink(d.link) }).catch(e => setErr(e.message))
   }, [id])
   useEffect(() => { if (po && po.supplier) call(null, `?products=${encodeURIComponent(po.supplier)}`).then(d => setProducts(d.products)).catch(() => setProducts([])); else setProducts([]) }, [po && po.supplier])
-  const editable = po && (isNew || po.status === 'approved')
+  const editable = po && (isNew || po.status === 'approved' || po.status === 'draft')
+  const isDraft = po && (isNew || po.status === 'draft')
+  // WHAT STOPS IT BEING RAISED (1201) - every line needs a quantity
+  const missing = po ? [
+    !po.projectId && 'the project', !po.supplier && 'the supplier', !po.lines.length && 'a line',
+    po.lines.some(l => !(Number(l.qty) > 0)) && `quantities (${po.lines.filter(l => !(Number(l.qty) > 0)).length})`,
+    po.lines.some(l => !String(l.description || '').trim()) && 'a description on every line',
+    !po.moffett && 'the Moffett question', !po.artics && 'the artics question'].filter(Boolean) : []
   const set = (k, v) => setPo(x => ({ ...x, [k]: v }))
   const setLine = (i, k, v) => setPo(x => ({ ...x, lines: x.lines.map((l, j) => j === i ? { ...l, [k]: v } : l) }))
-  const addProduct = (p) => setPo(x => ({ ...x, lines: [...x.lines, { ref: p.ref, code: p.code, description: p.description, qty: 1, unit: p.unit, price: p.price ?? 0 }] }))
+  // CLICK A PRODUCT TO ADD IT (1201) - the quantity blank (red) and ready to type
+  const focusLastQty = () => setTimeout(() => { const q = document.querySelectorAll('input[data-qty]'); if (q.length) q[q.length - 1].focus() }, 30)
+  const addProduct = (p) => { setPo(x => ({ ...x, lines: [...x.lines, { ref: p.ref, code: p.code, description: p.description, qty: '', unit: p.unit, price: p.price ?? 0 }] })); focusLastQty() }
   const words = pq.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const found = useMemo(() => products.filter(p => words.every(w => `${p.description} ${p.code} ${p.ref} ${p.section}`.toLowerCase().includes(w))).slice(0, 40), [products, pq])
   // the project's address from Project Details - filled in unless someone has typed their own
@@ -54,13 +63,19 @@ export default function PoPage() {
     try { const d = await call(null, `?project=${encodeURIComponent(p.id)}&jobNo=${encodeURIComponent(p.jobNo)}`)
       setPo(x => (!x.deliveryAddress || x.deliveryAddress === x._autoAddress) ? { ...x, deliveryAddress: d.projectAddress || '', _autoAddress: d.projectAddress || '' } : x) } catch {}
   }
-  async function save() {
+  // save as a DRAFT, RAISE (new or a draft), or save an approved PO's changes (1201)
+  async function save(how) {
     setBusy(true); setErr(''); setMsg('')
     try {
-      if (isNew) { const d = await call({ action: 'create', po }); router.replace(`/operations/purchasing/po/${d.po.id}`); return }
-      const d = await call({ action: 'update', id: po.id, po }); setPo(d.po); setMsg('Saved.')
+      if (isNew) { const d = await call({ action: 'create', po, draft: how === 'draft' }); router.replace(`/operations/purchasing/po/${d.po.id}`); return }
+      const d = await call({ action: how === 'raise' ? 'raise' : 'update', id: po.id, po })
+      setPo(d.po); setMsg(how === 'raise' ? `Raised as ${d.po.number}.` : how === 'draft' ? 'Draft saved.' : 'Saved.')
     } catch (e) { setErr(e.message) }
     setBusy(false)
+  }
+  async function discard() {
+    if (!window.confirm('Delete this draft purchase order?')) return
+    setBusy(true); setErr(''); try { await call({ action: 'discard', id: po.id }); router.replace('/operations/purchasing/purchase-orders') } catch (e) { setErr(e.message); setBusy(false) }
   }
   async function cancel() {
     const reason = window.prompt(`Cancel ${po.number}? It comes off Deliveries. Reason (optional):`, '')
@@ -70,15 +85,15 @@ export default function PoPage() {
   if (!po) return <OperationsShell active="purchasing:pos" section="purchasing" title="Purchase order" wide><div style={{ padding: 14, color: err ? '#b42318' : '#aaa' }}>{err || 'Loading…'}</div></OperationsShell>
   const st = PO_STATUS[po.status] || null
   return (
-    <OperationsShell active="purchasing:pos" section="purchasing" title={isNew ? 'New purchase order' : po.number} wide>
+    <OperationsShell active="purchasing:pos" section="purchasing" title={isNew ? 'New purchase order' : po.number || 'Draft purchase order'} wide>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         <a href="/operations/purchasing/purchase-orders" style={{ fontSize: 12.5, color: '#0f766e' }}>‹ Purchase orders</a>
-        <h1 style={{ fontSize: 20, margin: 0 }}>{isNew ? 'New purchase order' : po.number}</h1>
+        <h1 style={{ fontSize: 20, margin: 0 }}>{isNew ? 'New purchase order' : po.number || 'Draft purchase order'}</h1>
         {st && <span style={{ fontSize: 12, fontWeight: 700, color: st[1] }}>{st[0]}</span>}
         <span style={{ flex: 1 }} />
-        {!isNew && po.status !== 'cancelled' && <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(link); setMsg('The supplier\'s link is copied.') }} style={btn}>Copy supplier link</button>}
-        {!isNew && po.status !== 'cancelled' && <button onClick={() => setSending(true)} disabled={busy} style={primary}>{po.status === 'sent' ? 'Send again' : 'Send to supplier'}</button>}
-        {!isNew && po.status !== 'cancelled' && <button onClick={cancel} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Cancel PO</button>}
+        {!isNew && po.status !== 'cancelled' && po.status !== 'draft' && <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(link); setMsg('The supplier\'s link is copied.') }} style={btn}>Copy supplier link</button>}
+        {!isNew && po.status !== 'cancelled' && po.status !== 'draft' && <button onClick={() => setSending(true)} disabled={busy} style={primary}>{po.status === 'sent' ? 'Send again' : 'Send to supplier'}</button>}
+        {!isNew && po.status !== 'cancelled' && po.status !== 'draft' && <button onClick={cancel} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Cancel PO</button>}
       </div>
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {msg && <div style={{ color: '#0f766e', fontSize: 13, marginBottom: 8 }}>{msg}</div>}
@@ -108,7 +123,7 @@ export default function PoPage() {
               {po.lines.map((l, i) => <tr key={i}>
                 <td style={td}><input value={l.description} onChange={e => setLine(i, 'description', e.target.value)} style={{ ...inp, width: '100%' }} /></td>
                 <td style={{ ...td, width: 120 }}><input value={l.code} onChange={e => setLine(i, 'code', e.target.value)} style={{ ...inp, width: '100%' }} /></td>
-                <td style={{ ...td, width: 80 }}><input type="number" min="0" step="any" value={l.qty} onChange={e => setLine(i, 'qty', e.target.value)} style={{ ...inp, width: '100%', textAlign: 'right' }} /></td>
+                <td style={{ ...td, width: 80 }}><input data-qty="1" type="number" min="0" step="any" value={l.qty} placeholder="Qty" onChange={e => setLine(i, 'qty', e.target.value)} title={Number(l.qty) > 0 ? '' : 'Type the quantity'} style={{ ...inp, width: '100%', textAlign: 'right', ...(Number(l.qty) > 0 ? {} : { borderColor: '#dc2626', background: '#fef2f2' }) }} /></td>
                 <td style={{ ...td, width: 90 }}><input value={l.unit} onChange={e => setLine(i, 'unit', e.target.value)} style={{ ...inp, width: '100%' }} /></td>
                 <td style={{ ...td, width: 110 }}><input type="number" min="0" step="any" value={l.price} onChange={e => setLine(i, 'price', e.target.value)} style={{ ...inp, width: '100%', textAlign: 'right' }} /></td>
                 <td style={{ ...td, width: 100, textAlign: 'right', fontWeight: 600 }}>{money(lineTotal(l))}</td>
@@ -120,14 +135,14 @@ export default function PoPage() {
           {editable && <div style={{ marginTop: 10 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input value={pq} onChange={e => setPq(e.target.value)} disabled={!po.supplier} placeholder={po.supplier ? `Search ${po.supplier}'s products on the price list…` : 'Choose the supplier to add their products'} style={{ ...inp, flex: 1 }} />
-              <button onClick={() => setPo(x => ({ ...x, lines: [...x.lines, { ref: null, code: '', description: '', qty: 1, unit: '', price: 0 }] }))} style={btn}>+ Free line</button>
+              <button onClick={() => { setPo(x => ({ ...x, lines: [...x.lines, { ref: null, code: '', description: '', qty: '', unit: '', price: 0 }] })); focusLastQty() }} style={btn}>+ Free line</button>
             </div>
             {po.supplier && pq.trim() && <div style={{ border: '1px solid #f0efec', borderRadius: 8, marginTop: 6, maxHeight: 260, overflowY: 'auto' }}>
               {!found.length ? <div style={{ padding: 10, color: '#aaa', fontSize: 13 }}>No product matches.</div> : found.map(p => (
-                <div key={p.ref} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '6px 10px', borderBottom: '1px solid #f4f3f0', fontSize: 13 }}>
-                  <span style={{ flex: 1 }}>{p.description} <span style={{ color: '#999', fontSize: 11.5 }}>{[p.code, p.ref].filter(Boolean).join(' · ')}</span></span>
+                <div key={p.ref} onClick={() => addProduct(p)} title="Add to the PO" onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}
+                  style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 10px', borderBottom: '1px solid #f4f3f0', fontSize: 13, cursor: 'pointer' }}>
+                  <span style={{ flex: 1, color: '#0f766e' }}>{p.description} <span style={{ color: '#999', fontSize: 11.5 }}>{[p.code, p.ref].filter(Boolean).join(' · ')}</span></span>
                   <span style={{ color: '#555' }}>{p.price != null ? `${money(p.price)}${p.unit ? ` / ${p.unit}` : ''}` : 'no price'}</span>
-                  <button onClick={() => addProduct(p)} style={{ ...btn, padding: '3px 10px' }}>Add</button>
                 </div>))}
             </div>}
           </div>}
@@ -144,7 +159,7 @@ export default function PoPage() {
           </div>
           <label style={{ ...label, marginTop: 10 }}>Any special access routes?<textarea value={po.accessRoutes} onChange={e => set('accessRoutes', e.target.value)} rows={2} placeholder="e.g. Access via the rear service road only - height barrier 3.2m" style={{ ...inp, resize: 'vertical' }} /></label>
           <div style={{ marginTop: 8 }}>{isNew ? <div style={{ fontSize: 12, color: '#888' }}>Raise the PO to attach documents (access plans, route maps) - the supplier opens them from their link.</div>
-            : <DocumentsPanel ownerType="po" ownerId={po.id} title="Access route documents" readOnly={po.status !== 'approved'} />}</div>
+            : <DocumentsPanel ownerType="po" ownerId={po.id} title="Access route documents" readOnly={po.status !== 'approved' && po.status !== 'draft'} />}</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
             <label style={{ ...label, flex: '1 1 300px' }}>Site contact
               <select value={po.siteContact && po.siteContact.name ? `${po.siteContact.name}|${po.siteContact.phone || ''}` : ''} onChange={e => { const [name, phone] = e.target.value.split('|'); set('siteContact', { name: name || '', phone: phone || '' }) }} style={inp}>
@@ -158,8 +173,10 @@ export default function PoPage() {
         </div>
       </fieldset>
       {editable && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
-        {(!po.moffett || !po.artics) && <span style={{ fontSize: 12, color: '#b45309', alignSelf: 'center' }}>Answer the Moffett and artics questions</span>}
-        <button onClick={save} disabled={busy || !po.projectId || !po.supplier || !po.lines.length || !po.moffett || !po.artics} style={{ ...primary, opacity: (!po.projectId || !po.supplier || !po.lines.length || !po.moffett || !po.artics) ? 0.5 : 1 }}>{isNew ? 'Raise purchase order' : 'Save changes'}</button>
+        {missing.length > 0 && <span style={{ fontSize: 12, color: '#b45309', alignSelf: 'center' }}>To {isDraft ? 'raise it' : 'save'}: {missing.join(', ')}</span>}
+        {!isNew && po.status === 'draft' && <button onClick={discard} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete draft</button>}
+        {isDraft && <button onClick={() => save('draft')} disabled={busy} style={btn}>{isNew ? 'Save as draft' : 'Save draft'}</button>}
+        <button onClick={() => save(isDraft ? 'raise' : 'update')} disabled={busy || missing.length > 0} style={{ ...primary, opacity: missing.length ? 0.5 : 1 }}>{isDraft ? 'Raise purchase order' : 'Save changes'}</button>
       </div>}
       {!isNew && (po.history || []).length > 0 && <div style={{ ...card, fontSize: 12.5, color: '#555' }}><strong style={{ fontSize: 13, color: '#333' }}>History</strong>
         {(po.history || []).slice().reverse().map((h, i) => <div key={i} style={{ marginTop: 4 }}>{new Date(h.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {h.by} · {h.what}</div>)}</div>}

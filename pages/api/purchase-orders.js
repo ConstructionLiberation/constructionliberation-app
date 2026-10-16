@@ -19,14 +19,14 @@ import { fromEmail, baseUrl, companyName } from '../../lib/tenantSettings'
 import { loadPriceList } from '../../lib/priceListStore'
 import { LINKS_KEY, CONTACTS_KEY } from '../../lib/suppliers'
 import { listDocs } from '../../lib/documentsStore'
-import { listPos, loadPo, savePo, takeNumber, loadPoSettings, savePoSettings, poTotal, lineTotal, createPoToken, deliveryRowFor } from '../../lib/purchaseOrders'
+import { listPos, loadPo, savePo, deletePo, takeNumber, loadPoSettings, savePoSettings, poTotal, lineTotal, createPoToken, deliveryRowFor } from '../../lib/purchaseOrders'
 
 const newId = () => `po${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const money = (n) => `£${(Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const cleanLines = (lines) => (Array.isArray(lines) ? lines : []).map(l => ({ ref: l.ref ? String(l.ref).slice(0, 40) : null, code: String(l.code || '').slice(0, 60),
-  description: String(l.description || '').replace(/\s+/g, ' ').trim().slice(0, 300), qty: Number(l.qty) || 0, unit: String(l.unit || '').slice(0, 30), price: Math.round((Number(l.price) || 0) * 10000) / 10000 }))
-  .filter(l => l.description && l.qty > 0)
+  description: String(l.description || '').replace(/\s+/g, ' ').trim().slice(0, 300), qty: (l.qty === '' || l.qty == null) ? '' : (Number(l.qty) || 0), unit: String(l.unit || '').slice(0, 30), price: Math.round((Number(l.price) || 0) * 10000) / 10000 }))
+  .filter(l => l.description || l.qty > 0)
 const yn = (v) => (v === 'yes' || v === 'no') ? v : ''
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const linkFor = (po) => `${baseUrl()}/po?token=${encodeURIComponent(createPoToken({ id: po.id, tenantId: currentTenantId() }))}`
@@ -108,38 +108,77 @@ async function handler(req, res) {
     if (normRole(session.role) !== 'admin') return res.status(403).json({ error: 'Only an admin can change PO numbering' })
     return res.status(200).json({ ok: true, settings: await savePoSettings(b) })
   }
-  if (b.action === 'create' || b.action === 'update') {
+  if (b.action === 'create' || b.action === 'update' || b.action === 'raise') {
+    // A DRAFT (1201) may be incomplete; RAISING checks everything - a supplier linked
+    // to Xero, the project, and every line with a quantity (none quietly dropped).
     const src = b.po || {}
-    const sup = (await linkedSuppliers()).find(s => s.name === src.supplier)
-    if (!sup) return res.status(400).json({ error: 'Pick a supplier that is linked to its Xero contact (Purchasing > Suppliers)' })
-    if (!src.projectId) return res.status(400).json({ error: 'Pick the project' })
+    const toDraft = b.action === 'create' ? !!b.draft : false
+    const sup = (await linkedSuppliers()).find(s => s.name === src.supplier) || null
     const lines = cleanLines(src.lines)
-    if (!lines.length) return res.status(400).json({ error: 'Add at least one line with a quantity' })
-    const fields = { projectId: String(src.projectId), jobNo: String(src.jobNo || ''), projectName: String(src.projectName || ''), supplier: sup.name, contactId: sup.contactId, contactName: sup.contactName,
+    const fullCheck = () => {
+      if (!sup) return 'Pick a supplier that is linked to its Xero contact (Purchasing > Suppliers)'
+      if (!src.projectId) return 'Pick the project'
+      if (!lines.length) return 'Add at least one line'
+      const k = lines.findIndex(l => !(Number(l.qty) > 0)); if (k >= 0) return `Line ${k + 1}${lines[k].description ? ` (${lines[k].description.slice(0, 40)})` : ''} has no quantity`
+      const d = lines.findIndex(l => !l.description); if (d >= 0) return `Line ${d + 1} has no description`
+      return null
+    }
+    if (src.supplier && !sup) return res.status(400).json({ error: 'Pick a supplier that is linked to its Xero contact (Purchasing > Suppliers)' })
+    const fields = { projectId: String(src.projectId || ''), jobNo: String(src.jobNo || ''), projectName: String(src.projectName || ''), supplier: sup ? sup.name : '', contactId: sup ? sup.contactId : '', contactName: sup ? sup.contactName : '',
       lines, deliveryAddress: String(src.deliveryAddress || '').slice(0, 500), deliveryDate: String(src.deliveryDate || '').slice(0, 10), notes: String(src.notes || '').slice(0, 2000),
       // DELIVERY DETAILS (1200)
       moffett: yn(src.moffett), artics: yn(src.artics), accessRoutes: String(src.accessRoutes || '').slice(0, 2000),
       siteContact: { name: String((src.siteContact && src.siteContact.name) || '').slice(0, 120), phone: String((src.siteContact && src.siteContact.phone) || '').slice(0, 40) },
       confirmationsTo: String(src.confirmationsTo || '').trim().slice(0, 200) }
-    if (!fields.moffett) return res.status(400).json({ error: 'Answer "Is Moffett offload required?"' })
-    if (!fields.artics) return res.status(400).json({ error: 'Answer "Are artics permitted?"' })
+    const raising = !toDraft && b.action !== 'update'   // create (not a draft) or raise a draft
+    const existing = b.action === 'update' ? await loadPo(String(b.id)) : null
+    const strict = raising || (b.action === 'update' && existing && existing.status === 'approved')   // an approved PO stays complete when changed
+    if (strict) {
+      const why = fullCheck(); if (why) return res.status(400).json({ error: why })
+      if (!fields.moffett) return res.status(400).json({ error: 'Answer "Is Moffett offload required?"' })
+      if (!fields.artics) return res.status(400).json({ error: 'Answer "Are artics permitted?"' })
+    }
     if (fields.confirmationsTo && !EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     if (b.action === 'create') {
-      // raised by the office: approved on raising (operatives' POs wait for the CM - stage 2b)
       if (!fields.confirmationsTo) fields.confirmationsTo = (await loadPoSettings()).confirmationsTo || ''
+      if (toDraft) {
+        // a DRAFT: no number, not approved, not in Deliveries, cannot be sent
+        const po = { id: newId(), number: null, status: 'draft', ...fields, to: (sup && sup.email) || '', raisedBy: by, raisedByEmail: session.email || '', createdAt: now, raisedAt: now, history: [{ at: now, by, what: 'Saved as a draft' }] }
+        await savePo(po)
+        return res.status(200).json({ ok: true, po })
+      }
+      // raised by the office: approved on raising (operatives' POs wait for the CM - stage 2b)
       const po = { id: newId(), number: await takeNumber(), status: 'approved', ...fields, to: sup.email || '', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [{ at: now, by, what: 'Raised and approved' }] }
       await savePo(po); await setDelivery(po)
       return res.status(200).json({ ok: true, po })
     }
     const po = await loadPo(String(b.id))
     if (!po) return res.status(404).json({ error: 'That purchase order no longer exists' })
-    if (po.status !== 'approved') return res.status(409).json({ error: `${po.number} has been ${po.status} - it can no longer be changed` })
+    if (b.action === 'raise') {
+      if (po.status !== 'draft') return res.status(409).json({ error: `${po.number} has already been raised` })
+      const next = { ...po, ...fields, number: await takeNumber(), status: 'approved', to: po.to || sup.email || '', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [...(po.history || []), { at: now, by, what: 'Raised and approved' }] }
+      await savePo(next); await setDelivery(next)
+      return res.status(200).json({ ok: true, po: next })
+    }
+    if (po.status !== 'approved' && po.status !== 'draft') return res.status(409).json({ error: `${po.number} has been ${po.status} - it can no longer be changed` })
+    if (po.status === 'draft') {
+      // saving a draft again - still incomplete if need be
+      const next = { ...po, ...fields, to: po.to || (sup && sup.email) || '', history: [...(po.history || []), { at: now, by, what: 'Draft saved' }] }
+      await savePo(next)
+      return res.status(200).json({ ok: true, po: next })
+    }
     const next = { ...po, ...fields, history: [...(po.history || []), { at: now, by, what: 'Changed' }] }
     await savePo(next); await setDelivery(next)
     return res.status(200).json({ ok: true, po: next })
   }
   const po = await loadPo(String(b.id || ''))
   if (!po) return res.status(404).json({ error: 'That purchase order no longer exists' })
+  if (b.action === 'discard') {
+    if (po.status !== 'draft') return res.status(409).json({ error: 'Only a draft can be deleted - cancel a raised PO instead' })
+    await deletePo(po.id)
+    return res.status(200).json({ ok: true })
+  }
+  if (po.status === 'draft') return res.status(409).json({ error: 'This is a draft - raise it first' })
   if (b.action === 'send') {
     if (po.status === 'cancelled') return res.status(409).json({ error: `${po.number} has been cancelled` })
     const to = String(b.to || po.to || '').trim()
