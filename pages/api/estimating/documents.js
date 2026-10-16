@@ -45,14 +45,16 @@ async function checkOwner(ownerType, ownerId, role) {
   }
   // A PURCHASE ORDER's documents - its special access routes (1200). Purchasing
   // area; changeable until the PO is sent, then fixed.
-  if (ownerType === 'po') {
+  // 'po' = the PO's ATTACHMENTS (drawings, specifications...); 'po-access' = its special
+  // access route documents (1202). Both are attached to the email to the supplier.
+  if (ownerType === 'po' || ownerType === 'po-access') {
     if (!canAccessArea(role, 'purchasing')) return { error: 'You do not have access to purchase orders', code: 403 }
     const po = await loadPo(String(ownerId))
     if (!po) return { error: 'That purchase order no longer exists', code: 404 }
     if (po.status !== 'approved' && po.status !== 'draft') return { error: `${po.number} has been ${po.status} - its documents are fixed`, code: 409, readOnly: true }
     return { po }
   }
-  return { error: "ownerType must be 'estimate', 'buildup' or 'po'", code: 400 }
+  return { error: "ownerType must be 'estimate', 'buildup', 'po' or 'po-access'", code: 400 }
 }
 
 async function handler(req, res) {

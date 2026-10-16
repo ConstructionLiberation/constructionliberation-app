@@ -14,7 +14,7 @@ const size = (n) => n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math
 // PER REVISION (1169): with `revision`, this is the quote's documents for that
 // revision - added and removed here; earlier revisions' listed read-only (never
 // carried forward); ones from before revisions were tracked can be placed on it.
-export default function DocumentsPanel({ ownerType, ownerId, itemId = null, items = null, title = 'Documents', readOnly = false, revision = null, issued = null }) {
+export default function DocumentsPanel({ ownerType, ownerId, itemId = null, items = null, title = 'Documents', readOnly = false, revision = null, issued = null, hint = 'private - opened through the portal only' }) {
   const [state, setState] = useState(null)      // { documents, ready, folder, maxBytes }
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
@@ -67,7 +67,7 @@ export default function DocumentsPanel({ ownerType, ownerId, itemId = null, item
   return (
     <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-        <strong style={{ fontSize: 14 }}>{title} <span style={{ fontWeight: 400, fontSize: 11.5, color: '#999' }}>private - opened through the portal only</span></strong>
+        <strong style={{ fontSize: 14 }}>{title} <span style={{ fontWeight: 400, fontSize: 11.5, color: '#999' }}>{hint}</span></strong>
         {state?.ready && !readOnly && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {items && !itemId && !revision && items.length > 0 && (

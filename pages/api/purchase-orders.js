@@ -19,8 +19,10 @@ import { fromEmail, baseUrl, companyName } from '../../lib/tenantSettings'
 import { loadPriceList } from '../../lib/priceListStore'
 import { LINKS_KEY, CONTACTS_KEY } from '../../lib/suppliers'
 import { listDocs } from '../../lib/documentsStore'
+import { privateReady, shortLink } from '../../lib/privateFiles'
 import { listPos, loadPo, savePo, deletePo, takeNumber, loadPoSettings, savePoSettings, poTotal, lineTotal, createPoToken, deliveryRowFor } from '../../lib/purchaseOrders'
 
+// a document on this PO - attachments ('po') or access routes ('po-access')
 const newId = () => `po${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const money = (n) => `£${(Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -40,7 +42,7 @@ function deliveryHtml(po, docs) {
     ${row('Deliver to', po.deliveryAddress ? esc(po.deliveryAddress).replace(/\n/g, '<br>') : '')}
     ${row('Moffett offload required', yes(po.moffett))}
     ${row('Artics permitted', yes(po.artics))}
-    ${row('Special access routes', (po.accessRoutes ? esc(po.accessRoutes).replace(/\n/g, '<br>') : '') + (docs ? `${po.accessRoutes ? '<br>' : ''}<em>${docs} document${docs === 1 ? '' : 's'} on the link below</em>` : ''))}
+    ${row('Special access routes', (po.accessRoutes ? esc(po.accessRoutes).replace(/\n/g, '<br>') : '') + (docs ? `${po.accessRoutes ? '<br>' : ''}<em>${docs} document${docs === 1 ? '' : 's'} attached</em>` : ''))}
     ${row('Site contact', po.siteContact && po.siteContact.name ? `${esc(po.siteContact.name)}${po.siteContact.phone ? ` - ${esc(po.siteContact.phone)}` : ''}` : '')}
     ${row('Order confirmations to', po.confirmationsTo ? esc(po.confirmationsTo) : '')}
   </table>`
@@ -186,19 +188,29 @@ async function handler(req, res) {
     const key = process.env.RESEND_API_KEY
     if (!key) return res.status(500).json({ error: 'Email is not set up for the portal' })
     const link = linkFor(po), co = companyName()
+    // THE ATTACHMENTS, ATTACHED (1202) - the PO's attachments and its access route
+    // documents go with the email as files; the email service fetches each through a
+    // link that lasts minutes. They are also on the supplier's page.
+    const [attachDocs, accessDocs] = await Promise.all([listDocs('po', po.id).catch(() => []), listDocs('po-access', po.id).catch(() => [])])
+    let attachments = []
+    if (privateReady()) {
+      try { attachments = await Promise.all([...attachDocs, ...accessDocs].map(async d => ({ filename: d.name, path: await shortLink(d.pathname) }))) }
+      catch (e) { return res.status(502).json({ error: `The attachments could not be prepared: ${e.message}` }) }
+    }
     const rows = po.lines.map(l => `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">${esc(l.description)}${l.code ? `<br><span style="color:#888;font-size:12px">${esc(l.code)}</span>` : ''}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${esc(l.qty)} ${esc(l.unit)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${money(l.price)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${money(lineTotal(l))}</td></tr>`).join('')
     const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:680px">
       <h2 style="margin:0 0 4px">Purchase order ${esc(po.number)}</h2><p style="margin:0 0 14px;color:#555">${esc(co)} - ${esc([po.jobNo, po.projectName].filter(Boolean).join(' '))}</p>
       ${b.message ? `<p>${esc(b.message).replace(/\n/g, '<br>')}</p>` : ''}
       <p><strong>Please quote ${esc(po.number)} on your invoice.</strong></p>
-      ${deliveryHtml(po, (await listDocs('po', po.id)).length)}
+      ${deliveryHtml(po, accessDocs.length)}
+      ${attachDocs.length ? `<p>Attached: ${attachDocs.map(d => esc(d.name)).join(', ')}</p>` : ''}
       <table style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0"><tr style="background:#f5f5f3"><th style="padding:6px 8px;text-align:left">Item</th><th style="padding:6px 8px;text-align:right">Qty</th><th style="padding:6px 8px;text-align:right">Price</th><th style="padding:6px 8px;text-align:right">Total</th></tr>${rows}
       <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold">Total (ex VAT)</td><td style="padding:8px;text-align:right;font-weight:bold">${money(poTotal(po))}</td></tr></table>
       ${po.notes ? `<p><strong>Additional notes</strong><br>${esc(po.notes).replace(/\n/g, '<br>')}</p>` : ''}
       <p><a href="${link}" style="display:inline-block;background:#0f766e;color:#fff;padding:9px 16px;border-radius:6px;text-decoration:none">View or print the purchase order</a></p>
       <p style="color:#888;font-size:12px">Raised by ${esc(po.raisedBy)}. ${po.confirmationsTo ? `Please send the order confirmation to ${esc(po.confirmationsTo)} - replying to this email reaches it.` : 'Reply to this email with any questions.'}</p></div>`
     const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: fromEmail('notify'), to: [to], reply_to: po.confirmationsTo || po.raisedByEmail || session.email || undefined, subject: `Purchase order ${po.number} - ${co}${po.jobNo ? ` - ${po.jobNo}` : ''}`, html }) })
+      body: JSON.stringify({ from: fromEmail('notify'), to: [to], reply_to: po.confirmationsTo || po.raisedByEmail || session.email || undefined, subject: `Purchase order ${po.number} - ${co}${po.jobNo ? ` - ${po.jobNo}` : ''}`, html, ...(attachments.length ? { attachments } : {}) }) })
     if (!r.ok) { const t = await r.text().catch(() => ''); return res.status(502).json({ error: `The email could not be sent (${r.status}) ${t.slice(0, 200)}` }) }
     const next = { ...po, status: 'sent', to, sentAt: now, sentTo: to, sentBy: by, history: [...(po.history || []), { at: now, by, what: `Sent to ${to}` }] }
     await savePo(next); await setDelivery(next)

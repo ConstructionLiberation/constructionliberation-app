@@ -66,6 +66,7 @@ export default function SupplierPo() {
           <tr><td colSpan={3} style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>Total (ex VAT)</td><td style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>{money(po.total)}</td></tr>
         </tbody>
       </table>
+      {(po.attachments || []).length > 0 && <div style={{ marginBottom: 14, fontSize: 13 }}><div style={{ color: '#777', fontSize: 11.5 }}>Attachments</div>{po.attachments.map(d => <div key={d.id}><a href={`/api/po-view?token=${encodeURIComponent(token)}&doc=${encodeURIComponent(d.id)}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>{d.name}</a></div>)}</div>}
       {po.notes && <div style={{ marginBottom: 14, fontSize: 13, whiteSpace: 'pre-wrap' }}><div style={{ color: '#777', fontSize: 11.5 }}>Additional notes</div>{po.notes}</div>}
       <div style={{ borderTop: '1px solid #ddd', paddingTop: 10, fontSize: 13 }}><strong>Please quote {po.number} on your invoice.</strong>{po.confirmationsTo ? <> Please send the order confirmation to <strong>{po.confirmationsTo}</strong>.</> : null}</div>
     </div>

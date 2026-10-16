@@ -1,39 +1,39 @@
-PACKAGE 1201 - Purchase orders: click to add, quantities typed, drafts
+PACKAGE 1202 - Purchase orders: attachments, site contact search, change the
+confirmations default; PO numbering fix
 
-Seven files. Complete replacements. No re-seed. No env changes. Built on 1200.
+Seven files. Complete replacements. No re-seed. No env changes. Built on 1201.
 
-  lib/poShared.js
   lib/purchaseOrders.js
   pages/api/purchase-orders.js
   pages/api/po-view.js
   pages/api/estimating/documents.js
-  pages/operations/purchasing/purchase-orders.js
   pages/operations/purchasing/po/[id].js     (folder literally named [id])
+  pages/po.js
+  components/DocumentsPanel.js
 
-CLICK A PRODUCT TO ADD IT - the whole product row is the button (the Add
-buttons are gone); the new line's quantity box takes the cursor.
-QUANTITIES TYPED BY HAND - a product or free line is added with its quantity
-BLANK and RED until typed. A PO cannot be raised until every line has a
-quantity: the button is held back and says what is missing ("To raise it:
-quantities (1), the Moffett question..."), and the server refuses it too
-("Line 2 (Primer) has no quantity") - a line is never quietly dropped. An
-approved PO changed to a blank quantity is refused the same way.
-DRAFTS - "Save as draft" on a new PO; a draft may be incomplete (no supplier,
-blank quantities, questions unanswered). It has NO number yet, is not
-approved, not in Deliveries, cannot be sent, and its link does not open. In
-the list under "Drafts", shown as "Draft". Reopen it: "Save draft", "Raise
-purchase order" (it then gets its number and goes into Deliveries), or
-"Delete draft" (only drafts can be deleted - a raised PO is cancelled).
-Documents can be attached to a draft.
+ATTACHMENTS - an "Attachments" section on a PO (drawings, specifications,
+schedules), separate from the access route documents. Both are ATTACHED TO THE
+EMAIL to the supplier as files (fetched through links that last minutes - the
+files never become public) and listed on the supplier's page. Attach once the
+PO is saved as a draft or raised, until it is sent.
+SITE CONTACT - type to search: part of a name or a number; pick from the
+matches (Enter picks the first); Escape keeps the chosen one.
+ORDER CONFIRMATIONS - "Change default" (admins) beside the box: changes the
+company default for every new PO, and this PO's box if it still showed the
+old default.
+FIX - PO NUMBERING: saving PO settings put the number counter back to the
+stored start, so changing anything there (e.g. the confirmations address)
+after POs were raised would have REISSUED numbers already used. Now "Next
+number" shows the real next number and the counter only moves when that
+number is changed.
 
-Checked through the real routes: a draft saved incomplete (no number, not in
-Deliveries) and again; raising it refused while a quantity was blank, then
-raised as APP-PO-0001 into Deliveries; a new PO with a blank quantity refused
-by name, and an approved PO changed to one; a draft not sendable, its link
-not opening; deleting refused for a raised PO, done for a draft. In a REAL
-browser (Chromium): the Drafts filter; no Add buttons - a click on the product
-added it with a blank, red, focused quantity; Raise held with what is
-missing; Save as draft sent with the quantity blank; typing 12 cleared the red
-and, with the questions answered, enabled Raise. All server routes compile;
-all pages pass the browser check. Built from your deployed packages
-(1022-1200, verified against their zips).
+Checked through the real routes: three POs raised, then only the
+confirmations default changed -> the next PO APP-PO-0004 (not 0001); an admin
+setting 100 -> APP-PO-0100; an attachment and an access document attached; the
+email carried both files and named them; the supplier's page listed them
+separately and opened each. In a REAL browser (Chromium): "dave" -> Dave Kerr,
+picked with Enter; no match shown as such; Change default -> the new default
+saved (numbering untouched) and the box updated; the Attachments and Access
+route sections on a draft, worded accurately. All server routes compile; all
+pages pass the browser check. Built from your deployed packages (1022-1201,
+verified against their zips).

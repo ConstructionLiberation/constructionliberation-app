@@ -73,6 +73,20 @@ export default function PoPage() {
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
+  // CHANGE THE COMPANY DEFAULT for order confirmations (admins, 1202) - and this PO's
+  // box too, if it still shows the old default
+  async function changeDefault() {
+    const old = (list && list.settings && list.settings.confirmationsTo) || ''
+    const next = window.prompt('The company\'s default address for order confirmations - used on every new purchase order:', old)
+    if (next === null) return
+    setErr(''); setMsg('')
+    try {
+      const d = await call({ action: 'settings', ...(list.settings || {}), confirmationsTo: next.trim() })
+      setList(l => ({ ...l, settings: d.settings }))
+      setPo(x => (!x.confirmationsTo || x.confirmationsTo === old) ? { ...x, confirmationsTo: d.settings.confirmationsTo } : x)
+      setMsg(`The default for order confirmations is now ${d.settings.confirmationsTo || 'blank'}.`)
+    } catch (e) { setErr(e.message) }
+  }
   async function discard() {
     if (!window.confirm('Delete this draft purchase order?')) return
     setBusy(true); setErr(''); try { await call({ action: 'discard', id: po.id }); router.replace('/operations/purchasing/purchase-orders') } catch (e) { setErr(e.message); setBusy(false) }
@@ -147,6 +161,11 @@ export default function PoPage() {
             </div>}
           </div>}
         </div>
+        {/* ATTACHMENTS (1202) - drawings, specifications, schedules: attached to the email and on the supplier's page */}
+        <div style={card}>
+          {isNew ? <><strong style={{ fontSize: 14 }}>Attachments</strong><div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Save it as a draft (or raise it) to attach drawings, specifications or schedules - they go with the email to the supplier.</div></>
+            : <DocumentsPanel ownerType="po" ownerId={po.id} title="Attachments" hint="drawings, specifications, schedules - attached to the email to the supplier" readOnly={po.status !== 'approved' && po.status !== 'draft'} />}
+        </div>
         {/* DELIVERY DETAILS (1200) */}
         <div style={card}>
           <strong style={{ fontSize: 14 }}>Delivery details</strong>
@@ -159,15 +178,13 @@ export default function PoPage() {
           </div>
           <label style={{ ...label, marginTop: 10 }}>Any special access routes?<textarea value={po.accessRoutes} onChange={e => set('accessRoutes', e.target.value)} rows={2} placeholder="e.g. Access via the rear service road only - height barrier 3.2m" style={{ ...inp, resize: 'vertical' }} /></label>
           <div style={{ marginTop: 8 }}>{isNew ? <div style={{ fontSize: 12, color: '#888' }}>Raise the PO to attach documents (access plans, route maps) - the supplier opens them from their link.</div>
-            : <DocumentsPanel ownerType="po" ownerId={po.id} title="Access route documents" readOnly={po.status !== 'approved' && po.status !== 'draft'} />}</div>
+            : <DocumentsPanel ownerType="po-access" ownerId={po.id} title="Access route documents" hint="attached to the email to the supplier" readOnly={po.status !== 'approved' && po.status !== 'draft'} />}</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
-            <label style={{ ...label, flex: '1 1 300px' }}>Site contact
-              <select value={po.siteContact && po.siteContact.name ? `${po.siteContact.name}|${po.siteContact.phone || ''}` : ''} onChange={e => { const [name, phone] = e.target.value.split('|'); set('siteContact', { name: name || '', phone: phone || '' }) }} style={inp}>
-                <option value="">— choose the site contact —</option>
-                {po.siteContact && po.siteContact.name && !people.some(p => p.name === po.siteContact.name && (p.phone || '') === (po.siteContact.phone || '')) && <option value={`${po.siteContact.name}|${po.siteContact.phone || ''}`}>{po.siteContact.name}{po.siteContact.phone ? ` - ${po.siteContact.phone}` : ''}</option>}
-                {people.map((p, i) => <option key={i} value={`${p.name}|${p.phone || ''}`}>{p.name}{p.phone ? ` - ${p.phone}` : ' - no mobile on record'} ({p.kind})</option>)}
-              </select></label>
-            <label style={{ ...label, flex: '1 1 260px' }}>Order confirmations sent to<input value={po.confirmationsTo} onChange={e => set('confirmationsTo', e.target.value)} placeholder="orders@yourcompany.co.uk" style={inp} /></label>
+            <div style={{ ...label, flex: '1 1 300px' }}>Site contact
+              <ContactSearch people={people} value={po.siteContact} onChange={v => set('siteContact', v)} /></div>
+            <div style={{ ...label, flex: '1 1 260px' }}>
+              <span style={{ display: 'flex', alignItems: 'center' }}>Order confirmations sent to{list && list.canSettings && <button type="button" onClick={changeDefault} title="Change the company's default address for order confirmations" style={{ marginLeft: 'auto', border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, padding: 0 }}>Change default</button>}</span>
+              <input value={po.confirmationsTo} onChange={e => set('confirmationsTo', e.target.value)} placeholder="orders@yourcompany.co.uk" style={inp} /></div>
           </div>
           <label style={{ ...label, marginTop: 10 }}>Additional notes<textarea value={po.notes} onChange={e => set('notes', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></label>
         </div>
@@ -207,4 +224,27 @@ function SendBox({ po, onClose, onSent }) {
 function YesNo({ label, value, onChange }) {
   const opt = (v, t) => <button type="button" onClick={() => onChange(v)} style={{ fontSize: 12.5, padding: '5px 14px', border: `1px solid ${value === v ? '#0f766e' : '#d4d4d0'}`, background: value === v ? '#0f766e' : '#fff', color: value === v ? '#fff' : '#333', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit' }}>{t}</button>
   return <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: value ? '#333' : '#b45309' }}><span style={{ flex: 1 }}>{label}</span>{opt('yes', 'Yes')}{opt('no', 'No')}</div>
+}
+
+// SITE CONTACT - type to search operatives and portal users (1202)
+function ContactSearch({ people, value, onChange }) {
+  const [q, setQ] = useState(null)       // null = not searching (shows the chosen contact)
+  const shown = value && value.name ? `${value.name}${value.phone ? ` - ${value.phone}` : ''}` : ''
+  const words = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const found = q === null ? [] : people.filter(p => words.every(w => `${p.name} ${p.phone} ${p.kind}`.toLowerCase().includes(w))).slice(0, 12)
+  const pick = (p) => { onChange({ name: p.name, phone: p.phone || '' }); setQ(null) }
+  return (
+    <div style={{ position: 'relative' }}>
+      <input value={q === null ? shown : q} placeholder="Type a name or number…" onFocus={() => setQ('')} onChange={e => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setQ(null), 150)} onKeyDown={e => { if (e.key === 'Enter' && found[0]) { e.preventDefault(); pick(found[0]) } if (e.key === 'Escape') setQ(null) }}
+        style={{ ...inp, width: '100%' }} />
+      {q !== null && <div style={{ position: 'absolute', zIndex: 20, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.08)', maxHeight: 260, overflowY: 'auto' }}>
+        {!found.length ? <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#aaa' }}>No one matches</div> : found.map((p, i) => (
+          <div key={i} onMouseDown={e => { e.preventDefault(); pick(p) }} style={{ padding: '7px 10px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #f4f3f0', display: 'flex', gap: 8 }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}>
+            <span style={{ flex: 1 }}>{p.name}</span><span style={{ color: p.phone ? '#555' : '#b45309' }}>{p.phone || 'no mobile on record'}</span><span style={{ color: '#999', fontSize: 11.5 }}>{p.kind}</span>
+          </div>))}
+      </div>}
+    </div>
+  )
 }
