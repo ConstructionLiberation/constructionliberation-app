@@ -13,7 +13,7 @@ import { placeholderValues, checklistOf, currentTerms, letterOf, letterProblems,
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, descriptionText, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
-import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, labelBudget, NO_SUPPLIER, withLock, priceLibOf, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
+import { CRM_DETAILS, OWN_DETAILS, detailsFor, itemFromTemplate, uniqueItem, sectionRow, spacerRow, copyRows, lineRow, uncostedItems, uncostedText, labelBudget, NO_SUPPLIER, withLock, withMaterialRates, priceLibOf, priceEstimate, sectionTotals, priceItem, budgets, diffEstimates, prelimsRows } from '../../../lib/estimate'
 
 // THE TAKE-OFF (1088). Everything about a quote is built here:
 //   - the header and the QUOTE's profit %, MCD %, labour factor and day rate
@@ -1042,7 +1042,7 @@ function Popout({ item, est, lib: libIn, templates = [], money, onChange, setRow
         <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Changes here belong to this estimate only - the library is never changed from here (Add as new template adds a new one).</div>
         <div style={{ marginTop: 10 }}><DocumentsPanel ownerType="estimate" ownerId={est.id} itemId={item.id} title="Documents on this item" /></div>
         <BuildupEditor originalDesc={source ? { descText: source.descText || '', descVars: source.descVars || [], label: `"${source.description}" in the build-ups` } : null} varLibrary={variableLibrary(templates)} addSources={{ library: templates.filter(t => !t.hidden && !t.catHidden), estimate: (est.rows || []).filter(r => r.kind === 'item' && r.id !== item.id && r.buildup && (r.buildup.lines || []).length).map(r => ({ id: r.id, description: r.description, unit: r.unit, buildup: r.buildup })) }} value={value} onChange={(fn) => onChange((b) => { const n = fn({ ...b, unit: item.unit }); const { unit, ...rest } = n; return rest })}
-          lib={lib} money={money} rateTitle="Rate on this quote"
+          lib={withMaterialRates(lib, est.materialRates)} money={money} rateTitle="Rate on this quote"
           rateOpts={{ profit: item.profit != null ? item.profit : (s.profit || 0), mcd: s.mcd || 0, labourFactor: s.labourFactor ?? 1, jobQty: item.rateOnly || item.qty == null ? null : Number(item.qty) }}>
           <div style={{ fontSize: 12.5, color: '#555' }}>
             On this quote: profit {pct(item.profit != null ? item.profit : s.profit) || 0}%{item.profit != null ? ' (this item)' : ''} · MCD {pct(s.mcd) || 0}% · labour factor {s.labourFactor ?? 1}

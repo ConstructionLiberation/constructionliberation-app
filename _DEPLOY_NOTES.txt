@@ -1,20 +1,39 @@
-PACKAGE 1180 - Rate build-ups: comment boxes
+PACKAGE 1181 - Materials tab: edit the rates, then "Update Materials Rates for
+Quote"
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1179.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1180.
 
-  components/BuildupEditor.js     (the Build-ups page and every take-off
-                                   item's build-up)
+  lib/estimate.js
+  lib/materials.js
+  components/MaterialsTab.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-Comment lines in the rate build-ups:
-  - only the COMMENT BOX is light yellow - the line itself is plain again
-  - the box WRAPS its text and GROWS TALLER to fit the comment
-  - the box spans the row, from the Item column to the copy / delete buttons
-    (a comment has no item, quantity, rate or cost), so a comment reads on a
-    line or two rather than a narrow column
+EDITABLE RATES on the Materials tab, inline:
+  - each product's PACK PRICE
+  - each "not from the price list" line's RATE (labelled "per m²" etc.)
+A changed rate turns yellow ("was £124.00"); nothing changes until "UPDATE
+MATERIALS RATES FOR QUOTE" (top right, with the count; "Discard changes"
+beside it).
+WHAT UPDATING DOES - for THIS ESTIMATE ONLY:
+  - a pack price becomes this estimate's own rate: exactly what was typed (after
+    any supplier increases / quote adjustments), the per-unit rates following
+    in proportion; marked "own rate · list £124.00", with ↺ to go back to the
+    price-list rate
+  - a not-from-the-price-list rate updates that line's rate in its build-up
+The take-off, Summary, item build-ups and the quote reprice at once. The rates
+HOLD for this draft and every later revision of this quote (Create New
+Revision carries them) until changed again. The PRICE LIST (main navigation)
+and other estimates are NOT changed; issued revisions keep the prices they
+went out with.
 
-Checked in a REAL browser (Chromium) at 1366px: the line no colour, the box
-light yellow; a two-sentence comment wrapped onto two lines across the row,
-the box growing from 28px to 45px with nothing hidden; a whole line still fits
-at 1366px and 1600px. All 166 pages pass the browser check. Built from your
-deployed packages (1022-1179, verified against their zips); the file checked
-identical to the tested version before zipping.
+Checked: with the real price list - VCL £124.00; own rate £100.00 -> exactly
+£100.00 (list £124.00), the take-off rate down in proportion; with a +10%
+Renolit adjustment too -> still £100.00; another estimate unaffected. In a
+REAL browser (Chromium): "100.50" typed key by key, the box keeping the
+cursor, yellow, "was"; Solvent's rate labelled "per m²", 0.25 typed -> "2
+rates changed"; Update -> VCL £100.50 "own rate", materials £2,111.68 ->
+£1,994.18, the take-off £20,804.00 -> £20,594.00, saved (own rate and the
+Solvent line's rate); the item's build-up VCL line £0.60 -> £0.48 per m2; ↺ +
+Update -> back to £124.00. All server routes compile; all 166 pages pass the
+browser check. Built from your deployed packages (1022-1180, verified against
+their zips).

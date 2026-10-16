@@ -67,12 +67,58 @@ export default function MaterialsTab({ est, lib, change, money, readOnly }) {
           <td style={{ ...td, minWidth: 200 }}>{f.label}</td>
           <td style={{ ...td, color: '#666' }}>{f.item}</td>
           <td style={r_}>{n(f.quantity)} {UNIT[f.unit] || f.unit}</td>
-          <td style={r_}>{money(f.amount, { dp: 2 })}</td>
+          <td style={r_}>{RateBox({ k: `o:${f.key}`, current: f.amount, per: UNIT[f.unit] || f.unit })}</td>
           <td style={{ ...r_, fontWeight: 600 }}>{money(f.cost, { dp: 2 })}</td>
           <td style={td}><Alloc f={f} /></td>
         </tr>))}</tbody>
     </table>
     </>)
+  }
+  // EDIT RATES, THEN APPLY (1181) - pack prices (this estimate's own, over the price
+  // list) and the not-from-the-price-list rates (the line's rate in its build-up).
+  // Nothing changes until "Update Materials Rates for Quote".
+  const [pend, setPend] = useState({})   // { 'p:<ref>' | 'o:<item:line>': '12.50' | 'list' }
+  const num2 = (v) => Math.round(Number(v) * 100) / 100
+  const changed = Object.entries(pend).filter(([k, v]) => {
+    if (v === 'list') return true
+    if (v === '' || !(Number(v) >= 0)) return false
+    const cur = k.startsWith('p:') ? (m.suppliers.flatMap(x => x.rows).find(r => r.ref === k.slice(2)) || {}).packPrice : ((m.allFixed || []).find(f => f.key === k.slice(2)) || {}).amount
+    return cur == null || num2(v) !== num2(cur)
+  })
+  const applyRates = () => {
+    const edits = Object.fromEntries(changed)
+    change(e => {
+      const rates = { ...(e.materialRates || {}) }
+      for (const [k, v] of Object.entries(edits)) if (k.startsWith('p:')) { if (v === 'list') delete rates[k.slice(2)]; else rates[k.slice(2)] = num2(v) }
+      const rows = (e.rows || []).map(r => {
+        if (r.kind !== 'item' || !r.buildup) return r
+        let touched = false
+        const lines = (r.buildup.lines || []).map(l => {
+          const v = edits[`o:${r.id}:${l.id}`]; if (v == null || v === 'list') return l
+          touched = true
+          return l.type === 'lump' || l.type === 'lump sum' ? { ...l, amount: num2(v) } : { ...l, override: num2(v) }
+        })
+        return touched ? { ...r, buildup: { ...r.buildup, lines } } : r
+      })
+      return { ...e, materialRates: rates, rows }
+    })
+    setPend({})
+  }
+  const RateBox = ({ k, current, list, per }) => {
+    const v = pend[k]
+    const isList = v === 'list'
+    const shown = isList ? (list ?? '') : (v != null ? v : (current == null ? '' : num2(current).toFixed(2)))
+    const dirty = isList || (v != null && v !== '' && Number(v) >= 0 && (current == null || num2(v) !== num2(current)))
+    return (
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+        <input value={isList ? (list == null ? '' : num2(list).toFixed(2)) : shown} disabled={readOnly} inputMode="decimal"
+          onChange={e => setPend(x => ({ ...x, [k]: e.target.value.replace(/[^0-9.]/g, '') }))}
+          style={{ width: 78, fontSize: 12.5, textAlign: 'right', padding: '3px 6px', border: `1px solid ${dirty ? '#f59e0b' : '#d4d4d0'}`, borderRadius: 5, background: dirty ? '#fef3c7' : '#fff' }} />
+        {per && <span style={{ fontSize: 10.5, color: '#999' }}>per {per}</span>}
+        {dirty && <span style={{ fontSize: 10.5, color: '#92400e' }}>was {money(current, { dp: 2 })}</span>}
+        {!dirty && list != null && <span style={{ fontSize: 10.5, color: '#0f766e' }} title="This estimate's own rate">own rate · list {money(list, { dp: 2 })} <button onClick={() => setPend(x => ({ ...x, [k]: 'list' }))} disabled={readOnly} title="Go back to the price-list rate" style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', padding: 0, fontSize: 11 }}>↺</button></span>}
+      </div>
+    )
   }
   const th = { textAlign: 'left', padding: '7px 9px', fontSize: 11.5, color: '#666', fontWeight: 600, borderBottom: '1px solid #ecebe6', background: '#faf9f7', whiteSpace: 'nowrap' }
   const td = { padding: '6px 9px', fontSize: 12.5, borderBottom: '1px solid #f4f3f0', verticalAlign: 'top' }
@@ -83,6 +129,13 @@ export default function MaterialsTab({ est, lib, change, money, readOnly }) {
       <div style={{ display: 'flex', gap: 20, alignItems: 'baseline', marginBottom: 10, fontSize: 13 }}>
         <strong style={{ fontSize: 16 }}>Materials to order {money(m.total, { dp: 2 })}</strong>
         <span style={{ color: '#888' }}>{m.suppliers.length} supplier{m.suppliers.length === 1 ? '' : 's'} · packs rounded up · supplier prices incl. increases and this quote's adjustments</span>
+        {/* UPDATE MATERIALS RATES FOR QUOTE (1181) - this estimate only, and its future revisions */}
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {changed.length > 0 && <span style={{ fontSize: 12, color: '#92400e' }}>{changed.length} rate{changed.length === 1 ? '' : 's'} changed</span>}
+          {changed.length > 0 && <button onClick={() => setPend({})} style={{ fontSize: 12.5, padding: '6px 12px', border: '1px solid #d4d4d0', borderRadius: 7, background: '#fff', cursor: 'pointer' }}>Discard changes</button>}
+          {!readOnly && <button onClick={applyRates} disabled={!changed.length} title="Use these rates in this quote - and every later revision of it - until changed again. The Price List is not changed."
+            style={{ fontSize: 13, padding: '7px 14px', border: 'none', borderRadius: 8, background: changed.length ? '#0f766e' : '#cbd5d1', color: '#fff', cursor: changed.length ? 'pointer' : 'default', fontWeight: 600 }}>Update Materials Rates for Quote{changed.length ? ` (${changed.length})` : ''}</button>}
+        </span>
       </div>
       {m.suppliers.map(s => (
         <div key={s.supplier} style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, marginBottom: 12, overflow: 'auto' }}>
@@ -101,13 +154,13 @@ export default function MaterialsTab({ est, lib, change, money, readOnly }) {
                   <td style={td}><input disabled={readOnly} value={r.orderWaste == null ? '' : pct(r.orderWaste)} onChange={e => setOW(r.ref, e.target.value)} placeholder={String(pct(r.estWaste))} style={{ width: 60, fontSize: 12.5, padding: '4px 6px', border: `1px solid ${r.orderWaste != null ? '#f59e0b' : '#d4d4d0'}`, borderRadius: 6 }} title="Blank = the estimate's waste" /></td>
                   <td style={r_}>{n(r.toOrder)} {UNIT[r.baseUnit] || ''}</td>
                   <td style={{ ...r_, fontWeight: 600 }}>{r.packs ?? '—'} <span style={{ fontWeight: 400, color: '#888', fontSize: 11 }}>× {r.sellingUnit || `${r.packQty} ${UNIT[r.baseUnit] || ''}`}</span></td>
-                  <td style={r_}>{r.packPrice != null ? money(r.packPrice, { dp: 2 }) : <span style={{ color: '#b45309' }}>none</span>}</td>
+                  <td style={r_}>{r.packPrice != null ? RateBox({ k: `p:${r.ref}`, current: r.packPrice, list: r.ownRate ? r.listPackPrice : null }) : <span style={{ color: '#b45309' }}>none</span>}</td>
                   <td style={{ ...r_, fontWeight: 600 }}>{r.cost != null ? money(r.cost, { dp: 2 }) : ''}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {s.other && <div style={{ borderTop: '2px solid #ecebe6' }}><div style={{ padding: '6px 12px', fontSize: 12, color: '#0f766e', fontWeight: 600 }}>Lines allocated to {s.supplier}</div><OtherRows rows={s.other.rows} /></div>}
+          {s.other && <div style={{ borderTop: '2px solid #ecebe6' }}><div style={{ padding: '6px 12px', fontSize: 12, color: '#0f766e', fontWeight: 600 }}>Lines allocated to {s.supplier}</div>{OtherRows({ rows: s.other.rows })}</div>}
         </div>
       ))}
       {(m.groups || []).map(g => (
@@ -115,13 +168,13 @@ export default function MaterialsTab({ est, lib, change, money, readOnly }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #ecebe6' }}>
             <strong>{g.name} <span style={{ fontWeight: 400, fontSize: 11.5, color: '#888' }}>category</span></strong><strong>{money(g.cost, { dp: 2 })}</strong>
           </div>
-          <OtherRows rows={g.rows} />
+          {OtherRows({ rows: g.rows })}
         </div>
       ))}
       {m.fixed.length > 0 && (
         <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, marginBottom: 12, overflow: 'auto' }}>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #fde68a', fontSize: 13 }}><strong>Not from the price list - not allocated</strong> <span style={{ color: '#92400e', fontSize: 12 }}>- choose a supplier or category for each; it moves to that card</span></div>
-          <OtherRows rows={m.fixed} />
+          {OtherRows({ rows: m.fixed })}
         </div>
       )}
       {m.missing.length > 0 && <div style={{ fontSize: 12.5, color: '#b45309' }}>Not in the list yet: {m.missing.slice(0, 10).join(' · ')}{m.missing.length > 10 ? ` … and ${m.missing.length - 10} more` : ''}</div>}
