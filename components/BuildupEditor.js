@@ -14,7 +14,7 @@ export const fromPct = (s) => { if (s === '' || s == null) return null; const n 
 // The shared unit names (1103) - so m³, weeks and days show here too.
 const UNIT_LABEL = BU_UNIT_LABEL
 
-export default function BuildupEditor({ addSources, varLibrary, value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children, summary }) {
+export default function BuildupEditor({ originalDesc, addSources, varLibrary, value, onChange, lib, money, rateOpts, rateTitle = 'Rate', children, summary }) {
   const t = value
   // Changes pass through as STEPS (functions), so two in one click apply in
   // order. onChange must be a state setter (or accept a function).
@@ -170,7 +170,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                   {/* AN ADDED RATE BUILD-UP starts here (1155) - its name, a thick charcoal line */}
                   {l.groupStart && <tr><td colSpan={12} style={{ borderTop: '4px solid #36454f', padding: '5px 8px 3px', fontSize: 11.5, fontWeight: 700, color: '#36454f', letterSpacing: 0.3 }}>
                     {l.groupStart} <button onClick={() => setLine(l.id, { groupStart: undefined })} title="Remove this heading" style={{ border: 'none', background: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 12, marginLeft: 4 }}>×</button></td></tr>}
-                  <tr className={l.type === 'labour' || l.cost === 'Labour' ? 'bu-labour' : undefined} {...lineDrop(l)} style={{ background: l.type === 'comment' ? '#fafaf9' : undefined, opacity: dragL && dragL.includes(l.id) ? 0.4 : 1, boxShadow: dropL && dropL.id === l.id ? (dropL.after ? 'inset 0 -3px 0 #0f766e' : 'inset 0 3px 0 #0f766e') : undefined }}>
+                  <tr className={l.type === 'labour' || l.cost === 'Labour' ? 'bu-labour' : undefined} {...lineDrop(l)} style={{ background: l.type === 'comment' ? '#fefce8' : undefined, opacity: dragL && dragL.includes(l.id) ? 0.4 : 1, boxShadow: dropL && dropL.id === l.id ? (dropL.after ? 'inset 0 -3px 0 #0f766e' : 'inset 0 3px 0 #0f766e') : undefined }}>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}><input type="checkbox" checked={lsel.has(l.id)} onChange={() => toggleLine(l.id)} title="Tick to copy or delete several lines" style={{ verticalAlign: 'middle', marginRight: 2 }} /><span draggable onDragStart={(e) => { const ids = lsel.has(l.id) ? t.lines.filter(x => lsel.has(x.id)).map(x => x.id) : [l.id]; setDragL(ids); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', ids.join(',')) } catch {} }} onDragEnd={() => { setDragL(null); setDropL(null) }} title="Drag to move (ticked lines move together)" style={{ cursor: 'grab', color: '#aaa', padding: '0 1px', userSelect: 'none', fontSize: 12 }}>⋮⋮</span><button onClick={() => move(i, -1)} style={iconBtn} title="Up">↑</button><button onClick={() => move(i, 1)} style={iconBtn} title="Down">↓</button></td>
                     <td style={td}><select value={LINE_TYPES.includes(l.type) ? l.type : 'material'} onChange={e => { const ty = e.target.value; setLine(l.id, { type: ty, cost: ty === 'labour' ? 'Labour' : ty === 'material' ? 'Materials' : '' }) }} style={{ ...cellInp, width: 116 }}>{LINE_TYPES.map(x => <option key={x} value={x}>{LINE_TYPE_LABEL[x]}</option>)}</select></td>
                     <td style={td}><AutoText value={l.label} onChange={v => setLine(l.id, { label: v })} style={{ ...cellInp, width: 108 }} /></td>
@@ -192,7 +192,7 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
                         <input value={l.ownName || ''} onChange={e => setLine(l.id, { ownName: e.target.value })} placeholder={l.type === 'lump' ? 'description - e.g. Scaffold hire' : 'description - e.g. Delivery to site'} style={{ ...cellInp, width: '100%', background: isVariable(l, 'item') ? RED : undefined }} />
                         <div style={{ fontSize: 10.5, color: '#888', display: 'flex', gap: 4, marginTop: 2, alignItems: 'center' }}><VarFlag l={l} cell="item" setLine={setLine} />{l.type === 'lump' ? 'lump sum - amount x the line qty, not divided by the item qty' : 'lump spread - an amount per rate build-up, spread over the item qty'}</div>
                       </>}
-                      {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} style={{ ...cellInp, width: '100%' }} />}
+                      {l.type === 'comment' && <input value={l.comment} onChange={e => setLine(l.id, { comment: e.target.value })} placeholder="Comment" style={{ ...cellInp, width: '100%', background: '#fef9c3', borderColor: '#fde68a' }} />}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>{(isProd || l.type === 'lump') && <SizePicker value={l.applySize} t={t}
                       onChange={(list) => setLine(l.id, { applySize: !list.length ? undefined : list.length === 1 ? list[0] : list, ...(list.length && (!String(l.qty ?? '').trim() || Number(l.qty) === 0) ? { qty: '1' } : {}) })} />}</td>
@@ -248,6 +248,14 @@ export default function BuildupEditor({ addSources, varLibrary, value, onChange,
         {/* 1109: Insert products | Insert variable (a pop-out) | ⚙ Products - and each
             variable's DROPDOWN in the same row, to select its value. */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap', position: 'relative' }}>
+          {/* REVERT TO ORIGINAL (1178) - the library build-up's description (on a take-off
+              item), or the last saved one (on the Build-ups page) */}
+          {originalDesc && <button onClick={() => {
+              const same = String(t.descText || '') === String(originalDesc.descText || '') && JSON.stringify(t.descVars || []) === JSON.stringify(originalDesc.descVars || [])
+              if (same) return
+              if (window.confirm(`Revert the description to ${originalDesc.label || 'the original'}? Your changes to it - and any descriptions stacked into it from other build-ups - are replaced.`))
+                setT(x => ({ ...x, descText: originalDesc.descText || '', descVars: JSON.parse(JSON.stringify(originalDesc.descVars || [])) }))
+            }} title={`Put back ${originalDesc.label || 'the original'} description`} style={{ ...smallBtn, order: 99, marginLeft: 'auto', color: '#555' }}>↺ Revert to original</button>}
           <button onMouseDown={e => e.preventDefault()} onClick={() => descInsert.current && descInsert.current('products')} style={smallBtn} title="The ticked products, in grey - live until you edit them">Insert products</button>
           <button onMouseDown={e => e.preventDefault()} onClick={() => setVarPop({ index: null })} style={smallBtn} title="A detail the description needs that is not a product - e.g. Warranty, Girth">Insert variable</button>
           <button onClick={() => setDescMenu(v => !v)} style={smallBtn} title="Which lines go into the description - any cost category">⚙ Products in the description ({t.lines.filter(l => l.type !== 'comment' && l.inDescription).length})</button>

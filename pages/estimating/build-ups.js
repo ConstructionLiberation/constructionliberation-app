@@ -308,7 +308,7 @@ function Editor({ edit, lib, money, categories, onClose, onSaved, onDeleted, onC
 
       {/* "Try the rate" is gone (1123): the summary shows the rate by supplier and
           cost category, at this build-up's own profit % - no quote settings. */}
-      <BuildupEditor value={t} onChange={setT} lib={lib} money={money} varLibrary={varLibrary} summary addSources={{ library: (allTemplates || []).filter(x => x.ref !== edit.originalRef) }}
+      <BuildupEditor originalDesc={edit.originalRef && edit.t ? { descText: edit.t.descText || '', descVars: edit.t.descVars || [], label: 'the last saved' } : null} value={t} onChange={setT} lib={lib} money={money} varLibrary={varLibrary} summary addSources={{ library: (allTemplates || []).filter(x => x.ref !== edit.originalRef) }}
         rateOpts={{ profit: t.profit ?? 0, mcd: 0, labourFactor: 1 }} />
 
       {edit.originalRef && <div style={{ marginTop: 12 }}><DocumentsPanel ownerType="buildup" ownerId={edit.originalRef} title="Documents on this build-up" /></div>}

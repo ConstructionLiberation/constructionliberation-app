@@ -1,40 +1,25 @@
-PACKAGE 1177 - Delete the draft, not the estimate; a bin for deleted estimates
+PACKAGE 1178 - Revert a description to the original; comment lines light yellow
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1176.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1177.
 
-  lib/estimateStore.js
+  components/BuildupEditor.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/estimating/estimates.js
-  pages/api/estimating/estimates.js
+  pages/estimating/build-ups.js
 
-TWO DELETES, CLEARLY APART (top right of the estimate):
-  "Delete draft Rev B" - discards the draft revision only; the estimate goes
-    back to its latest issued revision (as issued, read-only). Documents added
-    to the draft are removed. ANYONE can do this. While editing an issued
-    revision it reads "Discard edits to Rev A" and discards those edits.
-  "Delete estimate" - the whole estimate, every revision. Never issued: ANYONE.
-    Issued at least once: ADMINS only (others see who to ask). The confirm
-    says it is the whole estimate and points to "Delete draft" when there is
-    one.
-A BIN - a deleted estimate goes to "Deleted estimates" (a tab on the Estimates
-list, admins only) with its revisions and documents intact: Restore, or Delete
-permanently. After 30 days it is removed for good.
-LOST IN THE CRM -> ARCHIVED - unchanged: the estimate is archived, read-only,
-until the deal is reopened.
+REVERT TO ORIGINAL - "↺ Revert to original" in the description's toolbar puts
+back the original description and its variables:
+  - on a take-off item from the build-ups: that build-up's description in the
+    library
+  - on the Build-ups page: the last saved description (undoes unsaved changes)
+It asks first (any descriptions stacked in from other build-ups go too). Not
+shown on unique items - they have no original.
+COMMENT LINES - light yellow: the line pale yellow, its comment box a stronger
+yellow - so comments stand apart from costed lines.
 
-NOTE: estimates deleted BEFORE this package were removed permanently - the bin
-only catches deletes from now on.
-
-Checked through the real route as an estimator (pre-contract) and an admin:
-the estimator deleted a never-issued estimate (to the bin); deleted draft Rev B
--> back on Rev A, latest, Rev B's document removed, Rev A's kept; deleting the
-issued estimate refused (pointing to Delete draft); the admin deleted it ->
-the bin (the estimator cannot see the bin) -> restored with its revisions ->
-deleted permanently (gone); discarding edits to Rev A -> back as issued. In a
-REAL browser (Chromium): the estimator sees "Delete draft Rev B" and "only an
-admin can delete an issued estimate - ask James McVeigh"; the admin both
-buttons; Delete draft -> "Discarded Rev B - back on Rev A", LATEST REVISION;
-the Estimates list - Active / Archived / Deleted estimates, the bin row (3
-revisions, deleted by, removed in 28 days), Restore. All server routes
-compile; all 166 pages pass the browser check. Built from your deployed
-packages (1022-1176, verified against their zips).
+Checked in a REAL browser (Chromium): on the take-off, Mech fixed single ply's
+edited description reverted to the library's ("Original library description
+for Mech Fixed SP."); a new comment line pale yellow with a yellow box; no
+Revert on a unique item; on the Build-ups page an unsaved change reverted to
+the last saved description; a whole line still fits at 1366px and 1600px. All
+166 pages pass the browser check. Built from your deployed packages
+(1022-1177, verified against their zips).
