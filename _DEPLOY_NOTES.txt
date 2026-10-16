@@ -1,33 +1,19 @@
-PACKAGE 1190 - Retention tracker: retention credit notes are adjustments, not
-releases
+PACKAGE 1191 - Pasting take-off rows leaves the quantities blank
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1189.
+One file. Complete replacement. No re-seed. No env changes. Built on 1190.
 
-  pages/api/dashboard.js
-  pages/retention.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-THE PROBLEM (J228) - a credit note on the retention account (612) is first
-paired with the application it reverses (Xero allocation, or same reference
-and the exact opposite amount). "Farmstead Drive - Retention adjustment" has
-its own reference and no allocation, so nothing paired ("no candidate found")
-and it fell back on its sign - £451.67 counted as RELEASED. Retention held
-was right; Deducted and Released were both overstated by £451.67.
-NOW - a retention credit note that cannot be paired REDUCES RETENTION
-DEDUCTED. A credit note on 612 is never a release (releases are invoiced). In
-the 612 lines window it shows as "adjustment" (amber) - "no candidate found -
-reduces retention deducted". Credit notes that do pair work as before. A
-credit note is also never counted as release money received.
-STRAIGHT AWAY - the saved tracker figures are re-worked from each project's
-saved 612 lines when read, so J228 is right as soon as this is deployed:
-Deducted £2,451.67, Released £0.00, held unchanged. "Released and paid" needs
-each document's payment state, so it corrects on the next Sync.
+Copying ticked rows on the take-off and pasting them (here or in another
+estimate) now brings the items in WITHOUT their quantities - blank, ready to
+measure where they land (they show as "without a quantity" until then). Their
+build-ups, descriptions, units, rates and notes come across as before; section
+headers and blank lines are unchanged. The message reads "Pasted 2 lines -
+quantities left blank to measure."
 
-AFTER DEPLOYING: open the tracker - J228 should show the adjustment against
-Deducted. Run a Sync when convenient to refresh "released and paid".
-
-Checked through the real dashboard code: J228's saved row (two applications
-deducting £1,451.67 each, the £451.67 adjustment credit note filed as
-released) -> read now as Deducted £2,451.67, Released £0.00, held £2,451.67,
-the credit note "adjustment - no candidate found - reduces retention
-deducted". All server routes compile; all 166 pages pass the browser check.
-Built from your deployed packages (1022-1189, verified against their zips).
+Checked in a REAL browser (Chromium): Mech fixed single ply (1000) and Primer
+to upstands (200) copied and pasted -> the originals still 1000 and 200; the
+copies below them with empty quantities, rates £17.54 and £16.32 intact. All
+166 pages pass the browser check. Built from your deployed packages
+(1022-1190, verified against their zips); the file checked identical to the
+tested version before zipping.

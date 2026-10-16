@@ -313,9 +313,10 @@ export default function EstimatePage() {
   const pasteRows = () => {
     let c = null; try { c = JSON.parse(localStorage.getItem(CLIP) || 'null') } catch {}
     if (!c?.rows?.length) return
-    const fresh = copyRows(c.rows)
+    // pasted WITHOUT their quantities (1191) - measure them where they land
+    const fresh = copyRows(c.rows).map(r => r.kind === 'item' ? { ...r, qty: null } : r)
     change(e => { const rs = [...e.rows]; const last = Math.max(-1, ...rs.map((r, i) => sel.has(r.id) ? i : -1)); rs.splice(last >= 0 ? last + 1 : rs.length, 0, ...fresh); return { ...e, rows: rs } })
-    setSel(new Set(fresh.map(r => r.id))); setSelMsg(`Pasted ${fresh.length} line${fresh.length === 1 ? '' : 's'}.`)
+    setSel(new Set(fresh.map(r => r.id))); setSelMsg(`Pasted ${fresh.length} line${fresh.length === 1 ? '' : 's'} - quantities left blank to measure.`)
   }
   const deleteSel = () => {
     const n = sel.size; if (!n || !window.confirm(`Delete ${n} line${n === 1 ? '' : 's'}?`)) return
