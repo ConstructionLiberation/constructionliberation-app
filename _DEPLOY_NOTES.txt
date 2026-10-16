@@ -1,20 +1,33 @@
-PACKAGE 1189 - Export a previous revision's take-off to Excel
+PACKAGE 1190 - Retention tracker: retention credit notes are adjustments, not
+releases
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1188.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1189.
 
-  pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/dashboard.js
+  pages/retention.js
 
-The revision window (Take-off > Revisions > View) now has "⬇ Export to Excel":
-it downloads THAT REVISION'S take-off exactly as issued - its own rows,
-quantities, descriptions and prices (the figures stored when it was issued) -
-with the same columns you have showing on the take-off. The file is named
-after the revision, e.g. "Q-1042-Rev-A-take-off.xlsx", and headed "... take-off,
-Rev A". The take-off's own Export (the draft / current revision) works as
-before.
+THE PROBLEM (J228) - a credit note on the retention account (612) is first
+paired with the application it reverses (Xero allocation, or same reference
+and the exact opposite amount). "Farmstead Drive - Retention adjustment" has
+its own reference and no allocation, so nothing paired ("no candidate found")
+and it fell back on its sign - £451.67 counted as RELEASED. Retention held
+was right; Deducted and Released were both overstated by £451.67.
+NOW - a retention credit note that cannot be paired REDUCES RETENTION
+DEDUCTED. A credit note on 612 is never a release (releases are invoiced). In
+the 612 lines window it shows as "adjustment" (amber) - "no candidate found -
+reduces retention deducted". Credit notes that do pair work as before. A
+credit note is also never counted as release money received.
+STRAIGHT AWAY - the saved tracker figures are re-worked from each project's
+saved 612 lines when read, so J228 is right as soon as this is deployed:
+Deducted £2,451.67, Released £0.00, held unchanged. "Released and paid" needs
+each document's payment state, so it corrects on the next Sync.
 
-Checked in a REAL browser (Chromium), draft Rev B at 1000 m2 and Rev A issued
-at 900 m2: the take-off's Export -> "Q-1042-Rev-B-take-off.xlsx", 1000 m2,
-total 20,804.00; Rev A's window -> "Q-1042-Rev-A-take-off.xlsx", headed Rev A,
-900 m2, total 19,050.00. All 166 pages pass the browser check. Built from your
-deployed packages (1022-1188, verified against their zips); the file checked
-identical to the tested version before zipping.
+AFTER DEPLOYING: open the tracker - J228 should show the adjustment against
+Deducted. Run a Sync when convenient to refresh "released and paid".
+
+Checked through the real dashboard code: J228's saved row (two applications
+deducting £1,451.67 each, the £451.67 adjustment credit note filed as
+released) -> read now as Deducted £2,451.67, Released £0.00, held £2,451.67,
+the credit note "adjustment - no candidate found - reduces retention
+deducted". All server routes compile; all 166 pages pass the browser check.
+Built from your deployed packages (1022-1189, verified against their zips).

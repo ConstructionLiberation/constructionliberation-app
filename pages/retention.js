@@ -1288,7 +1288,8 @@ export default function RetentionPage() {
 
         {ret612For && (() => {
           const rows = ret612For.ret612Detail || []
-          const d = rows.filter(r => r.side === 'deducted').reduce((t, r) => t + Math.abs(r.used), 0)
+          // an unpaired retention credit note is an ADJUSTMENT - it reduces deducted (1190)
+          const d = rows.filter(r => r.side === 'deducted').reduce((t, r) => t + Math.abs(r.used), 0) - rows.filter(r => r.side === 'adjustment').reduce((t, r) => t + Math.abs(r.used), 0)
           const rl = rows.filter(r => r.side === 'released').reduce((t, r) => t + r.used, 0)
           const th2 = { padding: '6px 8px', textAlign: 'left', fontSize: 10.5, color: '#888', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }
           const td2 = { padding: '6px 8px', fontSize: 12, borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }
@@ -1324,7 +1325,7 @@ export default function RetentionPage() {
                           <td style={td2}>{r.creditNote ? 'Credit note' : 'Invoice'}</td>
                           <td style={{ ...td2, textAlign: 'right' }}>{fmt(r.raw)}</td>
                           <td style={{ ...td2, textAlign: 'right', fontWeight: r.netted ? 700 : 400 }}>{fmt(r.used)}</td>
-                          <td style={{ ...td2, color: r.side === 'deducted' ? '#dc2626' : r.side === 'released' ? '#16a34a' : '#bbb' }}>{r.side}</td>
+                          <td style={{ ...td2, color: r.side === 'deducted' ? '#dc2626' : r.side === 'released' ? '#16a34a' : r.side === 'adjustment' ? '#b45309' : '#bbb' }} title={r.side === 'adjustment' ? 'A retention credit note not paired with an application - it reduces retention deducted' : undefined}>{r.side}</td>
                           <td style={td2}>{r.netted ? 'cancelled' : ''}</td>
                           <td style={td2}>{r.allocs || ''}</td>
                           <td style={{ ...td2, whiteSpace: 'normal', fontSize: 11, color: r.netted ? '#16a34a' : '#94a3b8' }}>{r.match || ''}</td>

@@ -80,8 +80,18 @@ export async function handler(req, res) {
             // Sales total, LIVE (1134): every code bookkeeping categorises as Sales.
             let invoicedSales = null
             try { invoicedSales = salesTotal((await redis.get(BYCODE_KEY(p.xeroId))) || null, salesCat) } catch {}
+            // SAVED FIGURES, RE-WORKED FROM THE SAVED 612 LINES (1190) - so an unpaired
+            // retention credit note counts against Deducted at once, without a rebuild.
+            let ret612 = {}
+            if (Array.isArray(p.ret612Detail) && p.ret612Detail.some(r => r.creditNote && r.used > 0 && r.side === 'released')) {
+              const detail = p.ret612Detail.map(r => (r.creditNote && r.used > 0 && r.side === 'released') ? { ...r, side: 'adjustment', match: `${r.match || ''} - reduces retention deducted` } : r)
+              const ded = detail.reduce((t, r) => t + (r.side === 'deducted' ? -r.used : r.side === 'adjustment' ? -r.used : 0), 0)
+              const rel = detail.reduce((t, r) => t + (r.side === 'released' ? r.used : 0), 0)
+              ret612 = { ret612Detail: detail, retention612Deducted: Math.round(ded * 100) / 100, retention612Released: Math.round(rel * 100) / 100, retention612Allocated: Math.max(0, Math.round((ded - rel) * 100) / 100) }
+            }
             return {
               ...p,
+              ...ret612,
               invoicedSales,        // LIVE - after the cached fields so it wins (1134)
               contractsManager: cm,
               wipMarginOverride: (s.wipMarginOverride != null && s.wipMarginOverride !== '') ? s.wipMarginOverride : null,
@@ -330,7 +340,12 @@ export async function handler(req, res) {
             const off = adj.get(key)
             v = v > 0 ? Math.max(0, v - off) : Math.min(0, v + off)
           }
-          if (v < 0) retention612Deducted += -v
+          // AN UNPAIRED RETENTION CREDIT NOTE (1190) is an adjustment to retention
+          // DEDUCTED, never a release - releases are invoiced. (J228: "Farmstead Drive -
+          // Retention adjustment" had counted as £451.67 released.)
+          const isAdj = !!l.creditNote && v > 0
+          if (isAdj) retention612Deducted -= v
+          else if (v < 0) retention612Deducted += -v
           else if (v > 0) retention612Released += v
           // WHAT THIS PROJECT ACTUALLY HOLDS, line by line.
           //
@@ -344,17 +359,17 @@ export async function handler(req, res) {
             used: Math.round(v * 100) / 100,
             netted: Math.abs((l.retention612 || 0) - v) > 0.005,
             allocs: (l.allocatedTo || []).length,
-            side: v < 0 ? 'deducted' : v > 0 ? 'released' : '-',
+            side: isAdj ? 'adjustment' : v < 0 ? 'deducted' : v > 0 ? 'released' : '-',
             // ALWAYS-ON WORKING. A diagnostic that only renders on failure cannot tell
             // 'nothing wrong' from 'not running', so every line carries how it paired.
-            match: matchNote.get(key) || '',
+            match: `${matchNote.get(key) || ''}${isAdj ? ' - reduces retention deducted' : ''}`,
           })
           if (v !== 0) {
             ret612Lines += 1
             if (!ret612First || (l.date && l.date < ret612First)) ret612First = l.date || ret612First
             // A release only counts as RECEIVED once the invoice carrying it is paid.
             // Until then it has left retention and become an ordinary debtor.
-            if (v > 0 && (l.amountDue || 0) <= 0.01) retention612ReleasedPaid += v
+            if (v > 0 && !l.creditNote && (l.amountDue || 0) <= 0.01) retention612ReleasedPaid += v   // a credit note is never release money (1190)
           }
         }
         if (!totalInvoiced) totalInvoiced = invoiceLines.reduce((s, l) => s + (l.total || 0), 0)
