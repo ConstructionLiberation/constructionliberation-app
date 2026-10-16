@@ -1,35 +1,45 @@
-PACKAGE 1197 - Variation clarifications: a company setting (none until set up)
+PACKAGE 1198 - Purchasing, stage 1: Suppliers linked to Xero contacts
 
-Seven files. Complete replacements (two NEW). No re-seed. No env changes.
-Built on 1196.
+Six files. Complete replacements (three NEW). No re-seed. No env changes.
+Built on 1197.
 
-  lib/variationClarifications.js         (NEW)
-  pages/api/variation-clarifications.js  (NEW)
-  lib/variationDefaults.js
-  components/VariationBuilder.js
-  pages/contracted-rates.js
-  pages/admin/quote-documents.js
-  pages/api/estimating/estimates.js
+  lib/suppliers.js                           (NEW)
+  pages/api/suppliers.js                     (NEW)
+  pages/operations/purchasing/suppliers.js   (NEW)
+  lib/xero.js
+  lib/roles.js
+  components/OperationsNav.js
 
-The five clarifications that were written into the code are GONE. The
-clarifications on a new variation are now the company's own:
-  ADMIN > QUOTE DOCUMENTS > "Variation clarifications" - one per line (type
-  or paste), "Save variation clarifications" (admins).
-Used on every new variation - the Variation Builder, variations from
-contracted rates, and Estimating > Variations - and still editable on each.
-A company that has not set any up gets NONE; nothing is written or offered
-for anyone automatically, so a new company never inherits Rock's wording.
+OPERATIONS > PURCHASING > SUPPLIERS - every supplier on the price list (with
+its product count), linked to its supplier contact in Xero:
+  - "Refresh from Xero" reads the company's Xero contacts (read-only - the
+    contacts permission the app already has; no reconnect needed)
+  - each unlinked supplier shows its closest Xero contacts: "Link to Fixfast
+    Ltd" in one click, or "Choose..." to search
+  - SEVERAL Xero contacts can be linked to one supplier (duplicates such as
+    "Soprema" / "Soprema UK Ltd"); one is the MAIN contact, for POs
+  - "We raise POs with them" (on by default - POs come from the price list)
+FOR VINAY (the accounts role can open this page):
+  - "Dext should publish as": Awaiting Approval for a PO supplier, else
+    Awaiting Payment
+  - "Set in Dext": he ticks it once the supplier's Dext rule matches; until
+    then it shows "To change in Dext". Only accounts, management and admin can
+    tick it. Changing whether we raise POs with a supplier un-ticks it, so it
+    is set again.
+  - filters: Not linked to Xero / To change in Dext, with counts
+A company with no Xero connected gets the list and a "not connected" note -
+not an error. Nothing is written to Xero.
 
-AFTER DEPLOYING: Rock's list starts EMPTY too. Paste the clarifications into
-Admin > Quote Documents > Variation clarifications and save (the previous
-five are in the chat message). Variations already raised keep theirs.
+AFTER DEPLOYING: open Operations > Purchasing > Suppliers, "Refresh from
+Xero", then link each supplier. Send Vinay the page link
+(/operations/purchasing/suppliers) for the Dext column.
 
-Checked through the real routes: nothing set up -> [] and a sent variation
-with 0 clarifications; a non-admin save refused (403); an admin save tidied
-(spaces, blank lines) to two; the next variation carried exactly those two;
-another company still []. In a REAL browser (Chromium): the Admin card empty
-("None set up yet"), saved -> "Saved - 2 clarifications on every new
-variation"; the Variation Builder's new variation for J228 started with those
-two and none of the old five. All server routes compile; all pages pass the
-browser check. Built from your deployed packages (1022-1196, verified against
-their zips).
+Checked through the real route on the real price list (15 suppliers):
+suggestions Fixfast -> Fixfast Ltd, Renolit -> Renolit UK Limited, Valro ->
+Valro UK, Soprema -> both Soprema UK Ltd and Soprema; Soprema linked to both
+(main Soprema UK Ltd); the Dext tick refused for an estimator, accepted for
+Vinay; not-a-PO-supplier -> Awaiting Payment and un-ticked; no Xero -> "not
+connected". In a REAL browser (Chromium): the list and suggestions, one-click
+link, Choose... with two contacts and a main, Vinay's tick, the filter
+counts. All server routes compile; all pages pass the browser check. Built
+from your deployed packages (1022-1197, verified against their zips).

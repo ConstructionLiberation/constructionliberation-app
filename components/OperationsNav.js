@@ -33,6 +33,13 @@ export const navFor = (term) => {
       { key: 'pm:negotiating', label: 'Negotiating', href: '/operations/negotiating' },
     ],
   },
+  // PURCHASING (1198) - suppliers linked to Xero now; purchase orders and bill matching to follow
+  {
+    key: 'purchasing', label: 'Purchasing', href: '/operations/purchasing/suppliers',
+    children: [
+      { key: 'purchasing:suppliers', label: 'Suppliers', href: '/operations/purchasing/suppliers' },
+    ],
+  },
   { key: 'financials', label: 'Project Financials', href: '/operations/project-financials' },
   {
     key: 'hs', label: 'H&S', href: '/operations/hs/rams-matrix',
