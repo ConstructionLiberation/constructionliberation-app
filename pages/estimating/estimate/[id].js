@@ -574,6 +574,17 @@ export default function EstimatePage() {
           <LabourRates estimateId={est.id} lines={labourLines} />
         </div>
       )}
+      {/* THIS QUOTE'S PRICE ADJUSTMENTS (1184) - here, with the materials they change */}
+      {tab === 'materials' && (() => { const ro = !!crm?.archived || !!est.isIssued, list = est.adjustments || []
+        return <div style={{ background: '#fff', border: `1px solid ${list.length ? '#bfdbfe' : '#e8e7e3'}`, borderRadius: 12, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <strong>This quote's price adjustments</strong>
+            <span style={{ color: list.length ? '#2563eb' : '#888' }}>{list.length ? list.map(a => `${a.supplier} ${pctText(a.pct)}`).join(' · ') : 'none - supplier prices as the price list'}</span>
+            <span style={{ fontSize: 11.5, color: '#999' }}>this quote only, on top of the price list's increases</span>
+            {!ro && <button onClick={() => setShowAdj(v => !v)} style={{ ...smallBtn, marginLeft: 'auto' }}>{showAdj ? 'Done' : list.length ? 'Edit' : 'Add an adjustment'}</button>}
+          </div>
+          {showAdj && !ro && <div style={{ marginTop: 8 }}><QuoteAdjustments est={est} change={change} suppliers={[...new Set(lib.products.map(p => p.supplier).filter(Boolean))].sort()} /></div>}
+        </div> })()}
       {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived || !!est.isIssued} />}
       {tab === 'quote' && quoteRev === 'draft' && <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === ((est.reopened && est.reopened.revision) || est.revision))} est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView && !est.isIssued}
         actions={<>
@@ -684,12 +695,11 @@ export default function EstimatePage() {
           <label title="Raise or lower ALL the labour on this quote - each rate in proportion to its own labour">Labour factor <NumBox value={s.labourFactor ?? 1} emptyAs={1} onChange={v => setSetting('labourFactor', v)} style={{ ...cellInp, width: 60 }} /></label>
           <label title="Starts from the company day rate (Labour Rates); used for prelims">Day rate <NumBox dp={2} value={s.dayRate ?? null} onChange={v => setSetting('dayRate', v)} style={{ ...cellInp, width: 70 }} /></label>
           <div style={{ flex: 1 }} />
-          <button onClick={() => setShowAdj(v => !v)} style={{ ...smallBtn, borderColor: (est.adjustments || []).length ? '#2563eb' : undefined, color: (est.adjustments || []).length ? '#2563eb' : undefined }}>This quote's price adjustments{(est.adjustments || []).length ? ` (${est.adjustments.length})` : ''}</button>
           <button onClick={() => setShowHeader(v => !v)} style={smallBtn}>{showHeader ? 'Hide' : 'Show'} project and customer details</button>
         </div>
         {s.profit == null && <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>Set the profit % for this quote - every rate includes it.</div>}
-        {(est.adjustments || []).length > 0 && !showAdj && <div style={{ fontSize: 12.5, color: '#2563eb', marginTop: 6 }}>This quote only: {est.adjustments.map(a => `${a.supplier} ${pctText(a.pct)}`).join(' · ')} - on top of the price list.</div>}
-        {showAdj && <QuoteAdjustments est={est} change={change} suppliers={[...new Set(lib.products.map(p => p.supplier).filter(Boolean))].sort()} />}
+        {/* MOVED TO MATERIALS (1184) - a pointer while adjustments apply */}
+        {(est.adjustments || []).length > 0 && <div style={{ fontSize: 12.5, color: '#2563eb', marginTop: 6 }}>Supplier price adjustments apply to this quote ({est.adjustments.map(a => `${a.supplier} ${pctText(a.pct)}`).join(' · ')}) - <button onClick={() => setTab('materials')} style={{ border: 'none', background: 'none', color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>see Materials</button></div>}
         {showHeader && (
           <div style={{ marginTop: 10 }}>
             {est.dealId && crm && !crm.missing ? (

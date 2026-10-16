@@ -1,25 +1,23 @@
-PACKAGE 1183 - The price-list question shows what changed, by supplier
+PACKAGE 1184 - This quote's price adjustments moved to the Materials tab
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1182.
+One file. Complete replacement. No re-seed. No env changes. Built on 1183.
 
   pages/estimating/estimate/[id].js      (folder literally named [id])
 
-(1182 added the question on Create New Revision when the price list has
-changed since the latest revision. This makes it say exactly what changed.)
+(Deploy 1182 and 1183 first if you have not already.)
 
-The changed rates are now GROUPED BY SUPPLIER - each supplier a heading with
-how many of its rates changed - and LABOUR RATES as their own group. Each line:
-the product and its CODE, the latest revision's price -> today's, with the
-selling unit (e.g. "/ 150m2"), and the % CHANGE (red up, green down). A product
-with this estimate's own Materials-tab rate is marked "this estimate's own rate
-applies - not affected". Then the quote total at the revision's prices ->
-today's, and Keep / Update / Cancel as before.
+"This quote's price adjustments" (supplier increases / discounts for this
+quote only) is now at the TOP OF THE MATERIALS TAB, with the materials it
+changes: what is applied is always shown (e.g. "Renolit +10%"), with "Edit" /
+"Add an adjustment" opening the same panel as before. View-only on the latest
+issued revision or an archived estimate.
+The button is gone from the take-off's settings bar; while adjustments apply,
+the take-off shows "Supplier price adjustments apply to this quote (Renolit
++10%) - see Materials", linking there.
 
-Checked in a REAL browser (Chromium), Rev A issued at different prices from
-today's: "Renolit - 1 rate changed: Alkorplus polythene VCL · 81012001 £148.80
--> £124.00 / 150m2 -16.7%" marked as this estimate's own rate; "Valro - CX
-Plate for PVC 6.5mm Hole £69.89 -> £58.24 / 250nr -16.7%"; "Labour rates - E/O
-for non combustible to area £3.60 -> £4.00 +11.1%"; the totals both ways. All
-166 pages pass the browser check. Built from your deployed packages
-(1022-1182, verified against their zips); the file checked identical to the
-tested version before zipping.
+Checked in a REAL browser (Chromium): no adjustments button on the take-off;
+Materials - "none", Add an adjustment -> Renolit +10% -> shown, materials to
+order £2,111.68 -> £2,173.68; the take-off's pointer and its link to
+Materials. All 166 pages pass the browser check. Built from your deployed
+packages (1022-1183, verified against their zips); the file checked identical
+to the tested version before zipping.
