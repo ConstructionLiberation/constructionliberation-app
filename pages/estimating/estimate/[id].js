@@ -156,6 +156,17 @@ export default function EstimatePage() {
     catch (e) { setErr(e.message) }
     setBusy(false)
   }
+  // CREATE NEW REVISION (1176) - from the latest: the next letter, editable on every tab
+  async function createNewRevision() {
+    if (dirty && !(await flushSave())) { setErr('The estimate could not be saved'); return }
+    setBusy(true); setErr('')
+    try {
+      const d = await estApi(API, { action: 'new-revision', id: est.id })
+      setEst(d.estimate); setBase(d.estimate.updatedAt); setQuoteRev('draft')
+      setIssueMsg(`Rev ${d.estimate.revision} started from Rev ${(d.estimate.revisions || []).slice(-1)[0]?.revision || ''} - change it on any tab, then issue it.`)
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
   async function markSent(rev, sent) {
     setBusy(true); setErr('')
     try { const d = await estApi(API, { action: 'mark-sent', id: est.id, revision: rev, sent }); setEst(d.estimate); setBase(d.estimate.updatedAt) }
@@ -174,8 +185,8 @@ export default function EstimatePage() {
   const revBar = est ? (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px solid #e8e7e3', borderRadius: 10, padding: '8px 10px' }}>
       <span style={{ fontSize: 12.5, color: '#666', marginRight: 4 }}>Revision:</span>
-      {[{ key: 'draft', label: est.reopened ? `Rev ${est.reopened.revision} - editing` : `Draft Rev ${est.revision}`, sent: false },
-        ...(est.revisions || []).slice().reverse().filter(r => !(est.reopened && r.revision === est.reopened.revision)).map(r => ({ key: r.revision, label: `Rev ${r.revision}`, sent: !!r.sent, at: r.issuedAt }))]
+      {[{ key: 'draft', label: est.isIssued ? `Rev ${est.revision} · latest` : est.reopened ? `Rev ${est.reopened.revision} - editing` : `Draft Rev ${est.revision}`, sent: !!(est.isIssued && ((est.revisions || []).slice(-1)[0] || {}).sent) },
+        ...(est.revisions || []).slice().reverse().filter(r => !(est.reopened && r.revision === est.reopened.revision) && !(est.isIssued && r.revision === est.revision)).map(r => ({ key: r.revision, label: `Rev ${r.revision}`, sent: !!r.sent, at: r.issuedAt }))]
         .map(b => (
           <button key={b.key} onClick={() => showRev(b.key)} title={b.at ? `Issued ${new Date(b.at).toLocaleDateString('en-GB')}` : 'The working draft'}
             style={{ fontSize: 12.5, padding: '5px 12px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${quoteRev === b.key ? '#0f766e' : '#d4d4d0'}`, background: quoteRev === b.key ? '#0f766e' : '#fff', color: quoteRev === b.key ? '#fff' : '#333', fontWeight: quoteRev === b.key ? 600 : 400 }}>
@@ -244,7 +255,8 @@ export default function EstimatePage() {
 
   useEffect(() => { estRef.current = est }, [est])
   useEffect(() => { baseRef.current = base }, [base])
-  const change = (fn) => { setEst(e => fn(e)); setDirty(true); seqRef.current++; schedule() }
+  // THE LATEST REVISION is read-only (1176) - only its project notes can change
+  const change = (fn) => { setEst(e => { const n = fn(e); return e && e.isIssued ? { ...e, notes: n.notes } : n }); setDirty(true); seqRef.current++; schedule() }
   function schedule(ms = AUTOSAVE_MS) {
     clearTimeout(timerRef.current)
     if (stoppedRef.current) return
@@ -373,7 +385,8 @@ export default function EstimatePage() {
     const d = detailsFor(est, crm)
     // The quote DATE (1098): never typed - today on a draft; the day it was marked
     // as sent on the copy printed then.
-    const dt = sentView ? new Date(sentView.at) : new Date()
+    const lastE = (est.revisions || []).slice(-1)[0]
+    const dt = sentView ? new Date(sentView.at) : (est.isIssued && lastE) ? new Date((lastE.sent && lastE.sent.at) || lastE.issuedAt) : new Date()
     return placeholderValues({ est: sentView ? { ...est, ...sentView.est, revision: sentView.revision } : est, details: d, total: totals.total, companyName, money, dateText: dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })
   }, [est, crm, totals, companyName, sentView])
   const since = useMemo(() => est && lastRev ? diffEstimates({ ...lastRev.estimate, priceLock: lastRev.priceLib || lastRev.estimate.priceLock || null }, est, libRaw) : [], [est, lastRev, libRaw])
@@ -433,8 +446,8 @@ export default function EstimatePage() {
           <a href="/estimating/estimates" style={{ fontSize: 12.5, color: '#888', textDecoration: 'none' }}>‹ Estimates</a>
           <input value={est.title} onChange={e => change(x => ({ ...x, title: e.target.value }))} style={{ display: 'block', fontSize: 21, fontWeight: 700, border: 'none', padding: '2px 0', fontFamily: 'inherit', minWidth: 420, background: 'transparent' }} />
           <div style={{ fontSize: 12.5, color: '#888' }}>
-            {est.dealId ? (crm && !crm.missing ? <>CRM deal: <a href={`/crm?deal=${crm.dealId}`} style={{ color: '#0f766e' }}>{crm.title}</a>{crm.organisation ? ` · ${crm.organisation}` : ''}</> : <span style={{ color: '#b42318' }}>The linked CRM deal no longer exists</span>) : 'Not linked to a CRM deal'}
-            {' · '}Rev {est.revision}{' · '}last saved {new Date(est.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{est.updatedBy ? ` by ${est.updatedBy}` : ''}
+            {est.dealId ? (crm && !crm.missing ? <>CRM deal: <a href={`/crm?deal=${crm.dealId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#0f766e' }}>{crm.title}</a>{crm.organisation ? ` · ${crm.organisation}` : ''}</> : <span style={{ color: '#b42318' }}>The linked CRM deal no longer exists</span>) : 'Not linked to a CRM deal'}
+            {' · '}Rev {est.revision}{est.isIssued && (() => { const l = (est.revisions || []).slice(-1)[0]; return <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: '#fff', background: '#0f766e', borderRadius: 8, padding: '2px 8px' }}>LATEST REVISION{l && l.sent ? ' · SENT' : ''}</span> })()}{' · '}last saved {new Date(est.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{est.updatedBy ? ` by ${est.updatedBy}` : ''}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -517,10 +530,10 @@ export default function EstimatePage() {
           <LabourRates estimateId={est.id} lines={labourLines} />
         </div>
       )}
-      {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived} />}
-      {tab === 'quote' && quoteRev === 'draft' && <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === ((est.reopened && est.reopened.revision) || est.revision))} est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView}
+      {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived || !!est.isIssued} />}
+      {tab === 'quote' && quoteRev === 'draft' && <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === ((est.reopened && est.reopened.revision) || est.revision))} est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView && !est.isIssued}
         actions={<>
-          <button onClick={() => issue(true)} disabled={busy || dirty || s.profit == null || !!crm?.archived} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ fontSize: 12.5, padding: '6px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: busy || dirty || s.profit == null || crm?.archived ? 0.5 : 1 }}>Download and mark as sent (Rev {est.revision})</button>
+          {!est.isIssued && <button onClick={() => issue(true)} disabled={busy || dirty || s.profit == null || !!crm?.archived} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ fontSize: 12.5, padding: '6px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: busy || dirty || s.profit == null || crm?.archived ? 0.5 : 1 }}>Download and mark as sent (Rev {est.revision})</button>}
           {dirty && <span style={{ fontSize: 12, color: '#b45309' }}>Save first</span>}
           {(() => { const last = (est.revisions || []).slice(-1)[0]; if (!last) return null
             return last.sent
@@ -543,12 +556,15 @@ export default function EstimatePage() {
           revision shown AS ISSUED, read-only; the draft (or a revision being
           edited) is where the new revision's are amended */}
       {(tab === 'letter' || tab === 'clar') && (est.revisions || []).length > 0 && <div style={{ marginBottom: 10 }}>{revBar}</div>}
-      {(tab === 'letter' || tab === 'clar') && quoteRev !== 'draft' && (() => {
-        const v = snapView(quoteRev)
+      {(tab === 'letter' || tab === 'clar') && (quoteRev !== 'draft' || est.isIssued) && (() => {
+        const latestE = (est.revisions || []).slice(-1)[0] || {}
+        const v = quoteRev === 'draft' ? { entry: latestE, estS: est, valuesS: values } : snapView(quoteRev)
         if (!v) return <div style={{ color: '#888', fontSize: 13 }}>{revSnapErr || `Loading Rev ${quoteRev}…`}</div>
         const { entry, estS, valuesS } = v
         const note = <div style={{ fontSize: 12.5, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '7px 12px', marginBottom: 10 }}>
-          <strong>Rev {quoteRev}</strong>{entry.sent ? `, sent ${new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ', issued'} - as it went out, read-only. To change it for the next quote, switch to <button onClick={() => showRev('draft')} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>the draft</button>.</div>
+          <strong>Rev {quoteRev === 'draft' ? est.revision : quoteRev}</strong>{quoteRev === 'draft' ? ' - the latest revision' : ''}{entry.sent ? `, sent ${new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ', issued'} - as it went out, read-only. {quoteRev === 'draft'
+            ? <>To change it, use <button onClick={() => setTab('takeoff')} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Create New Revision on the take-off</button>.</>
+            : <>To change it for the next quote, switch to <button onClick={() => showRev('draft')} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>{est.isIssued ? 'the latest revision' : 'the draft'}</button>.</>}</div>
         if (tab === 'letter') return <div style={{ maxWidth: 900 }}>{note}
           <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 18, whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6 }}>{letterOf(estS, quoteDocs).trim() ? letterNodes(letterOf(estS, quoteDocs), valuesS) : <span style={{ color: '#aaa' }}>No letter.</span>}</div></div>
         let n = 0
@@ -562,17 +578,25 @@ export default function EstimatePage() {
               : <div key={x.id} style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.55, paddingLeft: 4 }}><span style={{ minWidth: 22, color: '#555' }}>{++n}.</span><span>{redNodes(x.text)}</span></div>)}
           </div></div>
       })()}
-      {(tab === 'docs' || ((tab === 'letter' || tab === 'clar') && quoteRev === 'draft')) && (
+      {(tab === 'docs' || ((tab === 'letter' || tab === 'clar') && quoteRev === 'draft' && !est.isIssued)) && (
         <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {tab === 'letter' && <LetterTab est={est} change={change} templates={quoteDocs} values={values} canEditTemplate={canEditDocs}
             onSaveTemplate={async (body) => { const d = await estApi('/api/estimating/quote-templates', { action: 'save', letter: { body } }); setQuoteDocs(d.templates) }} />}
           {tab === 'clar' && <ClarificationsTab est={est} change={change} templates={quoteDocs} canEditTemplate={canEditDocs}
             onSaveTemplate={async (list) => { const d = await estApi('/api/estimating/quote-templates', { action: 'save', clarTemplate: list }); setQuoteDocs(d.templates) }} />}
-          {tab === 'docs' && <DocumentsTab est={est} readOnly={!!crm?.archived} />}
+          {tab === 'docs' && <DocumentsTab est={est} readOnly={!!crm?.archived || !!est.isIssued} />}
         </fieldset>
       )}
       {/* An archived estimate is read-only: every control below is disabled (the server refuses changes too). */}
       <fieldset disabled={!!crm?.archived} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0, display: tab === 'takeoff' ? 'block' : 'none' }}>
+      {/* THE LATEST REVISION (1176) - read-only until Create New Revision */}
+      {est.isIssued && (() => { const l = (est.revisions || []).slice(-1)[0] || {}
+        return <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#0f766e', borderRadius: 8, padding: '3px 9px' }}>LATEST REVISION</span>
+          <span><strong>Rev {est.revision}</strong> {l.sent ? `- sent ${new Date(l.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : `- issued ${l.issuedAt ? new Date(l.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}, not sent`}. Shown as issued, read-only - at its own prices.</span>
+          <button onClick={createNewRevision} disabled={busy} style={{ ...btn, marginLeft: 'auto', background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>Create New Revision</button>
+        </div> })()}
+      <fieldset disabled={!!est.isIssued} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
 
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 12, marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
@@ -593,7 +617,7 @@ export default function EstimatePage() {
             {est.dealId && crm && !crm.missing ? (
               <>
                 <div style={{ fontSize: 12, color: '#0f766e', fontWeight: 600, marginBottom: 6 }}>
-                  Project and customer details - LIVE from the CRM deal. <a href={`/crm?deal=${crm.dealId}`} style={{ color: '#0f766e' }}>Edit them in the CRM</a>; the estimate and the letter follow.
+                  Project and customer details - LIVE from the CRM deal. <a href={`/crm?deal=${crm.dealId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#0f766e' }}>Edit them in the CRM</a>; the estimate and the letter follow.
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px 16px' }}>
                   {CRM_DETAILS.map(([k, label]) => (
@@ -908,12 +932,13 @@ export default function EstimatePage() {
         )
       })()}
 
+      </fieldset>
       {issueMsg && <div style={{ marginTop: 10, fontSize: 13, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, padding: '8px 12px' }}>{issueMsg}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14, alignItems: 'start' }}>
         <div style={panel}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <strong style={{ fontSize: 14 }}>Revisions</strong>
-            <button onClick={issue} disabled={busy || dirty || s.profit == null} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ ...btn, opacity: busy || dirty || s.profit == null ? 0.5 : 1 }}>Issue Rev {est.revision}</button>
+            {!est.isIssued && <button onClick={issue} disabled={busy || dirty || s.profit == null} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ ...btn, opacity: busy || dirty || s.profit == null ? 0.5 : 1 }}>Issue Rev {est.revision}</button>}
           </div>
           {dirty && <div style={{ fontSize: 12, color: '#b45309', marginBottom: 6 }}>Save before issuing.</div>}
           {lastRev && (since.length
@@ -931,9 +956,10 @@ export default function EstimatePage() {
           ))}
           {!(est.revisions || []).length && <div style={{ fontSize: 12.5, color: '#888' }}>Not issued yet. Issuing freezes the quote as Rev {est.revision}{est.dealId ? ' and sets the CRM deal value' : ''}.</div>}
         </div>
-        {/* NOTES (1140) - general notes on this estimate; for the team, not on the quote */}
+        {/* PROJECT NOTES (1140, 1176) - for the project as a whole, kept across every
+            revision (never swapped with one); for the team, not on the quote */}
         <div style={panel}>
-          <strong style={{ fontSize: 14 }}>Notes</strong> <span style={{ fontSize: 11.5, color: '#999' }}>general notes on this estimate - not on the quote</span>
+          <strong style={{ fontSize: 14 }}>Project notes</strong> <span style={{ fontSize: 11.5, color: '#999' }}>for the project as a whole - kept across all revisions; not on the quote</span>
           <textarea value={est.notes || ''} onChange={e => change(x => ({ ...x, notes: e.target.value }))} disabled={!!est.archived} placeholder="Anything worth knowing about this estimate…" rows={6}
             style={{ ...inp, marginTop: 8, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
         </div>

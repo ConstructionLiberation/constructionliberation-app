@@ -12,7 +12,7 @@ import { uncostedItems, uncostedText, priceLibOf, withLock } from '../../../lib/
 // WORKING COPIES (1154): an estimate has ONE active working copy (the draft, or a
 // revision being edited) and may PARK the other - est.parked = [{ content, at }].
 // The shell (id, revisions...) is shared; everything else is the copy's content.
-const SHELL = new Set(['id', 'revisions', 'parked', 'createdAt', 'createdBy', 'dealId', 'title', 'quoteRef', 'archived', 'updatedAt', 'updatedBy'])
+const SHELL = new Set(['id', 'revisions', 'parked', 'createdAt', 'createdBy', 'dealId', 'title', 'quoteRef', 'archived', 'updatedAt', 'updatedBy', 'notes'])   // notes: PROJECT notes, across revisions (1176)
 const shellOf = (e) => Object.fromEntries(Object.entries(e).filter(([k]) => SHELL.has(k)))
 const contentOf = (e) => Object.fromEntries(Object.entries(e).filter(([k]) => !SHELL.has(k)))
 const copyKey = (content) => content && content.reopened ? content.reopened.revision : 'draft'
@@ -143,6 +143,13 @@ async function handler(req, res) {
     if (b.baseUpdatedAt && existing.updatedAt !== b.baseUpdatedAt) {
       return res.status(409).json({ error: `${existing.updatedBy || 'Someone'} saved this estimate at ${new Date(existing.updatedAt).toLocaleTimeString('en-GB')} since you opened it - reload to see their changes before saving` })
     }
+    // THE LATEST REVISION, AS ISSUED (1176) is read-only - only the project notes
+    // can be saved on it. "Create New Revision" starts the next one.
+    if (existing.isIssued) {
+      const saved = { ...existing, notes: String(est.notes ?? existing.notes ?? ''), updatedAt: new Date().toISOString(), updatedBy: by }
+      await saveEstimate(saved, await summaryOf(saved))
+      return res.status(200).json({ ok: true, estimate: saved })
+    }
     // Issued revisions are only ever added by 'issue' - a save cannot rewrite them.
     const saved = { ...existing, ...est, id: existing.id, createdAt: existing.createdAt, createdBy: existing.createdBy, revisions: existing.revisions || [], revision: existing.revision, updatedAt: new Date().toISOString(), updatedBy: by }
     await saveEstimate(saved, await summaryOf(saved))
@@ -230,11 +237,11 @@ async function handler(req, res) {
       // the revision being edited is re-issued - the draft comes back (1154)
       next = { ...shellOf(est), ...draft.content, revisions: revList, parked: [], updatedAt: issuedAt, updatedBy: by }
     } else {
-      // a new draft - following today's price list again (no lock)
-      const { reopened: _ro, priceLock: _pl, ...rest } = est
-      next = { ...rest, revision: nextRevision(rev), revisions: revList, parked: [], priceLock: null, updatedAt: issuedAt, updatedBy: by }
-      // the next revision needs its own rates-held date once this one is SENT (1164)
-      if (b.sent) next.ratesHeldUntil = null
+      // NO NEW DRAFT (1176): the estimate stays on the revision just issued - the
+      // LATEST REVISION, read-only, at its own prices - until "Create New
+      // Revision" starts the next one.
+      const { reopened: _ro, ...rest } = est
+      next = { ...rest, revision: rev, isIssued: true, revisions: revList, parked: [], priceLock: priceLibOf(est, withLock(lib, est.priceLock)), updatedAt: issuedAt, updatedBy: by }
     }
     await saveEstimate(next, await summaryOf(next, lib))
     return res.status(200).json({ ok: true, estimate: next, issued: rev, total, crm, changes, replaced: !!reo, setAside })
@@ -261,7 +268,22 @@ async function handler(req, res) {
     const revisions = est.revisions.map((r, i) => i !== k ? r : (b.sent ? { ...r, sent: { at: new Date().toISOString(), by } } : (({ sent, ...rest }) => rest)(r)))
     const next = { ...est, revisions, updatedAt: new Date().toISOString(), updatedBy: by }
     // the latest revision sent -> the draft after it needs its own rates-held date (1164)
-    if (b.sent && k === est.revisions.length - 1 && !est.reopened) next.ratesHeldUntil = null
+    if (b.sent && k === est.revisions.length - 1 && !est.reopened && !est.isIssued) next.ratesHeldUntil = null   // a draft after it (older estimates)
+    await saveEstimate(next, await summaryOf(next, await loadLib()))
+    return res.status(200).json({ ok: true, estimate: next })
+  }
+  // CREATE NEW REVISION (1176) - from the latest revision: an editable copy as the
+  // next letter, following today's price list; its rates-held date cleared if the
+  // latest was sent.
+  if (b.action === 'new-revision') {
+    const est = await loadEstimate(String(b.id))
+    if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
+    const dl = (await liveDeals())(est.dealId)
+    if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
+    if (!est.isIssued) return res.status(400).json({ error: `Rev ${est.revision} is already being worked on` })
+    const last = (est.revisions || []).slice(-1)[0]
+    const at = new Date().toISOString()
+    const next = { ...est, isIssued: false, revision: nextRevision(est.revision), priceLock: null, reopened: undefined, ...(last && last.sent ? { ratesHeldUntil: null } : {}), updatedAt: at, updatedBy: by }
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next })
   }
@@ -276,6 +298,16 @@ async function handler(req, res) {
     const dl = (await liveDeals())(est.dealId)
     if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
     const to = String(b.action === 'reopen' ? b.revision : b.to)
+    // the latest revision IS what is showing (1176) - make it editable, nothing to park
+    if (b.action === 'reopen' && est.isIssued) {
+      const last = (est.revisions || []).slice(-1)[0]
+      if (!last || last.revision !== to) return res.status(400).json({ error: 'Only the latest revision can be edited - create a new revision instead' })
+      if (last.sent) return res.status(400).json({ error: `Rev ${last.revision} has been sent - unmark it as sent on the Quote tab to edit it, or create a new revision` })
+      const at0 = new Date().toISOString()
+      const next = { ...est, isIssued: false, reopened: { revision: to, at: at0, by }, updatedAt: at0, updatedBy: by }
+      await saveEstimate(next, await summaryOf(next, await loadLib()))
+      return res.status(200).json({ ok: true, estimate: next })
+    }
     if (copyKey(est) === to) return res.status(200).json({ ok: true, estimate: est })
     const parked = est.parked || []
     let target = parked.find(p => copyKey(p.content) === to)
