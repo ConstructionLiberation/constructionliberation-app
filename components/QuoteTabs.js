@@ -298,8 +298,8 @@ export function ClarListEditor({ list, setList, template }) {
 export function DocumentsTab({ est, readOnly }) {
   const rev = (est.reopened && est.reopened.revision) || est.revision
   return <>
-    <div style={{ fontSize: 12.5, color: '#666', marginBottom: 8 }}>Documents to append to the quote - mark-ups, technical documents and the like. They are listed on the quote's Documents page. Each revision has its own: Rev {rev}'s are added here; earlier revisions keep theirs.</div>
-    <DocumentsPanel ownerType="estimate" ownerId={est.id} revision={rev} title={`Documents for Rev ${rev}`} readOnly={readOnly} />
+    <div style={{ fontSize: 12.5, color: '#666', marginBottom: 8 }}>Documents to append to the quote - mark-ups, technical documents and the like - listed on the quote's Documents page. They carry forward to each new revision; untick one to leave it off Rev {rev}, or tick an older one to bring it back.</div>
+    <DocumentsPanel ownerType="estimate" ownerId={est.id} revision={rev} issued={(est.revisions || []).map(r => r.revision).filter(r => !(est.reopened && r === est.reopened.revision))} title={`Documents for Rev ${rev}`} readOnly={readOnly} />
   </>
 }
 

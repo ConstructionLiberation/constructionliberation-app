@@ -9,7 +9,7 @@ import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import LabourRates from '../../../components/LabourRates'
 import { buildEstimateLabourLines } from '../../../lib/estimateLabour'
-import { placeholderValues, checklistOf, currentTerms, letterOf, letterProblems, letterProblemText, clarOf, clarRedCount } from '../../../lib/quoteDocs'
+import { placeholderValues, checklistOf, currentTerms, letterOf, letterProblems, letterProblemText, clarOf, clarRedCount, docRevisions } from '../../../lib/quoteDocs'
 import { adjustLib, pctText } from '../../../lib/priceAdjust'
 import { normalizeTemplate, needsNormalizing, descriptionParts, descriptionText, needsAmending, missingSizes, itemsMissingSizes, missingVars, variableLibrary, missingProducts } from '../../../lib/buildups'
 import { BU_UNITS, BU_UNIT_LABEL } from '../../../lib/buildups'
@@ -195,7 +195,7 @@ export default function EstimatePage() {
   const [quoteDocsList, setQuoteDocsList] = useState([])
   useEffect(() => {
     if (tab !== 'quote' || !est) return
-    fetch(`/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}`).then(r => r.ok ? r.json() : { documents: [] }).then(d => setQuoteDocsList((d.documents || []).filter(x => !x.itemId).map(x => ({ id: x.id, name: x.name, revision: x.revision || null, href: `/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}&download=${x.id}` })))).catch(() => {})
+    fetch(`/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}`).then(r => r.ok ? r.json() : { documents: [] }).then(d => setQuoteDocsList((d.documents || []).filter(x => !x.itemId).map(x => ({ id: x.id, name: x.name, revision: x.revision || null, revisions: docRevisions(x), href: `/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}&download=${x.id}` })))).catch(() => {})
   }, [tab, est && est.id])
   const [fromOther, setFromOther] = useState(false)   // the "from another quote" pop-out (1179)
   const [warnList, setWarnList] = useState(null)   // 'cost' | 'qty' - the list behind a red warning (1146)
@@ -541,7 +541,7 @@ export default function EstimatePage() {
           {showAdj && !ro && <div style={{ marginTop: 8 }}><QuoteAdjustments est={est} change={change} suppliers={[...new Set(lib.products.map(p => p.supplier).filter(Boolean))].sort()} /></div>}
         </div> })()}
       {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived || !!est.isIssued} />}
-      {tab === 'quote' && quoteRev === 'draft' && <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === ((est.reopened && est.reopened.revision) || est.revision))} est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView && !est.isIssued}
+      {tab === 'quote' && quoteRev === 'draft' && <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revisions.includes((est.reopened && est.reopened.revision) || est.revision))} est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView && !est.isIssued}
         actions={<>
           {!est.isIssued && <button onClick={() => issue(true)} disabled={busy || dirty || s.profit == null || !!crm?.archived} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ fontSize: 12.5, padding: '6px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: busy || dirty || s.profit == null || crm?.archived ? 0.5 : 1 }}>Download and mark as sent (Rev {est.revision})</button>}
           {dirty && <span style={{ fontSize: 12, color: '#b45309' }}>Save first</span>}
@@ -556,7 +556,7 @@ export default function EstimatePage() {
         const v = snapView(quoteRev)
         if (!v) return <div>{revBar}<div style={{ color: '#888', fontSize: 13, marginTop: 10 }}>{revSnapErr || `Loading Rev ${quoteRev}…`}</div></div>
         const { snap, entry, estS, libS, pricedS, totalsS, valuesS } = v
-        return <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revision === quoteRev)} est={estS} values={valuesS} priced={pricedS} totals={totalsS} templates={quoteDocs} money={money} companyName={companyName} termsOverride={snap.terms || null} lib={libS} draft={false}
+        return <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revisions.includes(quoteRev))} est={estS} values={valuesS} priced={pricedS} totals={totalsS} templates={quoteDocs} money={money} companyName={companyName} termsOverride={snap.terms || null} lib={libS} draft={false}
           actions={entry.sent
             ? <span style={{ fontSize: 12.5, color: '#15803d' }}>Rev {quoteRev} sent {new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · <button onClick={() => { if (window.confirm(`Unmark Rev ${quoteRev} as sent?`)) markSent(quoteRev, false) }} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Unmark sent</button></span>
             : <span style={{ fontSize: 12.5, color: '#666' }}>Rev {quoteRev} issued {new Date(snap.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, not sent · <button onClick={() => markSent(quoteRev, true)} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Mark as sent</button></span>} />

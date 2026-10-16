@@ -4,7 +4,7 @@ import { get, set, getPortalUsers } from '../../../lib/db'
 import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
-import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues, clarOf, clarRedCount } from '../../../lib/quoteDocs'
+import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues, clarOf, clarRedCount, docRevisions } from '../../../lib/quoteDocs'
 import { detailsFor } from '../../../lib/estimate'
 import { DEFAULT_FIELD_SCHEMA } from '../../../lib/crmFieldSchema'
 import { itemsMissingSizes } from '../../../lib/buildups'
@@ -297,6 +297,10 @@ async function handler(req, res) {
     const at = new Date().toISOString()
     // keepPrices (1182): keep the latest revision's prices rather than today's price list
     const next = { ...est, isIssued: false, revision: nextRevision(est.revision), priceLock: b.keepPrices ? (est.priceLock || null) : null, reopened: undefined, ...(last && last.sent ? { ratesHeldUntil: null } : {}), updatedAt: at, updatedBy: by }
+    // THE DOCUMENTS CARRY FORWARD (1193) - every quote document on the latest revision goes onto the new one
+    { const docs = await listDocs('estimate', est.id); let moved = false
+      const nextDocs = docs.map(d => { if (d.itemId) return d; const l = docRevisions(d); if (!l.includes(est.revision) || l.includes(next.revision)) return d; moved = true; return { ...d, revisions: [...l, next.revision] } })
+      if (moved) await saveDocs('estimate', est.id, nextDocs) }
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next })
   }
@@ -385,9 +389,12 @@ async function handler(req, res) {
     const next = { ...shellOf(est), ...contentOf(snap.estimate), revision: keep, isIssued: true, priceLock: snap.priceLib || snap.estimate.priceLock || null, parked: [], updatedAt: at, updatedBy: by }
     delete next.reopened
     if (!est.reopened && draftRev !== keep) {
+      // the draft comes off every document (1193); one that was ONLY on the draft is removed
       const docs = await listDocs('estimate', est.id)
-      const gone = docs.filter(d => !d.itemId && d.revision === draftRev)
-      if (gone.length) { if (privateReady()) for (const d of gone) { try { await removeFile(d.pathname) } catch {} } await saveDocs('estimate', est.id, docs.filter(d => !gone.includes(d))) }
+      const offDraft = docs.map(d => d.itemId ? d : { ...d, revisions: docRevisions(d).filter(r => r !== draftRev) })
+      const gone = offDraft.filter((d, k) => !d.itemId && !d.revisions.length && docRevisions(docs[k]).includes(draftRev))
+      if (privateReady()) for (const d of gone) { try { await removeFile(d.pathname) } catch {} }
+      if (offDraft.some((d, k) => d !== docs[k])) await saveDocs('estimate', est.id, offDraft.filter(d => !gone.includes(d)))
     }
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next, discarded: est.reopened ? `edits to Rev ${keep}` : `Rev ${draftRev}` })

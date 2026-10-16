@@ -1,24 +1,37 @@
-PACKAGE 1192 - The take-off export: just the schedule columns
+PACKAGE 1193 - Quote documents carry forward to each new revision, with a tick
+to leave one off (or bring an older one back)
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1191.
+Six files. Complete replacements. No re-seed. No env changes. Built on 1192.
 
+  lib/quoteDocs.js
+  components/DocumentsPanel.js
+  components/QuoteTabs.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/estimating/documents.js
+  pages/api/estimating/estimates.js
 
-"Export to Excel" - on the take-off and in a revision's window - now exports
-only:
-  Item no. | Description | Qty | Unit | Rate | Total
-  - Item no. only when the take-off's items have item numbers (none do yet,
-    so the file starts with Description)
-  - Description: the item, with its build-up description beneath it in the
-    same cell (wrapped)
-  - section headers, the Totals row and Below the line as before
-The optional columns (materials, labour, profit, suppliers) are no longer
-exported.
+CARRIED FORWARD - Create New Revision puts every document on the latest
+revision onto the new one too.
+ONE LIST, A TICK EACH - the Documents tab lists all the quote's documents, each
+with "On Rev B" and the revisions it is on ("Rev A, B"):
+  - untick to leave a document off this revision (it stays on the revisions
+    it went out with)
+  - tick an older revision's document to bring it back
+  - "2 of 3 on Rev B" sums it up
+The quote's Documents page lists what is ticked for the revision being
+viewed. Issued revisions are fixed - only the revision being worked on can be
+changed (the server refuses otherwise). DELETE is offered only for a document
+that has never gone out on an issued revision; otherwise untick it. "Delete
+draft" takes the draft off every document and removes any that were only on
+it. Documents saved the old way (one revision) work as they are.
 
-Checked in a REAL browser (Chromium): the draft -> "Description, Qty, Unit,
-Rate, Total", Mech fixed single ply with its build-up description beneath,
-1000 m2 @ 17.54 = 17,540.00, the sections and Totals 20,804.00; a revision
-whose items carry numbers -> "Item no." first (2.01, 2.02, 2.03). All 166 pages
-pass the browser check. Built from your deployed packages (1022-1191, verified
-against their zips); the file checked identical to the tested version before
-zipping.
+Checked through the real routes: a document on draft Rev A; Rev A issued ->
+untick refused, delete refused ("went out on Rev A - untick it"); Create New
+Revision -> it and an older-style document carried onto B ([A,B]); untick on
+B -> [A], tick back -> [A,B]; a B-only document deletable; Delete draft B ->
+the B-only one gone, the rest back to [A]. In a REAL browser (Chromium): the
+ticks and "Rev A, B" labels; the spec ticked on and the mark-up off -> Rev B's
+quote page lists the spec and the photo, Rev A's unchanged (mark-up and spec);
+Delete offered only on the Rev-B-only photo. All server routes compile; all
+166 pages pass the browser check. Built from your deployed packages
+(1022-1192, verified against their zips).

@@ -6,6 +6,7 @@ import { resolveMerged } from '../../../lib/crmMerge'
 import { loadEstimate } from '../../../lib/estimateStore'
 import { loadBuildups } from '../../../lib/buildupsStore'
 import { listDocs, saveDocs } from '../../../lib/documentsStore'
+import { docRevisions } from '../../../lib/quoteDocs'
 import { privateReady, privateToken, prefixFor, shortLink, fileExists, removeFile, MAX_BYTES, ALLOWED_TYPES } from '../../../lib/privateFiles'
 
 // PRIVATE DOCUMENTS (1093) - Estimating area.
@@ -88,10 +89,12 @@ async function handler(req, res) {
   const own = await checkOwner(b.ownerType, b.ownerId)
   if (own.error) return res.status(own.code).json({ error: own.error })
   const ownerId = String(b.ownerId)
-  // DOCUMENTS PER REVISION (1169): a quote document belongs to ONE revision - the
-  // one being worked on (the draft, or a revision being edited). An issued
-  // revision's documents are fixed.
+  // DOCUMENTS PER REVISION (1169, 1193): each quote document is on a LIST of
+  // revisions - carried forward to each new one, ticked on or off for the
+  // revision being worked on. Issued revisions' lists are fixed.
   const working = own.est ? String((own.est.reopened && own.est.reopened.revision) || own.est.revision || 'A') : null
+  const issued = new Set(((own.est && own.est.revisions) || []).map(r => r.revision).filter(r => !(own.est.reopened && r === own.est.reopened.revision)))
+  const fixed = own.est && own.est.isIssued   // the latest revision, as issued - Create New Revision to change
 
   // STEP 2: record the uploaded file against its owner - only a file that
   // really is in this owner's folder of the private store.
@@ -102,10 +105,10 @@ async function handler(req, res) {
     const meta = await fileExists(pathname)
     if (!meta) return res.status(404).json({ error: 'The upload did not arrive - try again' })
     if (b.itemId && own.est && !(own.est.rows || []).some(r => r.id === b.itemId)) return res.status(400).json({ error: 'That item is not on this estimate' })
-    if (b.revision != null && own.est && String(b.revision) !== working) return res.status(400).json({ error: `Rev ${b.revision} has been issued - its documents are fixed. Add documents to Rev ${working}.` })
+    if (b.revision != null && own.est && (fixed || String(b.revision) !== working)) return res.status(400).json({ error: `Rev ${b.revision} has been issued - its documents are fixed. ${fixed ? 'Create a new revision to add documents.' : `Add documents to Rev ${working}.`}` })
     const docs = await listDocs(b.ownerType, ownerId)
     const doc = { id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, pathname, name: String(b.name || pathname.split('/').pop()).slice(0, 200),
-      size: meta.size || 0, contentType: meta.contentType || '', itemId: b.itemId || null, revision: (b.revision != null && own.est && !b.itemId) ? working : null, uploadedAt: new Date().toISOString(), uploadedBy: by }
+      size: meta.size || 0, contentType: meta.contentType || '', itemId: b.itemId || null, revision: (b.revision != null && own.est && !b.itemId) ? working : null, revisions: (b.revision != null && own.est && !b.itemId) ? [working] : undefined, uploadedAt: new Date().toISOString(), uploadedBy: by }
     await saveDocs(b.ownerType, ownerId, [...docs, doc])
     return res.status(200).json({ ok: true, document: doc })
   }
@@ -113,22 +116,28 @@ async function handler(req, res) {
     const docs = await listDocs(b.ownerType, ownerId)
     const doc = docs.find(d => d.id === String(b.docId))
     if (!doc) return res.status(404).json({ error: 'That document no longer exists' })
-    if (doc.revision && own.est && doc.revision !== working) return res.status(400).json({ error: `That document is on Rev ${doc.revision}, which has been issued - it cannot be removed.` })
+    const onIssued = own.est ? docRevisions(doc).filter(r => issued.has(r)) : []
+    if (onIssued.length) return res.status(400).json({ error: `That document went out on Rev ${onIssued.join(', ')} - it cannot be deleted. Untick it to leave it off this revision.` })
     if (privateReady()) await removeFile(doc.pathname)
     await saveDocs(b.ownerType, ownerId, docs.filter(d => d.id !== doc.id))
     return res.status(200).json({ ok: true })
   }
-  // a document from before revisions were tracked -> onto the working revision (1169)
-  if (b.action === 'set-revision') {
+  // ON / OFF THE REVISION BEING WORKED ON (1193) - tick a document (an older
+  // revision's, or one from before revisions were tracked) onto it, or untick it
+  if (b.action === 'on-revision' || b.action === 'set-revision') {
     if (!own.est) return res.status(400).json({ error: 'Only an estimate\'s documents have revisions' })
+    if (fixed) return res.status(400).json({ error: `Rev ${working} has been issued - its documents are fixed. Create a new revision to change them.` })
     const docs = await listDocs(b.ownerType, ownerId)
     const doc = docs.find(d => d.id === String(b.docId))
     if (!doc) return res.status(404).json({ error: 'That document no longer exists' })
-    if (doc.itemId || doc.revision) return res.status(400).json({ error: 'That document already belongs somewhere' })
-    await saveDocs(b.ownerType, ownerId, docs.map(d => d.id === doc.id ? { ...d, revision: working } : d))
-    return res.status(200).json({ ok: true })
+    if (doc.itemId) return res.status(400).json({ error: 'That document is on an item, not the quote' })
+    const on = b.action === 'set-revision' ? true : !!b.on
+    const list = docRevisions(doc).filter(r => r !== working)
+    const next = on ? [...list, working] : list
+    await saveDocs(b.ownerType, ownerId, docs.map(d => d.id === doc.id ? { ...d, revisions: next, revision: d.revision || (on ? working : null) } : d))
+    return res.status(200).json({ ok: true, revisions: next })
   }
-  return res.status(400).json({ error: "action must be 'register', 'delete' or 'set-revision'" })
+  return res.status(400).json({ error: "action must be 'register', 'delete' or 'on-revision'" })
 }
 
 export default withTenant(handler)

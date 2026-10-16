@@ -1,3 +1,4 @@
+import { docRevisions } from '../lib/quoteDocs'
 import { useEffect, useState } from 'react'
 
 // PRIVATE DOCUMENTS PANEL (1093) - one panel for: an estimate's Documents tab,
@@ -13,7 +14,7 @@ const size = (n) => n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math
 // PER REVISION (1169): with `revision`, this is the quote's documents for that
 // revision - added and removed here; earlier revisions' listed read-only (never
 // carried forward); ones from before revisions were tracked can be placed on it.
-export default function DocumentsPanel({ ownerType, ownerId, itemId = null, items = null, title = 'Documents', readOnly = false, revision = null }) {
+export default function DocumentsPanel({ ownerType, ownerId, itemId = null, items = null, title = 'Documents', readOnly = false, revision = null, issued = null }) {
   const [state, setState] = useState(null)      // { documents, ready, folder, maxBytes }
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
@@ -46,13 +47,20 @@ export default function DocumentsPanel({ ownerType, ownerId, itemId = null, item
   }
 
   const all = state?.documents || []
-  const docs = revision ? all.filter(d => !d.itemId && d.revision === revision) : all.filter(d => !itemId || d.itemId === itemId)
-  const earlier = revision ? [...new Set(all.filter(d => !d.itemId && d.revision && d.revision !== revision).map(d => d.revision))].sort().reverse() : []
-  const unplaced = revision ? all.filter(d => !d.itemId && !d.revision) : []
-  async function place(doc) {
-    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-revision', ownerType, ownerId, docId: doc.id }) })
-    const d = await r.json(); if (!r.ok) setErr(d.error); await load()
+  // PER REVISION (1193): one list of the quote's documents, each with a tick for
+  // the revision being worked on - carried forward automatically, untick to
+  // leave one off; tick an older revision's to bring it back.
+  const docs = revision ? all.filter(d => !d.itemId) : all.filter(d => !itemId || d.itemId === itemId)
+  const onRev = (d) => docRevisions(d).includes(revision)
+  const issuedSet = new Set(issued || [])
+  const canDelete = (d) => !revision || !docRevisions(d).some(r => issuedSet.has(r))
+  const [busyTick, setBusyTick] = useState(null)
+  async function tick(doc, on) {
+    setBusyTick(doc.id); setErr('')
+    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'on-revision', ownerType, ownerId, docId: doc.id, on }) })
+    const d = await r.json(); if (!r.ok) setErr(d.error); await load(); setBusyTick(null)
   }
+
   const link = (d) => <a href={`${API}?${q}&download=${d.id}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e', fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</a>
   const meta = (d) => <span style={{ fontSize: 11.5, color: '#999', whiteSpace: 'nowrap' }}>{size(d.size)} · {new Date(d.uploadedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {d.uploadedBy}</span>
   const itemName = (id) => (items || []).find(i => i.id === id)?.description
@@ -79,27 +87,17 @@ export default function DocumentsPanel({ ownerType, ownerId, itemId = null, item
       {busy && <div style={{ fontSize: 12.5, color: '#0f766e', marginBottom: 6 }}>{busy}</div>}
       {err && <div style={{ fontSize: 12.5, color: '#b42318', marginBottom: 6 }}>{err}</div>}
       {state?.ready && !docs.length && <div style={{ fontSize: 12.5, color: '#aaa' }}>No documents yet.</div>}
+      {revision && docs.length > 0 && <div style={{ fontSize: 11.5, color: '#888', marginBottom: 2 }}>{docs.filter(onRev).length} of {docs.length} on Rev {revision} - documents carry forward to each new revision; untick one to leave it off.</div>}
       {docs.map(d => (
-        <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: '1px solid #f4f3f0', fontSize: 13 }}>
+        <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: '1px solid #f4f3f0', fontSize: 13, opacity: revision && !onRev(d) ? 0.7 : 1 }}>
+          {revision && <label title={onRev(d) ? `On Rev ${revision} - untick to leave it off` : `Tick to add it to Rev ${revision}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: onRev(d) ? '#0f766e' : '#888', whiteSpace: 'nowrap', cursor: readOnly ? 'default' : 'pointer' }}>
+            <input type="checkbox" checked={onRev(d)} disabled={readOnly || busyTick === d.id} onChange={e => tick(d, e.target.checked)} /> On Rev {revision}</label>}
+          {revision && <span style={{ fontSize: 10.5, color: '#999', whiteSpace: 'nowrap' }}>{docRevisions(d).length ? `Rev ${docRevisions(d).sort().join(', ')}` : 'not on a revision'}</span>}
           <a href={`${API}?${q}&download=${d.id}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e', fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</a>
           {!itemId && d.itemId && <span style={{ fontSize: 11.5, color: '#666', background: '#f4f4f2', borderRadius: 10, padding: '1px 8px' }}>{itemName(d.itemId) || 'an item'}</span>}
           <span style={{ fontSize: 11.5, color: '#999', whiteSpace: 'nowrap' }}>{size(d.size)} · {new Date(d.uploadedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {d.uploadedBy}</span>
-          {!readOnly && <button onClick={() => remove(d)} style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 12 }}>Delete</button>}
+          {!readOnly && canDelete(d) && <button onClick={() => remove(d)} style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 12 }}>Delete</button>}
         </div>
-      ))}
-      {unplaced.length > 0 && !readOnly && (
-        <div style={{ marginTop: 12, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>Not yet on a revision <span style={{ fontWeight: 400 }}>- added before documents were kept per revision</span></div>
-          {unplaced.map(d => <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 13 }}>{link(d)}{meta(d)}
-            <button onClick={() => place(d)} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 6, border: '1px solid #0f766e', background: '#fff', color: '#0f766e', cursor: 'pointer' }}>Add to Rev {revision}</button>
-            <button onClick={() => remove(d)} style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 12 }}>Delete</button></div>)}
-        </div>
-      )}
-      {earlier.map(rv => (
-        <details key={rv} style={{ marginTop: 10, fontSize: 13 }}>
-          <summary style={{ cursor: 'pointer', color: '#555' }}>Rev {rv} - {all.filter(d => !d.itemId && d.revision === rv).length} document{all.filter(d => !d.itemId && d.revision === rv).length === 1 ? '' : 's'} <span style={{ fontSize: 11.5, color: '#999' }}>(issued - kept with Rev {rv}, not carried forward)</span></summary>
-          {all.filter(d => !d.itemId && d.revision === rv).map(d => <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0 4px 14px', borderTop: '1px solid #f4f3f0' }}>{link(d)}{meta(d)}</div>)}
-        </details>
       ))}
     </div>
   )
