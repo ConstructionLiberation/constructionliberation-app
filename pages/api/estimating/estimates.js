@@ -290,7 +290,8 @@ async function handler(req, res) {
     if (!est.isIssued) return res.status(400).json({ error: `Rev ${est.revision} is already being worked on` })
     const last = (est.revisions || []).slice(-1)[0]
     const at = new Date().toISOString()
-    const next = { ...est, isIssued: false, revision: nextRevision(est.revision), priceLock: null, reopened: undefined, ...(last && last.sent ? { ratesHeldUntil: null } : {}), updatedAt: at, updatedBy: by }
+    // keepPrices (1182): keep the latest revision's prices rather than today's price list
+    const next = { ...est, isIssued: false, revision: nextRevision(est.revision), priceLock: b.keepPrices ? (est.priceLock || null) : null, reopened: undefined, ...(last && last.sent ? { ratesHeldUntil: null } : {}), updatedAt: at, updatedBy: by }
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next })
   }

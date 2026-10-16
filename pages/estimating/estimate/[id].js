@@ -157,13 +157,38 @@ export default function EstimatePage() {
     setBusy(false)
   }
   // CREATE NEW REVISION (1176) - from the latest: the next letter, editable on every tab
+  // HAS THE PRICE LIST CHANGED SINCE THE LATEST REVISION? (1182) - its own prices
+  // (est.priceLock) against today's, for every product and labour rate it uses
+  const [priceAsk, setPriceAsk] = useState(null)
+  function priceListChanges() {
+    if (!est || !est.priceLock) return []
+    const now = priceLibOf({ ...est, priceLock: null }, libRaw)
+    const val = (x) => x == null ? null : (x.price != null ? x.price : x.rate != null ? x.rate : x.rateM2)
+    const out = []
+    for (const kind of ['product', 'labour']) for (const [ref, was] of Object.entries(est.priceLock[kind] || {})) {
+      const cur = now[kind] && now[kind][ref]
+      if (!cur) continue
+      const a = val(was), b = val(cur)
+      if (a != null && b != null && Math.abs(a - b) > 0.0049) out.push({ ref, kind, name: cur.description || was.description || ref, from: a, to: b })
+    }
+    return out
+  }
   async function createNewRevision() {
+    const changes = priceListChanges()
+    if (changes.length) {
+      const from = priceEstimate(est, libRaw).totals.total, to = priceEstimate({ ...est, priceLock: null }, libRaw).totals.total
+      setPriceAsk({ changes, from, to }); return
+    }
+    return doNewRevision(false)
+  }
+  async function doNewRevision(keepPrices) {
+    setPriceAsk(null)
     if (dirty && !(await flushSave())) { setErr('The estimate could not be saved'); return }
     setBusy(true); setErr('')
     try {
-      const d = await estApi(API, { action: 'new-revision', id: est.id })
+      const d = await estApi(API, { action: 'new-revision', id: est.id, keepPrices })
       setEst(d.estimate); setBase(d.estimate.updatedAt); setQuoteRev('draft')
-      setIssueMsg(`Rev ${d.estimate.revision} started from Rev ${(d.estimate.revisions || []).slice(-1)[0]?.revision || ''} - change it on any tab, then issue it.`)
+      setIssueMsg(`Rev ${d.estimate.revision} started from Rev ${(d.estimate.revisions || []).slice(-1)[0]?.revision || ''}${keepPrices ? ', keeping its prices' : ''} - change it on any tab, then issue it.`)
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
@@ -567,6 +592,29 @@ export default function EstimatePage() {
             ? <span style={{ fontSize: 12.5, color: '#15803d' }}>Rev {quoteRev} sent {new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · <button onClick={() => { if (window.confirm(`Unmark Rev ${quoteRev} as sent?`)) markSent(quoteRev, false) }} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Unmark sent</button></span>
             : <span style={{ fontSize: 12.5, color: '#666' }}>Rev {quoteRev} issued {new Date(snap.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, not sent · <button onClick={() => markSent(quoteRev, true)} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Mark as sent</button></span>} />
       })()}
+      {/* THE PRICE LIST HAS CHANGED (1182) - asked on Create New Revision */}
+      {priceAsk && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 620, padding: 20 }}>
+            <strong style={{ fontSize: 16 }}>The price list has changed since Rev {est.revision}</strong>
+            <div style={{ fontSize: 13, color: '#444', margin: '8px 0 10px' }}>Do you want to update the new quote with the rates from the latest price list?</div>
+            <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid #f0efec', borderRadius: 8, marginBottom: 10 }}>
+              {priceAsk.changes.map(c => (
+                <div key={c.kind + c.ref} style={{ display: 'flex', gap: 10, fontSize: 12.5, padding: '6px 10px', borderBottom: '1px solid #f4f3f0' }}>
+                  <span style={{ flex: 1 }}>{c.name}{c.kind === 'labour' ? <span style={{ fontSize: 11, color: '#888' }}> (labour)</span> : null}</span>
+                  <span style={{ color: '#888' }}>{money(c.from, { dp: 2 })}</span><span>→</span>
+                  <span style={{ fontWeight: 600, color: c.to > c.from ? '#b42318' : '#15803d' }}>{money(c.to, { dp: 2 })}</span>
+                </div>))}
+            </div>
+            <div style={{ fontSize: 13, marginBottom: 14 }}>Quote total: {money(priceAsk.from, { dp: 2 })} at Rev {est.revision}'s prices → <strong>{money(priceAsk.to, { dp: 2 })}</strong> at today's.</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button onClick={() => setPriceAsk(null)} style={smallBtn}>Cancel</button>
+              <button onClick={() => doNewRevision(true)} style={{ ...btn }}>Keep Rev {est.revision}'s prices</button>
+              <button onClick={() => doNewRevision(false)} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>Update to the latest price list</button>
+            </div>
+          </div>
+        </div>
+      )}
       {fromOther && <OtherQuotePicker currentId={est.id} lib={lib} money={money} onClose={() => setFromOther(false)}
         onAdd={(rows, from) => { change(e => ({ ...e, rows: placeRows(e.rows, rows) })); setFromOther(false); setIssueMsg(`${rows.filter(r => r.kind === 'item').length} rate build-up${rows.filter(r => r.kind === 'item').length === 1 ? '' : 's'} brought in from "${from}" - without quantities; add them here.`) }} />}
       {revView && <RevisionViewer view={revView} est={est} lib={lib} money={money} onClose={() => setRevView(null)} onEdit={reopenRevision} busy={busy} />}

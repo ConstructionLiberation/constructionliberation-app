@@ -1,39 +1,29 @@
-PACKAGE 1181 - Materials tab: edit the rates, then "Update Materials Rates for
-Quote"
+PACKAGE 1182 - Create New Revision asks when the price list has changed
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1180.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1181.
 
-  lib/estimate.js
-  lib/materials.js
-  components/MaterialsTab.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/api/estimating/estimates.js
 
-EDITABLE RATES on the Materials tab, inline:
-  - each product's PACK PRICE
-  - each "not from the price list" line's RATE (labelled "per m²" etc.)
-A changed rate turns yellow ("was £124.00"); nothing changes until "UPDATE
-MATERIALS RATES FOR QUOTE" (top right, with the count; "Discard changes"
-beside it).
-WHAT UPDATING DOES - for THIS ESTIMATE ONLY:
-  - a pack price becomes this estimate's own rate: exactly what was typed (after
-    any supplier increases / quote adjustments), the per-unit rates following
-    in proportion; marked "own rate · list £124.00", with ↺ to go back to the
-    price-list rate
-  - a not-from-the-price-list rate updates that line's rate in its build-up
-The take-off, Summary, item build-ups and the quote reprice at once. The rates
-HOLD for this draft and every later revision of this quote (Create New
-Revision carries them) until changed again. The PRICE LIST (main navigation)
-and other estimates are NOT changed; issued revisions keep the prices they
-went out with.
+On CREATE NEW REVISION the portal compares the prices the latest revision went
+out with against today's price list - every product and labour rate the quote
+uses. If any have changed it asks:
+  "The price list has changed since Rev A - Do you want to update the new quote
+  with the rates from the latest price list?"
+listing each change (e.g. "Alkorplus polythene VCL £248.00 -> £124.00") and the
+quote total at Rev A's prices -> at today's, with:
+  Update to the latest price list - the new revision uses today's rates
+  Keep Rev A's prices - the new revision keeps the prices Rev A went out with
+                        ("Use today's prices" can switch it later)
+  Cancel - no new revision
+If nothing has changed it simply creates the revision. This estimate's own
+Materials-tab rates hold either way.
 
-Checked: with the real price list - VCL £124.00; own rate £100.00 -> exactly
-£100.00 (list £124.00), the take-off rate down in proportion; with a +10%
-Renolit adjustment too -> still £100.00; another estimate unaffected. In a
-REAL browser (Chromium): "100.50" typed key by key, the box keeping the
-cursor, yellow, "was"; Solvent's rate labelled "per m²", 0.25 typed -> "2
-rates changed"; Update -> VCL £100.50 "own rate", materials £2,111.68 ->
-£1,994.18, the take-off £20,804.00 -> £20,594.00, saved (own rate and the
-Solvent line's rate); the item's build-up VCL line £0.60 -> £0.48 per m2; ↺ +
-Update -> back to £124.00. All server routes compile; all 166 pages pass the
-browser check. Built from your deployed packages (1022-1180, verified against
-their zips).
+Checked through the real route: keep -> Rev B carries Rev A's prices; update ->
+Rev B follows today's price list. In a REAL browser (Chromium): Rev A with the
+VCL at £248.00, today £124.00 -> the question with "£248.00 -> £124.00" and
+"£21,594.00 at Rev A's prices -> £20,804.00 at today's"; Keep -> Rev B priced
+as at Rev A ("Rev B started from Rev A, keeping its prices"); Update -> Rev B
+at today's; with no change -> no question. All server routes compile; all 166
+pages pass the browser check. Built from your deployed packages (1022-1181,
+verified against their zips).
