@@ -1,29 +1,25 @@
-PACKAGE 1182 - Create New Revision asks when the price list has changed
+PACKAGE 1183 - The price-list question shows what changed, by supplier
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1181.
+One file. Complete replacement. No re-seed. No env changes. Built on 1182.
 
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/estimates.js
 
-On CREATE NEW REVISION the portal compares the prices the latest revision went
-out with against today's price list - every product and labour rate the quote
-uses. If any have changed it asks:
-  "The price list has changed since Rev A - Do you want to update the new quote
-  with the rates from the latest price list?"
-listing each change (e.g. "Alkorplus polythene VCL £248.00 -> £124.00") and the
-quote total at Rev A's prices -> at today's, with:
-  Update to the latest price list - the new revision uses today's rates
-  Keep Rev A's prices - the new revision keeps the prices Rev A went out with
-                        ("Use today's prices" can switch it later)
-  Cancel - no new revision
-If nothing has changed it simply creates the revision. This estimate's own
-Materials-tab rates hold either way.
+(1182 added the question on Create New Revision when the price list has
+changed since the latest revision. This makes it say exactly what changed.)
 
-Checked through the real route: keep -> Rev B carries Rev A's prices; update ->
-Rev B follows today's price list. In a REAL browser (Chromium): Rev A with the
-VCL at £248.00, today £124.00 -> the question with "£248.00 -> £124.00" and
-"£21,594.00 at Rev A's prices -> £20,804.00 at today's"; Keep -> Rev B priced
-as at Rev A ("Rev B started from Rev A, keeping its prices"); Update -> Rev B
-at today's; with no change -> no question. All server routes compile; all 166
-pages pass the browser check. Built from your deployed packages (1022-1181,
-verified against their zips).
+The changed rates are now GROUPED BY SUPPLIER - each supplier a heading with
+how many of its rates changed - and LABOUR RATES as their own group. Each line:
+the product and its CODE, the latest revision's price -> today's, with the
+selling unit (e.g. "/ 150m2"), and the % CHANGE (red up, green down). A product
+with this estimate's own Materials-tab rate is marked "this estimate's own rate
+applies - not affected". Then the quote total at the revision's prices ->
+today's, and Keep / Update / Cancel as before.
+
+Checked in a REAL browser (Chromium), Rev A issued at different prices from
+today's: "Renolit - 1 rate changed: Alkorplus polythene VCL · 81012001 £148.80
+-> £124.00 / 150m2 -16.7%" marked as this estimate's own rate; "Valro - CX
+Plate for PVC 6.5mm Hole £69.89 -> £58.24 / 250nr -16.7%"; "Labour rates - E/O
+for non combustible to area £3.60 -> £4.00 +11.1%"; the totals both ways. All
+166 pages pass the browser check. Built from your deployed packages
+(1022-1182, verified against their zips); the file checked identical to the
+tested version before zipping.

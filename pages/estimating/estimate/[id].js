@@ -169,7 +169,10 @@ export default function EstimatePage() {
       const cur = now[kind] && now[kind][ref]
       if (!cur) continue
       const a = val(was), b = val(cur)
-      if (a != null && b != null && Math.abs(a - b) > 0.0049) out.push({ ref, kind, name: cur.description || was.description || ref, from: a, to: b })
+      // ...with its SUPPLIER, code and selling unit, and whether this estimate has its own rate (1183)
+      if (a != null && b != null && Math.abs(a - b) > 0.0049) out.push({ ref, kind, name: cur.description || was.description || ref, from: a, to: b,
+        supplier: kind === 'labour' ? 'Labour rates' : (cur.supplier || was.supplier || 'No supplier'), code: cur.code || was.code || '',
+        unit: cur.sellingUnit || '', own: kind === 'product' && !!(est.materialRates && est.materialRates[ref] != null) })
     }
     return out
   }
@@ -595,16 +598,25 @@ export default function EstimatePage() {
       {/* THE PRICE LIST HAS CHANGED (1182) - asked on Create New Revision */}
       {priceAsk && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 620, padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 780, padding: 20 }}>
             <strong style={{ fontSize: 16 }}>The price list has changed since Rev {est.revision}</strong>
             <div style={{ fontSize: 13, color: '#444', margin: '8px 0 10px' }}>Do you want to update the new quote with the rates from the latest price list?</div>
-            <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid #f0efec', borderRadius: 8, marginBottom: 10 }}>
-              {priceAsk.changes.map(c => (
-                <div key={c.kind + c.ref} style={{ display: 'flex', gap: 10, fontSize: 12.5, padding: '6px 10px', borderBottom: '1px solid #f4f3f0' }}>
-                  <span style={{ flex: 1 }}>{c.name}{c.kind === 'labour' ? <span style={{ fontSize: 11, color: '#888' }}> (labour)</span> : null}</span>
-                  <span style={{ color: '#888' }}>{money(c.from, { dp: 2 })}</span><span>→</span>
-                  <span style={{ fontWeight: 600, color: c.to > c.from ? '#b42318' : '#15803d' }}>{money(c.to, { dp: 2 })}</span>
-                </div>))}
+            {/* WHAT HAS CHANGED, BY SUPPLIER (1183) */}
+            <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid #f0efec', borderRadius: 8, marginBottom: 10 }}>
+              {[...new Set(priceAsk.changes.map(c => c.supplier))].sort((a, b) => (a === 'Labour rates') - (b === 'Labour rates') || a.localeCompare(b)).map(sup => {
+                const list = priceAsk.changes.filter(c => c.supplier === sup)
+                return <div key={sup}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 10px', background: '#f6f6f4', fontSize: 12.5, fontWeight: 700, position: 'sticky', top: 0 }}><span>{sup}</span><span style={{ fontWeight: 400, color: '#666' }}>{list.length} rate{list.length === 1 ? '' : 's'} changed</span></div>
+                  {list.map(c => { const pct = c.from ? (c.to - c.from) / c.from * 100 : 0
+                    return <div key={c.kind + c.ref} style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 12.5, padding: '6px 10px', borderBottom: '1px solid #f4f3f0' }}>
+                      <span style={{ flex: 1, minWidth: 0 }}>{c.name}{c.code ? <span style={{ fontSize: 11, color: '#999' }}> · {c.code}</span> : null}
+                        {c.own && <div style={{ fontSize: 11, color: '#0f766e' }}>this estimate's own rate applies - not affected</div>}</span>
+                      <span style={{ color: '#888', whiteSpace: 'nowrap' }}>{money(c.from, { dp: 2 })}</span><span>→</span>
+                      <span style={{ fontWeight: 600, whiteSpace: 'nowrap', color: c.to > c.from ? '#b42318' : '#15803d' }}>{money(c.to, { dp: 2 })}{c.unit ? <span style={{ fontWeight: 400, color: '#999', fontSize: 11 }}> / {c.unit}</span> : null}</span>
+                      <span style={{ minWidth: 58, textAlign: 'right', fontSize: 11.5, color: c.to > c.from ? '#b42318' : '#15803d' }}>{pct > 0 ? '+' : ''}{pct.toFixed(1)}%</span>
+                    </div> })}
+                </div>
+              })}
             </div>
             <div style={{ fontSize: 13, marginBottom: 14 }}>Quote total: {money(priceAsk.from, { dp: 2 })} at Rev {est.revision}'s prices → <strong>{money(priceAsk.to, { dp: 2 })}</strong> at today's.</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
