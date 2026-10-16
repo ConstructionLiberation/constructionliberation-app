@@ -215,6 +215,7 @@ export default function EstimatePage() {
     if (tab !== 'quote' || !est) return
     fetch(`/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}`).then(r => r.ok ? r.json() : { documents: [] }).then(d => setQuoteDocsList((d.documents || []).filter(x => !x.itemId).map(x => ({ id: x.id, name: x.name, revision: x.revision || null, href: `/api/estimating/documents?ownerType=estimate&ownerId=${encodeURIComponent(est.id)}&download=${x.id}` })))).catch(() => {})
   }, [tab, est && est.id])
+  const [fromOther, setFromOther] = useState(false)   // the "from another quote" pop-out (1179)
   const [warnList, setWarnList] = useState(null)   // 'cost' | 'qty' - the list behind a red warning (1146)
   const [showChecklist, setShowChecklist] = useState(false)   // re-open a completed checklist (1142)
   const [ckNew, setCkNew] = useState('')
@@ -566,6 +567,8 @@ export default function EstimatePage() {
             ? <span style={{ fontSize: 12.5, color: '#15803d' }}>Rev {quoteRev} sent {new Date(entry.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · <button onClick={() => { if (window.confirm(`Unmark Rev ${quoteRev} as sent?`)) markSent(quoteRev, false) }} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Unmark sent</button></span>
             : <span style={{ fontSize: 12.5, color: '#666' }}>Rev {quoteRev} issued {new Date(snap.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, not sent · <button onClick={() => markSent(quoteRev, true)} disabled={busy} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Mark as sent</button></span>} />
       })()}
+      {fromOther && <OtherQuotePicker currentId={est.id} lib={lib} money={money} onClose={() => setFromOther(false)}
+        onAdd={(rows, from) => { change(e => ({ ...e, rows: placeRows(e.rows, rows) })); setFromOther(false); setIssueMsg(`${rows.filter(r => r.kind === 'item').length} rate build-up${rows.filter(r => r.kind === 'item').length === 1 ? '' : 's'} brought in from "${from}" - without quantities; add them here.`) }} />}
       {revView && <RevisionViewer view={revView} est={est} lib={lib} money={money} onClose={() => setRevView(null)} onEdit={reopenRevision} busy={busy} />}
       {/* LETTER / CLARIFICATIONS FOLLOW THE REVISIONS (1174) - the bar; an earlier
           revision shown AS ISSUED, read-only; the draft (or a revision being
@@ -848,6 +851,7 @@ export default function EstimatePage() {
         <button onClick={() => addRow(sectionRow('New section'))} style={btn}>+ Section header</button>
         <button onClick={() => setPicking(true)} style={btn} disabled={!templates.length} title={templates.length ? '' : 'Upload build-ups first'}>+ Item from build-ups</button>
         <button onClick={() => addRow(uniqueItem(''), true)} style={btn}>+ Unique item</button>
+        <button onClick={() => setFromOther(true)} title="Bring in rate build-ups from another estimate's take-off - without their quantities" style={btn}>+ Rate build-up from another quote</button>
         <button onClick={() => addRow(spacerRow())} style={btn} title="A blank line - layout only, not on the quote">+ Blank line</button>
         {!hasLine && <button onClick={() => change(e => ({ ...e, rows: [...e.rows, lineRow()] }))} style={{ ...btn, marginLeft: 'auto', color: '#6d28d9', borderColor: '#ddd6fe' }} title="Rate-only and optional items - shown and priced, not in the total">+ Below the line</button>}
         {/* + Prelims removed (1147) - prelims come from the rate build-ups like anything else */}
@@ -1386,3 +1390,86 @@ function ChangeList({ changes }) {
 // row of dashes - on the take-off THIN AND LIGHT GREY (1161); the quote keeps its
 // thick charcoal rule (QuoteTabs).
 const ruled = (text, key = '') => String(text ?? '').split(/\n?————————\n?/).flatMap((t, i) => i ? [<span key={`${key}r${i}`} style={{ display: 'block', borderTop: '1px solid #d4d4d0', margin: '5px 0' }} />, t] : [t])
+
+// RATE BUILD-UPS FROM ANOTHER QUOTE (1179) - search the estimates, open one's
+// take-off, tick items (a section ticks those under it) and bring them in WITHOUT
+// QUANTITIES: each with its build-up (lines, sizes, description, variables), unit
+// and own profit %, priced at today's price list here.
+function OtherQuotePicker({ currentId, lib, money, onAdd, onClose }) {
+  const [list, setList] = useState(null)
+  const [q, setQ] = useState('')
+  const [other, setOther] = useState(null)      // { id, est } | { loading } | { error }
+  const [ticked, setTicked] = useState(() => new Set())
+  const [err, setErr] = useState('')
+  useEffect(() => { estApi('/api/estimating/estimates').then(d => setList((d.estimates || []).filter(e => e.id !== currentId))).catch(e => setErr(e.message)) }, [currentId])
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const found = (list || []).filter(e => words.every(w => `${e.title} ${e.dealTitle || ''} ${e.organisation || ''} ${e.quoteRef || ''}`.toLowerCase().includes(w)))
+  async function open(e) {
+    setOther({ loading: true, title: e.title }); setTicked(new Set())
+    try { const d = await estApi(`/api/estimating/estimates?id=${encodeURIComponent(e.id)}`); setOther({ id: e.id, title: e.title, est: d.estimate }) }
+    catch (x) { setOther({ error: x.message, title: e.title }) }
+  }
+  const rows = other && other.est ? (other.est.rows || []).filter(r => r.kind === 'section' || r.kind === 'item') : []
+  const priced = other && other.est ? priceEstimate(other.est, lib).priced : {}
+  const toggle = (id) => setTicked(cur => {
+    const n = new Set(cur), on = !n.has(id), k = rows.findIndex(r => r.id === id), ids = [id]
+    if (k >= 0 && rows[k].kind === 'section') for (let j = k + 1; j < rows.length && rows[j].kind !== 'section'; j++) ids.push(rows[j].id)
+    for (const i of ids) { if (on) n.add(i); else n.delete(i) }
+    return n
+  })
+  const nItems = rows.filter(r => r.kind === 'item' && ticked.has(r.id)).length
+  const nid = (p) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+  const bringIn = () => onAdd(rows.filter(r => ticked.has(r.id)).map(r => {
+    const c = JSON.parse(JSON.stringify(r))
+    if (r.kind === 'section') return { ...c, id: nid('s'), highlight: undefined, note: undefined }
+    return { ...c, id: nid('i'), qty: null, note: undefined, highlight: undefined }
+  }), other.title)
+  const m2 = (v) => v == null ? '' : money(v, { dp: 2 })
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1150, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 20px', overflowY: 'auto' }} onMouseDown={ev => { if (ev.target === ev.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 980, padding: 18, maxHeight: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <strong style={{ fontSize: 16 }}>Rate build-ups from another quote</strong>
+          {other && <button onClick={() => { setOther(null); setTicked(new Set()) }} style={{ ...smallBtn }}>‹ Choose another project</button>}
+          <span style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer', color: '#888' }}>×</button>
+        </div>
+        {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
+        {!other ? <>
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search a project - estimate, CRM deal, customer or quote ref…" style={{ ...inp, marginBottom: 10 }} />
+          <div style={{ overflowY: 'auto', border: '1px solid #f0efec', borderRadius: 8 }}>
+            {!list ? <div style={{ padding: 12, color: '#aaa', fontSize: 13 }}>Loading…</div> : !found.length ? <div style={{ padding: 12, color: '#aaa', fontSize: 13 }}>No project matches.</div>
+              : found.slice(0, 200).map(e => (
+                <button key={e.id} onClick={() => open(e)} style={{ display: 'flex', gap: 12, width: '100%', textAlign: 'left', border: 'none', borderBottom: '1px solid #f4f3f0', background: '#fff', padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit', alignItems: 'baseline' }}>
+                  <span style={{ fontWeight: 600, fontSize: 13.5, flex: 1 }}>{e.title}{e.archived ? <span style={{ marginLeft: 6, fontSize: 10.5, color: '#888', background: '#f4f4f2', borderRadius: 8, padding: '1px 6px' }}>archived</span> : null}</span>
+                  <span style={{ fontSize: 12, color: '#666' }}>{[e.dealTitle, e.organisation].filter(Boolean).join(' · ')}</span>
+                  <span style={{ fontSize: 12, color: '#888', minWidth: 90 }}>{e.quoteRef ? `${e.quoteRef} · ` : ''}Rev {e.revision}</span>
+                  <span style={{ fontSize: 12, color: '#888', minWidth: 60, textAlign: 'right' }}>{e.items || 0} item{e.items === 1 ? '' : 's'}</span>
+                </button>))}
+          </div>
+        </> : other.loading ? <div style={{ color: '#888', fontSize: 13 }}>Opening "{other.title}"…</div> : other.error ? <div style={{ color: '#b42318', fontSize: 13 }}>{other.error}</div> : <>
+          <div style={{ fontSize: 12.5, color: '#555', marginBottom: 8 }}><strong>{other.title}</strong> - tick the rate build-ups to bring in (a section ticks those under it). They come in <strong>without quantities</strong>, priced at today's price list.</div>
+          <div style={{ overflowY: 'auto', border: '1px solid #f0efec', borderRadius: 8, flex: 1 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+              <thead><tr>{['', 'Description', 'Unit', 'Its rate'].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 3 ? 'right' : 'left', position: 'sticky', top: 0, background: '#faf9f7' }}>{h}</th>)}</tr></thead>
+              <tbody>{!rows.length ? <tr><td colSpan={4} style={{ ...td, color: '#aaa' }}>Nothing on this take-off.</td></tr> : rows.map(r => (
+                <tr key={r.id} onClick={() => toggle(r.id)} style={{ cursor: 'pointer', background: ticked.has(r.id) ? '#f0fdfa' : r.kind === 'section' ? '#f6f6f4' : undefined }}>
+                  <td style={{ ...td, width: 26 }}><input type="checkbox" checked={ticked.has(r.id)} onChange={() => toggle(r.id)} onClick={ev => ev.stopPropagation()} /></td>
+                  {r.kind === 'section' ? <td colSpan={3} style={{ ...td, fontWeight: 700, textDecoration: 'underline' }}>{r.title}</td> : <>
+                    <td style={td}><div style={{ fontWeight: 600 }}>{r.description}</div>{r.buildup && (() => { let t = ''; try { t = descriptionText(r.buildup, lib) } catch {} return t ? <div style={{ fontSize: 11.5, color: '#888', marginTop: 2, maxWidth: 620, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.replace(/\n?————————\n?/g, ' / ')}</div> : null })()}</td>
+                    <td style={td}>{r.unit ? BU_UNIT_LABEL[r.unit] : ''}</td>
+                    <td style={tdR}>{m2(priced[r.id] && priced[r.id].rate)}</td></>}
+                </tr>))}</tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+            <span style={{ fontSize: 12.5, color: '#666' }}>{nItems} rate build-up{nItems === 1 ? '' : 's'} ticked</span>
+            <span style={{ flex: 1 }} />
+            <button onClick={onClose} style={smallBtn}>Cancel</button>
+            <button onClick={bringIn} disabled={!nItems} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', opacity: nItems ? 1 : 0.5 }}>Add {nItems || ''} to this take-off</button>
+          </div>
+        </>}
+      </div>
+    </div>
+  )
+}

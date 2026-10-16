@@ -1,25 +1,26 @@
-PACKAGE 1178 - Revert a description to the original; comment lines light yellow
+PACKAGE 1179 - Rate build-ups from another quote
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1177.
+One file. Complete replacement. No re-seed. No env changes. Built on 1178.
 
-  components/BuildupEditor.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/estimating/build-ups.js
 
-REVERT TO ORIGINAL - "↺ Revert to original" in the description's toolbar puts
-back the original description and its variables:
-  - on a take-off item from the build-ups: that build-up's description in the
-    library
-  - on the Build-ups page: the last saved description (undoes unsaved changes)
-It asks first (any descriptions stacked in from other build-ups go too). Not
-shown on unique items - they have no original.
-COMMENT LINES - light yellow: the line pale yellow, its comment box a stronger
-yellow - so comments stand apart from costed lines.
+"+ Rate build-up from another quote" beside "+ Unique item" on the take-off
+opens a pop-out:
+  1 SEARCH a project - estimate name, CRM deal, customer or quote ref
+    (archived ones included; the one you are on left out)
+  2 SELECT it - its take-off shows: sections, items with their description,
+    unit and rate
+  3 TICK one or several (ticking a section ticks the items under it) ->
+    "Add N to this take-off"
+They come in above the line WITHOUT QUANTITIES, each with its build-up (lines,
+sizes, description, variables), unit and own profit %, priced at today's price
+list. Ticked section headers come too. Notes and highlights from the other job
+stay behind; the other quote is not changed.
 
-Checked in a REAL browser (Chromium): on the take-off, Mech fixed single ply's
-edited description reverted to the library's ("Original library description
-for Mech Fixed SP."); a new comment line pale yellow with a yellow box; no
-Revert on a unique item; on the Build-ups page an unsaved change reverted to
-the last saved description; a whole line still fits at 1366px and 1600px. All
-166 pages pass the browser check. Built from your deployed packages
-(1022-1177, verified against their zips).
+Checked in a REAL browser (Chromium): the list without the current estimate;
+"shrews" -> Shrewsbury Library; its take-off with rates (17.54, 16.32);
+ticking "Roof area A" ticked its two items; "Add 2 to this take-off" -> the
+section and both items here, quantities empty (1000 m2 / 200 m2 over there),
+priced 17.54 / 16.32, with the message. All 166 pages pass the browser check.
+Built from your deployed packages (1022-1178, verified against their zips);
+the file checked identical to the tested version before zipping.
