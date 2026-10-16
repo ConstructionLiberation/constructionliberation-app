@@ -37,13 +37,13 @@ export default function PurchaseOrdersPage() {
           <button key={k} onClick={() => setShow(k)} style={{ ...btn, background: show === k ? '#0f766e' : '#fff', color: show === k ? '#fff' : '#333', borderColor: show === k ? '#0f766e' : '#d4d4d0' }}>{l} ({count(k)})</button>)}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search number, project, supplier…" style={{ fontSize: 13, padding: '6px 10px', border: '1px solid #d4d4d0', borderRadius: 7, minWidth: 260 }} />
         <span style={{ flex: 1 }} />
-        {data && data.canSettings && <button onClick={() => setNumbering(true)} style={btn}>PO numbering…</button>}
+        {data && data.canSettings && <button onClick={() => setNumbering(true)} style={btn}>PO settings…</button>}
         <a href="/operations/purchasing/po/new" style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600, textDecoration: 'none' }}>+ New purchase order</a>
       </div>
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
         {!data ? <div style={{ padding: 14, color: '#aaa' }}>Loading…</div> : !shown.length ? <div style={{ padding: 14, color: '#aaa', fontSize: 13 }}>{data.pos.length ? 'Nothing here.' : 'No purchase orders yet.'}</div> : (
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead><tr>{['PO', 'Project', 'Supplier', 'Total (ex VAT)', 'Needed by', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['PO', 'Project', 'Supplier', 'Total (ex VAT)', 'Delivery required', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
             <tbody>{shown.map(p => (
               <tr key={p.id} onClick={() => { window.location.href = `/operations/purchasing/po/${p.id}` }} style={{ cursor: 'pointer' }}>
                 <td style={{ ...td, fontWeight: 700 }}>{p.number}</td>
@@ -73,7 +73,7 @@ function Numbering({ settings, onClose, onSaved }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '60px 20px' }} onMouseDown={ev => { if (ev.target === ev.currentTarget) onClose() }}>
       <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 520, padding: 18 }}>
-        <strong style={{ fontSize: 16 }}>PO numbering</strong>
+        <strong style={{ fontSize: 16 }}>PO settings</strong>
         <div style={{ fontSize: 12.5, color: '#666', margin: '6px 0 12px' }}>App POs start as APP-PO-0001, so they cannot clash with POs still raised in Xero. Once you stop raising POs in Xero, you can carry on Xero's sequence: set Xero's prefix and the number after your last Xero PO.</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <label style={{ ...f, flex: 2 }}>Prefix<input value={s.prefix} onChange={e => setS({ ...s, prefix: e.target.value })} style={inp} /></label>
@@ -81,6 +81,7 @@ function Numbering({ settings, onClose, onSaved }) {
           <label style={{ ...f, flex: 1 }}>Digits<input type="number" min="1" max="8" value={s.width} onChange={e => setS({ ...s, width: e.target.value })} style={inp} /></label>
         </div>
         <div style={{ fontSize: 13, marginTop: 10 }}>The next PO will be <strong>{preview}</strong></div>
+        <label style={{ ...f, marginTop: 14 }}>Order confirmations sent to - the default on every new PO (can be changed on each)<input value={s.confirmationsTo || ''} onChange={e => setS({ ...s, confirmationsTo: e.target.value })} placeholder="orders@yourcompany.co.uk" style={inp} /></label>
         {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 8 }}>{err}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}><button onClick={onClose} style={btn}>Cancel</button><button onClick={save} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>Save</button></div>
       </div>

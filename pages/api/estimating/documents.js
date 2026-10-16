@@ -1,6 +1,8 @@
 import { handleUpload } from '@vercel/blob-private/client'
 import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
+import { canAccessArea } from '../../../lib/roles'
+import { loadPo } from '../../../lib/purchaseOrders'
 import { get } from '../../../lib/db'
 import { resolveMerged } from '../../../lib/crmMerge'
 import { loadEstimate } from '../../../lib/estimateStore'
@@ -24,7 +26,8 @@ export const config = { api: { bodyParser: { sizeLimit: '1mb' } } }
 
 const NOT_READY = 'Private file storage is not set up yet - an admin connects a private Blob store in Vercel (see the deploy notes for 1093).'
 
-async function checkOwner(ownerType, ownerId) {
+async function checkOwner(ownerType, ownerId, role) {
+  if ((ownerType === 'estimate' || ownerType === 'buildup') && !canAccessArea(role, 'estimating')) return { error: 'You do not have access to this.', code: 403 }
   if (ownerType === 'estimate') {
     const est = await loadEstimate(String(ownerId))
     if (!est) return { error: 'That estimate no longer exists', code: 404 }
@@ -40,17 +43,27 @@ async function checkOwner(ownerType, ownerId) {
     if (!items.some(t => t.ref === String(ownerId))) return { error: 'That build-up no longer exists', code: 404 }
     return {}
   }
-  return { error: "ownerType must be 'estimate' or 'buildup'", code: 400 }
+  // A PURCHASE ORDER's documents - its special access routes (1200). Purchasing
+  // area; changeable until the PO is sent, then fixed.
+  if (ownerType === 'po') {
+    if (!canAccessArea(role, 'purchasing')) return { error: 'You do not have access to purchase orders', code: 403 }
+    const po = await loadPo(String(ownerId))
+    if (!po) return { error: 'That purchase order no longer exists', code: 404 }
+    if (po.status !== 'approved') return { error: `${po.number} has been ${po.status} - its documents are fixed`, code: 409, readOnly: true }
+    return { po }
+  }
+  return { error: "ownerType must be 'estimate', 'buildup' or 'po'", code: 400 }
 }
 
 async function handler(req, res) {
-  const session = requireArea(req, res, 'estimating')
+  // estimating for estimates and build-ups; purchasing for purchase orders (1200) - checked per owner
+  const session = requireArea(req, res, ['estimating', 'purchasing'])
   if (!session) return
   const by = session.name || session.email || ''
 
   if (req.method === 'GET') {
     const { ownerType, ownerId, download } = req.query
-    const own = await checkOwner(ownerType, ownerId)
+    const own = await checkOwner(ownerType, ownerId, session.role)
     if (own.error && !own.readOnly) return res.status(own.code).json({ error: own.error })
     const docs = await listDocs(ownerType, String(ownerId))
     // folder: where the browser uploads this owner's files (its company's folder only)
@@ -75,7 +88,7 @@ async function handler(req, res) {
         body: b, request: req, token: privateToken(),
         onBeforeGenerateToken: async (pathname, clientPayload) => {
           const p = JSON.parse(clientPayload || '{}')
-          const own = await checkOwner(p.ownerType, p.ownerId)
+          const own = await checkOwner(p.ownerType, p.ownerId, session.role)
           if (own.error) throw new Error(own.error)
           if (!pathname.startsWith(prefixFor(p.ownerType, p.ownerId))) throw new Error('Wrong folder for this document')
           return { allowedContentTypes: ALLOWED_TYPES, maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true, tokenPayload: JSON.stringify({ by }) }
@@ -86,7 +99,7 @@ async function handler(req, res) {
     } catch (e) { return res.status(400).json({ error: e.message }) }
   }
 
-  const own = await checkOwner(b.ownerType, b.ownerId)
+  const own = await checkOwner(b.ownerType, b.ownerId, session.role)
   if (own.error) return res.status(own.code).json({ error: own.error })
   const ownerId = String(b.ownerId)
   // DOCUMENTS PER REVISION (1169, 1193): each quote document is on a LIST of

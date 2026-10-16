@@ -13,11 +13,12 @@
 import withTenant from '../../lib/withTenant'
 import { requireArea } from '../../lib/portalAuth'
 import { normRole } from '../../lib/roles'
-import { get, set } from '../../lib/db'
+import { get, set, getPortalUsers, getOpsUsers, getProject } from '../../lib/db'
 import { currentTenantId } from '../../lib/tenantContext'
 import { fromEmail, baseUrl, companyName } from '../../lib/tenantSettings'
 import { loadPriceList } from '../../lib/priceListStore'
 import { LINKS_KEY, CONTACTS_KEY } from '../../lib/suppliers'
+import { listDocs } from '../../lib/documentsStore'
 import { listPos, loadPo, savePo, takeNumber, loadPoSettings, savePoSettings, poTotal, lineTotal, createPoToken, deliveryRowFor } from '../../lib/purchaseOrders'
 
 const newId = () => `po${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
@@ -26,7 +27,24 @@ const money = (n) => `£${(Number(n) || 0).toLocaleString('en-GB', { minimumFrac
 const cleanLines = (lines) => (Array.isArray(lines) ? lines : []).map(l => ({ ref: l.ref ? String(l.ref).slice(0, 40) : null, code: String(l.code || '').slice(0, 60),
   description: String(l.description || '').replace(/\s+/g, ' ').trim().slice(0, 300), qty: Number(l.qty) || 0, unit: String(l.unit || '').slice(0, 30), price: Math.round((Number(l.price) || 0) * 10000) / 10000 }))
   .filter(l => l.description && l.qty > 0)
+const yn = (v) => (v === 'yes' || v === 'no') ? v : ''
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const linkFor = (po) => `${baseUrl()}/po?token=${encodeURIComponent(createPoToken({ id: po.id, tenantId: currentTenantId() }))}`
+
+// THE DELIVERY DETAILS in the email (1200)
+function deliveryHtml(po, docs) {
+  const yes = (v) => v === 'yes' ? 'Yes' : v === 'no' ? 'No' : '-'
+  const row = (k, v) => v ? `<tr><td style="padding:4px 12px 4px 0;color:#666;vertical-align:top;white-space:nowrap">${k}</td><td style="padding:4px 0">${v}</td></tr>` : ''
+  return `<table style="border-collapse:collapse;font-size:13px;margin:10px 0">
+    ${row('Delivery required', po.deliveryDate ? `<strong>${esc(new Date(po.deliveryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}</strong>` : '')}
+    ${row('Deliver to', po.deliveryAddress ? esc(po.deliveryAddress).replace(/\n/g, '<br>') : '')}
+    ${row('Moffett offload required', yes(po.moffett))}
+    ${row('Artics permitted', yes(po.artics))}
+    ${row('Special access routes', (po.accessRoutes ? esc(po.accessRoutes).replace(/\n/g, '<br>') : '') + (docs ? `${po.accessRoutes ? '<br>' : ''}<em>${docs} document${docs === 1 ? '' : 's'} on the link below</em>` : ''))}
+    ${row('Site contact', po.siteContact && po.siteContact.name ? `${esc(po.siteContact.name)}${po.siteContact.phone ? ` - ${esc(po.siteContact.phone)}` : ''}` : '')}
+    ${row('Order confirmations to', po.confirmationsTo ? esc(po.confirmationsTo) : '')}
+  </table>`
+}
 
 async function linkedSuppliers() {
   const [links, cache] = await Promise.all([get(LINKS_KEY), get(CONTACTS_KEY)])
@@ -55,6 +73,27 @@ async function handler(req, res) {
       if (!po) return res.status(404).json({ error: 'That purchase order no longer exists' })
       return res.status(200).json({ po, link: linkFor(po) })
     }
+    // THE PROJECT'S ADDRESS from Project Details - the commercial override, else the IHM (1200)
+    if (req.query.project) {
+      let projectAddress = ''
+      try {
+        const { resolveProjectPeople } = await import('../../lib/projectPeople')
+        const [ops, users, settings] = await Promise.all([get('ops:projects'), getPortalUsers(), getProject(String(req.query.project))])
+        const rp = resolveProjectPeople({ jobNo: String(req.query.jobNo || ''), opsProjects: ops || [], users: users || [], override: (settings && settings.peopleOverride) || {} })
+        projectAddress = (rp && rp.projectAddress) || ''
+      } catch {}
+      return res.status(200).json({ projectAddress })
+    }
+    // SITE CONTACTS - every active operative (Site App users) and portal user, with mobile (1200)
+    if (req.query.people) {
+      const [users, ops] = await Promise.all([getPortalUsers().catch(() => []), getOpsUsers().catch(() => [])])
+      const name = (u) => (u.name || [u.firstName, u.lastName].filter(Boolean).join(' ')).trim()
+      const people = [...(ops || []).filter(u => u.active !== false).map(u => ({ name: name(u), phone: u.phone || '', kind: 'Operative' })),
+        ...(users || []).filter(u => u.active !== false).map(u => ({ name: name(u), phone: u.phone || '', kind: 'Portal user' }))]
+        .filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name))
+      const seen = new Set()
+      return res.status(200).json({ people: people.filter(p => { const k = `${p.name.toLowerCase()}|${p.phone}`; if (seen.has(k)) return false; seen.add(k); return true }) })
+    }
     if (req.query.products) {
       const { products } = await loadPriceList()
       const name = String(req.query.products)
@@ -77,9 +116,17 @@ async function handler(req, res) {
     const lines = cleanLines(src.lines)
     if (!lines.length) return res.status(400).json({ error: 'Add at least one line with a quantity' })
     const fields = { projectId: String(src.projectId), jobNo: String(src.jobNo || ''), projectName: String(src.projectName || ''), supplier: sup.name, contactId: sup.contactId, contactName: sup.contactName,
-      lines, deliveryAddress: String(src.deliveryAddress || '').slice(0, 500), deliveryDate: String(src.deliveryDate || '').slice(0, 10), notes: String(src.notes || '').slice(0, 2000) }
+      lines, deliveryAddress: String(src.deliveryAddress || '').slice(0, 500), deliveryDate: String(src.deliveryDate || '').slice(0, 10), notes: String(src.notes || '').slice(0, 2000),
+      // DELIVERY DETAILS (1200)
+      moffett: yn(src.moffett), artics: yn(src.artics), accessRoutes: String(src.accessRoutes || '').slice(0, 2000),
+      siteContact: { name: String((src.siteContact && src.siteContact.name) || '').slice(0, 120), phone: String((src.siteContact && src.siteContact.phone) || '').slice(0, 40) },
+      confirmationsTo: String(src.confirmationsTo || '').trim().slice(0, 200) }
+    if (!fields.moffett) return res.status(400).json({ error: 'Answer "Is Moffett offload required?"' })
+    if (!fields.artics) return res.status(400).json({ error: 'Answer "Are artics permitted?"' })
+    if (fields.confirmationsTo && !EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     if (b.action === 'create') {
       // raised by the office: approved on raising (operatives' POs wait for the CM - stage 2b)
+      if (!fields.confirmationsTo) fields.confirmationsTo = (await loadPoSettings()).confirmationsTo || ''
       const po = { id: newId(), number: await takeNumber(), status: 'approved', ...fields, to: sup.email || '', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [{ at: now, by, what: 'Raised and approved' }] }
       await savePo(po); await setDelivery(po)
       return res.status(200).json({ ok: true, po })
@@ -96,7 +143,7 @@ async function handler(req, res) {
   if (b.action === 'send') {
     if (po.status === 'cancelled') return res.status(409).json({ error: `${po.number} has been cancelled` })
     const to = String(b.to || po.to || '').trim()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ error: 'Enter the supplier\'s email address' })
+    if (!EMAIL.test(to)) return res.status(400).json({ error: 'Enter the supplier\'s email address' })
     const key = process.env.RESEND_API_KEY
     if (!key) return res.status(500).json({ error: 'Email is not set up for the portal' })
     const link = linkFor(po), co = companyName()
@@ -105,15 +152,14 @@ async function handler(req, res) {
       <h2 style="margin:0 0 4px">Purchase order ${esc(po.number)}</h2><p style="margin:0 0 14px;color:#555">${esc(co)} - ${esc([po.jobNo, po.projectName].filter(Boolean).join(' '))}</p>
       ${b.message ? `<p>${esc(b.message).replace(/\n/g, '<br>')}</p>` : ''}
       <p><strong>Please quote ${esc(po.number)} on your invoice.</strong></p>
-      ${po.deliveryDate ? `<p>Required by: <strong>${esc(new Date(po.deliveryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}</strong></p>` : ''}
-      ${po.deliveryAddress ? `<p>Deliver to:<br>${esc(po.deliveryAddress).replace(/\n/g, '<br>')}</p>` : ''}
+      ${deliveryHtml(po, (await listDocs('po', po.id)).length)}
       <table style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0"><tr style="background:#f5f5f3"><th style="padding:6px 8px;text-align:left">Item</th><th style="padding:6px 8px;text-align:right">Qty</th><th style="padding:6px 8px;text-align:right">Price</th><th style="padding:6px 8px;text-align:right">Total</th></tr>${rows}
       <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold">Total (ex VAT)</td><td style="padding:8px;text-align:right;font-weight:bold">${money(poTotal(po))}</td></tr></table>
-      ${po.notes ? `<p style="white-space:pre-wrap">${esc(po.notes)}</p>` : ''}
+      ${po.notes ? `<p><strong>Additional notes</strong><br>${esc(po.notes).replace(/\n/g, '<br>')}</p>` : ''}
       <p><a href="${link}" style="display:inline-block;background:#0f766e;color:#fff;padding:9px 16px;border-radius:6px;text-decoration:none">View or print the purchase order</a></p>
-      <p style="color:#888;font-size:12px">Raised by ${esc(po.raisedBy)}. Reply to this email with any questions.</p></div>`
+      <p style="color:#888;font-size:12px">Raised by ${esc(po.raisedBy)}. ${po.confirmationsTo ? `Please send the order confirmation to ${esc(po.confirmationsTo)} - replying to this email reaches it.` : 'Reply to this email with any questions.'}</p></div>`
     const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: fromEmail('notify'), to: [to], reply_to: po.raisedByEmail || session.email || undefined, subject: `Purchase order ${po.number} - ${co}${po.jobNo ? ` - ${po.jobNo}` : ''}`, html }) })
+      body: JSON.stringify({ from: fromEmail('notify'), to: [to], reply_to: po.confirmationsTo || po.raisedByEmail || session.email || undefined, subject: `Purchase order ${po.number} - ${co}${po.jobNo ? ` - ${po.jobNo}` : ''}`, html }) })
     if (!r.ok) { const t = await r.text().catch(() => ''); return res.status(502).json({ error: `The email could not be sent (${r.status}) ${t.slice(0, 200)}` }) }
     const next = { ...po, status: 'sent', to, sentAt: now, sentTo: to, sentBy: by, history: [...(po.history || []), { at: now, by, what: `Sent to ${to}` }] }
     await savePo(next); await setDelivery(next)

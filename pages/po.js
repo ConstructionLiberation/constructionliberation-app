@@ -7,6 +7,7 @@ import { lineTotal } from '../lib/poShared'
 // No portal login: the signed token in the address names this one PO and the
 // company. A clean, printable page on the company's letterhead.
 const money = (n) => `£${(Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const yes = (v) => v === 'yes' ? 'Yes' : v === 'no' ? 'No' : null
 const long = (s) => s ? new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : ''
 
 export default function SupplierPo() {
@@ -47,9 +48,17 @@ export default function SupplierPo() {
       <div style={{ display: 'flex', gap: 30, flexWrap: 'wrap', marginBottom: 18, fontSize: 13 }}>
         <div><div style={{ color: '#777', fontSize: 11.5 }}>Supplier</div><strong>{po.supplier}</strong></div>
         <div><div style={{ color: '#777', fontSize: 11.5 }}>Project</div><strong>{[po.jobNo, po.projectName].filter(Boolean).join(' ')}</strong></div>
-        {po.deliveryDate && <div><div style={{ color: '#777', fontSize: 11.5 }}>Required by</div><strong>{long(po.deliveryDate)}</strong></div>}
+        {po.deliveryDate && <div><div style={{ color: '#777', fontSize: 11.5 }}>Delivery required</div><strong>{long(po.deliveryDate)}</strong></div>}
       </div>
-      {po.deliveryAddress && <div style={{ marginBottom: 18, fontSize: 13 }}><div style={{ color: '#777', fontSize: 11.5 }}>Deliver to</div><div style={{ whiteSpace: 'pre-line' }}>{po.deliveryAddress}</div></div>}
+      {/* DELIVERY DETAILS (1200) */}
+      <table style={{ borderCollapse: 'collapse', fontSize: 13, marginBottom: 18 }}><tbody>
+        {[['Deliver to', po.deliveryAddress && <span style={{ whiteSpace: 'pre-line' }}>{po.deliveryAddress}</span>],
+          ['Moffett offload required', yes(po.moffett)], ['Artics permitted', yes(po.artics)],
+          ['Special access routes', (po.accessRoutes || (po.documents || []).length) ? <span><span style={{ whiteSpace: 'pre-line' }}>{po.accessRoutes}</span>{(po.documents || []).map(d => <div key={d.id}><a href={`/api/po-view?token=${encodeURIComponent(token)}&doc=${encodeURIComponent(d.id)}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>{d.name}</a></div>)}</span> : null],
+          ['Site contact', po.siteContact && po.siteContact.name ? `${po.siteContact.name}${po.siteContact.phone ? ` - ${po.siteContact.phone}` : ''}` : null],
+          ['Order confirmations to', po.confirmationsTo || null]].filter(([, v]) => v).map(([k, v]) =>
+          <tr key={k}><td style={{ color: '#777', padding: '3px 16px 3px 0', verticalAlign: 'top', whiteSpace: 'nowrap', fontSize: 12 }}>{k}</td><td style={{ padding: '3px 0' }}>{v}</td></tr>)}
+      </tbody></table>
       <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 14 }}>
         <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={{ ...th, textAlign: 'right' }}>Price</th><th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
         <tbody>
@@ -57,8 +66,8 @@ export default function SupplierPo() {
           <tr><td colSpan={3} style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>Total (ex VAT)</td><td style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>{money(po.total)}</td></tr>
         </tbody>
       </table>
-      {po.notes && <div style={{ marginBottom: 14, fontSize: 13, whiteSpace: 'pre-wrap' }}><div style={{ color: '#777', fontSize: 11.5 }}>Notes</div>{po.notes}</div>}
-      <div style={{ borderTop: '1px solid #ddd', paddingTop: 10, fontSize: 13 }}><strong>Please quote {po.number} on your invoice.</strong></div>
+      {po.notes && <div style={{ marginBottom: 14, fontSize: 13, whiteSpace: 'pre-wrap' }}><div style={{ color: '#777', fontSize: 11.5 }}>Additional notes</div>{po.notes}</div>}
+      <div style={{ borderTop: '1px solid #ddd', paddingTop: 10, fontSize: 13 }}><strong>Please quote {po.number} on your invoice.</strong>{po.confirmationsTo ? <> Please send the order confirmation to <strong>{po.confirmationsTo}</strong>.</> : null}</div>
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/router'
 import OperationsShell from '../../../../components/OperationsShell'
 import { lineTotal, poTotal, PO_STATUS } from '../../../../lib/poShared'
+import DocumentsPanel from '../../../../components/DocumentsPanel'
 
 // A PURCHASE ORDER (1199) - new, or one already raised. Raised by the office:
 // approved on raising. Editable until it is sent; then it stands as sent.
@@ -15,7 +16,7 @@ const th = { textAlign: 'left', padding: '7px 8px', fontSize: 11.5, color: '#666
 const td = { padding: '6px 8px', borderBottom: '1px solid #f1f0ec', fontSize: 13, verticalAlign: 'top' }
 const card = { background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 14, marginBottom: 12 }
 const label = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#666' }
-const blank = { projectId: '', jobNo: '', projectName: '', supplier: '', lines: [], deliveryAddress: '', deliveryDate: '', notes: '' }
+const blank = { projectId: '', jobNo: '', projectName: '', supplier: '', lines: [], deliveryAddress: '', deliveryDate: '', notes: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: '' }
 
 export default function PoPage() {
   const router = useRouter()
@@ -29,9 +30,11 @@ export default function PoPage() {
   const [pq, setPq] = useState('')
   const [err, setErr] = useState(''), [msg, setMsg] = useState(''), [busy, setBusy] = useState(false)
   const [sending, setSending] = useState(false)
+  const [people, setPeople] = useState([])      // site contacts: operatives and portal users (1200)
   useEffect(() => {
     if (!id) return
-    call().then(setList).catch(e => setErr(e.message))
+    call().then(d => { setList(d); if (isNew) setPo(x => x && !x.confirmationsTo ? { ...x, confirmationsTo: (d.settings && d.settings.confirmationsTo) || '' } : x) }).catch(e => setErr(e.message))
+    call(null, '?people=1').then(d => setPeople(d.people || [])).catch(() => {})
     Promise.all([fetch('/api/dashboard').then(r => r.json()).catch(() => ({})), fetch('/api/hidden-projects').then(r => r.json()).catch(() => ({}))]).then(([d, h]) => {
       const hidden = new Set((h.hidden || []).map(String))
       setProjects((d.projects || []).filter(p => p.xeroId && !hidden.has(String(p.xeroId))).map(p => ({ id: String(p.xeroId), jobNo: p.jobNo || '', name: p.name || p.projectName || '' })).sort((a, b) => String(b.jobNo).localeCompare(String(a.jobNo), undefined, { numeric: true })))
@@ -46,6 +49,11 @@ export default function PoPage() {
   const addProduct = (p) => setPo(x => ({ ...x, lines: [...x.lines, { ref: p.ref, code: p.code, description: p.description, qty: 1, unit: p.unit, price: p.price ?? 0 }] }))
   const words = pq.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const found = useMemo(() => products.filter(p => words.every(w => `${p.description} ${p.code} ${p.ref} ${p.section}`.toLowerCase().includes(w))).slice(0, 40), [products, pq])
+  // the project's address from Project Details - filled in unless someone has typed their own
+  async function fillAddress(p) {
+    try { const d = await call(null, `?project=${encodeURIComponent(p.id)}&jobNo=${encodeURIComponent(p.jobNo)}`)
+      setPo(x => (!x.deliveryAddress || x.deliveryAddress === x._autoAddress) ? { ...x, deliveryAddress: d.projectAddress || '', _autoAddress: d.projectAddress || '' } : x) } catch {}
+  }
   async function save() {
     setBusy(true); setErr(''); setMsg('')
     try {
@@ -79,7 +87,7 @@ export default function PoPage() {
       <fieldset disabled={!editable} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
         <div style={{ ...card, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <label style={{ ...label, flex: '2 1 280px' }}>Project
-            <select value={po.projectId} onChange={e => { const p = (projects || []).find(x => x.id === e.target.value); setPo(x => ({ ...x, projectId: p ? p.id : '', jobNo: p ? p.jobNo : '', projectName: p ? p.name : '' })) }} style={inp}>
+            <select value={po.projectId} onChange={e => { const p = (projects || []).find(x => x.id === e.target.value); setPo(x => ({ ...x, projectId: p ? p.id : '', jobNo: p ? p.jobNo : '', projectName: p ? p.name : '' })); if (p) fillAddress(p) }} style={inp}>
               <option value="">{projects ? '— choose the project —' : 'Loading projects…'}</option>
               {po.projectId && !(projects || []).some(p => p.id === po.projectId) && <option value={po.projectId}>{po.jobNo} {po.projectName}</option>}
               {(projects || []).map(p => <option key={p.id} value={p.id}>{p.jobNo} {p.name}</option>)}
@@ -89,7 +97,7 @@ export default function PoPage() {
               <option value="">— choose the supplier —</option>
               {((list && list.suppliers) || []).map(s => <option key={s.name} value={s.name}>{s.name}{s.contactName && s.contactName !== s.name ? ` (${s.contactName})` : ''}</option>)}
             </select></label>
-          <label style={{ ...label, flex: '0 1 170px' }}>Needed by<input type="date" value={po.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} style={inp} /></label>
+          <label style={{ ...label, flex: '0 1 170px' }}>Delivery required<input type="date" value={po.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} style={inp} /></label>
         </div>
         <div style={card}>
           <strong style={{ fontSize: 14 }}>Lines</strong>
@@ -124,13 +132,34 @@ export default function PoPage() {
             </div>}
           </div>}
         </div>
-        <div style={{ ...card, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label style={{ ...label, flex: '1 1 300px' }}>Deliver to<textarea value={po.deliveryAddress} onChange={e => set('deliveryAddress', e.target.value)} rows={3} placeholder="Site address and any delivery instructions" style={{ ...inp, resize: 'vertical' }} /></label>
-          <label style={{ ...label, flex: '1 1 300px' }}>Notes to the supplier<textarea value={po.notes} onChange={e => set('notes', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></label>
+        {/* DELIVERY DETAILS (1200) */}
+        <div style={card}>
+          <strong style={{ fontSize: 14 }}>Delivery details</strong>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+            <label style={{ ...label, flex: '1 1 320px' }}>Deliver to <span style={{ color: '#999' }}>(from Project Details - can be changed)</span><textarea value={po.deliveryAddress} onChange={e => set('deliveryAddress', e.target.value)} rows={3} placeholder="Site address" style={{ ...inp, resize: 'vertical' }} /></label>
+            <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <YesNo label="Is Moffett offload required?" value={po.moffett} onChange={v => set('moffett', v)} />
+              <YesNo label="Are artics permitted?" value={po.artics} onChange={v => set('artics', v)} />
+            </div>
+          </div>
+          <label style={{ ...label, marginTop: 10 }}>Any special access routes?<textarea value={po.accessRoutes} onChange={e => set('accessRoutes', e.target.value)} rows={2} placeholder="e.g. Access via the rear service road only - height barrier 3.2m" style={{ ...inp, resize: 'vertical' }} /></label>
+          <div style={{ marginTop: 8 }}>{isNew ? <div style={{ fontSize: 12, color: '#888' }}>Raise the PO to attach documents (access plans, route maps) - the supplier opens them from their link.</div>
+            : <DocumentsPanel ownerType="po" ownerId={po.id} title="Access route documents" readOnly={po.status !== 'approved'} />}</div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
+            <label style={{ ...label, flex: '1 1 300px' }}>Site contact
+              <select value={po.siteContact && po.siteContact.name ? `${po.siteContact.name}|${po.siteContact.phone || ''}` : ''} onChange={e => { const [name, phone] = e.target.value.split('|'); set('siteContact', { name: name || '', phone: phone || '' }) }} style={inp}>
+                <option value="">— choose the site contact —</option>
+                {po.siteContact && po.siteContact.name && !people.some(p => p.name === po.siteContact.name && (p.phone || '') === (po.siteContact.phone || '')) && <option value={`${po.siteContact.name}|${po.siteContact.phone || ''}`}>{po.siteContact.name}{po.siteContact.phone ? ` - ${po.siteContact.phone}` : ''}</option>}
+                {people.map((p, i) => <option key={i} value={`${p.name}|${p.phone || ''}`}>{p.name}{p.phone ? ` - ${p.phone}` : ' - no mobile on record'} ({p.kind})</option>)}
+              </select></label>
+            <label style={{ ...label, flex: '1 1 260px' }}>Order confirmations sent to<input value={po.confirmationsTo} onChange={e => set('confirmationsTo', e.target.value)} placeholder="orders@yourcompany.co.uk" style={inp} /></label>
+          </div>
+          <label style={{ ...label, marginTop: 10 }}>Additional notes<textarea value={po.notes} onChange={e => set('notes', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></label>
         </div>
       </fieldset>
       {editable && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
-        <button onClick={save} disabled={busy || !po.projectId || !po.supplier || !po.lines.length} style={{ ...primary, opacity: (!po.projectId || !po.supplier || !po.lines.length) ? 0.5 : 1 }}>{isNew ? 'Raise purchase order' : 'Save changes'}</button>
+        {(!po.moffett || !po.artics) && <span style={{ fontSize: 12, color: '#b45309', alignSelf: 'center' }}>Answer the Moffett and artics questions</span>}
+        <button onClick={save} disabled={busy || !po.projectId || !po.supplier || !po.lines.length || !po.moffett || !po.artics} style={{ ...primary, opacity: (!po.projectId || !po.supplier || !po.lines.length || !po.moffett || !po.artics) ? 0.5 : 1 }}>{isNew ? 'Raise purchase order' : 'Save changes'}</button>
       </div>}
       {!isNew && (po.history || []).length > 0 && <div style={{ ...card, fontSize: 12.5, color: '#555' }}><strong style={{ fontSize: 13, color: '#333' }}>History</strong>
         {(po.history || []).slice().reverse().map((h, i) => <div key={i} style={{ marginTop: 4 }}>{new Date(h.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {h.by} · {h.what}</div>)}</div>}
@@ -156,4 +185,9 @@ function SendBox({ po, onClose, onSent }) {
       </div>
     </div>
   )
+}
+
+function YesNo({ label, value, onChange }) {
+  const opt = (v, t) => <button type="button" onClick={() => onChange(v)} style={{ fontSize: 12.5, padding: '5px 14px', border: `1px solid ${value === v ? '#0f766e' : '#d4d4d0'}`, background: value === v ? '#0f766e' : '#fff', color: value === v ? '#fff' : '#333', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit' }}>{t}</button>
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: value ? '#333' : '#b45309' }}><span style={{ flex: 1 }}>{label}</span>{opt('yes', 'Yes')}{opt('no', 'No')}</div>
 }
