@@ -26,14 +26,10 @@ const n = (v) => { const x = parseFloat(v); return isNaN(x) ? 0 : x }
 const money = (v) => '£' + n(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
-// The clarifications that go on every variation unless somebody removes them.
-export const BASE_CLARIFICATIONS = [
-  'Attendances: craneage, 110V power, forklift, access, perimeter handrailing, skips, and safety netting by others.',
-  'Included for 1 No. continuous visit.',
-  'Programme periods to be agreed.',
-  'Quantities subject to remeasurement.',
-  'All works to be completed from scaffold or the roof. Rates available if working required from a MEWP.',
-]
+// The clarifications that go on every variation unless somebody removes them -
+// now in lib/variationDefaults.js, shared with variations priced on the take-off (1194).
+import { BASE_CLARIFICATIONS } from '../lib/variationDefaults'
+export { BASE_CLARIFICATIONS }
 
 const letter = (i) => String.fromCharCode(97 + i)   // a, b, c...
 

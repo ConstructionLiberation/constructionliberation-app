@@ -1,37 +1,50 @@
-PACKAGE 1193 - Quote documents carry forward to each new revision, with a tick
-to leave one off (or bring an older one back)
+PACKAGE 1194 - Estimating > Variations: price a variation on the take-off and
+send it to the project's Variation Builder
 
-Six files. Complete replacements. No re-seed. No env changes. Built on 1192.
+Seven files. Complete replacements (two NEW). No re-seed. No env changes.
+Built on 1193.
 
-  lib/quoteDocs.js
-  components/DocumentsPanel.js
-  components/QuoteTabs.js
+  lib/variationDefaults.js               (NEW)
+  pages/estimating/variations.js         (NEW)
+  components/VariationBuilder.js
+  components/EstimatingShell.js
+  pages/estimating/estimates.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
-  pages/api/estimating/documents.js
   pages/api/estimating/estimates.js
 
-CARRIED FORWARD - Create New Revision puts every document on the latest
-revision onto the new one too.
-ONE LIST, A TICK EACH - the Documents tab lists all the quote's documents, each
-with "On Rev B" and the revisions it is on ("Rev A, B"):
-  - untick to leave a document off this revision (it stays on the revisions
-    it went out with)
-  - tick an older revision's document to bring it back
-  - "2 of 3 on Rev B" sums it up
-The quote's Documents page lists what is ticked for the revision being
-viewed. Issued revisions are fixed - only the revision being worked on can be
-changed (the server refuses otherwise). DELETE is offered only for a document
-that has never gone out on an issued revision; otherwise untick it. "Delete
-draft" takes the draft off every document and removes any that were only on
-it. Documents saved the old way (one revision) work as they are.
+A "VARIATIONS" TAB next to Estimates. It lists the variations priced here -
+project, variation, total, and whether it is in the Variation Builder yet
+("V03 - sent 16 Oct at £835.64 - changed since", or "not sent yet").
+"+ ADD NEW VARIATION" - pick the project (the Variation Builder's project
+list, hidden projects left out), say what the variation is, "Open the
+take-off": the SAME take-off sheet as estimates - build-ups, rates, columns,
+Excel, "+ Rate build-up from another quote" and the rest. Its header reads
+"Variation for J228 Farmstead Drive".
+"SEND TO VARIATION BUILDER" (top right) puts it into that project's
+variations, as the builder writes them, as a DRAFT ready for sending:
+  - numbered after the project's existing variations (V01, V02 -> V03)
+  - one builder item per priced take-off item - quantity, unit, its materials
+    and labour, and the mark-up on cost that gives exactly the take-off's
+    total; items without a quantity are left out (and named)
+  - materials / labour / profit totals for the tracker, final account,
+    applications and cash flow, as builder-made variations already are
+  - the sub-contract ref, and this variation's clarifications (or the
+    builder's standard ones)
+Sending again UPDATES the same variation ("Update V03 in the Variation
+Builder") - unless it has been instructed, which the builder locks.
+Variations stay off the Estimates list and do not touch the CRM. The
+builder's standard clarifications now live in lib/variationDefaults.js,
+shared by both.
 
-Checked through the real routes: a document on draft Rev A; Rev A issued ->
-untick refused, delete refused ("went out on Rev A - untick it"); Create New
-Revision -> it and an older-style document carried onto B ([A,B]); untick on
-B -> [A], tick back -> [A,B]; a B-only document deletable; Delete draft B ->
-the B-only one gone, the rest back to [A]. In a REAL browser (Chromium): the
-ticks and "Rev A, B" labels; the spec ticked on and the mark-up off -> Rev B's
-quote page lists the spec and the photo, Rev A's unchanged (mark-up and spec);
-Delete offered only on the Rev-B-only photo. All server routes compile; all
-166 pages pass the browser check. Built from your deployed packages
-(1022-1192, verified against their zips).
+Checked through the real route: J228 with V01, V02 -> a variation created
+(no CRM deal), sent as V03, a draft: materials 460.20 + labour 208.00 +
+profit 167.44 = 835.64 = the take-off total; the Variation Builder's own
+calc() reproduced each item (642.80, 192.84); an unmeasured item skipped and
+named; sent again -> V03 updated (996.34), no V04; V03 instructed -> refused.
+In a REAL browser (Chromium): the Variations tab in the navigation; the list
+of variations only, with their builder status; Add new variation - projects
+(a hidden one left out), J228 picked, titled, created; the variation's
+take-off - "Variation for J228 Farmstead Drive", the same take-off tools,
+Send -> "Sent as V03 ...", then "Update V03 in the Variation Builder". All
+server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1193, verified against their zips).

@@ -1,8 +1,12 @@
 import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
-import { get, set, getPortalUsers } from '../../../lib/db'
+import { get, set, getPortalUsers, getProject, saveProject, getClient } from '../../../lib/db'
+import { invalidateDashboardCache } from '../../../lib/dashboardCache'
+import { isInstructed } from '../../../lib/applications'
+import { BASE_CLARIFICATIONS, toBuilderUnit } from '../../../lib/variationDefaults'
+import { descriptionText } from '../../../lib/buildups'
 import { normRole } from '../../../lib/roles'
-import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf } from '../../../lib/estimate'
+import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf , belowLineIds } from '../../../lib/estimate'
 import { resolveMerged } from '../../../lib/crmMerge'
 import { currentTerms, letterOf, letterProblems, letterProblemText, placeholderValues, clarOf, clarRedCount, docRevisions } from '../../../lib/quoteDocs'
 import { detailsFor } from '../../../lib/estimate'
@@ -83,6 +87,7 @@ async function summaryOf(est, lib) {
   return {
     id: est.id, quoteRef: est.quoteRef || '', revision: est.revision || '', title: est.title || '',
     dealId: est.dealId || null, dealTitle: est.dealTitle || '', organisation: est.organisation || '',
+    variation: est.variation || null,   // a variation priced on the take-off (1194)
     total: Math.round(totals.total * 100) / 100, items: totals.items, updatedAt: est.updatedAt, updatedBy: est.updatedBy,
   }
 }
@@ -130,10 +135,14 @@ async function handler(req, res) {
       if (!d) return res.status(404).json({ error: 'That CRM deal no longer exists' })
       dealTitle = d.title || ''; organisation = (d.fields || {}).organization || ''
     }
+    const vr = b.variation && b.variation.projectId ? { projectId: String(b.variation.projectId), jobNo: String(b.variation.jobNo || '').slice(0, 40), projectName: String(b.variation.projectName || '').slice(0, 200) } : null
+    if (vr && b.dealId) return res.status(400).json({ error: 'A variation belongs to a project, not a CRM deal' })
     const ls = await loadLabourSettings()
     const now = new Date().toISOString()
     const est = {
-      id: newId('e'), dealId: b.dealId || null, dealTitle, organisation, title: String(b.title || dealTitle || 'New estimate').slice(0, 200),
+      id: newId('e'), dealId: b.dealId || null, dealTitle, organisation, title: String(b.title || dealTitle || (vr ? `Variation - ${[vr.jobNo, vr.projectName].filter(Boolean).join(' ')}` : 'New estimate')).slice(0, 200),
+      // A VARIATION (1194) - priced here for a live project, sent to its variation builder
+      ...(vr ? { variation: vr } : {}),
       // Linked: the project and customer details are read LIVE from the deal, never copied.
       quoteRef: '', revision: 'A', header: b.dealId ? {} : { project: String(b.title || '') },
       // Profit and MCD are the estimator's to set; the day rate starts from the company setting.
@@ -283,6 +292,64 @@ async function handler(req, res) {
     if (b.sent && k === est.revisions.length - 1 && !est.reopened && !est.isIssued) next.ratesHeldUntil = null   // a draft after it (older estimates)
     await saveEstimate(next, await summaryOf(next, await loadLib()))
     return res.status(200).json({ ok: true, estimate: next })
+  }
+  // SEND TO THE VARIATION BUILDER (1194) - a variation priced on the take-off goes
+  // into its project's variations as the builder writes them: materials / labour /
+  // profit totals for the tracker and final account, and the builder's own items
+  // (one per take-off item, its materials and labour lines and the mark-up on cost
+  // that gives exactly the take-off's total). A DRAFT, ready for sending; numbered
+  // after the project's existing variations; sending again updates the same one
+  // unless it has been instructed.
+  if (b.action === 'to-builder') {
+    const est = await loadEstimate(String(b.id))
+    if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
+    if (!est.variation || !est.variation.projectId) return res.status(400).json({ error: 'This estimate is not a variation' })
+    const pid = est.variation.projectId
+    const project = (await getProject(pid)) || {}
+    const existing = Array.isArray(project.variations) ? project.variations : []
+    const lib = await loadLib()
+    const { priced, totals } = priceEstimate(est, lib)
+    const below = belowLineIds(est.rows || [])
+    const items = [], skipped = []
+    for (const r of est.rows || []) {
+      if (r.kind !== 'item' || below.has(r.id)) continue
+      const p = priced[r.id] || {}
+      const qty = r.qty == null || r.qty === '' ? null : Number(r.qty)
+      if (!qty || r.rateOnly) { skipped.push(r.description); continue }
+      const mat = (p.materialsRate || 0), lab = (p.labourRate || 0), tot = p.total || 0
+      const cost = (mat + lab) * qty
+      let spec = ''
+      try { spec = r.buildup ? descriptionText(r.buildup, lib).replace(/\n?————————\n?/g, ' / ').replace(/\s+/g, ' ').trim() : '' } catch {}
+      items.push({ description: spec ? `${r.description} - ${spec}` : (r.description || ''), qty, unit: toBuilderUnit(r.unit), markupPct: cost > 0 ? String(Math.round((tot - cost) / cost * 100 * 10000) / 10000) : '0',
+        materials: mat ? [{ description: 'Materials', qty, rate: Math.round(mat * 10000) / 10000, wastePct: 0 }] : [],
+        labour: lab ? [{ description: 'Labour', qty, rate: Math.round(lab * 10000) / 10000 }] : [],
+        materialsTotal: mat * qty, labourTotal: lab * qty, profit: tot - cost, total: tot, rate: tot / qty, fromEstimate: { id: est.id, itemId: r.id } })
+    }
+    if (!items.length) return res.status(400).json({ error: 'Nothing to send - no priced items with a quantity above the line' })
+    const num = (v) => { const m = String(v || '').match(/(\d+)/); return m ? Number(m[1]) : 0 }
+    const prefix = (existing.map(v => String(v.varNumber || '').match(/^([A-Za-z]+)\d/)).find(Boolean) || [null, 'V'])[1]
+    const width = Math.max(2, ...existing.map(v => (String(v.varNumber || '').match(/(\d+)/) || ['', ''])[1].length))
+    const varNumber = est.variation.varNumber && existing.some(v => String(v.varNumber) === String(est.variation.varNumber))
+      ? est.variation.varNumber : `${prefix}${String(Math.max(0, ...existing.map(v => num(v.varNumber))) + 1).padStart(width, '0')}`
+    const prior = existing.find(v => String(v.varNumber) === String(varNumber))
+    if (prior && isInstructed(prior)) return res.status(409).json({ error: `${varNumber} has been instructed in the variation builder - it cannot be changed. Raise a new variation instead.` })
+    const clar = clarOf(est, await get('quote:templates')).filter(x => x.kind !== 'header' && String(x.text || '').trim()).map(x => String(x.text).replace(/\[\/?red\]/g, ''))
+    const cost = totals.materials + totals.labour
+    const record = {
+      varNumber, description: est.title || items[0].description, instructed: false,
+      materials: String(Math.round(totals.materials * 100) / 100), labour: String(Math.round(totals.labour * 100) / 100), profit: String(Math.round((totals.total - cost) * 100) / 100),
+      builder: { ...((prior && prior.builder) || {}), date: new Date().toISOString().slice(0, 10), requestedBy: (prior && prior.builder && prior.builder.requestedBy) || '',
+        subContractRef: project.orderRef || project.customerOrderRef || '', items, clarifications: clar.length ? clar : BASE_CLARIFICATIONS.slice(), photos: (prior && prior.builder && prior.builder.photos) || [],
+        builtAt: Date.now(), raisedAt: (prior && prior.builder && prior.builder.raisedAt) || Date.now(), raisedBy: (prior && prior.builder && prior.builder.raisedBy) || { name: session.name || '', email: session.email || '' },
+        fromEstimate: est.id },
+    }
+    const next = prior ? existing.map(v => String(v.varNumber) === String(varNumber) ? { ...v, ...record } : v) : [...existing, record]
+    await saveProject(pid, { ...project, variations: next })
+    try { await invalidateDashboardCache(await getClient()) } catch {}
+    const at = new Date().toISOString()
+    const saved = { ...est, variation: { ...est.variation, varNumber, sentAt: at, sentTotal: Math.round(totals.total * 100) / 100 }, updatedAt: at, updatedBy: by }
+    await saveEstimate(saved, await summaryOf(saved, lib))
+    return res.status(200).json({ ok: true, estimate: saved, varNumber, total: totals.total, items: items.length, skipped, updated: !!prior })
   }
   // CREATE NEW REVISION (1176) - from the latest revision: an editable copy as the
   // next letter, following today's price list; its rates-held date cleared if the

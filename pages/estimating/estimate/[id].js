@@ -130,6 +130,16 @@ export default function EstimatePage() {
     }
     return out
   }
+  async function sendToBuilder() {
+    if (dirty && !(await flushSave())) { setErr('The estimate could not be saved'); return }
+    setBusy(true); setErr('')
+    try {
+      const d = await estApi(API, { action: 'to-builder', id: est.id })
+      setEst(d.estimate); setBase(d.estimate.updatedAt)
+      setIssueMsg(`${d.updated ? 'Updated' : 'Sent as'} ${d.varNumber} in the Variation Builder for ${est.variation.jobNo} - ${money(d.total, { dp: 2 })}, ${d.items} item${d.items === 1 ? '' : 's'}${d.skipped.length ? `; not sent (no quantity): ${d.skipped.join(', ')}` : ''}. Open the Variation Builder to check it and send it to the customer.`)
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
   async function createNewRevision() {
     const changes = priceListChanges()
     if (changes.length) {
@@ -442,13 +452,15 @@ export default function EstimatePage() {
           <a href="/estimating/estimates" style={{ fontSize: 12.5, color: '#888', textDecoration: 'none' }}>‹ Estimates</a>
           <input value={est.title} onChange={e => change(x => ({ ...x, title: e.target.value }))} style={{ display: 'block', fontSize: 21, fontWeight: 700, border: 'none', padding: '2px 0', fontFamily: 'inherit', minWidth: 420, background: 'transparent' }} />
           <div style={{ fontSize: 12.5, color: '#888' }}>
-            {est.dealId ? (crm && !crm.missing ? <>CRM deal: <a href={`/crm?deal=${crm.dealId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#0f766e' }}>{crm.title}</a>{crm.organisation ? ` · ${crm.organisation}` : ''}</> : <span style={{ color: '#b42318' }}>The linked CRM deal no longer exists</span>) : 'Not linked to a CRM deal'}
+            {est.variation ? <>Variation for <strong>{est.variation.jobNo}</strong> {est.variation.projectName}{est.variation.varNumber ? <> · in the Variation Builder as <strong>{est.variation.varNumber}</strong></> : ''}</> : est.dealId ? (crm && !crm.missing ? <>CRM deal: <a href={`/crm?deal=${crm.dealId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#0f766e' }}>{crm.title}</a>{crm.organisation ? ` · ${crm.organisation}` : ''}</> : <span style={{ color: '#b42318' }}>The linked CRM deal no longer exists</span>) : 'Not linked to a CRM deal'}
             {' · '}Rev {est.revision}{est.isIssued && (() => { const l = (est.revisions || []).slice(-1)[0]; return <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: '#fff', background: '#0f766e', borderRadius: 8, padding: '2px 8px' }}>LATEST REVISION{l && l.sent ? ' · SENT' : ''}</span> })()}{' · '}last saved {new Date(est.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{est.updatedBy ? ` by ${est.updatedBy}` : ''}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {/* DELETE (1177): the DRAFT only (anyone) - or the WHOLE estimate (anyone if never
               issued; admins once issued), which goes to Deleted estimates for 30 days */}
+          {/* SEND TO THE VARIATION BUILDER (1194) */}
+          {est.variation && <button onClick={sendToBuilder} disabled={busy} title="Put this variation into the project's Variation Builder (Commercial), ready for sending" style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>{est.variation.varNumber ? `Update ${est.variation.varNumber} in the Variation Builder` : 'Send to Variation Builder'}</button>}
           {(est.revisions || []).length > 0 && !est.isIssued && !crm?.archived && <button onClick={delDraft} title="Discard this draft - the estimate goes back to the latest issued revision" style={{ ...btn, color: '#b45309', borderColor: '#fcd34d' }}>{est.reopened ? `Discard edits to Rev ${est.reopened.revision}` : `Delete draft Rev ${est.revision}`}</button>}
           {(who.canDelete || !(est.revisions || []).length) ? <button onClick={del} title="Delete the whole estimate - all its revisions" style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete estimate</button>
             : <span style={{ fontSize: 11.5, color: '#999', maxWidth: 220, textAlign: 'right' }}>Only an admin can delete an issued estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}

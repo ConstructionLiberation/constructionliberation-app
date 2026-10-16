@@ -13,6 +13,7 @@ import { canAccessArea } from '../lib/roles'
 // gets a page with nothing in it, not the data.
 export const EST_NAV = [
   { key: 'estimates', label: 'Estimates', href: '/estimating/estimates' },
+  { key: 'variations', label: 'Variations', href: '/estimating/variations' },   // variations priced on the take-off (1194)
   { key: 'price-list', label: 'Price List', href: '/estimating/price-list' },
   { key: 'labour-rates', label: 'Labour Rates', href: '/estimating/labour-rates' },
   { key: 'build-ups', label: 'Rate Build-ups', href: '/estimating/build-ups' },

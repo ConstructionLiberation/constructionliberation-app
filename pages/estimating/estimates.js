@@ -23,7 +23,8 @@ export default function EstimatesPage() {
   async function purge(e) { if (!window.confirm(`Delete "${e.title}" permanently? Its revisions and documents are removed for good - this cannot be undone.`)) return; try { await estApi('/api/estimating/estimates', { action: 'purge', id: e.id }); await loadBin() } catch (x) { setErr(x.message) } }
   const [who, setWho] = useState({ canDelete: false, admins: [] })
 
-  const load = () => estApi('/api/estimating/estimates').then(d => { setList(d.estimates); setWho({ canDelete: !!d.canDelete, admins: d.admins || [] }) }).catch(e => setErr(e.message))
+  // variations have their own list (Estimating > Variations, 1194)
+  const load = () => estApi('/api/estimating/estimates').then(d => { setList((d.estimates || []).filter(e => !e.variation)); setWho({ canDelete: !!d.canDelete, admins: d.admins || [] }) }).catch(e => setErr(e.message))
   useEffect(() => { load() }, [])
   const archivedCount = (list || []).filter(e => e.archived).length
   const shown = useMemo(() => {
