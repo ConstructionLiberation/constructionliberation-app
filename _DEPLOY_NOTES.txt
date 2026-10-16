@@ -1,23 +1,17 @@
-PACKAGE 1184 - This quote's price adjustments moved to the Materials tab
+PACKAGE 1185 - Smaller Terms & Conditions text on the quote
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1183.
+One file. Complete replacement. No re-seed. No env changes. Built on 1184.
 
-  pages/estimating/estimate/[id].js      (folder literally named [id])
+  components/QuoteTabs.js
 
-(Deploy 1182 and 1183 first if you have not already.)
+The Terms & Conditions on the quote are set smaller - text 10px (from 11.5px),
+headings 10.5-11px, slightly tighter spacing and clause indents - so they take
+fewer pages. Still comfortably readable in print. The formatting rules are
+unchanged (CAPITALS / short numbered lines bold; clauses with their number in a
+column; deeper clauses indented).
 
-"This quote's price adjustments" (supplier increases / discounts for this
-quote only) is now at the TOP OF THE MATERIALS TAB, with the materials it
-changes: what is applied is always shown (e.g. "Renolit +10%"), with "Edit" /
-"Add an adjustment" opening the same panel as before. View-only on the latest
-issued revision or an archived estimate.
-The button is gone from the take-off's settings bar; while adjustments apply,
-the take-off shows "Supplier price adjustments apply to this quote (Renolit
-+10%) - see Materials", linking there.
-
-Checked in a REAL browser (Chromium): no adjustments button on the take-off;
-Materials - "none", Add an adjustment -> Renolit +10% -> shown, materials to
-order £2,111.68 -> £2,173.68; the take-off's pointer and its link to
-Materials. All 166 pages pass the browser check. Built from your deployed
-packages (1022-1183, verified against their zips); the file checked identical
+Checked in a REAL browser (Chromium): the condensed Standard Conditions of
+Sale (1,584 words, 15 sections) fit on 2 A4 pages; every page 794 x 1123 with
+nothing cut off. All 166 pages pass the browser check. Built from your deployed
+packages (1022-1184, verified against their zips); the file checked identical
 to the tested version before zipping.

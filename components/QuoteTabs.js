@@ -500,18 +500,18 @@ export const redNodes = (text) => String(text || '').split(/(\[red\][\s\S]*?\[\/
 export function termsLine(raw) {
   const l = String(raw || '')
   const t = l.trim()
-  if (!t) return <div style={{ height: 8 }} />
-  const base = { fontSize: 11.5, lineHeight: 1.5, color: '#333' }
-  if (/^#+\s*/.test(t)) return <div style={{ ...base, fontWeight: 700, fontSize: 12.5, color: '#1a1a19', marginTop: 8 }}>{t.replace(/^#+\s*/, '')}</div>
+  if (!t) return <div style={{ height: 5 }} />
+  const base = { fontSize: 10, lineHeight: 1.42, color: '#333' }   // smaller (1185) - fewer pages
+  if (/^#+\s*/.test(t)) return <div style={{ ...base, fontWeight: 700, fontSize: 11, color: '#1a1a19', marginTop: 6 }}>{t.replace(/^#+\s*/, '')}</div>
   const letters = t.replace(/[^A-Za-z]/g, '')
-  if (letters.length >= 3 && letters === letters.toUpperCase() && t.length <= 90) return <div style={{ ...base, fontWeight: 700, fontSize: 12, color: '#1a1a19', marginTop: 8 }}>{t}</div>
+  if (letters.length >= 3 && letters === letters.toUpperCase() && t.length <= 90) return <div style={{ ...base, fontWeight: 700, fontSize: 10.5, color: '#1a1a19', marginTop: 6 }}>{t}</div>
   const m = t.match(/^(\d+(?:\.\d+)*\.?|\(?[a-z]{1,3}\)|\([ivxlc]+\))\s+(.*)$/i)
   if (m) {
     const num = m[1], text = m[2]
     const top = /^\d+\.?$/.test(num)
-    if (top && text.length <= 70 && !/[.;:]$/.test(text)) return <div style={{ ...base, fontWeight: 700, fontSize: 12, color: '#1a1a19', marginTop: 8, display: 'flex', gap: 8 }}><span style={{ minWidth: 34 }}>{num}</span><span>{text}</span></div>
+    if (top && text.length <= 70 && !/[.;:]$/.test(text)) return <div style={{ ...base, fontWeight: 700, fontSize: 10.5, color: '#1a1a19', marginTop: 6, display: 'flex', gap: 6 }}><span style={{ minWidth: 30 }}>{num}</span><span>{text}</span></div>
     const depth = /^\d/.test(num) ? Math.max(0, num.replace(/\.$/, '').split('.').length - 1) : 2
-    return <div style={{ ...base, display: 'flex', gap: 8, paddingLeft: depth * 18 }}><span style={{ minWidth: 34, flexShrink: 0 }}>{num}</span><span>{text}</span></div>
+    return <div style={{ ...base, display: 'flex', gap: 6, paddingLeft: depth * 16 }}><span style={{ minWidth: 30, flexShrink: 0 }}>{num}</span><span>{text}</span></div>
   }
   return <div style={{ ...base, whiteSpace: 'pre-wrap' }}>{l}</div>
 }
