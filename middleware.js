@@ -184,6 +184,10 @@ export async function middleware(req) {
     // two lines the link bounces to the login page and is useless to them.
     pathname === '/inquery-review' ||
     pathname === '/api/inquery-review' ||
+    // A supplier's purchase order link (1199): no portal account - the signed token
+    // names one PO and the company. Without these the link bounces to the login page.
+    pathname === '/po' ||
+    pathname === '/api/po-view' ||
     pathname === '/api/rams-token' ||
     pathname === '/api/rams-approvals' ||
     pathname === '/api/download' ||

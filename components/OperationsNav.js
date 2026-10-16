@@ -35,8 +35,9 @@ export const navFor = (term) => {
   },
   // PURCHASING (1198) - suppliers linked to Xero now; purchase orders and bill matching to follow
   {
-    key: 'purchasing', label: 'Purchasing', href: '/operations/purchasing/suppliers',
+    key: 'purchasing', label: 'Purchasing', href: '/operations/purchasing/purchase-orders',
     children: [
+      { key: 'purchasing:pos', label: 'Purchase Orders', href: '/operations/purchasing/purchase-orders' },
       { key: 'purchasing:suppliers', label: 'Suppliers', href: '/operations/purchasing/suppliers' },
     ],
   },

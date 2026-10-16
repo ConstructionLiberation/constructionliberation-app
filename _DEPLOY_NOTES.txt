@@ -1,45 +1,52 @@
-PACKAGE 1198 - Purchasing, stage 1: Suppliers linked to Xero contacts
+PACKAGE 1199 - Purchasing, stage 2a: purchase orders raised by the office
 
-Six files. Complete replacements (three NEW). No re-seed. No env changes.
-Built on 1197.
+Ten files. Complete replacements (seven NEW). No re-seed. No env changes.
+Built on 1198.
 
-  lib/suppliers.js                           (NEW)
-  pages/api/suppliers.js                     (NEW)
-  pages/operations/purchasing/suppliers.js   (NEW)
-  lib/xero.js
-  lib/roles.js
+  lib/poShared.js                                   (NEW)
+  lib/purchaseOrders.js                             (NEW)
+  pages/api/purchase-orders.js                      (NEW)
+  pages/api/po-view.js                              (NEW)
+  pages/operations/purchasing/purchase-orders.js    (NEW)
+  pages/operations/purchasing/po/[id].js            (NEW - folder literally named [id])
+  pages/po.js                                       (NEW)
   components/OperationsNav.js
+  middleware.js
+  lib/withTenant.js
 
-OPERATIONS > PURCHASING > SUPPLIERS - every supplier on the price list (with
-its product count), linked to its supplier contact in Xero:
-  - "Refresh from Xero" reads the company's Xero contacts (read-only - the
-    contacts permission the app already has; no reconnect needed)
-  - each unlinked supplier shows its closest Xero contacts: "Link to Fixfast
-    Ltd" in one click, or "Choose..." to search
-  - SEVERAL Xero contacts can be linked to one supplier (duplicates such as
-    "Soprema" / "Soprema UK Ltd"); one is the MAIN contact, for POs
-  - "We raise POs with them" (on by default - POs come from the price list)
-FOR VINAY (the accounts role can open this page):
-  - "Dext should publish as": Awaiting Approval for a PO supplier, else
-    Awaiting Payment
-  - "Set in Dext": he ticks it once the supplier's Dext rule matches; until
-    then it shows "To change in Dext". Only accounts, management and admin can
-    tick it. Changing whether we raise POs with a supplier un-ticks it, so it
-    is set again.
-  - filters: Not linked to Xero / To change in Dext, with counts
-A company with no Xero connected gets the list and a "not connected" note -
-not an error. Nothing is written to Xero.
+OPERATIONS > PURCHASING > PURCHASE ORDERS
+  - the list: number, project, supplier, total, needed by, status, raised;
+    filters Not sent / Sent / Cancelled / All, and search
+  - "+ New purchase order": the project; a supplier LINKED to Xero (Purchasing >
+    Suppliers); lines from THAT supplier's price-list products (search, Add) or
+    free lines - quantity, unit and price editable; deliver-to, needed-by,
+    notes. "Raise purchase order" - raised by the office, so APPROVED on
+    raising (operatives and CM approval: stage 2b)
+  - editable until sent; "Send to supplier": an email from the company's
+    sender, REPLY-TO the person who raised it, with the PO and a link to a
+    printable page - NO LOGIN (the link names this one PO and the company; a
+    year). "Send again", "Copy supplier link", "Cancel PO"
+  - the supplier's page: the company letterhead (logo, address, VAT, company
+    number), the lines and total, delivery, notes, "Please quote <PO> on your
+    invoice", Print / Save as PDF; a cancelled PO says so
+  - every approved PO is added to DELIVERIES (as the Xero ones are), marked
+    sent when sent, and taken off if cancelled before delivery
+  - PO NUMBERING (admins, "PO numbering..."): starts APP-PO-0001 so it cannot
+    clash with POs still raised in Xero; set the prefix and the next number to
+    carry on Xero's sequence once POs are no longer raised there. Numbers are
+    handed out atomically - two people raising at once never share one.
+Nothing is written to Xero (stage 3). A PO is a commitment, never a cost.
 
-AFTER DEPLOYING: open Operations > Purchasing > Suppliers, "Refresh from
-Xero", then link each supplier. Send Vinay the page link
-(/operations/purchasing/suppliers) for the Dext column.
-
-Checked through the real route on the real price list (15 suppliers):
-suggestions Fixfast -> Fixfast Ltd, Renolit -> Renolit UK Limited, Valro ->
-Valro UK, Soprema -> both Soprema UK Ltd and Soprema; Soprema linked to both
-(main Soprema UK Ltd); the Dext tick refused for an estimator, accepted for
-Vinay; not-a-PO-supplier -> Awaiting Payment and un-ticked; no Xero -> "not
-connected". In a REAL browser (Chromium): the list and suggestions, one-click
-link, Choose... with two contacts and a main, Vinay's tick, the filter
-counts. All server routes compile; all pages pass the browser check. Built
-from your deployed packages (1022-1197, verified against their zips).
+Checked through the real routes: an unlinked supplier and an empty PO
+refused; APP-PO-0001 raised and approved, into Deliveries; numbering changed
+by an admin (a non-admin refused) -> PO-0245; changed, then sent - from "Rock
+Roofing <notifications@...>", reply-to the raiser, subject "Purchase order
+APP-PO-0001 - Rock Roofing Ltd - J228", with the link; Deliveries marked
+sent; a change after sending refused; the supplier's link -> that PO only
+(the raiser's email not exposed); a tampered link and another company's site
+refused; a cancelled PO off Deliveries. In a REAL browser (Chromium): the
+list and filters; a new PO - J228, Soprema, "flagon" -> 8 products, one added
+at 10 plus a GBP 45 free line = GBP 4,648.20, raised; the supplier's page
+with the letterhead. All server routes and the middleware compile; all pages
+pass the browser check. Built from your deployed packages (1022-1198,
+verified against their zips).

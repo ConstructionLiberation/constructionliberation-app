@@ -1,0 +1,25 @@
+// THE SUPPLIER'S PURCHASE ORDER PAGE (1199) - no portal login. The token in the
+// address IS the authentication: signed, it names ONE purchase order and the
+// company, and it expires. It returns that PO and the company's letterhead details
+// (logo inline, so the logo route stays behind sign-in) - nothing else.
+import withTenant from '../../lib/withTenant'
+import { currentTenantId } from '../../lib/tenantContext'
+import { companyName } from '../../lib/tenantSettings'
+import { loadCompany, publicCompany } from '../../lib/companyDetails'
+import { loadPo, verifyPoToken, poTotal } from '../../lib/purchaseOrders'
+
+async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+  const t = verifyPoToken(String(req.query.token || ''), currentTenantId())
+  if (!t) return res.status(403).json({ error: 'This link is not valid or has expired. Please ask us for a new one.' })
+  const po = await loadPo(t.id)
+  if (!po) return res.status(404).json({ error: 'This purchase order no longer exists.' })
+  const c = await loadCompany().catch(() => null)
+  const logo = c && typeof c.logo === 'string' && c.logo.startsWith('data:image/') ? c.logo : null
+  return res.status(200).json({
+    po: { number: po.number, status: po.status, jobNo: po.jobNo, projectName: po.projectName, supplier: po.contactName || po.supplier, lines: po.lines, total: poTotal(po),
+      deliveryAddress: po.deliveryAddress, deliveryDate: po.deliveryDate, notes: po.notes, raisedBy: po.raisedBy, raisedAt: po.raisedAt, cancelledAt: po.cancelledAt || null },
+    company: { name: companyName(), ...(publicCompany(c) || {}), logo },
+  })
+}
+export default withTenant(handler)
