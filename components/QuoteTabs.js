@@ -428,7 +428,7 @@ export function QuotePreview({ est, values, priced, totals, templates, money, co
         {actions}
         {/* NO TERMS YET (1175) - on screen only */}
         {!terms && <span style={{ fontSize: 12.5, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '4px 10px' }}>⚠ No Terms &amp; Conditions yet - add them in <a href="/admin/quote-documents" style={{ color: '#b45309', fontWeight: 600 }}>Admin &gt; Quote Documents</a></span>}
-        <button onClick={() => window.print()} style={small}>{draft ? 'Print draft' : 'Print'}</button>
+        <button onClick={() => printQuote(est)} title={`Saves as "${quoteFileTitle(est)}"`} style={small}>{draft ? 'Print draft' : 'Print / Save as PDF'}</button>
         <span style={{ fontSize: 12, color: '#888' }}>Choose "Save as PDF" in the print window. {sheets.length ? `${sheets.length} A4 pages, as they print.` : ''}</span>
       </div>
       {/* the measuring room - off screen, at the page's content width */}
@@ -514,4 +514,20 @@ export function termsLine(raw) {
     return <div style={{ ...base, display: 'flex', gap: 6, paddingLeft: depth * 16 }}><span style={{ minWidth: 30, flexShrink: 0 }}>{num}</span><span>{text}</span></div>
   }
   return <div style={{ ...base, whiteSpace: 'pre-wrap' }}>{l}</div>
+}
+
+// PRINT / SAVE AS PDF WITH A PROPER FILE NAME (1187) - browsers suggest the page's
+// title as the PDF's name, so while printing it is the quote's reference,
+// revision and project: "Q-1042 Rev B - TEST PROJECT - Quotation".
+export function quoteFileTitle(est) {
+  const clean = (x) => String(x || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim()
+  return [clean(est && est.quoteRef), est && est.revision ? `Rev ${clean(est.revision)}` : '', clean(est && est.title), 'Quotation'].filter(Boolean).join(' - ').replace(/^(\S+) - (Rev )/, '$1 $2')
+}
+export function printQuote(est) {
+  const was = document.title
+  document.title = quoteFileTitle(est)
+  const back = () => { document.title = was; window.removeEventListener('afterprint', back) }
+  window.addEventListener('afterprint', back)
+  window.print()
+  setTimeout(back, 1500)   // some browsers do not send afterprint
 }

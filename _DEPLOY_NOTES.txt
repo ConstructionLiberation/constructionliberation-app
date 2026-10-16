@@ -1,27 +1,21 @@
-PACKAGE 1186 - The estimator's email and phone on the letter (from Portal Users)
+PACKAGE 1187 - Downloaded quotes named with the reference and revision
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1185.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1186.
 
-  lib/quoteDocs.js
-  pages/api/estimating/estimates.js
+  components/QuoteTabs.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-Two new letter placeholders: {{estimatorEmail}} "Estimator email" and
-{{estimatorPhone}} "Estimator phone" - buttons in Edit template / Admin > Quote
-Documents. They come from ADMIN > PORTAL USERS: the record of the quote's
-estimator (the person {{estimator}} names - the CRM deal's "Estimator
-responsible"), matched by name (or email). As with the other placeholders, a
-gap shows red (e.g. no phone on that user's Portal Users record, or no
-estimator on the deal) and the quote cannot be sent until it is filled. An
-issued revision keeps the details it went out with.
+When the quote is printed or saved as PDF, the suggested file name is now the
+quote reference, the revision and the project, e.g.
 
-AFTER DEPLOYING: make sure each estimator's Portal Users record has their phone
-number, then add the placeholders to the letter template (e.g. under the
-signature: {{estimator}} / {{estimatorPhone}} · {{estimatorEmail}}).
+  Q-1042 Rev B - Market Drayton Care Home - Quotation.pdf
 
-Checked through the real route: the deal's estimator "James McVeigh" -> his
-Portal Users email and phone; the letter read "James McVeigh / 07700 900123 ·
-james@rockroofing.co.uk" and could be sent; Niall Case (no phone on Portal
-Users) -> "[Estimator phone]" and sending blocked. In a REAL browser
-(Chromium): Edit template shows "Estimator email" and "Estimator phone". All
-server routes compile; all 166 pages pass the browser check. Built from your
-deployed packages (1022-1185, verified against their zips).
+(browsers use the page title as the PDF's name; it is set just while printing,
+then put back). For Print on the Quote tab - the draft, or an earlier revision
+being viewed - and for "Download and mark as sent". The button now reads
+"Print / Save as PDF", and hovering it shows the name it will save as.
+
+Checked in a REAL browser (Chromium): the draft printed as "Q-1042 Rev B -
+Market Drayton Care Home - Quotation"; Rev A, viewed, as "Q-1042 Rev A - ...";
+the page title restored afterwards. All 166 pages pass the browser check.
+Built from your deployed packages (1022-1186, verified against their zips).

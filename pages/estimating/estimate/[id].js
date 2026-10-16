@@ -4,7 +4,7 @@ import EstimatingShell, { ErrorBar, estApi } from '../../../components/Estimatin
 import { useFormat } from '../../../components/TenantProvider'
 import { th, td, tdR, inp, btn } from '../../../components/LibraryParts'
 import BuildupEditor, { pct, fromPct, NumBox } from '../../../components/BuildupEditor'
-import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview, letterNodes, redNodes } from '../../../components/QuoteTabs'
+import { LetterTab, ClarificationsTab, DocumentsTab, QuotePreview, letterNodes, redNodes, printQuote } from '../../../components/QuoteTabs'
 import DocumentsPanel from '../../../components/DocumentsPanel'
 import MaterialsTab from '../../../components/MaterialsTab'
 import LabourRates from '../../../components/LabourRates'
@@ -449,7 +449,7 @@ export default function EstimatePage() {
       if (andPrint) {
         // Print the quote AS ISSUED (that revision, today's date) - then back to the draft.
         setSentView({ revision: d.issued, at: new Date().toISOString(), est: asSent })
-        setTimeout(() => { window.print(); setTimeout(() => setSentView(null), 500) }, 300)
+        setTimeout(() => { printQuote({ ...est, revision: d.issued }); setTimeout(() => setSentView(null), 500) }, 300)
       }
       setIssueMsg(`Rev ${d.issued} issued at ${money(d.total, { dp: 2 })}.${d.crm ? (d.crm.updated ? ` CRM deal value ${money(d.crm.from, { dp: 2 })} → ${money(d.crm.to, { dp: 2 })}.` : d.crm.error ? ` ${d.crm.error}` : ` ${d.crm.note}`) : ''} Now working on Rev ${d.estimate.revision}.`)
       if (d.replaced) setIssueMsg(m => `${m} Rev ${d.issued} replaced - back on the draft.`)
