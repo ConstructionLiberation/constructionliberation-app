@@ -1507,47 +1507,44 @@ function OtherQuotePicker({ currentId, lib, money, onAdd, onClose }) {
 // SHOWING, in the same order; sections, blank lines, the Totals row and the
 // items below the line. The Excel library loads only when it is used.
 async function exportTakeoffFrom(shownCols, est, priced, totals, lib, onError) {
+  // JUST THE SCHEDULE (1192): Item no. (only if the take-off has item numbers),
+  // Description (the item, with its build-up description beneath in the same
+  // cell), Qty, Unit, Rate, Total - sections, the Totals row and below the line.
   try {
     const XLSX = await import('xlsx')
-    const VAL = {
-      matRate: (r, p) => [p.materialsRate], matTotal: (r, p) => [p.materialsTotal],
-      labRate: (r, p) => [p.labourRate], labTotal: (r, p) => [p.labourTotal],
-      profitRate: (r, p) => [p.profitRate], profitTotal: (r, p) => [p.profitTotal],
-      profitPct: (r) => [r.profit == null ? null : r.profit], rateOnly: (r) => [r.rateOnly ? 'Yes' : ''],
-    }
-    const FOOT = { matTotal: [totals.materials], labTotal: [totals.labour], profitTotal: [totals.profit] }
-    const valOf = (c, r, p) => c.supplier ? (() => { const sup = c.key.slice(4), v = (p.bySupplier || {})[sup]; return [v ?? null, v != null && p.qty != null && !p.belowLine ? v * p.qty : null] })() : (VAL[c.key] ? VAL[c.key](r, p) : (c.heads || []).map(() => null))
-    const footOf = (c) => c.supplier ? [null, (totals.bySupplier || {})[c.key.slice(4)] ?? null] : (FOOT[c.key] || (c.heads || []).map(() => null))
-    const head = ['Description', 'Build-up description', 'Qty', 'Unit', 'Rate', 'Total', ...shownCols.flatMap(c => c.heads)]
-    const money = new Set([4, 5]); let col = 6
-    for (const c of shownCols) for (const h of c.heads) { if (c.key !== 'profitPct' && c.key !== 'rateOnly') money.add(col); col++ }
-    const pctCol = head.indexOf('Profit %')
-    const out = [[`${est.quoteRef ? `${est.quoteRef} - ` : ''}${est.title || 'Estimate'} - take-off, Rev ${(est.reopened && est.reopened.revision) || est.revision}`], [`Exported ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`], [], head]
     const rows = est.rows || []
-    const totalsRow = () => ['Totals', '', '', '', '', totals.total, ...shownCols.flatMap(footOf)]
+    const hasNo = rows.some(r => r.kind === 'item' && String(r.itemNo || '').trim())
+    const head = [...(hasNo ? ['Item no.'] : []), 'Description', 'Qty', 'Unit', 'Rate', 'Total']
+    const lead = (cells) => hasNo ? cells : cells.slice(1)
+    const rev = (est.reopened && est.reopened.revision) || est.revision
+    const out = [[`${est.quoteRef ? `${est.quoteRef} - ` : ''}${est.title || 'Estimate'} - take-off, Rev ${rev}`], [`Exported ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`], [], head]
     let past = false
     for (const r of rows) {
-      if (r.kind === 'line') { out.push(totalsRow(), [], ['BELOW THE LINE - rate-only and optional items, not in the total']); past = true; continue }
+      if (r.kind === 'line') { out.push(lead(['', 'Totals', '', '', '', totals.total]), [], lead(['', 'BELOW THE LINE - rate-only and optional items, not in the total'])); past = true; continue }
       if (r.kind === 'spacer') { out.push([]); continue }
-      if (r.kind === 'section') { out.push([r.title || '']); continue }
+      if (r.kind === 'section') { out.push(lead(['', r.title || ''])); continue }
       if (r.kind !== 'item') continue
       const p = priced[r.id] || {}
       let spec = ''
-      try { spec = r.buildup ? descriptionText(r.buildup, lib).replace(/\n?————————\n?/g, ' / ').replace(/\s+/g, ' ').trim() : '' } catch {}
-      out.push([r.description || '', spec, r.rateOnly ? 'TBC' : (r.qty == null || r.qty === '' ? null : Number(r.qty)), BU_UNIT_LABEL[r.unit] || r.unit || '', p.rate ?? null, past || r.rateOnly ? (p.optional && p.total != null ? p.total : null) : (p.total ?? null), ...shownCols.flatMap(c => valOf(c, r, p))])
+      try { spec = r.buildup ? descriptionText(r.buildup, lib).replace(/\n?————————\n?/g, '\n').trim() : '' } catch {}
+      const desc = spec ? `${r.description || ''}\n${spec}` : (r.description || '')
+      out.push(lead([String(r.itemNo || ''), desc, r.rateOnly ? 'TBC' : (r.qty == null || r.qty === '' ? null : Number(r.qty)), BU_UNIT_LABEL[r.unit] || r.unit || '', p.rate ?? null,
+        past || r.rateOnly ? (p.optional && p.total != null ? p.total : null) : (p.total ?? null)]))
     }
-    if (!past) out.push(totalsRow())
+    if (!past) out.push(lead(['', 'Totals', '', '', '', totals.total]))
     const ws = XLSX.utils.aoa_to_sheet(out)
     const range = XLSX.utils.decode_range(ws['!ref'])
+    const moneyCols = new Set([head.length - 2, head.length - 1])
     for (let R = 4; R <= range.e.r; R++) for (let C = 0; C <= range.e.c; C++) {
       const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
-      if (!cell || cell.t !== 'n') continue
-      if (money.has(C)) cell.z = '#,##0.00'; else if (C === pctCol) cell.z = '0.00%'
+      if (!cell) continue
+      if (cell.t === 'n' && moneyCols.has(C)) cell.z = '#,##0.00'
+      if (C === (hasNo ? 1 : 0) && cell.t === 's' && cell.v.includes('\n')) cell.s = { alignment: { wrapText: true, vertical: 'top' } }
     }
-    ws['!cols'] = head.map((h, i) => ({ wch: i === 0 ? 38 : i === 1 ? 60 : Math.max(10, String(h).length + 2) }))
+    ws['!cols'] = head.map(h => ({ wch: h === 'Description' ? 70 : h === 'Item no.' ? 9 : h === 'Qty' || h === 'Unit' ? 9 : 13 }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Take-off')
     const safe = (x) => String(x || '').replace(/[^A-Za-z0-9 _.-]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60)
-    XLSX.writeFile(wb, `${safe(est.quoteRef || est.title || 'estimate')}-Rev-${(est.reopened && est.reopened.revision) || est.revision}-take-off.xlsx`)
+    XLSX.writeFile(wb, `${safe(est.quoteRef || est.title || 'estimate')}-Rev-${rev}-take-off.xlsx`)
   } catch (e) { onError(`Could not export: ${e.message}`) }
 }
