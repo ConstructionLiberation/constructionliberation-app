@@ -1,21 +1,36 @@
-PACKAGE 1187 - Downloaded quotes named with the reference and revision
+PACKAGE 1188 - Faster saving on the Price List (and Labour Rates, Rate
+Build-ups)
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1186.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1187.
 
-  components/QuoteTabs.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
+  lib/libraryStore.js
+  lib/priceListStore.js
+  pages/estimating/price-list.js
+  pages/api/estimating/price-list.js
 
-When the quote is printed or saved as PDF, the suggested file name is now the
-quote reference, the revision and the project, e.g.
+WHY IT WAS SLOW - saving one product rewrote the WHOLE price list: every
+section written again one after another (65 writes on your 64 sections), the
+old copies deleted one after another (64), and then the page downloaded the
+entire list again.
+NOW:
+  - only the section that changed is written; the rest are reused as stored
+    (one product: 2 writes and 1 delete instead of 65 and 64)
+  - writes and clean-up run together rather than one by one (full uploads are
+    quicker too)
+  - after Save the page updates that one row from the reply - no reload of
+    the whole list
+Still safe: each save is a complete new version, switched to only once every
+write has succeeded, so a failed save can never leave half a list. Lists
+saved before this load and save as normal. Labour Rates and Rate Build-ups
+save through the same storage, so they are quicker too.
 
-  Q-1042 Rev B - Market Drayton Care Home - Quotation.pdf
-
-(browsers use the page title as the PDF's name; it is set just while printing,
-then put back). For Print on the Quote tab - the draft, or an earlier revision
-being viewed - and for "Download and mark as sent". The button now reads
-"Print / Save as PDF", and hovering it shows the name it will save as.
-
-Checked in a REAL browser (Chromium): the draft printed as "Q-1042 Rev B -
-Market Drayton Care Home - Quotation"; Rev A, viewed, as "Q-1042 Rev A - ...";
-the page title restored afterwards. All 166 pages pass the browser check.
-Built from your deployed packages (1022-1186, verified against their zips).
+Checked on your converted price list (1,499 products, 64 sections): one save -
+before 65 writes + 64 deletes (311 ms at 2 ms a call), after 2 writes + 1
+delete (18 ms); all 1,499 products present, the edit in place, one copy per
+section, no leftovers; moving a product to another section and deleting one
+both correct; a full upload writes every section; a list saved the old way
+loads and saves. Through the real route: the reply's rate (55 / 20 kg = 2.75)
+matches a full reload. In a REAL browser (Chromium): Save sends one request,
+no reload, the window closes and the row shows the new price. All server
+routes compile; all 166 pages pass the browser check. Built from your deployed
+packages (1022-1187, verified against their zips).

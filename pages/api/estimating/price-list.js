@@ -1,7 +1,7 @@
 import { requireArea } from '../../../lib/portalAuth'
 import withTenant from '../../../lib/withTenant'
 import { parseSheet, diffLists, sectionsOf } from '../../../lib/priceList'
-import { loadPriceList, loadPriceListRaw, replacePriceList, upsertProduct, deleteProduct, loadAdjustments, saveAdjustments } from '../../../lib/priceListStore'
+import { loadPriceList, loadPriceListRaw, replacePriceList, upsertProduct, deleteProduct, loadAdjustments, saveAdjustments, shownProduct } from '../../../lib/priceListStore'
 import { checkAdjustment } from '../../../lib/priceAdjust'
 
 // PRICE LIST API (1083) - Estimating area.
@@ -59,7 +59,8 @@ async function handler(req, res) {
   if (b.action === 'save') {
     const r = await upsertProduct(b.product || {}, { by, originalRef: b.originalRef })
     if (r.errors) return res.status(400).json({ error: r.errors.join('; ') })
-    return res.status(200).json({ ok: true, product: r.product, index: r.index })
+    // the saved product as the list shows it, so the page updates that row only (1188)
+    return res.status(200).json({ ok: true, product: r.product, shown: await shownProduct(r.product), index: r.index })
   }
   if (b.action === 'delete') {
     const r = await deleteProduct(b.ref, { by })

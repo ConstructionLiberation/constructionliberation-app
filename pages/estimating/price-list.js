@@ -192,7 +192,13 @@ export default function PriceListPage() {
       )}
 
       {edit && <ProductEditor edit={edit} sections={sections.map(s => s.name)} m4={m4} onClose={() => setEdit(null)}
-        onSaved={async () => { setEdit(null); await load() }} />}
+        onSaved={async (d, originalRef) => {
+          // SAVED (1188): swap in that one row - no reload of the whole list
+          setEdit(null)
+          if (!d || !d.shown) { await load(); return }
+          setData(x => { const k = String(originalRef || d.shown.ref).toLowerCase(), i = x.products.findIndex(p => p.ref.toLowerCase() === k)
+            return { ...x, index: d.index || x.index, products: i >= 0 ? x.products.map((p, j) => j === i ? d.shown : p) : [...x.products, d.shown] } })
+        }} />}
     </EstimatingShell>
   )
 }
@@ -205,7 +211,7 @@ function ProductEditor({ edit, sections, m4, onClose, onSaved }) {
   const set = (k) => (e) => setP({ ...p, [k]: e.target.value })
   async function save() {
     setBusy(true); setErr('')
-    try { await estApi('/api/estimating/price-list', { action: 'save', product: p, originalRef: edit.originalRef }); await onSaved() } catch (e) { setErr(e.message) }
+    try { const d = await estApi('/api/estimating/price-list', { action: 'save', product: p, originalRef: edit.originalRef }); await onSaved(d, edit.originalRef) } catch (e) { setErr(e.message) }
     setBusy(false)
   }
   async function del() {
