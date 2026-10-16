@@ -334,13 +334,12 @@ async function handler(req, res) {
       ? est.variation.varNumber : `${prefix}${String(Math.max(0, ...existing.map(v => num(v.varNumber))) + 1).padStart(width, '0')}`
     const prior = existing.find(v => String(v.varNumber) === String(varNumber))
     if (prior && isInstructed(prior)) return res.status(409).json({ error: `${varNumber} has been instructed in the variation builder - it cannot be changed. Raise a new variation instead.` })
-    const clar = clarOf(est, await get('quote:templates')).filter(x => x.kind !== 'header' && String(x.text || '').trim()).map(x => String(x.text).replace(/\[\/?red\]/g, ''))
     const cost = totals.materials + totals.labour
     const record = {
       varNumber, description: est.title || items[0].description, instructed: false,
       materials: String(Math.round(totals.materials * 100) / 100), labour: String(Math.round(totals.labour * 100) / 100), profit: String(Math.round((totals.total - cost) * 100) / 100),
       builder: { ...((prior && prior.builder) || {}), date: new Date().toISOString().slice(0, 10), requestedBy: (prior && prior.builder && prior.builder.requestedBy) || '',
-        subContractRef: project.orderRef || project.customerOrderRef || '', items, clarifications: clar.length ? clar : BASE_CLARIFICATIONS.slice(), photos: (prior && prior.builder && prior.builder.photos) || [],
+        subContractRef: project.orderRef || project.customerOrderRef || '', items, clarifications: BASE_CLARIFICATIONS.slice(),   // the Variation Builder's own - not the quote clarifications (1196) photos: (prior && prior.builder && prior.builder.photos) || [],
         builtAt: Date.now(), raisedAt: (prior && prior.builder && prior.builder.raisedAt) || Date.now(), raisedBy: (prior && prior.builder && prior.builder.raisedBy) || { name: session.name || '', email: session.email || '' },
         fromEstimate: est.id },
     }

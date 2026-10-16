@@ -1,27 +1,18 @@
-PACKAGE 1195 - Variations are standalone: sent, closed, back to the list
+PACKAGE 1196 - Variations go to the builder with the builder's own
+clarifications only
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1194.
+One file. Complete replacement. No re-seed. No env changes. Built on 1195.
 
-  pages/estimating/variations.js
-  pages/estimating/estimate/[id].js      (folder literally named [id])
   pages/api/estimating/estimates.js
 
-AFTER "SEND TO VARIATION BUILDER" you go back to the Variations page, which
-confirms it: "Sent as V03 for J228 - £835.64 - it is in the Variation Builder
-ready to send to the customer" (and names any item left out for having no
-quantity).
-A SENT VARIATION IS CLOSED - opened from the list it shows its take-off as
-sent, READ-ONLY, with "SENT AS V03 - any change is made there; for further
-work, raise a new variation" and links to the Variation Builder and back to
-Variations. No "Update" - the server refuses to re-send or change it (only
-its notes save).
-A NEW VARIATION for the same project is always a new, BLANK take-off.
+A variation sent from Estimating > Variations now carries ONLY the Variation
+Builder's own clarifications - the five set up for variations (Attendances...,
+1 No. continuous visit, programme periods, remeasurement, scaffold or roof /
+MEWP) - and none of the quote clarifications. They can be edited in the
+Variation Builder before it goes to the customer, as for any variation.
 
-Checked through the real route: sent as V03; a save afterwards kept the
-take-off (qty 40) and saved only the notes; sending again refused; a new
-variation for J228 started blank and sent as V04 (V01-V04 on the project). In
-a REAL browser (Chromium): Send -> back to the Variations page with the
-confirmation; the sent variation reopened read-only with its banner and no
-Send or Update button; the list "V03 sent 16 Oct". All server routes compile;
-all pages pass the browser check. Built from your deployed packages
-(1022-1194, verified against their zips).
+Checked through the real route: with the company's quote clarifications set
+up (Scaffold by others, Welfare by others, Weekend working excluded...), a
+variation sent as V01 carried exactly the builder's five clarifications and
+none of the quote ones. All server routes compile. Built from your deployed
+packages (1022-1195, verified against their zips).
