@@ -135,8 +135,10 @@ export default function EstimatePage() {
     setBusy(true); setErr('')
     try {
       const d = await estApi(API, { action: 'to-builder', id: est.id })
-      setEst(d.estimate); setBase(d.estimate.updatedAt)
-      setIssueMsg(`${d.updated ? 'Updated' : 'Sent as'} ${d.varNumber} in the Variation Builder for ${est.variation.jobNo} - ${money(d.total, { dp: 2 })}, ${d.items} item${d.items === 1 ? '' : 's'}${d.skipped.length ? `; not sent (no quantity): ${d.skipped.join(', ')}` : ''}. Open the Variation Builder to check it and send it to the customer.`)
+      setDirty(false)
+      // standalone - back to the Variations page (1195)
+      router.push(`/estimating/variations?sent=${encodeURIComponent(d.varNumber)}&job=${encodeURIComponent(est.variation.jobNo || '')}&total=${encodeURIComponent(Math.round(d.total * 100) / 100)}${d.skipped.length ? `&skipped=${encodeURIComponent(d.skipped.join(', '))}` : ''}`)
+      return
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
@@ -249,7 +251,7 @@ export default function EstimatePage() {
   useEffect(() => { estRef.current = est }, [est])
   useEffect(() => { baseRef.current = base }, [base])
   // THE LATEST REVISION is read-only (1176) - only its project notes can change
-  const change = (fn) => { setEst(e => { const n = fn(e); return e && e.isIssued ? { ...e, notes: n.notes } : n }); setDirty(true); seqRef.current++; schedule() }
+  const change = (fn) => { setEst(e => { const n = fn(e); return e && (e.isIssued || (e.variation && e.variation.varNumber)) ? { ...e, notes: n.notes } : n }); setDirty(true); seqRef.current++; schedule() }
   function schedule(ms = AUTOSAVE_MS) {
     clearTimeout(timerRef.current)
     if (stoppedRef.current) return
@@ -460,7 +462,7 @@ export default function EstimatePage() {
           {/* DELETE (1177): the DRAFT only (anyone) - or the WHOLE estimate (anyone if never
               issued; admins once issued), which goes to Deleted estimates for 30 days */}
           {/* SEND TO THE VARIATION BUILDER (1194) */}
-          {est.variation && <button onClick={sendToBuilder} disabled={busy} title="Put this variation into the project's Variation Builder (Commercial), ready for sending" style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>{est.variation.varNumber ? `Update ${est.variation.varNumber} in the Variation Builder` : 'Send to Variation Builder'}</button>}
+          {est.variation && !est.variation.varNumber && <button onClick={sendToBuilder} disabled={busy} title="Put this variation into the project's Variation Builder (Commercial), ready for sending" style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>Send to Variation Builder</button>}
           {(est.revisions || []).length > 0 && !est.isIssued && !crm?.archived && <button onClick={delDraft} title="Discard this draft - the estimate goes back to the latest issued revision" style={{ ...btn, color: '#b45309', borderColor: '#fcd34d' }}>{est.reopened ? `Discard edits to Rev ${est.reopened.revision}` : `Delete draft Rev ${est.revision}`}</button>}
           {(who.canDelete || !(est.revisions || []).length) ? <button onClick={del} title="Delete the whole estimate - all its revisions" style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete estimate</button>
             : <span style={{ fontSize: 11.5, color: '#999', maxWidth: 220, textAlign: 'right' }}>Only an admin can delete an issued estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}
@@ -552,7 +554,7 @@ export default function EstimatePage() {
           </div>
           {showAdj && !ro && <div style={{ marginTop: 8 }}><QuoteAdjustments est={est} change={change} suppliers={[...new Set(lib.products.map(p => p.supplier).filter(Boolean))].sort()} /></div>}
         </div> })()}
-      {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived || !!est.isIssued} />}
+      {tab === 'materials' && <MaterialsTab est={est} lib={lib} change={change} money={money} readOnly={!!crm?.archived || !!est.isIssued || !!(est.variation && est.variation.varNumber)} />}
       {tab === 'quote' && quoteRev === 'draft' && <QuotePreview revBar={revBar} documents={quoteDocsList.filter(d => d.revisions.includes((est.reopened && est.reopened.revision) || est.revision))} est={sentView ? { ...sentView.est, revision: sentView.revision } : est} values={values} priced={priced} totals={totals} templates={quoteDocs} money={money} companyName={companyName} lib={lib} draft={!sentView && !est.isIssued}
         actions={<>
           {!est.isIssued && <button onClick={() => issue(true)} disabled={busy || dirty || s.profit == null || !!crm?.archived} title={dirty ? 'Save first' : s.profit == null ? 'Set the profit % first' : ''} style={{ fontSize: 12.5, padding: '6px 12px', border: 'none', borderRadius: 7, background: '#0f766e', color: '#fff', fontWeight: 600, cursor: 'pointer', opacity: busy || dirty || s.profit == null || crm?.archived ? 0.5 : 1 }}>Download and mark as sent (Rev {est.revision})</button>}
@@ -652,7 +654,16 @@ export default function EstimatePage() {
           <span><strong>Rev {est.revision}</strong> {l.sent ? `- sent ${new Date(l.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : `- issued ${l.issuedAt ? new Date(l.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}, not sent`}. Shown as issued, read-only - at its own prices.</span>
           <button onClick={createNewRevision} disabled={busy} style={{ ...btn, marginLeft: 'auto', background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>Create New Revision</button>
         </div> })()}
-      <fieldset disabled={!!est.isIssued} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
+      {/* A VARIATION SENT TO THE BUILDER (1195) - closed; it carries on there */}
+      {est.variation && est.variation.varNumber && <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#0f766e', borderRadius: 8, padding: '3px 9px' }}>SENT AS {est.variation.varNumber}</span>
+        <span>Sent to the Variation Builder {est.variation.sentAt ? `on ${new Date(est.variation.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''} - shown as sent, read-only. Any change is made there; for further work, raise a new variation.</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <a href="/variation-builder" style={{ ...btn, textDecoration: 'none', color: '#0f766e' }}>Open the Variation Builder</a>
+          <a href="/estimating/variations" style={{ ...btn, textDecoration: 'none' }}>Back to Variations</a>
+        </span>
+      </div>}
+      <fieldset disabled={!!est.isIssued || !!(est.variation && est.variation.varNumber)} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
 
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 12, marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>

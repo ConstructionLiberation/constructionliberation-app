@@ -1,50 +1,27 @@
-PACKAGE 1194 - Estimating > Variations: price a variation on the take-off and
-send it to the project's Variation Builder
+PACKAGE 1195 - Variations are standalone: sent, closed, back to the list
 
-Seven files. Complete replacements (two NEW). No re-seed. No env changes.
-Built on 1193.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1194.
 
-  lib/variationDefaults.js               (NEW)
-  pages/estimating/variations.js         (NEW)
-  components/VariationBuilder.js
-  components/EstimatingShell.js
-  pages/estimating/estimates.js
+  pages/estimating/variations.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
   pages/api/estimating/estimates.js
 
-A "VARIATIONS" TAB next to Estimates. It lists the variations priced here -
-project, variation, total, and whether it is in the Variation Builder yet
-("V03 - sent 16 Oct at £835.64 - changed since", or "not sent yet").
-"+ ADD NEW VARIATION" - pick the project (the Variation Builder's project
-list, hidden projects left out), say what the variation is, "Open the
-take-off": the SAME take-off sheet as estimates - build-ups, rates, columns,
-Excel, "+ Rate build-up from another quote" and the rest. Its header reads
-"Variation for J228 Farmstead Drive".
-"SEND TO VARIATION BUILDER" (top right) puts it into that project's
-variations, as the builder writes them, as a DRAFT ready for sending:
-  - numbered after the project's existing variations (V01, V02 -> V03)
-  - one builder item per priced take-off item - quantity, unit, its materials
-    and labour, and the mark-up on cost that gives exactly the take-off's
-    total; items without a quantity are left out (and named)
-  - materials / labour / profit totals for the tracker, final account,
-    applications and cash flow, as builder-made variations already are
-  - the sub-contract ref, and this variation's clarifications (or the
-    builder's standard ones)
-Sending again UPDATES the same variation ("Update V03 in the Variation
-Builder") - unless it has been instructed, which the builder locks.
-Variations stay off the Estimates list and do not touch the CRM. The
-builder's standard clarifications now live in lib/variationDefaults.js,
-shared by both.
+AFTER "SEND TO VARIATION BUILDER" you go back to the Variations page, which
+confirms it: "Sent as V03 for J228 - £835.64 - it is in the Variation Builder
+ready to send to the customer" (and names any item left out for having no
+quantity).
+A SENT VARIATION IS CLOSED - opened from the list it shows its take-off as
+sent, READ-ONLY, with "SENT AS V03 - any change is made there; for further
+work, raise a new variation" and links to the Variation Builder and back to
+Variations. No "Update" - the server refuses to re-send or change it (only
+its notes save).
+A NEW VARIATION for the same project is always a new, BLANK take-off.
 
-Checked through the real route: J228 with V01, V02 -> a variation created
-(no CRM deal), sent as V03, a draft: materials 460.20 + labour 208.00 +
-profit 167.44 = 835.64 = the take-off total; the Variation Builder's own
-calc() reproduced each item (642.80, 192.84); an unmeasured item skipped and
-named; sent again -> V03 updated (996.34), no V04; V03 instructed -> refused.
-In a REAL browser (Chromium): the Variations tab in the navigation; the list
-of variations only, with their builder status; Add new variation - projects
-(a hidden one left out), J228 picked, titled, created; the variation's
-take-off - "Variation for J228 Farmstead Drive", the same take-off tools,
-Send -> "Sent as V03 ...", then "Update V03 in the Variation Builder". All
-server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1193, verified against their zips).
+Checked through the real route: sent as V03; a save afterwards kept the
+take-off (qty 40) and saved only the notes; sending again refused; a new
+variation for J228 started blank and sent as V04 (V01-V04 on the project). In
+a REAL browser (Chromium): Send -> back to the Variations page with the
+confirmation; the sent variation reopened read-only with its banner and no
+Send or Update button; the list "V03 sent 16 Oct". All server routes compile;
+all pages pass the browser check. Built from your deployed packages
+(1022-1194, verified against their zips).

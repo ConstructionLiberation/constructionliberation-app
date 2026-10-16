@@ -14,6 +14,8 @@ export default function VariationsPage() {
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
+  // just sent from a variation's take-off (1195)
+  const sent = router.query && router.query.sent ? { v: String(router.query.sent), job: String(router.query.job || ''), total: Number(router.query.total || 0), skipped: String(router.query.skipped || '') } : null
   useEffect(() => { estApi('/api/estimating/estimates').then(d => setList((d.estimates || []).filter(e => e.variation))).catch(e => setErr(e.message)) }, [])
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const shown = useMemo(() => (list || []).filter(e => words.every(w => `${e.title} ${e.variation.jobNo} ${e.variation.projectName} ${e.variation.varNumber || ''}`.toLowerCase().includes(w)))
@@ -22,6 +24,9 @@ export default function VariationsPage() {
     <EstimatingShell active="variations" title="Variations">
       <Heading title="Variations" sub="Priced on the take-off sheet, then sent to the project's Variation Builder ready for sending." />
       <ErrorBar err={err} />
+      {sent && <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#0f766e' }}>
+        <strong>Sent as {sent.v}</strong>{sent.job ? ` for ${sent.job}` : ''} - {money(sent.total, { dp: 2 })} - it is in the <a href="/variation-builder" style={{ color: '#0f766e' }}>Variation Builder</a> ready to send to the customer.{sent.skipped ? ` Not sent (no quantity): ${sent.skipped}.` : ''}
+      </div>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search project, job number or variation…" style={{ ...inp, maxWidth: 380 }} />
         <span style={{ flex: 1 }} />
@@ -37,7 +42,7 @@ export default function VariationsPage() {
                 <td style={{ ...td, fontWeight: 600 }}>{e.title}</td>
                 <td style={tdR}>{money(e.total, { dp: 2 })}</td>
                 <td style={td}>{e.variation.varNumber
-                  ? <span><span style={{ fontWeight: 700, color: '#0f766e' }}>{e.variation.varNumber}</span> <span style={{ color: '#888', fontSize: 12 }}>sent {new Date(e.variation.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} at {money(e.variation.sentTotal, { dp: 2 })}{Math.abs((e.variation.sentTotal || 0) - (e.total || 0)) > 0.005 ? ' - changed since' : ''}</span></span>
+                  ? <span><span style={{ fontWeight: 700, color: '#0f766e' }}>{e.variation.varNumber}</span> <span style={{ color: '#888', fontSize: 12 }}>sent {new Date(e.variation.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span></span>
                   : <span style={{ color: '#b45309', fontSize: 12 }}>not sent yet</span>}</td>
                 <td style={{ ...td, color: '#888', fontSize: 12, whiteSpace: 'nowrap' }}>{e.updatedAt ? new Date(e.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}{e.updatedBy ? ` · ${e.updatedBy}` : ''}</td>
               </tr>))}</tbody>

@@ -166,7 +166,7 @@ async function handler(req, res) {
     }
     // THE LATEST REVISION, AS ISSUED (1176) is read-only - only the project notes
     // can be saved on it. "Create New Revision" starts the next one.
-    if (existing.isIssued) {
+    if (existing.isIssued || (existing.variation && existing.variation.varNumber)) {   // ...or a variation SENT to the builder (1195)
       const saved = { ...existing, notes: String(est.notes ?? existing.notes ?? ''), updatedAt: new Date().toISOString(), updatedBy: by }
       await saveEstimate(saved, await summaryOf(saved))
       return res.status(200).json({ ok: true, estimate: saved })
@@ -304,6 +304,7 @@ async function handler(req, res) {
     const est = await loadEstimate(String(b.id))
     if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
     if (!est.variation || !est.variation.projectId) return res.status(400).json({ error: 'This estimate is not a variation' })
+    if (est.variation.varNumber) return res.status(409).json({ error: `This variation was sent to the Variation Builder as ${est.variation.varNumber} - it carries on there. Raise a new variation for further work.` })
     const pid = est.variation.projectId
     const project = (await getProject(pid)) || {}
     const existing = Array.isArray(project.variations) ? project.variations : []
