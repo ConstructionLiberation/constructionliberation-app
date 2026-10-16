@@ -1,36 +1,20 @@
-PACKAGE 1188 - Faster saving on the Price List (and Labour Rates, Rate
-Build-ups)
+PACKAGE 1189 - Export a previous revision's take-off to Excel
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1187.
+One file. Complete replacement. No re-seed. No env changes. Built on 1188.
 
-  lib/libraryStore.js
-  lib/priceListStore.js
-  pages/estimating/price-list.js
-  pages/api/estimating/price-list.js
+  pages/estimating/estimate/[id].js      (folder literally named [id])
 
-WHY IT WAS SLOW - saving one product rewrote the WHOLE price list: every
-section written again one after another (65 writes on your 64 sections), the
-old copies deleted one after another (64), and then the page downloaded the
-entire list again.
-NOW:
-  - only the section that changed is written; the rest are reused as stored
-    (one product: 2 writes and 1 delete instead of 65 and 64)
-  - writes and clean-up run together rather than one by one (full uploads are
-    quicker too)
-  - after Save the page updates that one row from the reply - no reload of
-    the whole list
-Still safe: each save is a complete new version, switched to only once every
-write has succeeded, so a failed save can never leave half a list. Lists
-saved before this load and save as normal. Labour Rates and Rate Build-ups
-save through the same storage, so they are quicker too.
+The revision window (Take-off > Revisions > View) now has "⬇ Export to Excel":
+it downloads THAT REVISION'S take-off exactly as issued - its own rows,
+quantities, descriptions and prices (the figures stored when it was issued) -
+with the same columns you have showing on the take-off. The file is named
+after the revision, e.g. "Q-1042-Rev-A-take-off.xlsx", and headed "... take-off,
+Rev A". The take-off's own Export (the draft / current revision) works as
+before.
 
-Checked on your converted price list (1,499 products, 64 sections): one save -
-before 65 writes + 64 deletes (311 ms at 2 ms a call), after 2 writes + 1
-delete (18 ms); all 1,499 products present, the edit in place, one copy per
-section, no leftovers; moving a product to another section and deleting one
-both correct; a full upload writes every section; a list saved the old way
-loads and saves. Through the real route: the reply's rate (55 / 20 kg = 2.75)
-matches a full reload. In a REAL browser (Chromium): Save sends one request,
-no reload, the window closes and the row shows the new price. All server
-routes compile; all 166 pages pass the browser check. Built from your deployed
-packages (1022-1187, verified against their zips).
+Checked in a REAL browser (Chromium), draft Rev B at 1000 m2 and Rev A issued
+at 900 m2: the take-off's Export -> "Q-1042-Rev-B-take-off.xlsx", 1000 m2,
+total 20,804.00; Rev A's window -> "Q-1042-Rev-A-take-off.xlsx", headed Rev A,
+900 m2, total 19,050.00. All 166 pages pass the browser check. Built from your
+deployed packages (1022-1188, verified against their zips); the file checked
+identical to the tested version before zipping.

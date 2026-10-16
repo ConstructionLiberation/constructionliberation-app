@@ -59,55 +59,9 @@ export default function EstimatePage() {
   const toggleCol = (k) => setCols(c => { const n = new Set(c); n.has(k) ? n.delete(k) : n.add(k); try { localStorage.setItem('takeoff:cols', JSON.stringify([...n])) } catch {}; return n })
   // The optional columns: cost rates and totals, profit, the item's own
   // profit % and rate only, and one per supplier WITH a budget here.
-  // EXPORT THE TAKE-OFF TO EXCEL (1170) - as it is on screen: Description (and
-  // its build-up description), Qty, Unit, Rate, Total, then the optional columns
-  // SHOWING, in the same order; sections, blank lines, the Totals row and the
-  // items below the line. The Excel library loads only when it is used.
-  async function exportTakeoff(shownCols) {
-    try {
-      const XLSX = await import('xlsx')
-      const VAL = {
-        matRate: (r, p) => [p.materialsRate], matTotal: (r, p) => [p.materialsTotal],
-        labRate: (r, p) => [p.labourRate], labTotal: (r, p) => [p.labourTotal],
-        profitRate: (r, p) => [p.profitRate], profitTotal: (r, p) => [p.profitTotal],
-        profitPct: (r) => [r.profit == null ? null : r.profit], rateOnly: (r) => [r.rateOnly ? 'Yes' : ''],
-      }
-      const FOOT = { matTotal: [totals.materials], labTotal: [totals.labour], profitTotal: [totals.profit] }
-      const valOf = (c, r, p) => c.supplier ? (() => { const sup = c.key.slice(4), v = (p.bySupplier || {})[sup]; return [v ?? null, v != null && p.qty != null && !p.belowLine ? v * p.qty : null] })() : (VAL[c.key] ? VAL[c.key](r, p) : (c.heads || []).map(() => null))
-      const footOf = (c) => c.supplier ? [null, (totals.bySupplier || {})[c.key.slice(4)] ?? null] : (FOOT[c.key] || (c.heads || []).map(() => null))
-      const head = ['Description', 'Build-up description', 'Qty', 'Unit', 'Rate', 'Total', ...shownCols.flatMap(c => c.heads)]
-      const money = new Set([4, 5]); let col = 6
-      for (const c of shownCols) for (const h of c.heads) { if (c.key !== 'profitPct' && c.key !== 'rateOnly') money.add(col); col++ }
-      const pctCol = head.indexOf('Profit %')
-      const out = [[`${est.quoteRef ? `${est.quoteRef} - ` : ''}${est.title || 'Estimate'} - take-off, Rev ${(est.reopened && est.reopened.revision) || est.revision}`], [`Exported ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`], [], head]
-      const rows = est.rows || []
-      const totalsRow = () => ['Totals', '', '', '', '', totals.total, ...shownCols.flatMap(footOf)]
-      let past = false
-      for (const r of rows) {
-        if (r.kind === 'line') { out.push(totalsRow(), [], ['BELOW THE LINE - rate-only and optional items, not in the total']); past = true; continue }
-        if (r.kind === 'spacer') { out.push([]); continue }
-        if (r.kind === 'section') { out.push([r.title || '']); continue }
-        if (r.kind !== 'item') continue
-        const p = priced[r.id] || {}
-        let spec = ''
-        try { spec = r.buildup ? descriptionText(r.buildup, lib).replace(/\n?————————\n?/g, ' / ').replace(/\s+/g, ' ').trim() : '' } catch {}
-        out.push([r.description || '', spec, r.rateOnly ? 'TBC' : (r.qty == null || r.qty === '' ? null : Number(r.qty)), BU_UNIT_LABEL[r.unit] || r.unit || '', p.rate ?? null, past || r.rateOnly ? (p.optional && p.total != null ? p.total : null) : (p.total ?? null), ...shownCols.flatMap(c => valOf(c, r, p))])
-      }
-      if (!past) out.push(totalsRow())
-      const ws = XLSX.utils.aoa_to_sheet(out)
-      const range = XLSX.utils.decode_range(ws['!ref'])
-      for (let R = 4; R <= range.e.r; R++) for (let C = 0; C <= range.e.c; C++) {
-        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
-        if (!cell || cell.t !== 'n') continue
-        if (money.has(C)) cell.z = '#,##0.00'; else if (C === pctCol) cell.z = '0.00%'
-      }
-      ws['!cols'] = head.map((h, i) => ({ wch: i === 0 ? 38 : i === 1 ? 60 : Math.max(10, String(h).length + 2) }))
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Take-off')
-      const safe = (x) => String(x || '').replace(/[^A-Za-z0-9 _.-]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60)
-      XLSX.writeFile(wb, `${safe(est.quoteRef || est.title || 'estimate')}-Rev-${(est.reopened && est.reopened.revision) || est.revision}-take-off.xlsx`)
-    } catch (e) { setErr(`Could not export: ${e.message}`) }
-  }
+  // EXPORT THE TAKE-OFF TO EXCEL (1170) - this draft; a revision's own, from its window (1189)
+  async function exportTakeoff(shownCols) { return exportTakeoffFrom(shownCols, est, priced, totals, lib, setErr) }
+  const exportRevision = (snapEst, pricedS, totalsS, libS) => exportTakeoffFrom(takeoffColumns(snapEst.settings || {}, totalsS).filter(c => cols.has(c.key)), snapEst, pricedS, totalsS, libS, setErr)
   function takeoffColumns(s, totals) {
     // The supporting figures recede - smaller and grey - so Rate and Total lead (1099).
     const R = (k, v) => <td key={k} style={{ ...tdR, color: '#9a9a96', fontSize: 11.5 }}>{m2(v)}</td>
@@ -640,7 +594,7 @@ export default function EstimatePage() {
       )}
       {fromOther && <OtherQuotePicker currentId={est.id} lib={lib} money={money} onClose={() => setFromOther(false)}
         onAdd={(rows, from) => { change(e => ({ ...e, rows: placeRows(e.rows, rows) })); setFromOther(false); setIssueMsg(`${rows.filter(r => r.kind === 'item').length} rate build-up${rows.filter(r => r.kind === 'item').length === 1 ? '' : 's'} brought in from "${from}" - without quantities; add them here.`) }} />}
-      {revView && <RevisionViewer view={revView} est={est} lib={lib} money={money} onClose={() => setRevView(null)} onEdit={reopenRevision} busy={busy} />}
+      {revView && <RevisionViewer view={revView} est={est} lib={lib} money={money} onClose={() => setRevView(null)} onEdit={reopenRevision} busy={busy} onExport={exportRevision} />}
       {/* LETTER / CLARIFICATIONS FOLLOW THE REVISIONS (1174) - the bar; an earlier
           revision shown AS ISSUED, read-only; the draft (or a revision being
           edited) is where the new revision's are amended */}
@@ -1366,7 +1320,7 @@ const warnBtn = { color: '#dc2626', fontWeight: 700, fontSize: 15, background: '
 // estimate's notes. Figures stored at issue are used; a revision issued before
 // they were stored is priced at today's prices, and says so. EDIT only for the
 // latest revision, and only if it has not been sent.
-function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy }) {
+function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy, onExport }) {
   const snap = view.snap
   const m2 = (v) => v == null ? '' : money(v, { dp: 2 })
   const HLC = { yellow: '#fef9c3', orange: '#ffedd5', red: '#fee2e2', green: '#dcfce7' }
@@ -1388,6 +1342,7 @@ function RevisionViewer({ view, est, lib, money, onClose, onEdit, busy }) {
         <span style={{ fontSize: 12.5, color: '#666' }}>Issued {new Date(snap.issuedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} by {snap.issuedBy}{snap.note ? ` - "${snap.note}"` : ''}</span>
         {entry.sent ? <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 8, padding: '2px 8px' }}>SENT</span> : <span style={{ fontSize: 11, color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '2px 8px' }}>not sent</span>}
         <span style={{ flex: 1 }} />
+        {onExport && <button onClick={() => onExport({ ...e, revision: snap.revision, reopened: undefined, priceLock: snap.priceLib || e.priceLock || null }, priced, totals, libR)} title={`Download Rev ${snap.revision}'s take-off as issued`} style={{ ...btn }}>⬇ Export to Excel</button>}
         {canEdit ? <button onClick={() => onEdit(snap.revision)} disabled={busy} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e' }}>Edit Rev {snap.revision}</button> : <span style={{ fontSize: 12, color: '#888', maxWidth: 380 }}>{why}</span>}
       </div>
       {!snap.priced && <div style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 10px', marginBottom: 8 }}>This revision was issued before figures were stored with it, so rates and totals are worked out at today's prices. Issued total: {m2(snap.total)}.</div>}
@@ -1542,4 +1497,56 @@ function OtherQuotePicker({ currentId, lib, money, onAdd, onClose }) {
       </div>
     </div>
   )
+}
+
+// ----------------------------------------------------------------------------
+// THE TAKE-OFF TO EXCEL from ANY revision's data (1170, 1189)
+// EXPORT THE TAKE-OFF TO EXCEL (1170) - as it is on screen: Description (and
+// its build-up description), Qty, Unit, Rate, Total, then the optional columns
+// SHOWING, in the same order; sections, blank lines, the Totals row and the
+// items below the line. The Excel library loads only when it is used.
+async function exportTakeoffFrom(shownCols, est, priced, totals, lib, onError) {
+  try {
+    const XLSX = await import('xlsx')
+    const VAL = {
+      matRate: (r, p) => [p.materialsRate], matTotal: (r, p) => [p.materialsTotal],
+      labRate: (r, p) => [p.labourRate], labTotal: (r, p) => [p.labourTotal],
+      profitRate: (r, p) => [p.profitRate], profitTotal: (r, p) => [p.profitTotal],
+      profitPct: (r) => [r.profit == null ? null : r.profit], rateOnly: (r) => [r.rateOnly ? 'Yes' : ''],
+    }
+    const FOOT = { matTotal: [totals.materials], labTotal: [totals.labour], profitTotal: [totals.profit] }
+    const valOf = (c, r, p) => c.supplier ? (() => { const sup = c.key.slice(4), v = (p.bySupplier || {})[sup]; return [v ?? null, v != null && p.qty != null && !p.belowLine ? v * p.qty : null] })() : (VAL[c.key] ? VAL[c.key](r, p) : (c.heads || []).map(() => null))
+    const footOf = (c) => c.supplier ? [null, (totals.bySupplier || {})[c.key.slice(4)] ?? null] : (FOOT[c.key] || (c.heads || []).map(() => null))
+    const head = ['Description', 'Build-up description', 'Qty', 'Unit', 'Rate', 'Total', ...shownCols.flatMap(c => c.heads)]
+    const money = new Set([4, 5]); let col = 6
+    for (const c of shownCols) for (const h of c.heads) { if (c.key !== 'profitPct' && c.key !== 'rateOnly') money.add(col); col++ }
+    const pctCol = head.indexOf('Profit %')
+    const out = [[`${est.quoteRef ? `${est.quoteRef} - ` : ''}${est.title || 'Estimate'} - take-off, Rev ${(est.reopened && est.reopened.revision) || est.revision}`], [`Exported ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`], [], head]
+    const rows = est.rows || []
+    const totalsRow = () => ['Totals', '', '', '', '', totals.total, ...shownCols.flatMap(footOf)]
+    let past = false
+    for (const r of rows) {
+      if (r.kind === 'line') { out.push(totalsRow(), [], ['BELOW THE LINE - rate-only and optional items, not in the total']); past = true; continue }
+      if (r.kind === 'spacer') { out.push([]); continue }
+      if (r.kind === 'section') { out.push([r.title || '']); continue }
+      if (r.kind !== 'item') continue
+      const p = priced[r.id] || {}
+      let spec = ''
+      try { spec = r.buildup ? descriptionText(r.buildup, lib).replace(/\n?————————\n?/g, ' / ').replace(/\s+/g, ' ').trim() : '' } catch {}
+      out.push([r.description || '', spec, r.rateOnly ? 'TBC' : (r.qty == null || r.qty === '' ? null : Number(r.qty)), BU_UNIT_LABEL[r.unit] || r.unit || '', p.rate ?? null, past || r.rateOnly ? (p.optional && p.total != null ? p.total : null) : (p.total ?? null), ...shownCols.flatMap(c => valOf(c, r, p))])
+    }
+    if (!past) out.push(totalsRow())
+    const ws = XLSX.utils.aoa_to_sheet(out)
+    const range = XLSX.utils.decode_range(ws['!ref'])
+    for (let R = 4; R <= range.e.r; R++) for (let C = 0; C <= range.e.c; C++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
+      if (!cell || cell.t !== 'n') continue
+      if (money.has(C)) cell.z = '#,##0.00'; else if (C === pctCol) cell.z = '0.00%'
+    }
+    ws['!cols'] = head.map((h, i) => ({ wch: i === 0 ? 38 : i === 1 ? 60 : Math.max(10, String(h).length + 2) }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Take-off')
+    const safe = (x) => String(x || '').replace(/[^A-Za-z0-9 _.-]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60)
+    XLSX.writeFile(wb, `${safe(est.quoteRef || est.title || 'estimate')}-Rev-${(est.reopened && est.reopened.revision) || est.revision}-take-off.xlsx`)
+  } catch (e) { onError(`Could not export: ${e.message}`) }
 }
