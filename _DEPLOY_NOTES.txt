@@ -1,17 +1,27 @@
-PACKAGE 1185 - Smaller Terms & Conditions text on the quote
+PACKAGE 1186 - The estimator's email and phone on the letter (from Portal Users)
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1184.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1185.
 
-  components/QuoteTabs.js
+  lib/quoteDocs.js
+  pages/api/estimating/estimates.js
 
-The Terms & Conditions on the quote are set smaller - text 10px (from 11.5px),
-headings 10.5-11px, slightly tighter spacing and clause indents - so they take
-fewer pages. Still comfortably readable in print. The formatting rules are
-unchanged (CAPITALS / short numbered lines bold; clauses with their number in a
-column; deeper clauses indented).
+Two new letter placeholders: {{estimatorEmail}} "Estimator email" and
+{{estimatorPhone}} "Estimator phone" - buttons in Edit template / Admin > Quote
+Documents. They come from ADMIN > PORTAL USERS: the record of the quote's
+estimator (the person {{estimator}} names - the CRM deal's "Estimator
+responsible"), matched by name (or email). As with the other placeholders, a
+gap shows red (e.g. no phone on that user's Portal Users record, or no
+estimator on the deal) and the quote cannot be sent until it is filled. An
+issued revision keeps the details it went out with.
 
-Checked in a REAL browser (Chromium): the condensed Standard Conditions of
-Sale (1,584 words, 15 sections) fit on 2 A4 pages; every page 794 x 1123 with
-nothing cut off. All 166 pages pass the browser check. Built from your deployed
-packages (1022-1184, verified against their zips); the file checked identical
-to the tested version before zipping.
+AFTER DEPLOYING: make sure each estimator's Portal Users record has their phone
+number, then add the placeholders to the letter template (e.g. under the
+signature: {{estimator}} / {{estimatorPhone}} · {{estimatorEmail}}).
+
+Checked through the real route: the deal's estimator "James McVeigh" -> his
+Portal Users email and phone; the letter read "James McVeigh / 07700 900123 ·
+james@rockroofing.co.uk" and could be sent; Niall Case (no phone on Portal
+Users) -> "[Estimator phone]" and sending blocked. In a REAL browser
+(Chromium): Edit template shows "Estimator email" and "Estimator phone". All
+server routes compile; all 166 pages pass the browser check. Built from your
+deployed packages (1022-1185, verified against their zips).

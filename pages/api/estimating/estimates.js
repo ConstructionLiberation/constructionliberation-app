@@ -38,7 +38,10 @@ import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
 const GROUP_OF = Object.fromEntries(DEFAULT_FIELD_SCHEMA.filter(f => f.group === 'organization' || f.group === 'person').map(f => [f.key, f.group]))
 const blank = (v) => v == null || String(v).trim() === '' || String(v).trim() === '-'
 async function liveDeals() {
-  const [deals, merged, orgs, contacts] = await Promise.all([get('crm:deals'), get('crm:merged'), get('crm:orgs'), get('crm:contacts')])
+  const [deals, merged, orgs, contacts, users] = await Promise.all([get('crm:deals'), get('crm:merged'), get('crm:orgs'), get('crm:contacts'), getPortalUsers().catch(() => [])])
+  // THE ESTIMATOR'S EMAIL AND PHONE (1186) - from Portal Users, matched to the deal's estimator by name (or email)
+  const userOf = (who) => { const w = String(who || '').trim().toLowerCase(); if (!w) return null
+    return (users || []).find(u => [u.name, [u.firstName, u.lastName].filter(Boolean).join(' '), u.email].some(x => String(x || '').trim().toLowerCase() === w)) || null }
   const byId = new Map((Array.isArray(deals) ? deals : []).map(d => [String(d.id), d]))
   const byName = (list) => new Map((Array.isArray(list) ? list : []).map(x => [String(x.name || '').trim().toLowerCase(), x]))
   const orgOf = byName(orgs), contactOf = byName(contacts)
@@ -55,7 +58,9 @@ async function liveDeals() {
     const f = d.fields || {}
     // ARCHIVED (1091): the deal was LOST in the CRM. Read live, so a deal
     // reopened in the CRM brings its estimate back by itself.
-    return { dealId: String(d.id), title: d.title || '', organisation: f.organization || '', details: crmDetailsOf(d),
+    const det = crmDetailsOf(d), est_u = userOf(det.estimator)
+    if (est_u) { det.estimatorEmail = est_u.email || ''; det.estimatorPhone = est_u.phone || '' }
+    return { dealId: String(d.id), title: d.title || '', organisation: f.organization || '', details: det,
       status: d.status || 'open', archived: d.status === 'lost', lostTime: f.lost_time || null, lostReason: f.lost_reason || '' }
   }
 }
