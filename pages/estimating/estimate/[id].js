@@ -432,8 +432,20 @@ export default function EstimatePage() {
   async function save() { await flushSave() }
 
   async function del() {
-    if (!window.confirm(`Delete the estimate "${est.title}"${(est.revisions || []).length ? ' and its issued revisions' : ''}? This cannot be undone.`)) return
+    const n = (est.revisions || []).length
+    if (!window.confirm(`Delete the WHOLE estimate "${est.title}"${n ? ` - all ${n} issued revision${n === 1 ? '' : 's'} with it` : ''}?\n\nIt moves to Deleted estimates, where an admin can restore it for 30 days.${n && !est.isIssued ? `\n\nTo remove only the draft, use "Delete draft Rev ${est.revision}" instead.` : ''}`)) return
     try { await estApi(API, { action: 'delete', id: est.id }); setDirty(false); router.push('/estimating/estimates') } catch (e) { setErr(e.message) }
+  }
+  // DELETE THE DRAFT (1177) - back to the latest issued revision
+  async function delDraft() {
+    const keep = est.reopened ? est.reopened.revision : ((est.revisions || []).slice(-1)[0] || {}).revision
+    if (!window.confirm(est.reopened
+      ? `Discard your edits to Rev ${keep}? It goes back to exactly as it was issued.`
+      : `Delete draft Rev ${est.revision}? Its changes - and any documents added to it - are discarded, and the estimate goes back to Rev ${keep} as issued.\n\nRev ${keep} and earlier revisions are not affected.`)) return
+    setBusy(true); setErr('')
+    try { const d = await estApi(API, { action: 'discard-draft', id: est.id }); setDirty(false); setEst(d.estimate); setBase(d.estimate.updatedAt); setQuoteRev('draft'); setIssueMsg(`Discarded ${d.discarded} - back on Rev ${d.estimate.revision}, the latest revision.`) }
+    catch (e) { setErr(e.message) }
+    setBusy(false)
   }
 
   if (!est) return <EstimatingShell active="estimates" title="Estimate" wide>{err ? <ErrorBar error={err} /> : <div style={{ color: '#aaa', padding: 30 }}>Loading…</div>}</EstimatingShell>
@@ -451,8 +463,11 @@ export default function EstimatePage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {who.canDelete ? <button onClick={del} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>
-            : <span style={{ fontSize: 11.5, color: '#999', maxWidth: 220, textAlign: 'right' }}>Only an admin can delete an estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}
+          {/* DELETE (1177): the DRAFT only (anyone) - or the WHOLE estimate (anyone if never
+              issued; admins once issued), which goes to Deleted estimates for 30 days */}
+          {(est.revisions || []).length > 0 && !est.isIssued && !crm?.archived && <button onClick={delDraft} title="Discard this draft - the estimate goes back to the latest issued revision" style={{ ...btn, color: '#b45309', borderColor: '#fcd34d' }}>{est.reopened ? `Discard edits to Rev ${est.reopened.revision}` : `Delete draft Rev ${est.revision}`}</button>}
+          {(who.canDelete || !(est.revisions || []).length) ? <button onClick={del} title="Delete the whole estimate - all its revisions" style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete estimate</button>
+            : <span style={{ fontSize: 11.5, color: '#999', maxWidth: 220, textAlign: 'right' }}>Only an admin can delete an issued estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}
           <SaveStatus state={saveState} dirty={dirty} archived={!!crm?.archived} />
           {saveState.kind === 'conflict'
             ? <button onClick={() => window.location.reload()} style={{ ...btn, background: '#b42318', color: '#fff', borderColor: '#b42318' }}>Reload</button>

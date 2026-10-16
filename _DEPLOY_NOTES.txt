@@ -1,40 +1,40 @@
-PACKAGE 1176 - No automatic draft: the latest revision, and Create New Revision;
-project notes; CRM links in a new tab
+PACKAGE 1177 - Delete the draft, not the estimate; a bin for deleted estimates
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1175.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1176.
 
+  lib/estimateStore.js
   pages/estimating/estimate/[id].js      (folder literally named [id])
+  pages/estimating/estimates.js
   pages/api/estimating/estimates.js
 
-NO AUTOMATIC DRAFT - issuing (or "Download and mark as sent") no longer starts
-a new draft. The estimate stays on the revision just issued: a "LATEST
-REVISION" badge (" · SENT" once sent) beside the revision, and every tab -
-take-off, Summary, Materials, Letter, Clarifications, Documents, Quote - shows
-it as issued, READ-ONLY, at its own prices.
-CREATE NEW REVISION - a button on the take-off's "Latest revision" banner:
-starts the next revision (Rev B) as an editable copy of the latest, on every
-tab, following today's price list (its rates-held date cleared if the latest
-was sent). Then edit and issue as before.
-EDITING THE LATEST (not sent) - "Edit Rev A" still makes it editable again;
-re-issuing replaces it.
-PROJECT NOTES - the Notes box under the take-off is now "Project notes": for
-the project as a whole, kept across every revision (never swapped when a
-revision is opened or edited), and editable even while the latest revision is
-read-only.
-CRM LINKS - "Edit them in the CRM" and the CRM deal link at the top open in a
-NEW BROWSER TAB.
-Estimates already sitting on a draft carry on as they are.
+TWO DELETES, CLEARLY APART (top right of the estimate):
+  "Delete draft Rev B" - discards the draft revision only; the estimate goes
+    back to its latest issued revision (as issued, read-only). Documents added
+    to the draft are removed. ANYONE can do this. While editing an issued
+    revision it reads "Discard edits to Rev A" and discards those edits.
+  "Delete estimate" - the whole estimate, every revision. Never issued: ANYONE.
+    Issued at least once: ADMINS only (others see who to ask). The confirm
+    says it is the whole estimate and points to "Delete draft" when there is
+    one.
+A BIN - a deleted estimate goes to "Deleted estimates" (a tab on the Estimates
+list, admins only) with its revisions and documents intact: Restore, or Delete
+permanently. After 30 days it is removed for good.
+LOST IN THE CRM -> ARCHIVED - unchanged: the estimate is archived, read-only,
+until the deal is reopened.
 
-Checked through the real route: issued -> stays on Rev A, latest, its own
-prices, no new draft; a save on it changed only the notes (qty unchanged);
-Create New Revision -> Rev B editable at today's prices, notes kept; B sent ->
-the next revision's rates-held date cleared; Edit Rev C (unsent) -> editable,
-nothing parked; re-issued -> replaced C, back to latest. In a REAL browser
-(Chromium): the badge "LATEST REVISION · SENT"; the take-off read-only with
-Create New Revision and no Issue button; Project notes editable and saved;
-Letter read-only; the Quote without "Download and mark as sent" or DRAFT, the
-bar "Rev A · latest SENT"; both CRM links open in a new tab; Create New
-Revision -> "Rev B started from Rev A", everything editable, the bar "Draft Rev
-B | Rev A SENT". All server routes compile; all 166 pages pass the browser
-check. Built from your deployed packages (1022-1175, verified against their
-zips).
+NOTE: estimates deleted BEFORE this package were removed permanently - the bin
+only catches deletes from now on.
+
+Checked through the real route as an estimator (pre-contract) and an admin:
+the estimator deleted a never-issued estimate (to the bin); deleted draft Rev B
+-> back on Rev A, latest, Rev B's document removed, Rev A's kept; deleting the
+issued estimate refused (pointing to Delete draft); the admin deleted it ->
+the bin (the estimator cannot see the bin) -> restored with its revisions ->
+deleted permanently (gone); discarding edits to Rev A -> back as issued. In a
+REAL browser (Chromium): the estimator sees "Delete draft Rev B" and "only an
+admin can delete an issued estimate - ask James McVeigh"; the admin both
+buttons; Delete draft -> "Discarded Rev B - back on Rev A", LATEST REVISION;
+the Estimates list - Active / Archived / Deleted estimates, the bin row (3
+revisions, deleted by, removed in 28 days), Restore. All server routes
+compile; all 166 pages pass the browser check. Built from your deployed
+packages (1022-1176, verified against their zips).

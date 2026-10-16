@@ -15,7 +15,12 @@ export default function EstimatesPage() {
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
   const [creating, setCreating] = useState(false)
-  const [tab, setTab] = useState('active')       // active | archived (deal lost in the CRM)
+  const [tab, setTab] = useState('active')       // active | archived (deal lost in the CRM) | deleted (1177, admins)
+  const [bin, setBin] = useState(null)
+  const loadBin = () => estApi('/api/estimating/estimates?bin=1').then(d => setBin(d)).catch(e => setErr(e.message))
+  useEffect(() => { if (tab === 'deleted') loadBin() }, [tab])
+  async function restore(e) { try { await estApi('/api/estimating/estimates', { action: 'restore', id: e.id }); await Promise.all([load(), loadBin()]) } catch (x) { setErr(x.message) } }
+  async function purge(e) { if (!window.confirm(`Delete "${e.title}" permanently? Its revisions and documents are removed for good - this cannot be undone.`)) return; try { await estApi('/api/estimating/estimates', { action: 'purge', id: e.id }); await loadBin() } catch (x) { setErr(x.message) } }
   const [who, setWho] = useState({ canDelete: false, admins: [] })
 
   const load = () => estApi('/api/estimating/estimates').then(d => { setList(d.estimates); setWho({ canDelete: !!d.canDelete, admins: d.admins || [] }) }).catch(e => setErr(e.message))
@@ -28,7 +33,7 @@ export default function EstimatesPage() {
   }, [list, q, tab])
   async function del(e, ev) {
     ev.stopPropagation()
-    if (!window.confirm(`Delete the estimate "${e.title}"${e.revision > 'A' ? ' and its issued revisions' : ''}? This cannot be undone.`)) return
+    if (!window.confirm(`Delete the whole estimate "${e.title}" - all its revisions? It moves to Deleted estimates, where an admin can restore it for 30 days.`)) return
     try { await estApi('/api/estimating/estimates', { action: 'delete', id: e.id }); await load() } catch (x) { setErr(x.message) }
   }
 
@@ -45,14 +50,30 @@ export default function EstimatesPage() {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-            {[['active', `Active (${list.length - archivedCount})`], ['archived', `Archived (${archivedCount})`]].map(([k, label]) => (
+            {[['active', `Active (${list.length - archivedCount})`], ['archived', `Archived (${archivedCount})`], ...(who.canDelete ? [['deleted', 'Deleted estimates']] : [])].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} style={{ ...btn, background: tab === k ? '#1a1a19' : '#fff', color: tab === k ? '#fff' : '#555', borderColor: tab === k ? '#1a1a19' : '#d4d4d0' }}>{label}</button>
             ))}
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search estimate, deal, customer or quote ref…" style={{ ...inp, maxWidth: 380 }} />
-            {!who.canDelete && <span style={{ fontSize: 12, color: '#888' }}>Only an admin can delete an estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}
+            {!who.canDelete && <span style={{ fontSize: 12, color: '#888' }}>Only an admin can delete an issued estimate{who.admins.length ? ` - ask ${who.admins.join(', ')}` : ''}.</span>}
           </div>
+          {tab === 'deleted' && (
+            <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
+              <div style={{ fontSize: 12.5, color: '#666', padding: '10px 12px' }}>Deleted estimates - with all their revisions and documents. Restore one within {bin?.days || 30} days; after that it is removed for good.</div>
+              {!bin ? <div style={{ color: '#aaa', padding: 12 }}>Loading…</div> : !bin.deleted.length ? <div style={{ color: '#aaa', padding: 12, fontSize: 13 }}>Nothing deleted.</div> : (
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+                  <thead><tr>{['Estimate', 'CRM deal', 'Quote ref', 'Revisions issued', 'Deleted', 'Removed for good', ''].map((h, i) => <th key={i} style={{ ...th }}>{h}</th>)}</tr></thead>
+                  <tbody>{bin.deleted.map(e => { const left = Math.max(0, Math.ceil((new Date(e.deletedAt).getTime() + (bin.days || 30) * 86400000 - Date.now()) / 86400000))
+                    return <tr key={e.id}>
+                      <td style={{ ...td, fontWeight: 600 }}>{e.title}</td><td style={td}>{e.dealTitle}</td><td style={td}>{e.quoteRef}</td><td style={td}>{e.revisions || 0}</td>
+                      <td style={{ ...td, color: '#666' }}>{new Date(e.deletedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}{e.deletedBy ? ` by ${e.deletedBy}` : ''}</td>
+                      <td style={{ ...td, color: left <= 5 ? '#b42318' : '#666' }}>in {left} day{left === 1 ? '' : 's'}</td>
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}><button onClick={() => restore(e)} style={{ ...btn, color: '#0f766e', borderColor: '#99f6e4', marginRight: 6 }}>Restore</button><button onClick={() => purge(e)} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete permanently</button></td>
+                    </tr> })}</tbody>
+                </table>)}
+            </div>
+          )}
           {tab === 'archived' && <div style={{ fontSize: 12.5, color: '#666', marginBottom: 8 }}>Archived: the estimate's CRM deal was lost. They are read-only; reopening the deal in the CRM brings the estimate back.</div>}
-          <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
+          {tab !== 'deleted' &&           <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
               <thead><tr>{['Estimate', 'CRM deal', 'Customer', 'Quote ref', 'Rev', 'Items', 'Total', tab === 'archived' ? 'Lost' : 'Last saved', ''].map((h, i) => <th key={i} style={{ ...th, textAlign: i === 6 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
               <tbody>
@@ -72,7 +93,7 @@ export default function EstimatesPage() {
                 {!shown.length && <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#aaa', padding: 24 }}>Nothing matches.</td></tr>}
               </tbody>
             </table>
-          </div>
+          </div>}
         </>
       )}
       {creating && <NewEstimate onClose={() => setCreating(false)} onCreated={(id) => router.push(`/estimating/estimate/${id}`)} />}

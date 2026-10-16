@@ -16,9 +16,9 @@ const SHELL = new Set(['id', 'revisions', 'parked', 'createdAt', 'createdBy', 'd
 const shellOf = (e) => Object.fromEntries(Object.entries(e).filter(([k]) => SHELL.has(k)))
 const contentOf = (e) => Object.fromEntries(Object.entries(e).filter(([k]) => !SHELL.has(k)))
 const copyKey = (content) => content && content.reopened ? content.reopened.revision : 'draft'
-import { deleteAllDocs } from '../../../lib/documentsStore'
+import { deleteAllDocs, listDocs, saveDocs } from '../../../lib/documentsStore'
 import { removeFile, privateReady } from '../../../lib/privateFiles'
-import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision } from '../../../lib/estimateStore'
+import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision, binEstimate, listBin, restoreEstimate, purgeEstimate, BIN_DAYS } from '../../../lib/estimateStore'
 import { loadPriceList } from '../../../lib/priceListStore'
 import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
 
@@ -90,6 +90,13 @@ async function handler(req, res) {
     if (req.query.deals) {
       const deals = (await get('crm:deals')) || []
       return res.status(200).json({ deals: (Array.isArray(deals) ? deals : []).map(d => ({ id: d.id, title: d.title || '', organisation: (d.fields || {}).organization || '', status: d.status || '' })) })
+    }
+    // the bin (1177) - admins; anything past 30 days is removed for good first
+    if (req.query.bin) {
+      if (normRole(session.role) !== 'admin') return res.status(403).json({ error: 'Only an admin can see deleted estimates' })
+      const cutoff = Date.now() - BIN_DAYS * 86400000
+      for (const e of await listBin()) if (new Date(e.deletedAt).getTime() < cutoff) { if (privateReady()) await deleteAllDocs('estimate', e.id, removeFile); await purgeEstimate(e.id) }
+      return res.status(200).json({ deleted: await listBin(), days: BIN_DAYS })
     }
     if (req.query.id && req.query.rev) {
       const r = await loadRevision(String(req.query.id), String(req.query.rev))
@@ -340,14 +347,56 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true, estimate: next, crm: d })
   }
   // DELETE - admins only (1091), enforced here, not just hidden on the page.
+  // DELETE THE ESTIMATE (1177) - into the bin ("Deleted estimates"), whole: its
+  // revisions and documents kept, restorable by an admin for 30 days. One never
+  // issued can be deleted by anyone; one that has been issued only by an admin.
   if (b.action === 'delete') {
-    if (normRole(session.role) !== 'admin') {
+    const est = await loadEstimate(String(b.id))
+    if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
+    if ((est.revisions || []).length && normRole(session.role) !== 'admin') {
       const names = await adminNames()
-      return res.status(403).json({ error: `Only an admin can delete an estimate${names.length ? ` - ask ${names.join(', ')}` : ''}.` })
+      return res.status(403).json({ error: `This estimate has been issued, so only an admin can delete it${names.length ? ` - ask ${names.join(', ')}` : ''}. To remove just the draft, use "Delete draft".` })
     }
-    // Its private documents go too - out of storage, not just off the list (1093).
+    await binEstimate(est.id, by)
+    return res.status(200).json({ ok: true, binned: true, days: BIN_DAYS })
+  }
+  // DELETE THE DRAFT (1177) - anyone: the draft revision (or the edits to a
+  // revision being edited) is discarded and the estimate goes back to its latest
+  // issued revision, as issued. Documents added to the discarded draft are removed.
+  if (b.action === 'discard-draft') {
+    const est = await loadEstimate(String(b.id))
+    if (!est) return res.status(404).json({ error: 'That estimate no longer exists' })
+    const dl = (await liveDeals())(est.dealId)
+    if (dl && dl.archived) return res.status(409).json({ error: ARCHIVED(dl) })
+    const revs = est.revisions || []
+    if (!revs.length) return res.status(400).json({ error: 'Nothing has been issued yet - delete the estimate instead' })
+    if (est.isIssued) return res.status(400).json({ error: `There is no draft - Rev ${est.revision} is the latest revision` })
+    const keep = est.reopened ? est.reopened.revision : revs[revs.length - 1].revision
+    const snap = await loadRevision(est.id, keep)
+    if (!snap || !snap.estimate) return res.status(404).json({ error: `Rev ${keep} could not be loaded` })
+    const at = new Date().toISOString()
+    const draftRev = est.revision
+    const next = { ...shellOf(est), ...contentOf(snap.estimate), revision: keep, isIssued: true, priceLock: snap.priceLib || snap.estimate.priceLock || null, parked: [], updatedAt: at, updatedBy: by }
+    delete next.reopened
+    if (!est.reopened && draftRev !== keep) {
+      const docs = await listDocs('estimate', est.id)
+      const gone = docs.filter(d => !d.itemId && d.revision === draftRev)
+      if (gone.length) { if (privateReady()) for (const d of gone) { try { await removeFile(d.pathname) } catch {} } await saveDocs('estimate', est.id, docs.filter(d => !gone.includes(d))) }
+    }
+    await saveEstimate(next, await summaryOf(next, await loadLib()))
+    return res.status(200).json({ ok: true, estimate: next, discarded: est.reopened ? `edits to Rev ${keep}` : `Rev ${draftRev}` })
+  }
+  // THE BIN (1177) - admins: restore, or delete for good
+  if (b.action === 'restore' || b.action === 'purge') {
+    if (normRole(session.role) !== 'admin') return res.status(403).json({ error: 'Only an admin can restore or remove deleted estimates' })
+    if (b.action === 'restore') {
+      const est = await restoreEstimate(String(b.id))
+      if (!est) return res.status(404).json({ error: 'That deleted estimate is no longer in the bin' })
+      await saveEstimate(est, await summaryOf(est, await loadLib()))
+      return res.status(200).json({ ok: true, estimate: est })
+    }
     if (privateReady()) await deleteAllDocs('estimate', String(b.id), removeFile)
-    await deleteEstimate(String(b.id))
+    await purgeEstimate(String(b.id))
     return res.status(200).json({ ok: true })
   }
   return res.status(400).json({ error: "action must be 'create', 'save' or 'delete'" })
