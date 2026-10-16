@@ -63,6 +63,7 @@ export default function QuoteDocuments() {
             <ClarListEditor template list={Array.isArray(tpl.clarTemplate) ? tpl.clarTemplate : clarStarter(tpl)} setList={(l) => edit(t => ({ ...t, clarTemplate: l }))} />
           </Card>
           {/* THE PRICING CHECKLIST (1142) - shown above the total on every take-off */}
+          <VariationClarifications />
           <Card title="Pricing checklist" hint={`Reminders on every take-off, above the total - estimators tick them, and can add their own per estimate.${Array.isArray(tpl.checklist) ? '' : ' This is the starter list until you save your own.'}`}>
             {checklistOf(tpl).map((x, i) => (
               <div key={x.id} style={{ display: 'flex', gap: 4, marginBottom: 5, maxWidth: 760 }}>
@@ -106,3 +107,36 @@ const chip = { fontSize: 11.5, padding: '3px 8px', border: '1px solid #c7d2fe', 
 const icon = { border: 'none', background: 'none', cursor: 'pointer', color: '#888', fontSize: 12, padding: 2 }
 const small = { fontSize: 12, padding: '4px 10px', border: '1px solid #ddd', borderRadius: 7, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }
 const btn = { fontSize: 13, padding: '8px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }
+
+// VARIATION CLARIFICATIONS (1197) - the company's own, on every new variation (the
+// Variation Builder, contracted rates, Estimating > Variations). None until set up.
+function VariationClarifications() {
+  const [text, setText] = useState(null)
+  const [saved, setSaved] = useState('')
+  const [msg, setMsg] = useState(''), [err, setErr] = useState('')
+  useEffect(() => { fetch('/api/variation-clarifications').then(r => r.json()).then(d => { const t = (d.clarifications || []).join('\n'); setText(t); setSaved(t) }).catch(e => setErr(e.message)) }, [])
+  const lines = (text || '').split('\n').map(x => x.trim()).filter(Boolean)
+  async function save() {
+    setErr(''); setMsg('')
+    try {
+      const r = await fetch('/api/variation-clarifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clarifications: lines }) })
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not save')
+      const t = d.clarifications.join('\n'); setText(t); setSaved(t); setMsg(`Saved - ${d.clarifications.length} clarification${d.clarifications.length === 1 ? '' : 's'} on every new variation.`)
+    } catch (e) { setErr(e.message) }
+  }
+  return (
+    <Card title="Variation clarifications" hint="On every new variation - in the Variation Builder, from contracted rates and from Estimating > Variations. One per line. They can still be changed on each variation.">
+      {text == null ? <div style={{ color: '#aaa', fontSize: 13 }}>Loading…</div> : <>
+        <textarea value={text} onChange={e => { setText(e.target.value); setMsg('') }} rows={Math.max(5, lines.length + 2)} placeholder={'None set up yet - new variations start with no clarifications.\nType or paste them here, one per line.'}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, lineHeight: 1.5, padding: 10, border: '1px solid #d4d4d0', borderRadius: 8, fontFamily: 'inherit', resize: 'vertical' }} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+          <span style={{ fontSize: 12, color: '#888' }}>{lines.length} clarification{lines.length === 1 ? '' : 's'}</span>
+          {err && <span style={{ fontSize: 12.5, color: '#b42318' }}>{err}</span>}
+          {msg && <span style={{ fontSize: 12.5, color: '#0f766e' }}>{msg}</span>}
+          <span style={{ flex: 1 }} />
+          <button onClick={save} disabled={text === saved} style={{ fontSize: 13, padding: '7px 14px', border: 'none', borderRadius: 8, background: text === saved ? '#cbd5d1' : '#0f766e', color: '#fff', cursor: text === saved ? 'default' : 'pointer', fontWeight: 600 }}>Save variation clarifications</button>
+        </div>
+      </>}
+    </Card>
+  )
+}

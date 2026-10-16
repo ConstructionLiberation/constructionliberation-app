@@ -26,10 +26,9 @@ const n = (v) => { const x = parseFloat(v); return isNaN(x) ? 0 : x }
 const money = (v) => '£' + n(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
-// The clarifications that go on every variation unless somebody removes them -
-// now in lib/variationDefaults.js, shared with variations priced on the take-off (1194).
-import { BASE_CLARIFICATIONS } from '../lib/variationDefaults'
-export { BASE_CLARIFICATIONS }
+// The clarifications on a new variation are the COMPANY'S (Admin > Quote Documents >
+// Variation clarifications) - fetched; none if the company has set none up (1197).
+export const companyVariationClarifications = () => fetch('/api/variation-clarifications').then(r => r.json()).then(d => Array.isArray(d.clarifications) ? d.clarifications : []).catch(() => [])
 
 const letter = (i) => String.fromCharCode(97 + i)   // a, b, c...
 
@@ -458,7 +457,9 @@ export default function VariationBuilder({ projects, onSaved }) {
   const [projectId, setProjectId] = useState('')
   const [header, setHeader] = useState({ varNumber: '', date: todayISO(), requestedBy: '', description: '' })
   const [items, setItems] = useState([])
-  const [clar, setClar] = useState(BASE_CLARIFICATIONS.slice())
+  const [clar, setClar] = useState([])
+  const [companyClar, setCompanyClar] = useState([])   // the company's (1197)
+  useEffect(() => { companyVariationClarifications().then(l => { setCompanyClar(l); setClar(c => c.length ? c : l.slice()) }) }, [])
   // Site photos attached to this variation. [{ url, name }], same shape as every other
   // attachment in the portal.
   const [photos, setPhotos] = useState([])
@@ -531,7 +532,7 @@ export default function VariationBuilder({ projects, onSaved }) {
       description: v.description || '',
     })
     setItems((b.items || []).map(x => ({ ...x })))
-    setClar(b.clarifications?.length ? b.clarifications.slice() : BASE_CLARIFICATIONS.slice())
+    setClar(b.clarifications?.length ? b.clarifications.slice() : companyClar.slice())
     setPhotos(Array.isArray(b.photos) ? b.photos.slice() : [])
     setMsg('')
   }
@@ -579,7 +580,7 @@ export default function VariationBuilder({ projects, onSaved }) {
     // moment a draft existed.
     setHeader({ varNumber: nextSentLabel, date: todayISO(), requestedBy: '', description: '' })
     setItems([])
-    setClar(BASE_CLARIFICATIONS.slice())
+    setClar(companyClar.slice())
     setPhotos([])
     setMsg('')
   }

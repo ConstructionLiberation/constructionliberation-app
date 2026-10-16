@@ -3,7 +3,8 @@ import withTenant from '../../../lib/withTenant'
 import { get, set, getPortalUsers, getProject, saveProject, getClient } from '../../../lib/db'
 import { invalidateDashboardCache } from '../../../lib/dashboardCache'
 import { isInstructed } from '../../../lib/applications'
-import { BASE_CLARIFICATIONS, toBuilderUnit } from '../../../lib/variationDefaults'
+import { toBuilderUnit } from '../../../lib/variationDefaults'
+import { loadVariationClarifications } from '../../../lib/variationClarifications'
 import { descriptionText } from '../../../lib/buildups'
 import { normRole } from '../../../lib/roles'
 import { checkEstimate, newId, priceEstimate, nextRevision, diffEstimates, crmDetailsOf , belowLineIds } from '../../../lib/estimate'
@@ -339,7 +340,7 @@ async function handler(req, res) {
       varNumber, description: est.title || items[0].description, instructed: false,
       materials: String(Math.round(totals.materials * 100) / 100), labour: String(Math.round(totals.labour * 100) / 100), profit: String(Math.round((totals.total - cost) * 100) / 100),
       builder: { ...((prior && prior.builder) || {}), date: new Date().toISOString().slice(0, 10), requestedBy: (prior && prior.builder && prior.builder.requestedBy) || '',
-        subContractRef: project.orderRef || project.customerOrderRef || '', items, clarifications: BASE_CLARIFICATIONS.slice(),   // the Variation Builder's own - not the quote clarifications (1196) photos: (prior && prior.builder && prior.builder.photos) || [],
+        subContractRef: project.orderRef || project.customerOrderRef || '', items, clarifications: await loadVariationClarifications(),   // the company's variation clarifications - not the quote ones (1196, 1197) photos: (prior && prior.builder && prior.builder.photos) || [],
         builtAt: Date.now(), raisedAt: (prior && prior.builder && prior.builder.raisedAt) || Date.now(), raisedBy: (prior && prior.builder && prior.builder.raisedBy) || { name: session.name || '', email: session.email || '' },
         fromEstimate: est.id },
     }

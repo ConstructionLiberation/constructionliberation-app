@@ -8,7 +8,7 @@ import CommercialNav from '../components/CommercialNav'
 import ProjectSearchSelect from '../components/ProjectSearchSelect'
 // The send window and the standard clarifications, shared with the Variation Builder so a
 // variation raised from the rate schedule goes out identically to one built by hand.
-import { SendVariationModal, BASE_CLARIFICATIONS } from '../components/VariationBuilder'
+import { SendVariationModal, companyVariationClarifications } from '../components/VariationBuilder'
 import LabourRates from '../components/LabourRates'
 import { computeRateTotals, sumItems, lineRateTotal, lineMatTotal, lineLabTotal } from '../lib/contractRatesParser'
 
@@ -376,7 +376,7 @@ export default function ContractedRatesPage() {
                 profit: Math.max(0, lineRateTotal(x) - lineMatTotal(x) - lineLabTotal(x)),
                 fromContractedRates: true,
               })),
-              clarifications: BASE_CLARIFICATIONS.slice(),
+              clarifications: await companyVariationClarifications(),   // the company's (1197)
             },
             materials: String(Math.round(matTotal * 100) / 100),
             labour: String(Math.round(labTotal * 100) / 100),
