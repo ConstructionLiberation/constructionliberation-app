@@ -128,7 +128,6 @@ export default function PoPage() {
             <SupplierSearch contacts={(list && list.contacts) || []} value={po.contactName || po.supplier}
               onPick={c => setPo(x => ({ ...x, contactId: c.id, contactName: c.name, supplier: c.priceList || c.name, priceList: c.priceList || '' }))} />
             {list && !(list.contacts || []).length && <span style={{ fontSize: 11.5, color: '#b45309' }}>No Xero contacts read yet - Purchasing &gt; Suppliers &gt; Refresh from Xero</span>}</div>
-          <label style={{ ...label, flex: '0 1 170px' }}>Delivery required<input type="date" value={po.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} style={inp} /></label>
         </div>
         <div style={card}>
           <strong style={{ fontSize: 14 }}>Lines</strong>
@@ -181,6 +180,10 @@ export default function PoPage() {
         {/* DELIVERY DETAILS (1200) */}
         <div style={card}>
           <strong style={{ fontSize: 14 }}>Delivery details</strong>
+          {/* delivery required - here with the rest of the delivery details (1208) */}
+          <div style={{ display: 'flex', marginTop: 8 }}>
+          <label style={{ ...label, flex: '0 0 200px' }}>Delivery required<input type="date" value={po.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} style={inp} /></label>
+          </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8, alignItems: 'stretch' }}>
             <label style={{ ...label, flex: '1 1 320px' }}>Deliver to <span style={{ color: '#999' }}>(from Project Details - can be changed)</span><textarea value={po.deliveryAddress} onChange={e => set('deliveryAddress', e.target.value)} rows={3} placeholder="Site address" style={{ ...inp, resize: 'vertical' }} /></label>
             {/* level with the bottom of the address box (1205) */}

@@ -1,24 +1,16 @@
-PACKAGE 1207 - Suppliers: the other suppliers we raise POs with, for Dext
+PACKAGE 1208 - Purchase orders: Delivery required under Delivery details
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1206.
+One file. Complete replacement. No re-seed. No env changes. Built on 1207.
 
-  lib/purchaseOrders.js
-  lib/suppliers.js
-  pages/api/suppliers.js
-  pages/operations/purchasing/suppliers.js
+  pages/operations/purchasing/po/[id].js     (folder literally named [id])
 
-PURCHASING > SUPPLIERS now also lists "OTHER SUPPLIERS WE RAISE POs WITH" -
-Xero contacts on raised purchase orders that are not on the price list (hire
-companies, merchants...), with how many POs each. Their invoices need the
-same Dext rule - "Dext should publish as: Awaiting Approval" - and Vinay
-ticks "Set in Dext" for each, as for the price-list suppliers; they count in
-"To change in Dext". Drafts and cancelled POs do not put a supplier on the
-list; a supplier linked to the price list appears in the main table instead.
+"Delivery required" moves from the top of the PO (beside the supplier) into
+the DELIVERY DETAILS card, as its first field above "Deliver to". The top card
+now holds the project and the supplier. The Moffett and artics questions still
+sit level with the delivery address box.
 
-Checked through the real routes: two POs to HSS Hire, one to Soprema (price
-list), a draft and a cancelled PO to Speedy Hire, and an older PO to Jewson ->
-the list shows HSS Hire (2) and Jewson (1) only; the tick refused for an
-estimator, set by Vinay. In a REAL browser (Chromium): the section, the tick,
-and "To change in Dext" counting them (6 -> 5). All server routes compile; all
-pages pass the browser check. Built from your deployed packages (1022-1206,
-verified against their zips).
+Checked in a REAL browser (Chromium): the date inside Delivery details, once,
+above the address box; artics level with the address box (0px apart); the date
+saved. All pages pass the browser check. Built from your deployed packages
+(1022-1207, verified against their zips); the file checked identical to the
+tested version before zipping.
