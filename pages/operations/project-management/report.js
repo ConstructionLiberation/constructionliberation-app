@@ -7,6 +7,7 @@ import { sourceLabel } from '../../../lib/siteWeatherLabel'
 import { autofillReport } from '../../../lib/projectReportAutofill'
 import DrawingMarkup from '../../../components/DrawingMarkup'
 import { upload } from '@vercel/blob/client'
+import { customerChoices } from '../../../lib/customerReport'
 
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const parseLocal = (d) => { if (!d) return null; const [y, m, day] = String(d).split('-').map(Number); return new Date(y, (m || 1) - 1, day || 1) }
@@ -20,6 +21,8 @@ export default function ReportPage() {
   // re-fetch it.
   const [template, setTemplate] = useState({ sections: [] })
   const [tplOpen, setTplOpen] = useState(false)
+  const [custOpen, setCustOpen] = useState(false)   // Edit customer report (1234)
+  const [sendFor, setSendFor] = useState(null)       // Send Customer Progress Report (1234)
   const [reports, setReports] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -91,10 +94,13 @@ export default function ReportPage() {
     <OperationsShell active="pm:report" section="pm" title="Project Report" wide>
       <PageHeading title="Project Reports" sub="Site reports — completed on desktop."
         action={<div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setCustOpen(true)} style={ghostBtn}>Edit customer report</button>
           <button onClick={() => setTplOpen(true)} style={ghostBtn}>Edit template</button>
           <button onClick={() => setEdit('new')} style={primaryBtn}>+ Add new</button>
         </div>} />
 
+      {custOpen && <CustomerReportSettings template={template} onClose={() => setCustOpen(false)} />}
+      {sendFor && <SendCustomerReport report={sendFor} onClose={() => setSendFor(null)} />}
       {tplOpen && <TemplateModal template={template} onClose={() => setTplOpen(false)}
         onSaved={(t) => { setTemplate(t); setTplOpen(false) }} />}
 
@@ -135,6 +141,7 @@ export default function ReportPage() {
                     ? <span style={{ fontSize: 11.5, color: '#16a34a', background: '#dcfce7', padding: '2px 10px', borderRadius: 12, fontWeight: 600 }}>Submitted</span>
                     : <span style={{ fontSize: 11.5, color: '#b45309', background: '#fef3c7', padding: '2px 10px', borderRadius: 12, fontWeight: 700 }}>● DRAFT</span>}</td>
                   <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button onClick={() => setSendFor(r)} style={{ ...linkBtn, color: '#0f766e', fontWeight: 600 }}>Send Customer Progress Report</button>
                     <button onClick={() => setView(r.id)} style={linkBtn}>View</button>
                     <button onClick={() => setEdit(r.id)} style={linkBtn}>Edit</button>
                     <button onClick={() => del(r)} style={{ ...linkBtn, color: '#dc2626' }}>Delete</button>
@@ -756,5 +763,87 @@ function DrawingList({ drawings, onOpen, onRemove, readOnly }) {
         <DrawingMarkup key={view.id} imageUrl={view.url} contentType={view.contentType} initial={view.markup} canEdit={false} fileName={view.name} onSave={() => {}} />
       </Modal>}
     </div>
+  )
+}
+
+// EDIT CUSTOMER REPORT (1234) - which sections of a report the customer is sent, for the company
+function CustomerReportSettings({ template, onClose }) {
+  const choices = customerChoices(template)
+  const [inc, setInc] = useState(null), [busy, setBusy] = useState(false), [err, setErr] = useState('')
+  useEffect(() => { fetch('/api/project-report-customer').then(r => r.json()).then(d => setInc(new Set((d.settings && d.settings.include) || []))).catch(() => setErr('Could not load the settings')) }, [])
+  async function save() {
+    setBusy(true); setErr('')
+    try { const r = await fetch('/api/project-report-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'settings', include: [...inc] }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not save'); onClose() } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  return (
+    <Modal title="Edit customer report" onClose={onClose}>
+      <div style={{ fontSize: 13, color: '#555', margin: '6px 0 12px' }}>Tick what the customer receives in their Customer Progress Report. The project, address, customer and report date always head it. Your own report is not changed.</div>
+      {!inc ? <Loading /> : choices.map(c => <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid #f4f3f0', fontSize: 13.5, cursor: 'pointer' }}>
+        <input type="checkbox" checked={inc.has(c.key)} onChange={e => setInc(s => { const n = new Set(s); e.target.checked ? n.add(c.key) : n.delete(c.key); return n })} />
+        <span style={{ flex: 1 }}>{c.label}{c.custom ? <span style={{ color: '#999', fontSize: 11.5 }}> (your section)</span> : null}</span>
+        {c.note && <span style={{ color: '#999', fontSize: 11.5 }}>{c.note}</span>}
+      </label>)}
+      {err && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><button onClick={save} disabled={busy || !inc} style={primaryBtn}>{busy ? 'Saving...' : 'Save'}</button><button onClick={onClose} style={ghostBtn}>Cancel</button></div>
+    </Modal>
+  )
+}
+
+// SEND CUSTOMER PROGRESS REPORT (1234) - to the customer's whole project team, copying in any
+// portal users; from the notifications address, the customer PDF attached
+function SendCustomerReport({ report, onClose }) {
+  const [d, setD] = useState(null), [cc, setCc] = useState(new Set()), [q, setQ] = useState('')
+  const [subject, setSubject] = useState(''), [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [done, setDone] = useState(null)
+  useEffect(() => {
+    fetch(`/api/project-report-customer?report=${encodeURIComponent(report.id)}`).then(r => r.json()).then(x => {
+      if (x.error) { setErr(x.error); return }
+      setD(x)
+      setSubject(`${report.projectName || report.projectNo} - Customer Progress Report${report.date ? ` - ${String(report.date).split('-').reverse().join('/')}` : ''}`)
+      setMessage(`Dear ${x.to.length === 1 ? (x.to[0].name || 'all').split(' ')[0] : 'all'},\n\nPlease find attached this week's progress report for ${report.projectName || report.projectNo}.\n\nKind regards`)
+    }).catch(() => setErr('Could not load the recipients'))
+  }, [report.id])
+  async function send() {
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/project-report-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', reportId: report.id, cc: [...cc], subject, message }) })
+      const x = await r.json(); if (!r.ok) throw new Error(x.error || 'Could not send'); setDone(x.sent)
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const users = d ? d.users.filter(u => !words.length || words.every(w => `${u.name} ${u.email}`.toLowerCase().includes(w))) : []
+  const box = { width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }
+  return (
+    <Modal title={`Send Customer Progress Report - ${report.reportId || ''} ${report.projectName || report.projectNo || ''}`} onClose={onClose} wide>
+      {done ? <div style={{ padding: '10px 0', fontSize: 14 }}>
+        <div style={{ color: '#0f766e', fontWeight: 600, marginBottom: 6 }}>Sent.</div>
+        <div>To {done.to.join(', ')}{done.cc.length ? <> - copied to {done.cc.join(', ')}</> : null}</div>
+        <button onClick={onClose} style={{ ...primaryBtn, marginTop: 14 }}>Close</button>
+      </div> : !d ? (err ? <div style={{ color: '#b42318', fontSize: 13 }}>{err}</div> : <Loading />) : <>
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: '10px 0 4px' }}>To - the customer's project team</div>
+        {d.to.length ? <div style={{ fontSize: 13 }}>{d.to.map(t => <div key={t.email}>{t.name || t.email}{t.title ? <span style={{ color: '#888' }}> - {t.title}</span> : null} <span style={{ color: '#888' }}>&lt;{t.email}&gt;</span></div>)}</div>
+          : <div style={{ fontSize: 13, color: '#b42318' }}>No customer project team with an email address - add them in Project Details first.</div>}
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: '14px 0 4px' }}>Copy in <span style={{ fontWeight: 400, color: '#888' }}>- portal users ({cc.size} chosen)</span></div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search portal users..." style={{ ...box, marginBottom: 6 }} />
+        <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8 }}>
+          {users.map(u => <label key={u.email} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 10px', fontSize: 13, borderBottom: '1px solid #f6f6f4', cursor: 'pointer' }}>
+            <input type="checkbox" checked={cc.has(u.email)} onChange={e => setCc(s => { const n = new Set(s); e.target.checked ? n.add(u.email) : n.delete(u.email); return n })} />
+            <span style={{ flex: 1 }}>{u.name}</span><span style={{ color: '#999', fontSize: 12 }}>{u.email}</span></label>)}
+        </div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: '14px 0 4px' }}>Subject</div>
+        <input value={subject} onChange={e => setSubject(e.target.value)} style={box} />
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: '14px 0 4px' }}>Message</div>
+        <textarea value={message} onChange={e => setMessage(e.target.value)} style={{ ...box, minHeight: 120, resize: 'vertical' }} />
+        <div style={{ fontSize: 12, color: '#777', marginTop: 8 }}>Sent from the notifications address with the Customer Progress Report attached as a PDF - <a href={`/api/project-report-customer?preview=${encodeURIComponent(report.id)}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>preview what they receive</a>. Replies come to you.</div>
+        {(d.sends || []).length > 0 && <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Sent before: {d.sends.map(s => `${new Date(s.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} by ${s.by || 'someone'}`).join('; ')}</div>}
+        {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 8 }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <button onClick={send} disabled={busy || !d.to.length} style={{ ...primaryBtn, opacity: (busy || !d.to.length) ? 0.5 : 1 }}>{busy ? 'Sending...' : 'Send Customer Progress Report'}</button>
+          <button onClick={onClose} style={ghostBtn}>Cancel</button>
+        </div>
+      </>}
+    </Modal>
   )
 }

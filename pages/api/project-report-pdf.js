@@ -1,6 +1,6 @@
 import { get } from '../../lib/db'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
-import { buildProjectReportPDF } from '../../lib/projectReportPdf'
+import { buildProjectReportPDF, openIssuesFor } from '../../lib/projectReportPdf'
 import withTenant from '../../lib/withTenant'
 
 // GET /api/project-report-pdf?id=pr_... -> branded, date-stamped report PDF
@@ -12,15 +12,8 @@ async function handler(req, res) {
     const report = reports.find(r => r.id === id)
     if (!report) return res.status(404).json({ error: 'Report not found' })
     const origin = `https://${req.headers.host}`
-    // Pull the full open-issue records referenced in this report, to append their forms.
-    // Only append issues that were sent to the customer (or marked sent); never "do not send".
-    let openIssues = []
-    try {
-      const allIssues = (await get('ops:issues')) || []
-      const ids = (report.issuesSnapshot || []).map(s => s.id).filter(Boolean)
-      openIssues = ids.map(id => allIssues.find(i => i.id === id)).filter(Boolean)
-        .filter(i => i.sendToCustomer !== 'nosend' && (i.sentToCustomer === true || i.sentManually === true))
-    } catch {}
+    // the issues it includes - one copy of the rule (lib/projectReportPdf, 1234)
+    const openIssues = await openIssuesFor(report)
     const bytes = await buildProjectReportPDF({ report, logoUrl: pdfLogoUrl(req), openIssues })
     const fname = `Project Report ${report.reportId || ''} - ${(report.projectName || report.projectNo || 'report')}.pdf`.replace(/[^a-zA-Z0-9 .-]/g, '')
     res.setHeader('Content-Type', 'application/pdf')

@@ -1,43 +1,46 @@
-PACKAGE 1233 - Project Report: marked-up drawings, planned works, customer notes
-(part 1 of the Customer Progress Report)
+PACKAGE 1234 - The Customer Progress Report (part 2)
 
 Five files. Complete replacements (two NEW). No re-seed. No env changes.
-Built on 1232.
+Built on 1233 - DEPLOY 1233 FIRST (the drawings).
 
-  lib/drawingPdf.js                              (NEW)
-  pages/api/project-report-drawings.js           (NEW)
+  lib/customerReport.js                          (NEW)
+  pages/api/project-report-customer.js           (NEW)
   lib/projectReportPdf.js
-  lib/projectReportTemplate.js
+  pages/api/project-report-pdf.js
   pages/operations/project-management/report.js
 
-THE REPORT FORM - under Works completed:
-  1. DRAWINGS - "+ Upload drawings" (PDF, PNG or JPEG, several at once). Click a
-     drawing to open it in the SAME mark-up viewer as the Design portal - arrow,
-     box, circle, line, draw, highlight, text, colours - saved as you go. The
-     drawings and their mark-up are kept PER PROJECT, so next week's report
-     carries the mark-up on and it is developed as the job progresses. Each
-     report keeps a COPY of the drawings and mark-up as they were when it was
-     saved, so a report already sent never changes.
-  2. PLANNED WORKS IN THE NEXT 1 - 2 WEEKS - a text box like the others.
-  3. ADDITIONAL NOTES FOR CUSTOMER REPORT - a text box.
-  Your own template sections now follow these.
-THE REPORT'S VIEW shows the drawings (click to see the mark-up as on that
-report), planned works and notes.
-THE REPORT'S PDF - the new sections in order after Works completed, and each
-marked-up drawing appended on a page of its own (landscape or portrait to suit;
-a PDF drawing's marked pages), every mark redrawn exactly where it was drawn -
-before the issue forms, with the signature footer on every page.
+PROJECT REPORTS - at the top, "EDIT CUSTOMER REPORT": tick what the customer is
+sent - every section of the report in order (variations, issues, site
+communications, works completed, drawings, planned works, customer notes, your
+own template sections, photos, additional photos, weather, approval). The
+project, address, customer and report date always head it. It starts as:
+variations (instructed and not), works completed, the marked-up drawings, the
+week's photos, planned works and the customer notes. Your own report is not
+changed.
+EACH ROW - "SEND CUSTOMER PROGRESS REPORT": an email window -
+  - TO: the customer's whole project team (from Project Details / the handover),
+    each once
+  - COPY IN: search and tick any portal users
+  - subject and message, prefilled and editable; "preview what they receive"
+  - sent FROM THE NOTIFICATIONS ADDRESS with the Customer Progress Report as a
+    PDF attachment - only the chosen sections, the marked-up drawings, photos and
+    comments; replies come to the sender; recorded on the report ("Sent before")
+  - no customer team with an email -> it says so, and to add them in Project
+    Details
+THE CUSTOMER PDF is titled "Customer Progress Report", has no internal status
+stamp or signature line, and is footed with the report number and page numbers.
+The internal report's PDF is unchanged.
 
-Checked: the drawing renderer on a grid image and a two-page PDF drawing - a
-box, ellipse, arrow (with its head), line, freehand, highlighter and wrapped bold
-underlined text each landing exactly on their gridlines; only the PDF's marked
-page 2 drawn, titled "page 2 of 2"; a broken link gives an explanatory page. The
-drawings route (real code): add, a bad link refused, mark-up saved with who, remove,
-per project. The report PDF: Works completed > Drawings > Planned works (lines
-kept) > Additional notes > Approval, both drawings appended with their mark-up,
-the footer on every page; looked at. In a REAL browser (Chromium): the new boxes;
-choose the project; upload a drawing; open it - the Design portal's viewer and
-tools; draw a box -> mark-up saved automatically (0.10-0.30); the list shows "1
-mark"; save -> planned works, notes and the drawings copy sent with the report.
-All server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1220) plus 1221-1232.
+Checked through the real route (the mail service stood in, the email inspected):
+the default selection; a change saved; the recipients - the customer team (an
+address in two cases sent once) and active portal users; the email - from the
+notifications address, to the team, copying the chosen user, reply-to the
+sender, the PDF attached; the PDF - Customer Progress Report, variations V01 Yes
+and V02 No, works completed, the drawing with its mark-up, planned works (lines
+kept), customer notes; site communications ("INTERNAL..."), issues and approval
+left out; the customer footer; the send recorded; no team refused. The internal
+report still has every section. In a REAL browser (Chromium): Edit customer
+report - the sections including your own, ticks saved; Send Customer Progress
+Report - the team, the subject and message, the preview link, a portal user
+copied in, Sent. All server routes compile; all pages pass the browser check.
+Built from your deployed packages (1022-1220) plus 1221-1233.
