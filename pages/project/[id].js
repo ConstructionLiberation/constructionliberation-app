@@ -138,6 +138,21 @@ export default function ProjectPage() {
   // COMMITTED COSTS - open purchase orders less what has been billed (1221)
   const [committed, setCommitted] = useState(null)
   useEffect(() => { if (id) fetch(`/api/purchase-orders?committed=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).then(d => setCommitted(d)).catch(() => setCommitted(null)) }, [id])
+  // COSTS REMAINING - entered by the CM (1222); the forecast cost is costs to date +
+  // committed + these, measured against the AFA
+  const [remaining, setRemaining] = useState(null)            // as saved
+  const [remLines, setRemLines] = useState([])                // being edited
+  const [remBusy, setRemBusy] = useState(false), [remMsg, setRemMsg] = useState('')
+  useEffect(() => { if (id) fetch(`/api/project/${encodeURIComponent(id)}/forecast-costs`).then(r => r.ok ? r.json() : null).then(d => { const lines = d && Array.isArray(d.lines) ? d.lines : []; setRemaining(d ? { ...d, lines } : null); setRemLines(lines) }).catch(() => setRemaining(null)) }, [id])
+  async function saveRemaining() {
+    setRemBusy(true); setRemMsg('')
+    try {
+      const r = await fetch(`/api/project/${encodeURIComponent(id)}/forecast-costs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines: remLines }) })
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not save')
+      const lines = Array.isArray(d.lines) ? d.lines : []; setRemaining({ ...d, lines }); setRemLines(lines); setRemMsg('Saved.')
+    } catch (e) { setRemMsg(e.message) }
+    setRemBusy(false)
+  }
   // the project's purchase orders, for the section below the cards (1221)
   const [projectPos, setProjectPos] = useState(null)
   useEffect(() => { if (id) fetch('/api/purchase-orders').then(r => r.ok ? r.json() : null).then(d => setProjectPos(d ? (d.pos || []).filter(p => String(p.projectId) === String(id)) : null)).catch(() => setProjectPos(null)) }, [id])
@@ -342,6 +357,14 @@ export default function ProjectPage() {
   // Budget, Budget vs Spend, Cost Breakdown, the Costs tab, Total Invoiced and
   // Retention Held - reads these.
   const live = calcAtDate(costLines, invoiceLines, null, settings || {})
+  // FORECAST GROSS PROJECT MARGIN (1222): AFA less (costs to date + committed on open POs +
+  // the CM's costs remaining). The AFA is the same figure as the AFA card (one shared rule).
+  const forecast = (() => {
+    const toDate = Number(live.costsToDate) || 0, committedAmt = (committed && Number(committed.committed)) || 0
+    const rem = (remaining && Array.isArray(remaining.lines) ? remaining.lines : []).reduce((a, l) => a + (Number(l.amount) || 0), 0)
+    const cost = toDate + committedAmt + rem, afa = Number(live.afa) || 0
+    return { toDate, committed: committedAmt, remaining: rem, cost, afa, margin: afa - cost, pct: afa > 0 ? (afa - cost) / afa : null }
+  })()
   const trendData = pastVDates.slice(0, 6).reverse().map(d => {
     const calc = calcAtDate(costLines, invoiceLines, d, settings || {})
     return { label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), margin: calc.margin, invoiced: calc.invoicedToDate, costs: calc.costsToDate }
@@ -388,7 +411,7 @@ export default function ProjectPage() {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 12, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 12, marginBottom: 20 }}>
             {[
               { label: 'AFA', value: fmt(atDate.afa), sub: atDate.afaSource ? `${atDate.afaSource} · CV: ${fmt(parseFloat(settings?.contractValue || 0))}` : `CV: ${fmt(parseFloat(settings?.contractValue || 0))}` },
               { label: 'Application total inc. retention', value: fmt(atDate.appliedForGross), sub: atDate.afa > 0 ? `${((atDate.appliedForGross / atDate.afa) * 100).toFixed(0)}% of AFA` : `as at ${vDateLabel}` },
@@ -396,6 +419,7 @@ export default function ProjectPage() {
               { label: 'Committed (open POs)', value: committed ? fmt(committed.committed) : '\u2014', sub: committed ? (committed.committed > 0 ? `${committed.open} PO${committed.open === 1 ? '' : 's'} not fully billed · ${fmt(committed.billed)} billed` : 'nothing ordered and unbilled') : 'purchase orders', color: committed && committed.committed > 0 ? '#7c3aed' : undefined },
               { label: 'Total Budget', value: fmt(live.totalBudget), sub: live.totalBudget > 0 ? `${((live.costsToDate / live.totalBudget) * 100).toFixed(0)}% used` : '⚠ Set budget' },
               { label: 'Current Margin', value: atDate.margin != null ? (atDate.margin * 100).toFixed(1) + '%' : '—', sub: `as at ${vDateLabel}`, color: marginColor(atDate.margin), bg: marginBg(atDate.margin), showKey: true },
+              { label: 'Forecast Margin', value: forecast.pct != null ? (forecast.pct * 100).toFixed(1) + '%' : '\u2014', sub: forecast.pct != null ? `${fmt(forecast.margin)} on AFA ${fmt(forecast.afa)}` : 'set the AFA', color: marginColor(forecast.pct), bg: marginBg(forecast.pct) },
               { label: 'Remaining to apply for', value: fmt(atDate.remainingToApply), sub: 'gross, AFA less applied for', color: atDate.remainingToApply > 0 ? '#2563eb' : '#e63946' },
             ].map(card => (
               <div key={card.label} style={{ background: card.bg || '#fff', borderRadius: 10, padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: card.bg ? `1px solid ${card.color}22` : 'none' }}>
@@ -435,6 +459,36 @@ export default function ProjectPage() {
                   </tr>))}</tbody>
               </table></div>)}
           </div>}
+          {/* FORECAST TO COMPLETE (1222) - the CM's costs remaining and the forecast margin */}
+          <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 14 }}>Forecast to complete</strong>
+              {remaining && remaining.updatedAt && <span style={{ fontSize: 12, color: '#999' }}>costs remaining updated by {remaining.updatedBy || 'someone'}, {new Date(remaining.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, margin: '10px 0' }}>
+              {[['Costs to date', forecast.toDate], ['Committed (open POs)', forecast.committed], ['Costs remaining', forecast.remaining]].map(([k, v], i) => <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{i > 0 && <span style={{ color: '#999' }}>+</span>}<span style={{ background: '#f8fafc', borderRadius: 8, padding: '4px 10px' }}>{k} <strong>{fmt(v)}</strong></span></span>)}
+              <span style={{ color: '#999' }}>=</span><span style={{ background: '#f1f5f9', borderRadius: 8, padding: '4px 10px' }}>Forecast cost <strong>{fmt(forecast.cost)}</strong></span>
+              <span style={{ color: '#999', marginLeft: 6 }}>against AFA</span><strong>{fmt(forecast.afa)}</strong>
+              <span style={{ color: '#999' }}>&rarr;</span><span style={{ fontWeight: 700, color: marginColor(forecast.pct) }}>{forecast.pct != null ? `${fmt(forecast.margin)} (${(forecast.pct * 100).toFixed(1)}%)` : '\u2014'}</span>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead><tr>{['Costs remaining - not yet ordered or billed', 'Category', 'Amount', ''].map((h, k) => <th key={k} style={{ textAlign: k === 2 ? 'right' : 'left', padding: '6px 8px', color: '#666', fontWeight: 600, borderBottom: '1px solid #eee' }}>{h}</th>)}</tr></thead>
+              <tbody>{remLines.map((l, i) => {
+                const upd = (k, v) => setRemLines(ls => ls.map((x, j) => j === i ? { ...x, [k]: v } : x))
+                return <tr key={l.id || i}>
+                  <td style={{ padding: '4px 8px' }}><input value={l.description} onChange={e => upd('description', e.target.value)} placeholder="e.g. Remaining labour - second fix" style={{ width: '100%', fontSize: 13, padding: '5px 8px', border: '1px solid #d4d4d0', borderRadius: 6, fontFamily: 'inherit' }} /></td>
+                  <td style={{ padding: '4px 8px', width: 150 }}><select value={l.category} onChange={e => upd('category', e.target.value)} style={{ fontSize: 13, padding: '5px 6px', border: '1px solid #d4d4d0', borderRadius: 6, fontFamily: 'inherit' }}>{[['labour', 'Labour'], ['materials', 'Materials'], ['plant', 'Plant'], ['other', 'Other']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></td>
+                  <td style={{ padding: '4px 8px', width: 140 }}><input type="number" step="any" value={l.amount} onChange={e => upd('amount', e.target.value)} style={{ width: '100%', fontSize: 13, padding: '5px 8px', border: '1px solid #d4d4d0', borderRadius: 6, textAlign: 'right', fontFamily: 'inherit' }} /></td>
+                  <td style={{ padding: '4px 8px', width: 30 }}><button onClick={() => setRemLines(ls => ls.filter((_, j) => j !== i))} title="Remove" style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 16 }}>&times;</button></td>
+                </tr> })}</tbody>
+            </table>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+              <button onClick={() => setRemLines(ls => [...ls, { id: `l${Date.now().toString(36)}`, description: '', category: 'labour', amount: '' }])} style={{ fontSize: 13, padding: '5px 12px', border: '1px solid #d4d4d0', background: '#fff', borderRadius: 7, cursor: 'pointer' }}>+ Add line</button>
+              <button onClick={saveRemaining} disabled={remBusy || JSON.stringify(remLines) === JSON.stringify((remaining && remaining.lines) || [])} style={{ fontSize: 13, padding: '5px 14px', border: 'none', background: '#0f766e', color: '#fff', borderRadius: 7, cursor: 'pointer', opacity: (remBusy || JSON.stringify(remLines) === JSON.stringify((remaining && remaining.lines) || [])) ? 0.5 : 1 }}>{remBusy ? 'Saving...' : 'Save costs remaining'}</button>
+              {remMsg && <span style={{ fontSize: 12.5, color: remMsg === 'Saved.' ? '#16a34a' : '#b42318' }}>{remMsg}</span>}
+              <span style={{ flex: 1 }} /><span style={{ fontSize: 12, color: '#999' }}>Lines not yet saved count once saved.</span>
+            </div>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
             <div>

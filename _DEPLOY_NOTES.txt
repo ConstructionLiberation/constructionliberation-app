@@ -1,54 +1,32 @@
-PACKAGE 1221 - Committed costs per project (open POs not yet billed)
+PACKAGE 1222 - Forecast Gross Project Margin
 
-Seven files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1220.
+Two files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1221 - DEPLOY 1221 FIRST (this replaces the project page 1221 changed).
 
-  lib/poCommitted.js                       (NEW)
-  lib/poShared.js, lib/xero.js
-  pages/api/purchase-orders.js
-  pages/operations/purchasing/purchase-orders.js
-  pages/operations/purchasing/po/[id].js   (folder literally named [id])
-  pages/project/[id].js                    (folder literally named [id])
+  pages/api/project/[id]/forecast-costs.js   (NEW; folder literally named [id])
+  pages/project/[id].js                      (folder literally named [id])
 
-COMMITTED = what has been ordered on a project but not yet billed: each
-approved / sent purchase order's value ex VAT, less the supplier bills that
-have come in against it, never below zero.
-BILLS ARE MATCHED TO POs BY THE PO NUMBER - a bill on the same project, from
-the same Xero supplier, quoting the number in its reference, its bill number
-or a line description ("APP-PO-0002", "APP PO 0002", "PO-0002" all match; a
-longer number such as PO-00021 does not). To do this the project cost lines
-now also keep each bill's reference, number and Xero contact - they fill in at
-the next cost sync; nothing else about the costs changes.
-"MARK AS FULLY BILLED" on a PO - for a bill that did not quote the PO number:
-the PO is closed ("Billed - closed") and no longer counts as committed;
-"Reopen" puts it back. A closed PO cannot be sent or changed.
-WHERE YOU SEE IT:
-  - Purchase Orders list: a "Committed" column (still committed, billed
-    beneath); pick a project to see "Committed on this project"; a "Billed -
-    closed" filter
-  - a PO: "Billed so far" and "Still committed"
-  - THE PROJECT PAGE (from Project Financials): a "Committed (open POs)" card
-    beside Total Spent, and a PURCHASE ORDERS section under the cards - every
-    PO on the project with its status, total, billed and still committed, each
-    opening the PO - and "+ Raise a PO for this project", which opens a new PO
-    with the project already picked and its address filled in
-When Vinay confirms which Xero field Dext puts the PO number in, matching can be
-narrowed to that field; until then reference, number and description are all
-searched.
+ON THE PROJECT PAGE (from Project Financials):
+  - a FORECAST MARGIN card beside Current Margin - the same colours (25% / 21%)
+  - a FORECAST TO COMPLETE section under Purchase orders:
+      Costs to date + Committed (open POs) + Costs remaining = Forecast cost,
+      against the AFA -> the forecast margin in pounds and per cent
+  - COSTS REMAINING are entered by the CM as lines - description, category
+    (labour, materials, plant, other), amount - "+ Add line", "Save costs
+    remaining"; who updated them and when is shown.
+The forecast updates by itself as POs are raised (committed rises), as bills
+arrive (cost moves from committed to costs to date) and as the CM revises the
+costs remaining. The AFA is the same figure as the AFA card - one shared rule
+(latest sent application, else an override, else contract value plus
+instructed variations).
+Who can enter costs remaining: post-contract, management, admin.
 
-AFTER DEPLOYING: the next cost sync fills in the bill references - until then
-bills already in Xero show as "not yet billed" against their POs.
-
-Checked through the real route: on one project, a sent PO (285) with a bill
-quoting only "PO-0001" (200) -> 85 committed; an approved PO (1000) with a bill
-"APP-PO-0002 part" (400) -> 600; an approved PO (500) -> 500; total 1185 - the
-unrelated bill, a cancelled PO and a draft left out; another project's PO on
-its own; Mark as fully billed -> 685, a closed PO refused for sending, Reopen
--> 1185; closing a draft refused. The matching rule checked on its own: the
-number's forms, no match on a longer number or another supplier, closed = 0,
-over-billing not negative. In a REAL browser (Chromium): the Committed column
-and the project total; the PO's billed / committed line, Mark as fully billed
-and Reopen; the project page's card and Purchase orders section (this
-project's POs only, newest first, billed and still committed) and "Raise a PO
-for this project" opening with the project picked and its address filled. All server routes compile; all pages pass the browser check. Built
-from your deployed packages (1022-1220, verified against their zips).
+Checked through the real route: lines saved (a blank one dropped, an unknown
+category kept as "other", amounts to the penny), read back, who saved them
+recorded; pre-contract refused. In a REAL browser (Chromium): costs to date
+12,000 + committed 685 + remaining 8,000 = 20,685 against an AFA of 50,000 ->
+29,315 (58.6%); a materials line of 5,000 added and saved -> 25,685, 24,315
+(48.6%), the card and the sum both updated, each line's category kept. The
+page first crashed when the costs reply had no lines - it now treats that as
+none. All server routes compile; all pages pass the browser check. Built from
+your deployed packages (1022-1220) plus 1221.
