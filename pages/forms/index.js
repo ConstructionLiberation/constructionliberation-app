@@ -8,6 +8,30 @@ import { useRouter } from 'next/router'
 import { compressImage } from '../../lib/compressImage'
 import { nameMatches, cmSeesAll } from '../../lib/cmSiteApp'
 
+// EVERY SITE APP CALL SAYS WHO IS ASKING (1220). The Site App's routes now refuse a call
+// that is not from a signed-in Site App user (or portal user). Rather than change every
+// screen, every call to /api/... from a Site App page carries the sign-in token; and a
+// call refused as signed out (an operative signed in before the token existed) signs them
+// out to the sign-in screen once, instead of leaving screens that silently fail.
+if (typeof window !== 'undefined' && !window.__opsFetchInstalled) {
+  window.__opsFetchInstalled = true
+  const f0 = window.fetch.bind(window)
+  window.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input && input.url) || ''
+    const api = url.startsWith('/api/') || url.startsWith(`${window.location.origin}/api/`)
+    if (api) {
+      let t = ''; try { t = sessionStorage.getItem('ops_token') || '' } catch {}
+      if (t) { const h = new Headers(init.headers || (typeof input !== 'string' && input && input.headers) || undefined); if (!h.has('x-ops-token')) h.set('x-ops-token', t); init = { ...init, headers: h } }
+    }
+    const r = await f0(input, init)
+    if (api && r.status === 401 && !url.includes('/api/ops-users')) {
+      try { const d = await r.clone().json(); if (d && d.siteSignIn && sessionStorage.getItem('ops_operative')) { sessionStorage.removeItem('ops_operative'); sessionStorage.removeItem('ops_token'); window.location.href = '/forms' } } catch {}
+    }
+    return r
+  }
+}
+
+
 // forms.rockroofing.co.uk — operative-facing app.
 // Mobile-first, big tap targets, one decision per screen. No portal access.
 const BRAND = '#ca8a04'          // Operations gold, ties to the portal tile

@@ -1,3 +1,4 @@
+import { internalHeaders } from '../../lib/internalKey'
 import { get, set } from '../../lib/db'
 import { verifySessionToken, SESSION_COOKIE } from '../../lib/portalAuth'
 import { getExternalUsers, externalCanAccessProject } from '../../lib/designUsers'
@@ -85,7 +86,7 @@ async function peopleWithEmail(projectNo) {
 
 async function projectName(projectNo) {
   try {
-    const d = await fetch(`${APP_URL()}/api/planning`).then(r => r.json())
+    const d = await fetch(`${APP_URL()}/api/planning`, { headers: await internalHeaders() }).then(r => r.json())   // the server calling itself (1220)
     const p = (d.projects || []).find(x => String(x.projectNo || x.jobNo || '') === String(projectNo))
     return p ? (p.name || '') : ''
   } catch { return '' }

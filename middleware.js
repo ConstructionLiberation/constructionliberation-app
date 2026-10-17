@@ -1,3 +1,4 @@
+import { isInternal } from './lib/internalKey'
 import { NextResponse } from 'next/server'
 
 const SESSION_COOKIE = 'rr_portal_session'
@@ -18,6 +19,22 @@ async function verifyToken(token, secret) {
 }
 
 // Operative Site App lives on siteapp.rockroofing.co.uk (formerly forms.).
+// THE CRON CHECK - one copy, for the main address AND the Site App address (1220). The
+// Site App address let /api/cron straight through, so any scheduled job could be run
+// by anyone through it.
+function cronGate(req) {
+  // Vercel sets this header on its own scheduled invocations. Trust it so scheduled
+  // crons always run, even if CRON_SECRET is mismatched/rotated.
+  if (req.headers.get('x-vercel-cron')) return NextResponse.next()
+  const secret = process.env.CRON_SECRET
+  if (!secret) return NextResponse.next()
+  const auth = req.headers.get('authorization') || ''
+  if (auth === `Bearer ${secret}`) return NextResponse.next()
+  // Allow a manual ?key=<secret> too, for testing from a browser.
+  if (req.nextUrl.searchParams.get('key') === secret) return NextResponse.next()
+  return new NextResponse(JSON.stringify({ error: 'Unauthorized cron' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+}
+
 export async function middleware(req) {
   const host = (req.headers.get('host') || '').toLowerCase()
   const isForms = host.startsWith('siteapp.') || host.startsWith('forms.')
@@ -115,6 +132,7 @@ export async function middleware(req) {
       pathname.startsWith('/api/report-problem') ||
       pathname.startsWith('/api/blob-upload') ||
       pathname.startsWith('/api/pre-start')
+    if (pathname.startsWith('/api/cron')) return cronGate(req)   // the cron secret here too (1220)
     if (passthrough) return NextResponse.next()
     if (pathname === '/forms' || pathname.startsWith('/forms/')) return NextResponse.next()
     url.pathname = '/forms'
@@ -129,18 +147,10 @@ export async function middleware(req) {
   // sends it as "Authorization: Bearer <CRON_SECRET>" on scheduled invocations. If a
   // CRON_SECRET is set we require it; if it isn't set we still let cron through (so the
   // jobs work) but they remain non-obvious internal endpoints.
-  if (pathname.startsWith('/api/cron')) {
-    // Vercel sets this header on its own scheduled invocations. Trust it so scheduled
-    // crons always run, even if CRON_SECRET is mismatched/rotated.
-    if (req.headers.get('x-vercel-cron')) return NextResponse.next()
-    const secret = process.env.CRON_SECRET
-    if (!secret) return NextResponse.next()
-    const auth = req.headers.get('authorization') || ''
-    if (auth === `Bearer ${secret}`) return NextResponse.next()
-    // Allow a manual ?key=<secret> too, for testing from a browser.
-    if (req.nextUrl.searchParams.get('key') === secret) return NextResponse.next()
-    return new NextResponse(JSON.stringify({ error: 'Unauthorized cron' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
-  }
+  if (pathname.startsWith('/api/cron')) return cronGate(req)
+  // THE SERVER CALLING ITSELF (1220) - its own jobs fetch /api/dashboard and /api/planning
+  // with no login; they carry the internal key instead (lib/internalKey).
+  if (pathname.startsWith('/api/') && await isInternal(req)) return NextResponse.next()
 
   // Always allow: static, the login page & its API, Xero OAuth callback, logo.
   const isOpen =

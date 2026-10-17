@@ -1,3 +1,4 @@
+import { internalHeaders } from '../../../lib/internalKey'
 import forEachTenant from '../../../lib/forEachTenant'
 import { refreshGpSnapshots } from '../../../lib/crmGpSnapshots'
 
@@ -15,7 +16,7 @@ async function handler(req, res) {
     // The project list, stages and estimators come from the same place Project Financials
     // uses, so the snapshot and the live page cannot disagree about who owns what.
     const base = process.env.PORTAL_BASE_URL || `https://${req.headers.host}`
-    const r = await fetch(`${base}/api/dashboard`, { headers: { cookie: req.headers.cookie || '' } })
+    const r = await fetch(`${base}/api/dashboard`, { headers: { cookie: req.headers.cookie || '', ...(await internalHeaders()) } })   // the server calling itself (1220)
     if (!r.ok) return res.status(500).json({ error: `Could not read /api/dashboard (${r.status})` })
     const { projects } = await r.json()
     // The same hide list the EOM report applies, so the two count the same projects.
