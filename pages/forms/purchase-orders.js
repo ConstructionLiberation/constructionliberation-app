@@ -57,8 +57,9 @@ export default function SitePurchaseOrders() {
 }
 
 // ONE PO, read-only (mine, or one I decide)
-export function PoView({ id, onDecided }) {
+export function PoView({ id, onDecided, data }) {
   const [d, setD] = useState(null), [err, setErr] = useState('')
+  const [editing, setEditing] = useState(false)   // the CM changes it before it is sent (1213)
   const [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [rejecting, setRejecting] = useState(false)
   useEffect(() => { siteApi(`/api/site-po?id=${encodeURIComponent(id)}`).then(setD).catch(e => setErr(e.message)) }, [id])
   async function decide(action) {
@@ -67,6 +68,7 @@ export function PoView({ id, onDecided }) {
   }
   if (err && !d) return <div style={{ color: '#b42318', fontSize: 14 }}>{err}</div>
   if (!d) return <div style={{ textAlign: 'center', color: '#999', paddingTop: 30 }}>Loading...</div>
+  if (editing && data) return <NewPo data={data} initial={d.po} onCancel={() => setEditing(false)} onDone={(r) => { setD(x => ({ ...x, po: r.po })); setEditing(false) }} />
   const po = d.po, row = (k, v) => v ? <div style={{ display: 'flex', gap: 10, fontSize: 14, padding: '4px 0' }}><span style={{ color: '#888', minWidth: 120 }}>{k}</span><span style={{ flex: 1, whiteSpace: 'pre-line' }}>{v}</span></div> : null
   return (
     <div>
@@ -86,6 +88,7 @@ export function PoView({ id, onDecided }) {
         {row('Confirmations to', po.confirmationsTo)}{row('Notes', po.notes)}
       </div>
       {err && <div style={{ color: '#b42318', fontSize: 14, marginBottom: 8 }}>{err}</div>}
+      {d.canEdit && data && !rejecting && <button onClick={() => setEditing(true)} style={{ ...bigBtn(false), background: '#fff', color: INK, border: '1px solid #d9d5cc', marginBottom: 10 }}>Edit</button>}
       {d.canDecide && (!rejecting ? <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => decide('approve')} disabled={busy} style={{ ...bigBtn(busy), background: busy ? '#c9c4ba' : '#0f766e' }}>Approve</button>
           <button onClick={() => setRejecting(true)} disabled={busy} style={{ ...bigBtn(busy), background: '#fff', color: '#b42318', border: '1px solid #f5c2c2' }}>Reject</button></div>
@@ -97,8 +100,12 @@ export function PoView({ id, onDecided }) {
 }
 
 // A NEW PO from the phone
-function NewPo({ data, onDone }) {
-  const [po, setPo] = useState({ projectNo: '', contactId: '', contactName: '', priceList: '', lines: [], deliveryDate: '', deliveryAddress: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: data.settings.confirmationsTo || '', notes: '' })
+function NewPo({ data, onDone, initial = null, onCancel }) {
+  // NEW, or an existing PO being EDITED by the CM (1213) - its project stays as raised
+  const [po, setPo] = useState(() => initial ? { projectNo: initial.jobNo || '', contactId: initial.contactId || '', contactName: initial.contactName || initial.supplier || '', priceList: initial.priceList || '',
+      lines: (initial.lines || []).map(l => ({ ...l })), deliveryDate: initial.deliveryDate || '', deliveryAddress: initial.deliveryAddress || '', moffett: initial.moffett || '', artics: initial.artics || '', accessRoutes: initial.accessRoutes || '',
+      siteContact: { name: (initial.siteContact && initial.siteContact.name) || '', phone: (initial.siteContact && initial.siteContact.phone) || '' }, confirmationsTo: initial.confirmationsTo || '', notes: initial.notes || '', vat: initial.vat || 'standard' }
+    : { projectNo: '', contactId: '', contactName: '', priceList: '', lines: [], deliveryDate: '', deliveryAddress: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: data.settings.confirmationsTo || '', notes: '' })
   const [products, setProducts] = useState([]), [pq, setPq] = useState(''), [sq, setSq] = useState(''), [cq, setCq] = useState(null)
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false)
   const set = (k, v) => setPo(x => ({ ...x, [k]: v }))
@@ -115,7 +122,7 @@ function NewPo({ data, onDone }) {
   const setLine = (i, k, v) => setPo(x => ({ ...x, lines: x.lines.map((l, j) => j === i ? { ...l, [k]: v } : l) }))
   async function submit() {
     setBusy(true); setErr('')
-    try { const d = await siteApi('/api/site-po', { action: 'create', po }); onDone(d) } catch (e) { setErr(e.message); setBusy(false) }
+    try { const d = await siteApi('/api/site-po', initial ? { action: 'update', id: initial.id, po } : { action: 'create', po }); onDone(d) } catch (e) { setErr(e.message); setBusy(false) }
   }
   const yn = (k, label) => <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}><span style={{ flex: 1, fontSize: 14, color: po[k] ? INK : '#b45309' }}>{label}</span>
     {[['yes', 'Yes'], ['no', 'No']].map(([v, t]) => <button key={v} onClick={() => set(k, v)} style={{ fontSize: 14, padding: '9px 18px', borderRadius: 10, border: `1px solid ${po[k] === v ? '#0f766e' : '#d9d5cc'}`, background: po[k] === v ? '#0f766e' : '#fff', color: po[k] === v ? '#fff' : INK, fontFamily: 'inherit' }}>{t}</button>)}</div>
@@ -124,9 +131,9 @@ function NewPo({ data, onDone }) {
     <div>
       <div style={card}>
         <label style={{ ...lbl, marginTop: 0 }}>Project</label>
-        <select value={po.projectNo} onChange={e => { const p = data.projects.find(x => x.projectNo === e.target.value); setPo(x => ({ ...x, projectNo: e.target.value, deliveryAddress: (!x.deliveryAddress || x.deliveryAddress === x._auto) ? ((p && p.address) || '') : x.deliveryAddress, _auto: (p && p.address) || '' })) }} style={inp}>
+        {initial ? <div style={{ fontSize: 15, fontWeight: 600 }}>{initial.jobNo} {initial.projectName}</div> : <select value={po.projectNo} onChange={e => { const p = data.projects.find(x => x.projectNo === e.target.value); setPo(x => ({ ...x, projectNo: e.target.value, deliveryAddress: (!x.deliveryAddress || x.deliveryAddress === x._auto) ? ((p && p.address) || '') : x.deliveryAddress, _auto: (p && p.address) || '' })) }} style={inp}>
           <option value="">Choose your project</option>{data.projects.map(p => <option key={p.projectNo} value={p.projectNo}>{p.projectNo} {p.name}</option>)}
-        </select>
+        </select>}
         <label style={lbl}>Supplier</label>
         {po.contactId ? <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong style={{ flex: 1, fontSize: 15 }}>{po.contactName}</strong><button onClick={() => setPo(x => ({ ...x, contactId: '', contactName: '', priceList: '' }))} style={{ ...back, color: '#0f766e' }}>Change</button></div>
           : <><input value={sq} onChange={e => setSq(e.target.value)} placeholder="Search suppliers…" style={inp} />
@@ -164,8 +171,9 @@ function NewPo({ data, onDone }) {
       </div>
       {err && <div style={{ color: '#b42318', fontSize: 14, marginBottom: 8 }}>{err}</div>}
       {missing.length > 0 && <div style={{ fontSize: 13, color: '#b45309', marginBottom: 8 }}>Still needed: {missing.join(', ')}</div>}
-      <button onClick={submit} disabled={busy || missing.length > 0} style={bigBtn(busy || missing.length > 0)}>{busy ? 'Sending…' : 'Send for approval'}</button>
-      <div style={{ fontSize: 12, color: '#999', textAlign: 'center', marginTop: 8 }}>Goes to the project's Contracts Manager - nothing is sent to the supplier until they approve.</div>
+      <button onClick={submit} disabled={busy || missing.length > 0} style={bigBtn(busy || missing.length > 0)}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Send for approval'}</button>
+      {initial ? <button onClick={onCancel} style={{ ...bigBtn(false), background: '#fff', color: '#555', border: '1px solid #d9d5cc', marginTop: 10 }}>Cancel</button>
+        : <div style={{ fontSize: 12, color: '#999', textAlign: 'center', marginTop: 8 }}>Goes to the project's Contracts Manager - nothing is sent to the supplier until they approve.</div>}
     </div>
   )
 }

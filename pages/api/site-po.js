@@ -55,16 +55,18 @@ async function handler(req, res) {
       const po = await loadPo(String(req.query.id))
       const proj = po && projOf(po)
       if (!po || !(String(po.raisedByOps) === String(user.id) || (proj && await isProjectCm(user, proj)))) return res.status(404).json({ error: 'That purchase order is not available.' })
-      return res.status(200).json({ po, canDecide: po.status === 'awaiting-approval' && !!proj && await isProjectCm(user, proj) })
+      const cm = !!proj && await isProjectCm(user, proj)
+      // the CM can change it until it is SENT (1213)
+      return res.status(200).json({ po, canDecide: po.status === 'awaiting-approval' && cm, canEdit: cm && (po.status === 'awaiting-approval' || po.status === 'approved') })
     }
     const all = await listPos()
     const mine = all.filter(p => String(p.raisedByOps || '') === String(user.id))
-    const approvals = []
-    for (const p of all.filter(x => x.status === 'awaiting-approval')) { const proj = projOf(p); if (proj && await isProjectCm(user, proj)) approvals.push(p) }
+    const approvals = [], approvedUnsent = []
+    for (const p of all.filter(x => x.status === 'awaiting-approval' || x.status === 'approved')) { const proj = projOf(p); if (proj && await isProjectCm(user, proj)) (p.status === 'approved' ? approvedUnsent : approvals).push(p) }
     const st = await loadPoSettings()
     return res.status(200).json({ me: { id: user.id, name: nameOf(user), isCM: user.accessLevel === 'contracts-manager' },
       projects: await Promise.all(projects.map(async p => ({ projectNo: p.projectNo, name: p.name, projectId: p.projectId, address: await addressOf(p) }))),
-      settings: { confirmationsTo: st.confirmationsTo || '', vatRate: st.vatRate }, contacts: await xeroContacts(), people: await sitePeople(), mine, approvals })
+      settings: { confirmationsTo: st.confirmationsTo || '', vatRate: st.vatRate }, contacts: await xeroContacts(), people: await sitePeople(), mine, approvals, approvedUnsent })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -88,6 +90,24 @@ async function handler(req, res) {
     if (cm && cm.email) told = await mail(cm.email, `PO to approve - ${proj.projectNo} ${proj.name} - ${po.contactName || po.supplier}`,
       `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><p>Hi ${esc(cm.firstName || '')},</p><p>${esc(by)} has raised a purchase order for your approval. Nothing goes to the supplier until you approve it.</p>${summary(po)}${button(siteAppUrl(), 'Open the Site App to approve')}</div>`)
     return res.status(200).json({ ok: true, po, cmNotified: told, cmName: cm ? nameOf(cm) || cm.firstName || '' : '' })
+  }
+  // THE CM EDITS IT (1213) - while it awaits them, or once approved until the office
+  // sends it. The same full check; the project stays as raised.
+  if (b.action === 'update') {
+    const po = await loadPo(String(b.id || ''))
+    const proj = po && projOf(po)
+    if (!po || !proj || !(await isProjectCm(user, proj))) return res.status(403).json({ error: 'Only the project\'s Contracts Manager can change this purchase order.' })
+    if (po.status !== 'awaiting-approval' && po.status !== 'approved') return res.status(409).json({ error: `This purchase order has been ${po.status} - it can no longer be changed` })
+    const src = b.po || {}
+    const r0 = await resolveSupplier(src); if (r0.error) return res.status(400).json({ error: r0.error })
+    const sup = r0.sup, lines = cleanLines(src.lines)
+    const fields = buildFields({ ...src, projectId: po.projectId, jobNo: po.jobNo, projectName: po.projectName }, sup, lines)
+    const why = await completeProblem(fields, sup, lines); if (why) return res.status(400).json({ error: why })
+    if (!EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
+    const next = { ...po, ...fields, to: (sup && sup.email) || po.to || '', history: [...(po.history || []), { at: now, by, what: 'Changed by the CM' }] }
+    await savePo(next)
+    if (next.status === 'approved') await setDelivery(next)
+    return res.status(200).json({ ok: true, po: next })
   }
   if (b.action === 'approve' || b.action === 'reject') {
     const po = await loadPo(String(b.id || ''))

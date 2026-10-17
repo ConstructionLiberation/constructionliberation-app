@@ -31,7 +31,7 @@ export default function PoApprovals() {
         <h2 style={{ fontSize: 18, color: INK, margin: '8px 0 4px' }}>PO Approvals</h2>
         {err && <div style={{ ...card, borderColor: '#fecaca', background: '#fef2f2', color: '#b42318', fontSize: 14 }}>{err}</div>}
         {msg && <div style={{ ...card, borderColor: '#99f6e4', background: '#f0fdfa', color: '#0f766e', fontSize: 14 }}>{msg}</div>}
-        {open ? <PoView id={open} onDecided={(po, action) => { setOpen(null); setMsg(action === 'approve' ? `Approved as ${po.number} - the office will send it to the supplier.` : 'Rejected - the operative has been told.'); load() }} />
+        {open ? <PoView id={open} data={data} onDecided={(po, action) => { setOpen(null); setMsg(action === 'approve' ? `Approved as ${po.number} - the office will send it to the supplier.` : 'Rejected - the operative has been told.'); load() }} />
           : !data ? (!err && <div style={{ textAlign: 'center', color: '#999', paddingTop: 30 }}>Loading...</div>)
           : <>
             <p style={{ color: '#777', fontSize: 14, margin: '0 0 14px' }}>Purchase orders raised on your projects, waiting for you. Nothing is sent to the supplier until you approve.</p>
@@ -40,6 +40,15 @@ export default function PoApprovals() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 15, color: INK }}>{p.supplier}</strong>{statusChip(p.status)}</div>
                 <div style={{ fontSize: 13, color: '#777', marginTop: 3 }}>{p.jobNo} {p.projectName} · {money(p.gross ?? p.total)} · {p.raisedBy}</div>
               </button>))}
+            {/* approved, still editable until the office sends it (1213) */}
+            {(data.approvedUnsent || []).length > 0 && <>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: '#ca8a04', margin: '22px 0 8px' }}>Approved - not yet sent</div>
+              {data.approvedUnsent.map(p => (
+                <button key={p.id} onClick={() => { setMsg(''); setOpen(p.id) }} style={{ ...card, width: '100%', textAlign: 'left', cursor: 'pointer', display: 'block', fontFamily: 'inherit' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 15, color: INK }}>{p.supplier}</strong>{statusChip(p.status)}</div>
+                  <div style={{ fontSize: 13, color: '#777', marginTop: 3 }}>{p.number} · {p.jobNo} {p.projectName} · {money(p.gross ?? p.total)}</div>
+                </button>))}
+            </>}
           </>}
       </div>
     </Shell>

@@ -1,38 +1,32 @@
-PACKAGE 1212 - Purchasing, stage 2b-2: purchase orders in the Site App
+PACKAGE 1213 - Site App: CMs edit purchase orders before they are sent
 
-Four files. Complete replacements (three NEW). No re-seed. No env changes.
-Built on 1211 - deploy 1211 first (the sign-in token these screens use).
+Three files. Complete replacements. No re-seed. No env changes. Built on 1212.
 
-  lib/siteApi.js                        (NEW)
-  pages/forms/purchase-orders.js        (NEW)
-  pages/forms/cm/po-approvals.js        (NEW)
-  pages/forms/index.js
+  pages/api/site-po.js
+  pages/forms/purchase-orders.js
+  pages/forms/cm/po-approvals.js
 
-SITE APP HOME - a "Purchase Orders" card for everyone; for Contracts Managers,
-"PO Approvals" in their section with a count of what is waiting.
-PURCHASE ORDERS (operatives) - "My purchase orders" with their status
-(awaiting the CM, approved, sent, rejected and why) and "+ New purchase order",
-made for a phone:
-  - project: one of theirs - the delivery address fills in
-  - supplier: search any Xero contact; a price-list supplier's products can be
-    tapped in (quantity blank and red until typed), or "+ Add an item"
-  - delivery: required date, address, Moffett and artics (Yes/No), access
-    routes, site contact (search, or type anyone, with their mobile), order
-    confirmations email (prefilled with the company default), notes
-  - "Send for approval" - held until complete, saying what is still needed;
-    then "Sent to <the CM> for approval"
-PO APPROVALS (CMs) - the POs on their projects waiting for them; open one to
-see the lines, VAT, totals and delivery details; Approve, or Reject with a
-reason. An approved PO is numbered and goes to the office to send.
-Operatives signed in before 1211 are asked to sign out and in again the first
-time (their sign-in had no token).
+A project's Contracts Manager can now EDIT a purchase order in the Site App
+until it is sent to the supplier:
+  - in PO Approvals, a waiting PO has "Edit" beside Approve and Reject: the
+    same form as raising one, filled in - supplier, lines, quantities, prices,
+    delivery details; the project stays as raised. "Save changes", then approve
+    or reject.
+  - an APPROVED PO the office has not yet sent stays editable - listed under
+    "Approved - not yet sent" in PO Approvals; its Deliveries entry follows the
+    changes.
+  - once SENT it is fixed (as in the portal).
+The edited PO must still be complete (the same full check), and every change
+is recorded in its history with the CM's name. Only that project's CM can
+edit - not the operative who raised it, nor anyone else.
 
-Checked in a REAL browser (Chromium, phone size): an operative's list (sent,
-rejected); a new PO - J228 (address filled), Soprema found by "sopr", a
-product tapped in with a blank red focused quantity, "Send for approval" held
-(quantities, Moffett, artics, site contact) then enabled, sent with the
-operative's token - "Sent to Will Reid for approval"; the CM's home - the
-Purchase Orders card and PO Approvals with a badge of 1; opened, Reject held
-until a reason, Approve -> "Approved as APP-PO-0007", sent with the CM's
-token. The server side was proved in 1211. All pages pass the browser check.
-Built from your deployed packages (1022-1211, verified against their zips).
+Checked through the real route: Will (the CM) edited Dave's waiting PO
+(quantity changed, a line added) - still awaiting, "Changed by the CM by Will
+Reid"; Dave and Ali refused; an incomplete edit refused; after approval an
+edit saved and Deliveries showed the new lines, the PO listed as approved -
+not yet sent; once the office sent it, editing refused and Edit gone. In a
+REAL browser (Chromium, phone size): the "Approved - not yet sent" section;
+Edit beside Approve / Reject; the form filled in with the project fixed;
+quantity changed, saved with the CM's token, back to the PO to approve. All
+server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1212, verified against their zips).
