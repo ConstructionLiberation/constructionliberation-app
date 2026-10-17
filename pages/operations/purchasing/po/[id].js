@@ -61,6 +61,14 @@ export default function PoPage() {
   const words = pq.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const found = useMemo(() => products.filter(p => words.every(w => `${p.description} ${p.code} ${p.ref} ${p.section}`.toLowerCase().includes(w))).slice(0, 40), [products, pq])
   // the project's address from Project Details - filled in unless someone has typed their own
+  // RAISED FROM A PROJECT'S PAGE (1221): /operations/purchasing/po/new?project=<xero id>
+  // - the project already picked, its address filled in
+  const fromProject = isNew ? String(router.query.project || '') : ''
+  useEffect(() => {
+    if (!fromProject || !projects || !po || po.projectId) return
+    const p = projects.find(x => x.id === fromProject); if (!p) return
+    setPo(x => ({ ...x, projectId: p.id, jobNo: p.jobNo, projectName: p.name })); fillAddress(p)
+  }, [fromProject, projects, po && po.projectId])
   async function fillAddress(p) {
     try { const d = await call(null, `?project=${encodeURIComponent(p.id)}&jobNo=${encodeURIComponent(p.jobNo)}`)
       setPo(x => (!x.deliveryAddress || x.deliveryAddress === x._autoAddress) ? { ...x, deliveryAddress: d.projectAddress || '', _autoAddress: d.projectAddress || '' } : x) } catch {}

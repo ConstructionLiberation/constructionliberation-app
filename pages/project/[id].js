@@ -138,6 +138,9 @@ export default function ProjectPage() {
   // COMMITTED COSTS - open purchase orders less what has been billed (1221)
   const [committed, setCommitted] = useState(null)
   useEffect(() => { if (id) fetch(`/api/purchase-orders?committed=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).then(d => setCommitted(d)).catch(() => setCommitted(null)) }, [id])
+  // the project's purchase orders, for the section below the cards (1221)
+  const [projectPos, setProjectPos] = useState(null)
+  useEffect(() => { if (id) fetch('/api/purchase-orders').then(r => r.ok ? r.json() : null).then(d => setProjectPos(d ? (d.pos || []).filter(p => String(p.projectId) === String(id)) : null)).catch(() => setProjectPos(null)) }, [id])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState('overview')
@@ -390,7 +393,7 @@ export default function ProjectPage() {
               { label: 'AFA', value: fmt(atDate.afa), sub: atDate.afaSource ? `${atDate.afaSource} · CV: ${fmt(parseFloat(settings?.contractValue || 0))}` : `CV: ${fmt(parseFloat(settings?.contractValue || 0))}` },
               { label: 'Application total inc. retention', value: fmt(atDate.appliedForGross), sub: atDate.afa > 0 ? `${((atDate.appliedForGross / atDate.afa) * 100).toFixed(0)}% of AFA` : `as at ${vDateLabel}` },
               { label: 'Total Spent', value: fmt(live.costsToDate), sub: live.totalBudget > 0 ? `${((live.costsToDate / live.totalBudget) * 100).toFixed(0)}% of budget` : `as at ${vDateLabel}` },
-              { label: 'Committed (open POs)', value: committed ? fmt(committed.committed) : '\u2014', sub: committed ? (committed.pos.length ? `${committed.open} open PO${committed.open === 1 ? '' : 's'} · ${fmt(committed.billed)} billed` : 'no purchase orders yet') : 'purchase orders', color: committed && committed.committed > 0 ? '#7c3aed' : undefined },
+              { label: 'Committed (open POs)', value: committed ? fmt(committed.committed) : '\u2014', sub: committed ? (committed.committed > 0 ? `${committed.open} PO${committed.open === 1 ? '' : 's'} not fully billed · ${fmt(committed.billed)} billed` : 'nothing ordered and unbilled') : 'purchase orders', color: committed && committed.committed > 0 ? '#7c3aed' : undefined },
               { label: 'Total Budget', value: fmt(live.totalBudget), sub: live.totalBudget > 0 ? `${((live.costsToDate / live.totalBudget) * 100).toFixed(0)}% used` : '⚠ Set budget' },
               { label: 'Current Margin', value: atDate.margin != null ? (atDate.margin * 100).toFixed(1) + '%' : '—', sub: `as at ${vDateLabel}`, color: marginColor(atDate.margin), bg: marginBg(atDate.margin), showKey: true },
               { label: 'Remaining to apply for', value: fmt(atDate.remainingToApply), sub: 'gross, AFA less applied for', color: atDate.remainingToApply > 0 ? '#2563eb' : '#e63946' },
@@ -409,6 +412,29 @@ export default function ProjectPage() {
               </div>
             ))}
           </div>
+          {/* PURCHASE ORDERS on this project (1221) - billed and still committed; raise one from here */}
+          {projectPos && <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: projectPos.length ? 8 : 0 }}>
+              <strong style={{ fontSize: 14 }}>Purchase orders</strong>
+              {committed && <span style={{ fontSize: 12.5, color: '#64748b' }}>{fmt(committed.committed)} still committed · {fmt(committed.billed)} billed</span>}
+              <span style={{ flex: 1 }} />
+              <a href={`/operations/purchasing/po/new?project=${encodeURIComponent(id)}`} style={{ fontSize: 13, color: '#0f766e', fontWeight: 600, textDecoration: 'none' }}>+ Raise a PO for this project</a>
+            </div>
+            {!projectPos.length ? <div style={{ fontSize: 13, color: '#999', marginTop: 6 }}>No purchase orders on this project yet.</div> : (
+              <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead><tr>{['PO', 'Supplier', 'Status', 'Total ex VAT', 'Billed', 'Still committed', 'Raised'].map((h, k) => <th key={h} style={{ textAlign: k >= 3 && k <= 5 ? 'right' : 'left', padding: '6px 8px', color: '#666', fontWeight: 600, borderBottom: '1px solid #eee', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+                <tbody>{[...projectPos].sort((a, b) => String(b.raisedAt || '').localeCompare(String(a.raisedAt || ''))).map(p => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid #f4f3f0' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}><a href={`/operations/purchasing/po/${p.id}`} style={{ color: '#2563eb', textDecoration: 'none' }}>{p.number || (p.status === 'draft' ? 'Draft' : 'Not yet numbered')}</a></td>
+                    <td style={{ padding: '6px 8px' }}>{p.supplier}</td>
+                    <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{({ draft: 'Draft', 'awaiting-approval': 'Awaiting CM', approved: 'Approved - not sent', sent: 'Sent', closed: 'Billed - closed', rejected: 'Rejected', cancelled: 'Cancelled' })[p.status] || p.status}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>{fmt(p.total)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>{p.billed != null ? fmt(p.billed) : '\u2014'}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: p.committed > 0 ? 600 : 400, color: p.committed > 0 ? '#7c3aed' : '#999' }}>{p.committed != null ? fmt(p.committed) : '\u2014'}</td>
+                    <td style={{ padding: '6px 8px', color: '#777', whiteSpace: 'nowrap' }}>{p.raisedAt ? new Date(p.raisedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}{p.raisedBy ? ` · ${p.raisedBy}` : ''}</td>
+                  </tr>))}</tbody>
+              </table></div>)}
+          </div>}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
             <div>

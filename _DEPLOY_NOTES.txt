@@ -27,7 +27,11 @@ WHERE YOU SEE IT:
     beneath); pick a project to see "Committed on this project"; a "Billed -
     closed" filter
   - a PO: "Billed so far" and "Still committed"
-  - the project page: a "Committed (open POs)" card beside Total Spent
+  - THE PROJECT PAGE (from Project Financials): a "Committed (open POs)" card
+    beside Total Spent, and a PURCHASE ORDERS section under the cards - every
+    PO on the project with its status, total, billed and still committed, each
+    opening the PO - and "+ Raise a PO for this project", which opens a new PO
+    with the project already picked and its address filled in
 When Vinay confirms which Xero field Dext puts the PO number in, matching can be
 narrowed to that field; until then reference, number and description are all
 searched.
@@ -44,5 +48,7 @@ its own; Mark as fully billed -> 685, a closed PO refused for sending, Reopen
 number's forms, no match on a longer number or another supplier, closed = 0,
 over-billing not negative. In a REAL browser (Chromium): the Committed column
 and the project total; the PO's billed / committed line, Mark as fully billed
-and Reopen. All server routes compile; all pages pass the browser check. Built
+and Reopen; the project page's card and Purchase orders section (this
+project's POs only, newest first, billed and still committed) and "Raise a PO
+for this project" opening with the project picked and its address filled. All server routes compile; all pages pass the browser check. Built
 from your deployed packages (1022-1220, verified against their zips).
