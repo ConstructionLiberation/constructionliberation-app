@@ -22,7 +22,7 @@ import { listDocs } from '../../lib/documentsStore'
 import { DEFAULT_PO_EMAIL, poEmailValues, fillPoEmail } from '../../lib/poShared'
 import { sendPurchaseOrder } from '../../lib/poSend'
 import { decidePo } from '../../lib/poApprove'
-import { xeroPoProjects, xeroById, xeroByJob, projectGaps } from '../../lib/poProjects'
+import { xeroPoProjects, xeroById, xeroMatch, projectGaps, GAPS_DISMISSED } from '../../lib/poProjects'
 import { findProjectCM } from '../../lib/ramsNotify'
 import { newId, esc, money, cleanLines, EMAIL, deliveryHtml, xeroContacts, linkedSuppliers, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { privateReady, shortLink } from '../../lib/privateFiles'
@@ -71,7 +71,8 @@ async function handler(req, res) {
     // THE PROJECTS - Xero's, the same lookup as the Site App (1217); and what needs fixing
     const xp = await xeroPoProjects()
     const unlinked = pos.filter(p => p.status !== 'cancelled' && !xeroById(xp, p.projectId)).length
-    return res.status(200).json({ projects: xp, gaps: await projectGaps(), unlinked, canRelink: ['admin', 'management'].includes(normRole(session.role)), pos, settings: await loadPoSettings(), suppliers: await linkedSuppliers(), contacts: await xeroContacts(), companyName: companyName(), canSettings: normRole(session.role) === 'admin' })
+    const allGaps = await projectGaps()
+    return res.status(200).json({ projects: xp, gaps: allGaps.filter(g => !g.dismissed), gapsDismissed: allGaps.filter(g => g.dismissed).length, unlinked, canRelink: ['admin', 'management'].includes(normRole(session.role)), pos, settings: await loadPoSettings(), suppliers: await linkedSuppliers(), contacts: await xeroContacts(), companyName: companyName(), canSettings: normRole(session.role) === 'admin' })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -79,6 +80,13 @@ async function handler(req, res) {
   if (b.action === 'settings') {
     if (normRole(session.role) !== 'admin') return res.status(403).json({ error: 'Only an admin can change PO numbering' })
     return res.status(200).json({ ok: true, settings: await savePoSettings(b) })
+  }
+  // DISMISS / RESTORE A PROJECT IN THE "NOT IN XERO" NOTICE (1219) - management / admin
+  if (b.action === 'dismiss-gap' || b.action === 'restore-gaps') {
+    if (!['admin', 'management'].includes(normRole(session.role))) return res.status(403).json({ error: 'Only management or an admin can change this' })
+    const cur = ((await get(GAPS_DISMISSED)) || []).map(String)
+    await set(GAPS_DISMISSED, b.action === 'restore-gaps' ? [] : [...new Set([...cur, String(b.key || '')])].filter(Boolean))
+    return res.status(200).json({ ok: true })
   }
   // RELINK BY JOB NUMBER (1217) - POs saved without a Xero project (or with one no
   // longer in the list) are tied to the Xero project of the same job number.
@@ -88,7 +96,7 @@ async function handler(req, res) {
     for (const s0 of await listPos()) {
       if (s0.status === 'cancelled' || xeroById(xp, s0.projectId)) continue
       const p = await loadPo(s0.id); if (!p) continue
-      const x = xeroByJob(xp, p.jobNo)
+      const x = xeroMatch(xp, p.jobNo, p.projectName)
       if (!x) { unmatched.push(`${p.number || 'Draft'} (${p.jobNo || 'no job number'})`); continue }
       const next = { ...p, projectId: x.projectId, jobNo: x.jobNo, projectName: x.name, history: [...(p.history || []), { at: new Date().toISOString(), by, what: `Linked to Xero project ${x.jobNo} ${x.name}` }] }
       await savePo(next); if (next.status === 'approved' || next.status === 'sent') await setDelivery(next)
@@ -162,7 +170,15 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true, ...r })
   }
   if (b.action === 'discard') {
-    if (po.status !== 'draft') return res.status(409).json({ error: 'Only a draft can be deleted - cancel a raised PO instead' })
+    // DELETING (1219): a draft - anyone; a CANCELLED or REJECTED PO - management / admin;
+    // never a live one (awaiting approval, approved, sent) - cancel it first
+    if (po.status === 'cancelled' || po.status === 'rejected') {
+      if (!['admin', 'management'].includes(normRole(session.role))) return res.status(403).json({ error: 'Only management or an admin can delete a cancelled or rejected purchase order' })
+      await setDelivery(po, true).catch(() => {})
+      await deletePo(po.id)
+      return res.status(200).json({ ok: true })
+    }
+    if (po.status !== 'draft') return res.status(409).json({ error: 'Cancel it first - only a draft, or a cancelled or rejected purchase order, can be deleted' })
     await deletePo(po.id)
     return res.status(200).json({ ok: true })
   }

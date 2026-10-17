@@ -1,25 +1,34 @@
-PACKAGE 1218 - Project address on purchase orders (Site App and portal)
+PACKAGE 1219 - Purchase orders: deleting dead POs; the "not in Xero" notice
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1217.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1218.
 
-  lib/projectPeople.js
+  lib/poProjects.js
+  pages/api/purchase-orders.js
+  pages/operations/purchasing/purchase-orders.js
+  pages/operations/purchasing/po/[id].js   (folder literally named [id])
 
-WHY THE ADDRESS WAS BLANK: a project keeps its address in one of two fields -
-projectAddress (the IHM / Project Details) or siteLocation (older and
-hand-added projects). The Site App's own project list reads either, but the
-address rule purchase orders use (the portal's too) read only projectAddress,
-so a project with its address in siteLocation came back blank - in BOTH the
-Site App and the portal.
-NOW: projectAddress, else siteLocation - unless the address was deliberately
-set or cleared in Project Details, which still wins. The same rule feeds the
-project report and the project-complete checks, so they pick these addresses
-up too.
-If a project's address is still blank after this, it has no address in
-Project Details / the IHM - add it there.
+DELETING. Live purchase orders are still cancelled, not deleted - a numbered
+PO has gone to a supplier, and deleting it would leave a gap in the numbers and
+no record of what was ordered. Now:
+  - a DRAFT - anyone (as before)
+  - a CANCELLED or REJECTED PO - management / admin: "Delete" on the PO,
+    confirming "Delete PO-0003 for good? Its number will not be used again."
+  - awaiting approval, approved or sent - refused: cancel it first
+WHY "BBB Test Project 2" STAYED IN THE NOTICE: it has no job number, and
+projects were matched to Xero by job number only - it could never match.
+Now a project is matched by job number, and when that finds nothing, by its
+NAME (ignoring case and punctuation) - in the Site App, the portal and Relink.
+DISMISSING: management / admin can hide a project from the "not set up in
+Xero" notice with the x beside it (test projects, cancelled jobs); "N hidden
+- show again" brings them back.
 
-Checked through the real routes: a project with projectAddress, one with only
-siteLocation, and one with a Project Details override - all three now give
-their address, in the Site App and the portal (siteLocation was blank in both
-before). The rule: no override -> siteLocation used; override cleared on
-purpose -> stays blank; override set -> wins. All server routes compile.
-Built from your deployed packages (1022-1217, verified against their zips).
+Checked through the real routes: "BBB Test Project 2" (no job number) matched
+to its Xero project by name and gone from the notice; its PO-0002 relinked by
+name; a real gap dismissed by management (refused for post-contract) and
+restored; a draft deleted; a cancelled PO refused for post-contract, deleted
+by management; an approved PO refused ("cancel it first"); a rejected PO
+deleted by an admin. In a REAL browser (Chromium): the notice's x and "show
+again"; "Delete" on a cancelled PO (moved to the header - the first version
+put it where a cancelled PO's buttons do not show) with its confirmation. All
+server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1218, verified against their zips).

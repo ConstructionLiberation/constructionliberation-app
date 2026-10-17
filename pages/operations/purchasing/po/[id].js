@@ -104,7 +104,9 @@ export default function PoPage() {
     setBusy(false)
   }
   async function discard() {
-    if (!window.confirm('Delete this draft purchase order?')) return
+    // a draft, or (management / admin) a cancelled or rejected PO (1219)
+    const dead = po.status === 'cancelled' || po.status === 'rejected'
+    if (!window.confirm(dead ? `Delete ${po.number || 'this purchase order'} for good?${po.number ? ` Its number (${po.number}) will not be used again.` : ''}` : 'Delete this draft purchase order?')) return
     setBusy(true); setErr(''); try { await call({ action: 'discard', id: po.id }); router.replace('/operations/purchasing/purchase-orders') } catch (e) { setErr(e.message); setBusy(false) }
   }
   async function cancel() {
@@ -123,6 +125,8 @@ export default function PoPage() {
         <span style={{ flex: 1 }} />
         {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(link); setMsg('The supplier\'s link is copied.') }} style={btn}>Copy supplier link</button>}
         {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => setSending(true)} disabled={busy} style={primary}>{po.status === 'sent' ? 'Send again' : 'Send to supplier'}</button>}
+        {/* delete a cancelled or rejected PO - management / admin (1219) */}
+        {!isNew && (po.status === 'cancelled' || po.status === 'rejected') && list && list.canRelink && <button onClick={discard} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>}
         {!isNew && ['approved', 'sent', 'awaiting-approval'].includes(po.status) && <button onClick={cancel} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Cancel PO</button>}
       </div>
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
