@@ -200,6 +200,10 @@ export async function middleware(req) {
     // names one PO and the company. Without these the link bounces to the login page.
     pathname === '/po' ||
     pathname === '/api/po-view' ||
+    // A supplier's link to a query on their bill (1242): no portal account - the random token
+    // in the address opens that one query and nothing else. Without these it bounces to login.
+    pathname === '/bill-query' ||
+    pathname === '/api/bill-query' ||
     pathname === '/api/rams-token' ||
     pathname === '/api/rams-approvals' ||
     pathname === '/api/download' ||

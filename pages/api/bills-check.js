@@ -41,7 +41,8 @@ async function handler(req, res) {
   if (b.action === 'settings') {
     const pct = Number(b.tolerancePct), abs = Number(b.toleranceAbs)
     const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fromDate || '')) ? String(b.fromDate) : ''
-    await set(SETTINGS_KEY, { fromDate, tolerancePct: isFinite(pct) && pct >= 0 ? pct : 2, toleranceAbs: isFinite(abs) && abs >= 0 ? abs : 5 })
+    const dextEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(b.dextEmail || '').trim()) ? String(b.dextEmail).trim().toLowerCase() : ''   // documents from suppliers go on to Dext (1242)
+    await set(SETTINGS_KEY, { fromDate, tolerancePct: isFinite(pct) && pct >= 0 ? pct : 2, toleranceAbs: isFinite(abs) && abs >= 0 ? abs : 5, dextEmail })
     return res.status(200).json(await sortBills())
   }
   return res.status(400).json({ error: 'Unknown action' })
