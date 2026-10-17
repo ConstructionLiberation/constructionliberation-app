@@ -1,27 +1,41 @@
-PACKAGE 1214 - Purchase orders: the supplier's email, changeable on the PO
+PACKAGE 1215 - Site App: the CM sends purchase orders to the supplier
 
-Five files. Complete replacements. No re-seed. No env changes. Built on 1213.
+Five files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1214.
 
-  lib/poData.js
+  lib/poSend.js                         (NEW)
   pages/api/purchase-orders.js
   pages/api/site-po.js
-  pages/operations/purchasing/po/[id].js     (folder literally named [id])
   pages/forms/purchase-orders.js
+  pages/forms/cm/po-approvals.js
 
-A "SUPPLIER EMAIL" box on the PO - in the portal (under the supplier) and in
-the Site App (under the chosen supplier). It fills in from the supplier's
-Xero contact and can be changed for this PO (a branch, a named rep); it is
-saved with the PO - kept through drafts, raising, approval and a CM's edits -
-and the PO is emailed there (the portal's send box can still adjust it at the
-last moment). Picking the supplier again refills it only if nobody has typed
-their own. A malformed address is refused.
+WHY YOUR PO WAS NOT SENT: approving in the Site App only marked it approved -
+sending was left to the office (the portal), and the Site App had no Send
+button. Now the CM sends from the Site App:
+  - a waiting PO: "APPROVE AND SEND" (approved, numbered and emailed to the
+    supplier at once), "Approve only" (left for the office), or Reject
+  - an approved PO not yet sent (like PO-0002): "SEND TO SUPPLIER" (asks to
+    confirm, showing the address)
+The CM's email is the SAME as the office's - one shared sender now (lib/
+poSend.js): the company template, the PO with delivery details, lines, VAT
+and totals, its attachments, the view / print link, reply-to the order
+confirmations address. If there is no supplier email, the PO is still
+approved and the screen says why it could not be sent.
+THE HEADING now shows the supplier's name (the price-list name where there is
+one), with "Xero contact: ..." and "Sent to: <address>" beneath. Your PO-0002
+showed "sales@fixfast.com" as its heading because that is the NAME of the Xero
+contact Fixfast is linked to - worth checking that contact in Xero (Dext
+sometimes creates contacts named after an email) and renaming or merging it.
 
-Checked through the real routes: from Xero when nothing typed; a typed
-address kept on raising, through a draft saved and raised, and the email sent
-to it; a malformed one refused; an operative's typed address kept, the CM's
-edit keeping it and changing it. In a REAL browser (Chromium): the portal box
-filled from Xero, a typed address sticking when the supplier is picked again;
-the Site App box (phone size) filled from Xero, typed address kept, placed
-below the supplier. All server routes compile; all pages pass the browser
-check. Built from your deployed packages (1022-1213, verified against their
-zips).
+Checked through the real route: approve and send -> sent, the supplier's
+email complete (message, PO, delivery, line, VAT and total, link, reply-to the
+confirmations address), the operative told; approve only -> approved, then
+Send -> sent, a second send refused; someone other than the CM refused; no
+supplier email -> approved, with the reason. The office's sending proved
+unchanged (template, attachments, sending after approval and the supplier
+email tests identical before and after). In a REAL browser (Chromium, phone
+size): Edit / Approve and send / Approve only / Reject; "approved and sent to
+hire@hss.com"; the approved PO's heading (Fixfast, its Xero contact, sent-to
+address) and "Send to supplier". All server routes compile; all pages pass the
+browser check. Built from your deployed packages (1022-1214, verified against
+their zips).

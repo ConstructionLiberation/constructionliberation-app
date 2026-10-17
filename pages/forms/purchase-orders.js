@@ -62,9 +62,9 @@ export function PoView({ id, onDecided, data }) {
   const [editing, setEditing] = useState(false)   // the CM changes it before it is sent (1213)
   const [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [rejecting, setRejecting] = useState(false)
   useEffect(() => { siteApi(`/api/site-po?id=${encodeURIComponent(id)}`).then(setD).catch(e => setErr(e.message)) }, [id])
-  async function decide(action) {
+  async function decide(action, send = false) {
     setBusy(true); setErr('')
-    try { const r = await siteApi('/api/site-po', { action, id, reason }); onDecided && onDecided(r.po, action) } catch (e) { setErr(e.message); setBusy(false) }
+    try { const r = await siteApi('/api/site-po', { action, id, reason, send }); onDecided && onDecided(r.po, action, r) } catch (e) { setErr(e.message); setBusy(false) }
   }
   if (err && !d) return <div style={{ color: '#b42318', fontSize: 14 }}>{err}</div>
   if (!d) return <div style={{ textAlign: 'center', color: '#999', paddingTop: 30 }}>Loading...</div>
@@ -73,7 +73,9 @@ export function PoView({ id, onDecided, data }) {
   return (
     <div>
       <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 16 }}>{po.contactName || po.supplier}</strong>{statusChip(po.status)}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 16 }}>{po.supplier || po.contactName}</strong>{statusChip(po.status)}</div>
+        {(po.contactName && po.contactName !== po.supplier) && <div style={{ fontSize: 12, color: '#999' }}>Xero contact: {po.contactName}</div>}
+        <div style={{ fontSize: 13, color: po.to ? '#555' : '#b45309', marginTop: 2 }}>{po.to ? `Sent to: ${po.to}` : 'No supplier email - add one with Edit'}</div>
         <div style={{ fontSize: 13, color: '#777', margin: '4px 0 8px' }}>{po.jobNo} {po.projectName}{po.number ? ` · ${po.number}` : ''} · raised by {po.raisedBy}</div>
         {po.status === 'rejected' && <div style={{ background: '#fef2f2', color: '#b42318', borderRadius: 10, padding: 10, fontSize: 14, marginBottom: 8 }}>Rejected by {po.rejectedBy}: {po.rejectReason}</div>}
         {po.lines.map((l, i) => <div key={i} style={{ display: 'flex', gap: 8, fontSize: 14, padding: '6px 0', borderTop: i ? '1px solid #f1eee6' : 'none' }}><span style={{ flex: 1 }}>{l.description}<div style={{ fontSize: 12, color: '#999' }}>{l.qty} {l.unit} × {money(l.price)}</div></span><strong>{money(lineTotal(l))}</strong></div>)}
@@ -89,9 +91,13 @@ export function PoView({ id, onDecided, data }) {
       </div>
       {err && <div style={{ color: '#b42318', fontSize: 14, marginBottom: 8 }}>{err}</div>}
       {d.canEdit && data && !rejecting && <button onClick={() => setEditing(true)} style={{ ...bigBtn(false), background: '#fff', color: INK, border: '1px solid #d9d5cc', marginBottom: 10 }}>Edit</button>}
-      {d.canDecide && (!rejecting ? <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => decide('approve')} disabled={busy} style={{ ...bigBtn(busy), background: busy ? '#c9c4ba' : '#0f766e' }}>Approve</button>
-          <button onClick={() => setRejecting(true)} disabled={busy} style={{ ...bigBtn(busy), background: '#fff', color: '#b42318', border: '1px solid #f5c2c2' }}>Reject</button></div>
+      {d.canSend && <button onClick={() => { if (window.confirm(`Send ${po.number} to ${po.to || 'the supplier'}?`)) decide('send') }} disabled={busy || !po.to} style={{ ...bigBtn(busy || !po.to), background: (busy || !po.to) ? '#c9c4ba' : '#0f766e', marginBottom: 10 }}>{busy ? 'Sending…' : 'Send to supplier'}</button>}
+      {d.canDecide && (!rejecting ? <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button onClick={() => decide('approve', true)} disabled={busy || !po.to} title={po.to ? '' : 'Add the supplier email with Edit'} style={{ ...bigBtn(busy || !po.to), background: (busy || !po.to) ? '#c9c4ba' : '#0f766e' }}>{busy ? 'Working…' : 'Approve and send'}</button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => decide('approve', false)} disabled={busy} style={{ ...bigBtn(busy), background: '#fff', color: INK, border: '1px solid #d9d5cc' }}>Approve only</button>
+            <button onClick={() => setRejecting(true)} disabled={busy} style={{ ...bigBtn(busy), background: '#fff', color: '#b42318', border: '1px solid #f5c2c2' }}>Reject</button></div>
+          <div style={{ fontSize: 12, color: '#999', textAlign: 'center' }}>"Approve only" leaves it for the office to send.</div></div>
         : <div style={card}><label style={{ ...lbl, marginTop: 0 }}>Why is it rejected?</label><textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} style={inp} />
           <div style={{ display: 'flex', gap: 10, marginTop: 10 }}><button onClick={() => setRejecting(false)} style={{ ...bigBtn(false), background: '#fff', color: '#555', border: '1px solid #d9d5cc' }}>Back</button>
             <button onClick={() => decide('reject')} disabled={busy || !reason.trim()} style={{ ...bigBtn(busy || !reason.trim()), background: (busy || !reason.trim()) ? '#c9c4ba' : '#b42318' }}>Reject</button></div></div>)}

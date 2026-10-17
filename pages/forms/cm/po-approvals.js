@@ -31,7 +31,7 @@ export default function PoApprovals() {
         <h2 style={{ fontSize: 18, color: INK, margin: '8px 0 4px' }}>PO Approvals</h2>
         {err && <div style={{ ...card, borderColor: '#fecaca', background: '#fef2f2', color: '#b42318', fontSize: 14 }}>{err}</div>}
         {msg && <div style={{ ...card, borderColor: '#99f6e4', background: '#f0fdfa', color: '#0f766e', fontSize: 14 }}>{msg}</div>}
-        {open ? <PoView id={open} data={data} onDecided={(po, action) => { setOpen(null); setMsg(action === 'approve' ? `Approved as ${po.number} - the office will send it to the supplier.` : 'Rejected - the operative has been told.'); load() }} />
+        {open ? <PoView id={open} data={data} onDecided={(po, action, r) => { setOpen(null); setMsg(action === 'reject' ? 'Rejected - the operative has been told.' : action === 'send' || (r && r.sent) ? `${po.number} approved and sent to ${po.sentTo || po.to}.` : r && r.sendError ? `Approved as ${po.number}, but it could not be sent: ${r.sendError}` : `Approved as ${po.number} - the office will send it to the supplier.`); load() }} />
           : !data ? (!err && <div style={{ textAlign: 'center', color: '#999', paddingTop: 30 }}>Loading...</div>)
           : <>
             <p style={{ color: '#777', fontSize: 14, margin: '0 0 14px' }}>Purchase orders raised on your projects, waiting for you. Nothing is sent to the supplier until you approve.</p>

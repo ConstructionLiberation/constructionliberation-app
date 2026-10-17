@@ -19,6 +19,7 @@ import { fromEmail, siteAppUrl, companyName } from '../../lib/tenantSettings'
 import { listPos, loadPo, savePo, takeNumber, loadPoSettings } from '../../lib/purchaseOrders'
 import { newId, esc, money, cleanLines, EMAIL, xeroContacts, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { poTotal, poGross } from '../../lib/poShared'
+import { sendPurchaseOrder } from '../../lib/poSend'
 
 const nameOf = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.name || ''
 async function myProjects(user) {
@@ -57,7 +58,7 @@ async function handler(req, res) {
       if (!po || !(String(po.raisedByOps) === String(user.id) || (proj && await isProjectCm(user, proj)))) return res.status(404).json({ error: 'That purchase order is not available.' })
       const cm = !!proj && await isProjectCm(user, proj)
       // the CM can change it until it is SENT (1213)
-      return res.status(200).json({ po, canDecide: po.status === 'awaiting-approval' && cm, canEdit: cm && (po.status === 'awaiting-approval' || po.status === 'approved') })
+      return res.status(200).json({ po, canDecide: po.status === 'awaiting-approval' && cm, canEdit: cm && (po.status === 'awaiting-approval' || po.status === 'approved'), canSend: cm && po.status === 'approved' })
     }
     const all = await listPos()
     const mine = all.filter(p => String(p.raisedByOps || '') === String(user.id))
@@ -109,6 +110,16 @@ async function handler(req, res) {
     if (next.status === 'approved') await setDelivery(next)
     return res.status(200).json({ ok: true, po: next })
   }
+  // SEND AN APPROVED PO (1215) - the project's CM, from the Site App
+  if (b.action === 'send') {
+    const po = await loadPo(String(b.id || ''))
+    const proj = po && projOf(po)
+    if (!po || !proj || !(await isProjectCm(user, proj))) return res.status(403).json({ error: 'Only the project\'s Contracts Manager can send this purchase order.' })
+    if (po.status !== 'approved') return res.status(409).json({ error: po.status === 'sent' ? 'This purchase order has already been sent' : 'Approve it first' })
+    const s = await sendPurchaseOrder(po, { by, replyFallback: user.email })
+    if (s.error) return res.status(s.status || 400).json({ error: s.error })
+    return res.status(200).json({ ok: true, po: s.po })
+  }
   if (b.action === 'approve' || b.action === 'reject') {
     const po = await loadPo(String(b.id || ''))
     const proj = po && projOf(po)
@@ -125,6 +136,13 @@ async function handler(req, res) {
     // APPROVED: numbered now, at the VAT rate in force; into Deliveries; ready for the office to send
     const next = { ...po, number: await takeNumber(), status: 'approved', vatRate: (await loadPoSettings()).vatRate, approvedBy: by, approvedAt: now, history: [...(po.history || []), { at: now, by, what: 'Approved by the CM' }] }
     await savePo(next); await setDelivery(next)
+    // APPROVE AND SEND (1215) - the same email the office sends; "approve only" leaves it for the office
+    if (b.send) {
+      const s = await sendPurchaseOrder(next, { by, replyFallback: user.email })
+      if (s.error) return res.status(200).json({ ok: true, po: next, sendError: s.error })
+      await mail(po.raisedByEmail, `PO approved and sent - ${next.number} - ${po.jobNo} ${po.contactName || po.supplier}`, `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><p>Your purchase order was approved by ${esc(by)} and sent to the supplier.</p>${summary(s.po)}</div>`)
+      return res.status(200).json({ ok: true, po: s.po, sent: true })
+    }
     await mail(po.raisedByEmail, `PO approved - ${next.number} - ${po.jobNo} ${po.contactName || po.supplier}`, `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><p>Your purchase order was approved by ${esc(by)}. The office will send it to the supplier.</p>${summary(next)}</div>`)
     return res.status(200).json({ ok: true, po: next })
   }
