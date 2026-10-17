@@ -22,6 +22,7 @@ import { listDocs } from '../../lib/documentsStore'
 import { DEFAULT_PO_EMAIL, poEmailValues, fillPoEmail } from '../../lib/poShared'
 import { sendPurchaseOrder } from '../../lib/poSend'
 import { decidePo } from '../../lib/poApprove'
+import { xeroPoProjects, xeroById, xeroByJob, projectGaps } from '../../lib/poProjects'
 import { findProjectCM } from '../../lib/ramsNotify'
 import { newId, esc, money, cleanLines, EMAIL, deliveryHtml, xeroContacts, linkedSuppliers, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { privateReady, shortLink } from '../../lib/privateFiles'
@@ -67,7 +68,10 @@ async function handler(req, res) {
     }
     // POs listed before VAT (1204) carry no VAT figures - worked out from the PO itself
     const pos = await Promise.all((await listPos()).map(async p => p.gross != null ? p : summaryOf((await loadPo(p.id)) || p)))
-    return res.status(200).json({ pos, settings: await loadPoSettings(), suppliers: await linkedSuppliers(), contacts: await xeroContacts(), companyName: companyName(), canSettings: normRole(session.role) === 'admin' })
+    // THE PROJECTS - Xero's, the same lookup as the Site App (1217); and what needs fixing
+    const xp = await xeroPoProjects()
+    const unlinked = pos.filter(p => p.status !== 'cancelled' && !xeroById(xp, p.projectId)).length
+    return res.status(200).json({ projects: xp, gaps: await projectGaps(), unlinked, canRelink: ['admin', 'management'].includes(normRole(session.role)), pos, settings: await loadPoSettings(), suppliers: await linkedSuppliers(), contacts: await xeroContacts(), companyName: companyName(), canSettings: normRole(session.role) === 'admin' })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -75,6 +79,22 @@ async function handler(req, res) {
   if (b.action === 'settings') {
     if (normRole(session.role) !== 'admin') return res.status(403).json({ error: 'Only an admin can change PO numbering' })
     return res.status(200).json({ ok: true, settings: await savePoSettings(b) })
+  }
+  // RELINK BY JOB NUMBER (1217) - POs saved without a Xero project (or with one no
+  // longer in the list) are tied to the Xero project of the same job number.
+  if (b.action === 'relink') {
+    if (!['admin', 'management'].includes(normRole(session.role))) return res.status(403).json({ error: 'Only management or an admin can relink purchase orders' })
+    const xp = await xeroPoProjects(), relinked = [], unmatched = []
+    for (const s0 of await listPos()) {
+      if (s0.status === 'cancelled' || xeroById(xp, s0.projectId)) continue
+      const p = await loadPo(s0.id); if (!p) continue
+      const x = xeroByJob(xp, p.jobNo)
+      if (!x) { unmatched.push(`${p.number || 'Draft'} (${p.jobNo || 'no job number'})`); continue }
+      const next = { ...p, projectId: x.projectId, jobNo: x.jobNo, projectName: x.name, history: [...(p.history || []), { at: new Date().toISOString(), by, what: `Linked to Xero project ${x.jobNo} ${x.name}` }] }
+      await savePo(next); if (next.status === 'approved' || next.status === 'sent') await setDelivery(next)
+      relinked.push(`${p.number || 'Draft'} -> ${x.jobNo} ${x.name}`)
+    }
+    return res.status(200).json({ ok: true, relinked, unmatched })
   }
   if (b.action === 'create' || b.action === 'update' || b.action === 'raise') {
     // A DRAFT (1201) may be incomplete; RAISING checks everything - a supplier linked
@@ -84,10 +104,13 @@ async function handler(req, res) {
     // the supplier, the fields and the full check are shared with the Site App (lib/poData, 1211)
     const r0 = await resolveSupplier(src); if (r0.error) return res.status(400).json({ error: r0.error })
     const sup = r0.sup, lines = cleanLines(src.lines)
-    const fields = buildFields(src, sup, lines)
+    // THE PROJECT, from Xero on the server - its id, job number and name (1217)
+    const xp = await xeroPoProjects(), proj = src.projectId ? xeroById(xp, src.projectId) : null
+    const fields = buildFields(proj ? { ...src, projectId: proj.projectId, jobNo: proj.jobNo, projectName: proj.name } : src, sup, lines)
     const raising = !toDraft && b.action !== 'update'   // create (not a draft) or raise a draft
     const existing = b.action === 'update' ? await loadPo(String(b.id)) : null
     const strict = raising || (b.action === 'update' && existing && (existing.status === 'approved' || existing.status === 'awaiting-approval'))   // an approved or waiting PO stays complete when changed
+    if (strict && fields.projectId && !proj) return res.status(400).json({ error: 'That project is not in Xero - pick it again, or relink this PO by its job number (Purchase Orders list)' })
     if (strict) { const why = await completeProblem(fields, sup, lines); if (why) return res.status(400).json({ error: why }) }
     if (fields.confirmationsTo && !EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     if (fields.to && !EMAIL.test(fields.to)) return res.status(400).json({ error: 'The supplier email address is not valid' })

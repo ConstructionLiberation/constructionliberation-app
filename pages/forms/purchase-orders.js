@@ -138,7 +138,7 @@ function NewPo({ data, onDone, initial = null, onCancel }) {
       <div style={card}>
         <label style={{ ...lbl, marginTop: 0 }}>Project</label>
         {initial ? <div style={{ fontSize: 15, fontWeight: 600 }}>{initial.jobNo} {initial.projectName}</div> : <select value={po.projectNo} onChange={e => { const p = data.projects.find(x => x.projectNo === e.target.value); setPo(x => ({ ...x, projectNo: e.target.value, deliveryAddress: (!x.deliveryAddress || x.deliveryAddress === x._auto) ? ((p && p.address) || '') : x.deliveryAddress, _auto: (p && p.address) || '' })) }} style={inp}>
-          <option value="">Choose your project</option>{data.projects.map(p => <option key={p.projectNo} value={p.projectNo}>{p.projectNo} {p.name}</option>)}
+          <option value="">Choose your project</option>{data.projects.map(p => <option key={p.projectNo} value={p.projectNo} disabled={p.inXero === false}>{p.projectNo} {p.name}{p.inXero === false ? ' - not set up in Xero yet, ask the office' : ''}</option>)}
         </select>}
         <label style={lbl}>Supplier</label>
         {po.contactId ? <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong style={{ flex: 1, fontSize: 15 }}>{po.contactName}</strong><button onClick={() => setPo(x => ({ ...x, contactId: '', contactName: '', priceList: '' }))} style={{ ...back, color: '#0f766e' }}>Change</button></div>

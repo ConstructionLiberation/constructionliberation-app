@@ -24,6 +24,14 @@ export default function PurchaseOrdersPage() {
   const shown = useMemo(() => (data ? data.pos : []).filter(p => show === 'all' || (show === 'open' ? p.status === 'approved' : p.status === show))
     .filter(p => words.every(w => `${p.number || 'draft'} ${p.jobNo} ${p.projectName} ${p.supplier} ${p.raisedBy}`.toLowerCase().includes(w))), [data, q, show])
   const count = (st) => (data ? data.pos : []).filter(p => st === 'all' || (st === 'open' ? p.status === 'approved' : p.status === st)).length
+  async function relink() {
+    try {
+      const r = await fetch('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'relink' }) }).then(x => x.json())
+      if (r.error) throw new Error(r.error)
+      window.alert(`${r.relinked.length ? `Linked: ${r.relinked.join('; ')}` : 'Nothing could be linked.'}${r.unmatched.length ? `\n\nNo Xero project with the same job number: ${r.unmatched.join('; ')}` : ''}`)
+      window.location.reload()
+    } catch (e) { window.alert(e.message) }
+  }
   return (
     <OperationsShell active="purchasing:pos" section="purchasing" title="Purchase Orders" wide>
       <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 10 }}>
@@ -31,6 +39,11 @@ export default function PurchaseOrdersPage() {
         <span style={{ fontSize: 13, color: '#666' }}>Raised from the price list and emailed to the supplier. A PO is a commitment - costs still come from the bills in Xero.</span>
       </div>
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
+      {/* PROJECTS NOT LINKED TO XERO (1217) - for the office to put right */}
+      {data && ((data.gaps || []).length > 0 || data.unlinked > 0) && <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+        {(data.gaps || []).length > 0 && <div><strong>Live Site App projects not set up in Xero</strong> (operatives can't raise POs for them until they are - check the job number matches in Xero): {data.gaps.map(g => `${g.projectNo} ${g.name}`.trim()).join(', ')}</div>}
+        {data.unlinked > 0 && <div style={{ marginTop: (data.gaps || []).length ? 6 : 0 }}><strong>{data.unlinked} purchase order{data.unlinked === 1 ? '' : 's'} not linked to a Xero project.</strong>{data.canRelink && <button onClick={relink} style={{ ...btn, marginLeft: 8, padding: '3px 10px' }}>Relink by job number</button>}</div>}
+      </div>}
       {data && !(data.contacts || []).length && <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>Read your contacts from Xero first - <a href="/operations/purchasing/suppliers" style={{ color: '#0f766e' }}>Purchasing &gt; Suppliers</a> &gt; Refresh from Xero. Any Xero contact can then be a PO's supplier.</div>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         {[['open', 'Not sent'], ['awaiting-approval', 'Awaiting approval'], ['draft', 'Drafts'], ['sent', 'Sent'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) =>

@@ -35,12 +35,9 @@ export default function PoPage() {
   const [people, setPeople] = useState([])      // site contacts: operatives and portal users (1200)
   useEffect(() => {
     if (!id) return
-    call().then(d => { setList(d); if (isNew) setPo(x => x && !x.confirmationsTo ? { ...x, confirmationsTo: (d.settings && d.settings.confirmationsTo) || '' } : x) }).catch(e => setErr(e.message))
+    // the projects: Xero's, from the same lookup as the Site App (1217)
+    call().then(d => { setList(d); setProjects((d.projects || []).map(p => ({ id: p.projectId, jobNo: p.jobNo, name: p.name }))); if (isNew) setPo(x => x && !x.confirmationsTo ? { ...x, confirmationsTo: (d.settings && d.settings.confirmationsTo) || '' } : x) }).catch(e => setErr(e.message))
     call(null, '?people=1').then(d => setPeople(d.people || [])).catch(() => {})
-    Promise.all([fetch('/api/dashboard').then(r => r.json()).catch(() => ({})), fetch('/api/hidden-projects').then(r => r.json()).catch(() => ({}))]).then(([d, h]) => {
-      const hidden = new Set((h.hidden || []).map(String))
-      setProjects((d.projects || []).filter(p => p.xeroId && !hidden.has(String(p.xeroId))).map(p => ({ id: String(p.xeroId), jobNo: p.jobNo || '', name: p.name || p.projectName || '' })).sort((a, b) => String(b.jobNo).localeCompare(String(a.jobNo), undefined, { numeric: true })))
-    })
     if (isNew) setPo({ ...blank })
     else call(null, `?id=${encodeURIComponent(id)}`).then(d => { setPo(d.po); setLink(d.link); setCmName(d.cmName || ''); setLoaded(JSON.stringify(d.po)) }).catch(e => setErr(e.message))
   }, [id])

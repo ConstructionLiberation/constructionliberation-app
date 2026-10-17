@@ -20,20 +20,17 @@ import { listPos, loadPo, savePo, takeNumber, loadPoSettings } from '../../lib/p
 import { newId, esc, money, cleanLines, EMAIL, xeroContacts, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { poTotal, poGross } from '../../lib/poShared'
 import { sendPurchaseOrder } from '../../lib/poSend'
+import { sitePoProjects } from '../../lib/poProjects'
+import { normJob } from '../../lib/projectPeople'
 import { decidePo, mail, summary } from '../../lib/poApprove'
 
 const nameOf = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.name || ''
-async function myProjects(user) {
-  const [ops, cached] = await Promise.all([getOpsProjects(), getCachedProjects().catch(() => null)])
-  const xeroByJob = new Map(((cached || []).filter(p => p && p.jobNo)).map(p => [String(p.jobNo).toLowerCase(), String(p.xeroId || '')]))
-  return (ops || []).filter(p => (p.status || 'active') === 'active' && userCanAccess(user, p.projectNo))
-    .map(p => ({ projectNo: p.projectNo, name: (p.data && p.data.projectName) || '', projectId: xeroByJob.get(String(p.projectNo).toLowerCase()) || `job:${p.projectNo}`, _p: p }))
-}
+const myProjects = (user) => sitePoProjects(user)   // one lookup, shared with the portal (lib/poProjects, 1217)
 // the address from Project Details - the commercial override, else the IHM (as the portal does)
 async function addressOf(proj) {
   try {
     const { resolveProjectPeople } = await import('../../lib/projectPeople')
-    const [ops, users, settings] = await Promise.all([get('ops:projects'), getPortalUsers(), proj.projectId.startsWith('job:') ? null : getProject(proj.projectId)])
+    const [ops, users, settings] = await Promise.all([get('ops:projects'), getPortalUsers(), proj.projectId ? getProject(proj.projectId) : null])
     return (resolveProjectPeople({ jobNo: proj.projectNo, opsProjects: ops || [], users: users || [], override: (settings && settings.peopleOverride) || {} }) || {}).projectAddress || ''
   } catch { return '' }
 }
@@ -44,7 +41,7 @@ async function handler(req, res) {
   const user = await opsUserFromReq(req)
   if (!user) return res.status(401).json({ error: 'Please sign in again.' })
   const projects = await myProjects(user)
-  const projOf = (po) => projects.find(p => String(p.projectNo).toLowerCase() === String(po.jobNo || '').toLowerCase())
+  const projOf = (po) => projects.find(p => normJob(p.projectNo) === normJob(po.jobNo))
   if (req.method === 'GET') {
     if (req.query.products) return res.status(200).json({ products: await supplierProducts(String(req.query.products)) })
     if (req.query.id) {
@@ -61,7 +58,7 @@ async function handler(req, res) {
     for (const p of all.filter(x => x.status === 'awaiting-approval' || x.status === 'approved')) { const proj = projOf(p); if (proj && await isProjectCm(user, proj)) (p.status === 'approved' ? approvedUnsent : approvals).push(p) }
     const st = await loadPoSettings()
     return res.status(200).json({ me: { id: user.id, name: nameOf(user), isCM: user.accessLevel === 'contracts-manager' },
-      projects: await Promise.all(projects.map(async p => ({ projectNo: p.projectNo, name: p.name, projectId: p.projectId, address: await addressOf(p) }))),
+      projects: await Promise.all(projects.map(async p => ({ projectNo: p.projectNo, name: p.name, projectId: p.projectId, inXero: p.inXero, address: p.inXero ? await addressOf(p) : '' }))),
       settings: { confirmationsTo: st.confirmationsTo || '', vatRate: st.vatRate }, contacts: await xeroContacts(), people: await sitePeople(), mine, approvals, approvedUnsent })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -72,9 +69,11 @@ async function handler(req, res) {
     // the project: one of MINE, its details from the server - not from the phone
     const proj = projects.find(p => String(p.projectNo) === String(src.projectNo || src.jobNo || ''))
     if (!proj) return res.status(403).json({ error: 'Pick one of your projects' })
+    // tied to the Xero project, always (1217)
+    if (!proj.inXero) return res.status(409).json({ error: `${proj.projectNo} is not set up in Xero yet - ask the office` })
     const r0 = await resolveSupplier(src); if (r0.error) return res.status(400).json({ error: r0.error })
     const sup = r0.sup, lines = cleanLines(src.lines)
-    const fields = buildFields({ ...src, projectId: proj.projectId, jobNo: proj.projectNo, projectName: proj.name }, sup, lines)
+    const fields = buildFields({ ...src, projectId: proj.projectId, jobNo: proj.xeroJobNo || proj.projectNo, projectName: proj.name }, sup, lines)   // all from Xero (1217)
     const why = await completeProblem(fields, sup, lines); if (why) return res.status(400).json({ error: why })
     if (!EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     const st = await loadPoSettings()
