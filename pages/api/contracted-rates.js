@@ -32,6 +32,8 @@ function populateBudgetsFromCR(project) {
 }
 import { parseTakeOffRows, computeRateTotals } from '../../lib/contractRatesParser'
 import withTenant from '../../lib/withTenant'
+import { listEstimates, loadEstimate, loadRevision } from '../../lib/estimateStore'
+import { loadPriceLib, ratesFromEstimate } from '../../lib/estimateToRates'
 
 export const config = { api: { bodyParser: { sizeLimit: '6mb' } } }
 
@@ -43,6 +45,12 @@ async function handler(req, res) {
   if (!requireArea(req, res, 'commercial')) return
 
   if (req.method === 'GET') {
+    // THE ESTIMATES to build contracted rates from (1225) - variations left out
+    if (req.query.estimates) {
+      const list = (await listEstimates()).filter(e => e && !e.variation)
+        .map(e => ({ id: e.id, quoteRef: e.quoteRef, title: e.title, organisation: e.organisation, dealId: e.dealId, dealTitle: e.dealTitle, revision: e.revision, total: e.total, updatedAt: e.updatedAt }))
+      return res.json({ estimates: list })
+    }
     const { projectId } = req.query
     if (!projectId) return res.status(400).json({ error: 'projectId required' })
     const project = await loadProject(projectId)
@@ -88,6 +96,24 @@ async function handler(req, res) {
       return res.json({ ok: true, items: parsed.items, skipped: parsed.skipped || [], totals, sheetName, fileName: fileName || '' })
     }
 
+    // BUILD FROM AN ESTIMATE (1225) - its latest ISSUED revision, as a preview (nothing
+    // saved): the same items an uploaded take-off sheet gives, so Save and Lock work as ever
+    if (action === 'from-estimate') {
+      const est = await loadEstimate(String(req.body.estimateId || ''))
+      if (!est) return res.status(404).json({ error: 'That estimate no longer exists.' })
+      if (est.variation) return res.status(400).json({ error: 'That is a variation, not a quote.' })
+      const issued = (Array.isArray(est.revisions) ? est.revisions : []).filter(r => r && r.revision)
+      const last = issued[issued.length - 1]
+      const snap = last ? await loadRevision(est.id, last.revision) : null
+      if (!snap) return res.status(409).json({ error: `${est.quoteRef || 'This estimate'} has not been issued yet - issue it from Estimating first, so the contract is built from the revision the customer accepted.` })
+      // the saved revision is { revision, issuedAt, total, estimate: <the estimate as issued>, ... }
+      const frozen = snap.estimate || snap
+      const { items, estimateTotal } = ratesFromEstimate(frozen, await loadPriceLib())
+      if (!items.length) return res.status(400).json({ error: 'That estimate has no items on its take-off.' })
+      return res.json({ ok: true, items, totals: computeRateTotals(items), estimateTotal, issuedTotal: snap.total != null ? Number(snap.total) : null,
+        fileName: `${est.quoteRef ? `${est.quoteRef} ` : ''}Rev ${last.revision} (from the estimate)`,
+        fromEstimate: { estimateId: est.id, quoteRef: est.quoteRef || '', revision: last.revision, title: est.title || '', builtAt: Date.now() } })
+    }
     if (!projectId) return res.status(400).json({ error: 'projectId required' })
     const project = await loadProject(projectId)
 
@@ -105,6 +131,8 @@ async function handler(req, res) {
         uploadedAt: existing.uploadedAt || Date.now(),
         savedAt: Date.now(),
         savedBy: req.body.author || '',
+        // which estimate and revision these were built from (1225) - the project's link to it
+        ...((req.body.fromEstimate || existing.fromEstimate) ? { fromEstimate: req.body.fromEstimate || existing.fromEstimate } : {}),
       }
       // When the rates are locked, the CR totals become the source of truth for the
       // project's contract value + labour/materials budgets (overwrites manual).

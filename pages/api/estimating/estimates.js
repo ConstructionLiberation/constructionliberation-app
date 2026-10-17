@@ -25,6 +25,7 @@ import { deleteAllDocs, listDocs, saveDocs } from '../../../lib/documentsStore'
 import { removeFile, privateReady } from '../../../lib/privateFiles'
 import { listEstimates, loadEstimate, saveEstimate, deleteEstimate, saveRevision, loadRevision, binEstimate, listBin, restoreEstimate, purgeEstimate, BIN_DAYS } from '../../../lib/estimateStore'
 import { loadPriceList } from '../../../lib/priceListStore'
+import { loadPriceLib } from '../../../lib/estimateToRates'
 import { loadLabour, loadLabourSettings } from '../../../lib/labourRatesStore'
 
 // ESTIMATES API (1088) - Estimating area.
@@ -78,10 +79,8 @@ async function adminNames() {
 }
 const ARCHIVED = (d) => `This estimate is archived - its CRM deal${d.title ? ` "${d.title}"` : ''} was lost. Reopen the deal in the CRM to work on it again.`
 
-async function loadLib() {
-  const [{ products }, { items }] = await Promise.all([loadPriceList(), loadLabour()])
-  return { product: Object.fromEntries(products.map(p => [p.ref, p])), labour: Object.fromEntries(items.map(i => [i.ref, i])) }
-}
+// the price library - one copy, shared with Build contracted rates from estimate (1225)
+const loadLib = () => loadPriceLib()
 
 async function summaryOf(est, lib) {
   const { totals } = priceEstimate(est, lib || await loadLib())

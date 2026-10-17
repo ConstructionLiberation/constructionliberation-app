@@ -31,6 +31,9 @@ export default function ContractedRatesPage() {
   const [showNet, setShowNet] = useState(false)          // view toggle: show rates net of discount
   const [fileName, setFileName] = useState('')
   const [sourceTotal, setSourceTotal] = useState(null)
+  // BUILT FROM AN ESTIMATE (1225) - which estimate and revision, and the picker
+  const [fromEstimate, setFromEstimate] = useState(null)
+  const [estPick, setEstPick] = useState(null)   // null = closed; { list, q, busy }
   const [skippedRows, setSkippedRows] = useState([])
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -87,6 +90,7 @@ export default function ContractedRatesPage() {
     setLocked(!!rates?.locked)
     setFileName(rates?.fileName || '')
     setSourceTotal(rates?.sourceTotal ?? null)
+    setFromEstimate(rates?.fromEstimate || null)
     setDiscountPct(rates?.discountPct != null ? rates.discountPct : 0)
     setDirty(false)
     setEditRow(null)
@@ -126,6 +130,27 @@ export default function ContractedRatesPage() {
   const allSelHave = (key) => selArr.length > 0 && selArr.every(x => !!x[key])
   const clearSel = () => setSelected(new Set())
 
+  // ── Build from an estimate (1225): its latest ISSUED revision, into the same preview ──
+  async function openEstimates() {
+    setEstPick({ list: null, q: '', busy: false })
+    try { const d = await fetch('/api/contracted-rates?estimates=1').then(r => r.json()); setEstPick(p => p && { ...p, list: d.estimates || [] }) } catch { setEstPick(p => p && { ...p, list: [] }) }
+  }
+  async function buildFromEstimate(e) {
+    setEstPick(p => p && { ...p, busy: true }); setMsg('')
+    try {
+      const d = await fetch('/api/contracted-rates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'from-estimate', estimateId: e.id }) }).then(r => r.json())
+      if (!d.ok) { setMsg(d.error || 'Could not build from that estimate.'); setEstPick(p => p && { ...p, busy: false }); return }
+      setItems(d.items.map(x => ({ ...x })))
+      setFileName(d.fileName || '')
+      setSourceTotal(d.issuedTotal ?? d.estimateTotal ?? null)
+      setSkippedRows([])
+      setFromEstimate(d.fromEstimate || null)
+      setLocked(false); setDirty(true); setEstPick(null)
+      const below = d.items.filter(x => x.section === 'below').length, noCode = d.items.filter(x => x.codeMissing).length
+      setMsg(`Built ${d.items.length} rate line${d.items.length === 1 ? '' : 's'} from ${d.fromEstimate.quoteRef || 'the estimate'} Rev ${d.fromEstimate.revision}${below ? ` (${below} below the line)` : ''}.${noCode ? ` ${noCode} have no item number on the take-off (highlighted).` : ''} Review, then Save - Lock when they are right.`)
+    } catch (err) { setMsg('Could not build from that estimate: ' + (err?.message || err)); setEstPick(p => p && { ...p, busy: false }) }
+  }
+
   // ── Upload + parse ──
   async function onFile(e) {
     const file = e.target.files?.[0]
@@ -146,6 +171,7 @@ export default function ContractedRatesPage() {
       }).then(r => r.json())
       if (!d.ok) { setMsg(d.error || 'Could not parse the file.'); setUploading(false); return }
       setItems(d.items.map(x => ({ ...x })))
+      setFromEstimate(null)
       setFileName(d.fileName || file.name)
       setSourceTotal(d.totals?.aboveTotal ?? null)
       setSkippedRows(Array.isArray(d.skipped) ? d.skipped : [])
@@ -403,7 +429,7 @@ export default function ContractedRatesPage() {
     try {
       const d = await fetch('/api/contracted-rates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save', projectId, items, locked, fileName, sourceTotal, discountPct, author: me?.name || '' }),
+        body: JSON.stringify({ action: 'save', projectId, items, locked, fileName, sourceTotal, discountPct, author: me?.name || '', fromEstimate }),
       }).then(r => r.json())
       if (!d.ok) { setMsg(d.error || 'Save failed.'); setSaving(false); return }
       applyCr(d.contractedRates)
@@ -426,7 +452,7 @@ export default function ContractedRatesPage() {
     try {
       const d = await fetch('/api/contracted-rates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save', projectId, items, locked: next, fileName, sourceTotal, discountPct, author: me?.name || '' }),
+        body: JSON.stringify({ action: 'save', projectId, items, locked: next, fileName, sourceTotal, discountPct, author: me?.name || '', fromEstimate }),
       }).then(r => r.json())
       if (!d.ok) { setMsg(d.error || 'Failed.'); setSaving(false); return }
       applyCr(d.contractedRates)
@@ -689,6 +715,8 @@ export default function ContractedRatesPage() {
             <LabourRates projectId={projectId} crItems={cr?.items || []} variations={variations || []} />
           ) : (
             <>
+              {fromEstimate && <div style={{ fontSize: 12.5, color: '#0f766e', marginBottom: 8 }}>Built from estimate <strong>{fromEstimate.quoteRef || fromEstimate.title}</strong> Rev {fromEstimate.revision}{fromEstimate.title && fromEstimate.quoteRef ? ` - ${fromEstimate.title}` : ''}</div>}
+              {estPick && <EstimatePicker pick={estPick} setPick={setEstPick} projectId={projectId} onChoose={buildFromEstimate} />}
               {/* Toolbar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
                 {!hasRates ? (
@@ -696,7 +724,9 @@ export default function ContractedRatesPage() {
                     {uploading ? 'Parsing…' : '⬆ Upload costings / contract rates (.xlsm / .xlsx)'}
                     <input type="file" accept=".xlsm,.xlsx" onChange={onFile} disabled={uploading} style={{ display: 'none' }} />
                   </label>
-                ) : (
+                ) : null}
+                {!hasRates && <button onClick={openEstimates} style={{ background: '#fff', color: '#0f766e', border: '1px solid #0f766e', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Build contracted rates from estimate</button>}
+                {!hasRates ? null : (
                   <>
                     {locked ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', borderRadius: 8, padding: '8px 14px', fontSize: 12.5, fontWeight: 600 }}>🔒 Locked</span>
@@ -959,6 +989,38 @@ function RowMenu({ x, section, onEdit, onMove, onStrike, onDelete, onUp, onDown,
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// THE ESTIMATE PICKER (1225) - search by quote reference, title or customer; for a
+// negotiated project (a CRM deal), that deal's estimates come first
+function EstimatePicker({ pick, setPick, projectId, onChoose }) {
+  const dealId = String(projectId || '').startsWith('N:') ? String(projectId).slice(2) : null
+  const words = String(pick.q || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const list = (pick.list || []).filter(e => words.every(w => `${e.quoteRef} ${e.title} ${e.organisation} ${e.dealTitle}`.toLowerCase().includes(w)))
+    .sort((a, b) => (dealId ? (String(b.dealId) === dealId) - (String(a.dealId) === dealId) : 0) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+  const money = (n) => `£${(Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return (
+    <div style={{ background: '#fff', border: '1px solid #99f6e4', borderRadius: 12, padding: 14, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <strong style={{ fontSize: 14 }}>Build contracted rates from an estimate</strong>
+        <span style={{ fontSize: 12, color: '#777' }}>its latest issued revision - the one the customer accepted</span>
+        <span style={{ flex: 1 }} /><button onClick={() => setPick(null)} style={{ border: 'none', background: 'none', color: '#888', cursor: 'pointer', fontSize: 13 }}>Close</button>
+      </div>
+      <input autoFocus value={pick.q} onChange={e => setPick(p => ({ ...p, q: e.target.value }))} placeholder="Search quote reference, title or customer..." style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '7px 10px', border: '1px solid #d4d4d0', borderRadius: 8, marginBottom: 8 }} />
+      {pick.list == null ? <div style={{ color: '#999', fontSize: 13 }}>Loading estimates...</div> : !list.length ? <div style={{ color: '#999', fontSize: 13 }}>No estimates match.</div> : (
+        <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8 }}>
+          {list.slice(0, 60).map(e => (
+            <button key={e.id} disabled={pick.busy} onClick={() => onChoose(e)} style={{ display: 'flex', width: '100%', gap: 10, alignItems: 'center', textAlign: 'left', padding: '8px 10px', border: 'none', borderBottom: '1px solid #f4f3f0', background: '#fff', cursor: pick.busy ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: 13 }}>
+              <strong style={{ minWidth: 80 }}>{e.quoteRef || '-'}</strong>
+              <span style={{ flex: 1 }}>{e.title || e.dealTitle}{e.organisation ? <span style={{ color: '#888' }}> - {e.organisation}</span> : null}</span>
+              {dealId && String(e.dealId) === dealId && <span style={{ fontSize: 11, color: '#0f766e', border: '1px solid #0f766e', borderRadius: 8, padding: '0 6px' }}>this deal</span>}
+              <span style={{ color: '#666' }}>Rev {e.revision || 'A'}</span>
+              <span style={{ minWidth: 100, textAlign: 'right', fontWeight: 600 }}>{money(e.total)}</span>
+            </button>))}
+        </div>)}
+      {pick.busy && <div style={{ fontSize: 12.5, color: '#0f766e', marginTop: 8 }}>Building...</div>}
     </div>
   )
 }
