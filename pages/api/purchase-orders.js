@@ -22,7 +22,7 @@ import { listDocs } from '../../lib/documentsStore'
 import { DEFAULT_PO_EMAIL, poEmailValues, fillPoEmail } from '../../lib/poShared'
 import { sendPurchaseOrder } from '../../lib/poSend'
 import { decidePo } from '../../lib/poApprove'
-import { xeroPoProjects, xeroById, xeroMatch, projectGaps, GAPS_DISMISSED } from '../../lib/poProjects'
+import { xeroPoProjects, xeroById, xeroMatch, projectGaps, GAPS_DISMISSED, projectAddressFor } from '../../lib/poProjects'
 import { committedFor, committedOf } from '../../lib/poCommitted'
 import { buildPoPDF } from '../../lib/poPdf'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
@@ -53,16 +53,7 @@ async function handler(req, res) {
       return res.status(200).json({ po, link: linkFor(po), cmName: cm ? [cm.firstName, cm.lastName].filter(Boolean).join(' ') || cm.name || '' : '' })
     }
     // THE PROJECT'S ADDRESS from Project Details - the commercial override, else the IHM (1200)
-    if (req.query.project) {
-      let projectAddress = ''
-      try {
-        const { resolveProjectPeople } = await import('../../lib/projectPeople')
-        const [ops, users, settings] = await Promise.all([get('ops:projects'), getPortalUsers(), getProject(String(req.query.project))])
-        const rp = resolveProjectPeople({ jobNo: String(req.query.jobNo || ''), opsProjects: ops || [], users: users || [], override: (settings && settings.peopleOverride) || {} })
-        projectAddress = (rp && rp.projectAddress) || ''
-      } catch {}
-      return res.status(200).json({ projectAddress })
-    }
+    if (req.query.project) return res.status(200).json({ projectAddress: await projectAddressFor(String(req.query.project), String(req.query.jobNo || '')) })   // shared (1229)
     // SITE CONTACTS - every active operative (Site App users) and portal user, with mobile (1200)
     // DOWNLOAD THE PO AS A PDF (1224)
     if (req.query.pdf) {

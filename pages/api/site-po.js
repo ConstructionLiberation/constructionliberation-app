@@ -20,20 +20,14 @@ import { listPos, loadPo, savePo, takeNumber, loadPoSettings } from '../../lib/p
 import { newId, esc, money, cleanLines, EMAIL, xeroContacts, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { poTotal, poGross } from '../../lib/poShared'
 import { sendPurchaseOrder } from '../../lib/poSend'
-import { sitePoProjects } from '../../lib/poProjects'
+import { sitePoProjects, projectAddressFor } from '../../lib/poProjects'
 import { normJob } from '../../lib/projectPeople'
 import { decidePo, mail, summary } from '../../lib/poApprove'
 
 const nameOf = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.name || ''
 const myProjects = (user) => sitePoProjects(user)   // one lookup, shared with the portal (lib/poProjects, 1217)
 // the address from Project Details - the commercial override, else the IHM (as the portal does)
-async function addressOf(proj) {
-  try {
-    const { resolveProjectPeople } = await import('../../lib/projectPeople')
-    const [ops, users, settings] = await Promise.all([get('ops:projects'), getPortalUsers(), proj.projectId ? getProject(proj.projectId) : null])
-    return (resolveProjectPeople({ jobNo: proj.projectNo, opsProjects: ops || [], users: users || [], override: (settings && settings.peopleOverride) || {} }) || {}).projectAddress || ''
-  } catch { return '' }
-}
+const addressOf = (proj) => projectAddressFor(proj.projectId, proj.projectNo)   // the shared rule (lib/poProjects, 1229)
 const isProjectCm = async (user, proj) => { const cm = await findProjectCM(proj._p); return !!(cm && cm.id && String(cm.id) === String(user.id)) }
 const button = (href, text) => `<p><a href="${href}" style="display:inline-block;background:#0f766e;color:#fff;padding:9px 16px;border-radius:6px;text-decoration:none">${text}</a></p>`
 

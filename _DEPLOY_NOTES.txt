@@ -1,25 +1,46 @@
-PACKAGE 1228 - Fix: no projects on Materials Take-offs (and at times on POs)
+PACKAGE 1229 - Estimate to job, part 3: draft POs from the materials take-off
+(includes the 1228 fix - deploying this covers both)
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1227.
+Six files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1227 (+1228).
 
-  lib/poProjects.js
+  lib/takeoffPos.js                    (NEW)
+  lib/poProjects.js                    (the 1228 fix, plus one shared address lookup)
+  pages/api/job-takeoffs.js
+  pages/api/purchase-orders.js
+  pages/api/site-po.js
+  pages/materials-takeoffs.js
 
-WHY THE TAKE-OFFS PAGE LISTED NO PROJECTS: the project list for POs and
-take-offs (1217) read the dashboard's SAVED project list - which is a cache, not
-a register. It expires after 4 hours, and it is wiped whenever figures change -
-LOCKING CONTRACTED RATES among them. So after building and locking the rates
-from the estimate, the list was empty until somebody opened Project
-Financials. The office's PO project list and the Site App's had the same gap.
-NOW: the PERMANENT project register (projects:registry - every project Xero has
-ever returned, kept even when the cache is empty), less hidden projects and the
-tracking options that are not projects - the same list the In Query page uses -
-plus anything in the dashboard's cache the register has not caught up with yet.
+MATERIALS TAKE-OFFS > MATERIALS tab > "CREATE DRAFT POs" - one draft PO per
+supplier, from the same materials list the tab shows:
+  - the supplier's products at PACKS x the PACK PRICE (the unit is the selling
+    unit - a roll, a pack), plus any own lines (not from the price list)
+    allocated to that supplier on the Materials tab
+  - the supplier is the Xero contact linked to that price-list supplier
+    (Purchasing > Suppliers); not linked yet -> the draft is still made, named
+    for the supplier, with a note to link it
+  - the project, its delivery address and the order confirmations email filled
+    in; "From the materials take-off (Q-1042 Rev A)"
+  - they are DRAFTS: add the delivery details, check, raise or delete as normal
+  - what cannot be ordered is listed: items with no product chosen, own lines
+    not allocated to a supplier
+  - the take-off remembers the drafts it made (links shown); making them again
+    asks first. "Save first" if the take-off has unsaved changes.
+ALSO: the project-address lookup is now ONE shared function, used by the
+office's PO page, the Site App and these drafts (it had been written twice).
+AND the 1228 fix: projects come from the permanent project register, so the
+take-offs and PO project lists are never empty after rates are locked.
 
-Checked: with the register full and the dashboard's cache EMPTY (as after
-locking rates) - the previous lookup returned no projects at all (the fault
-reproduced); the new one returns them, Materials Take-offs lists J228 linked to
-Q-1042 Rev A, and the office's PO project list is full; a hidden project and
-"In Query" left out; a project only in the cache included. The earlier
-project-lookup, delete and cover tests all identical before and after. All
-server routes compile. Built from your deployed packages (1022-1220) plus
-1221-1227.
+Checked through the real routes with a real take-off (Q-1042, re-measured), one
+supplier linked and one not: Renolit draft - linked to Renolit UK Ltd,
+Alkorplan 46 packs x 185.85 (exactly the Materials tab's) plus the allocated own
+line, project J228, the address and confirmations filled in, a draft with no
+number; Soprema draft - named, no contact, a note to link it; the unallocated
+own line reported, not ordered; making again refused without asking, done
+when confirmed, the take-off remembering all four; the drafts in the PO list.
+The shared address lookup: all three kinds of project give the same address in
+the portal and the Site App, the Site App tests identical before and after. In a
+REAL browser (Chromium): Save first; Create draft POs -> 2 made, with links,
+totals and the not-linked flag; the unallocated line listed; making again asks.
+All server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1220) plus 1221-1228.

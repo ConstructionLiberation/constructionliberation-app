@@ -31,6 +31,7 @@ export default function MaterialsTakeoffs() {
   const [tab, setTab] = useState('takeoff')
   const [editing, setEditing] = useState(null)  // row id whose build-up is open
   const [err, setErr] = useState(''), [msg, setMsg] = useState(''), [busy, setBusy] = useState(false)
+  const [drafts, setDrafts] = useState(null)   // the result of Create draft POs (1229)
   useEffect(() => { call(null, '?projects=1').then(d => setProjects(d.projects || [])).catch(e => setErr(e.message)) }, [])
   async function pick(pid) {
     setProjectId(pid); setData(null); setTk(null); setErr(''); setMsg(''); setEditing(null); setTab('takeoff')
@@ -40,6 +41,18 @@ export default function MaterialsTakeoffs() {
   async function start() {
     setBusy(true); setErr('')
     try { const d = await call({ action: 'start', projectId }); setTk(d.takeoff); setSaved(JSON.stringify(d.takeoff)); setMsg(`Started from ${d.takeoff.quoteRef} Rev ${d.takeoff.revision} - re-measure the quantities for the job.`); setProjects(ps => (ps || []).map(p => p.projectId === projectId ? { ...p, hasTakeoff: true } : p)) } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  // DRAFT POs, one per supplier, from the Materials list (1229)
+  async function makeDrafts() {
+    const again = (tk.draftPos || []).length > 0
+    if (again && !window.confirm(`Draft POs were already made from this take-off (${tk.draftPos.length}). Make another set?`)) return
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const r = await fetch('/api/job-takeoffs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'draft-pos', projectId, again }) })
+      const d = await r.json(); if (!r.ok) { setDrafts(d.missing || d.unallocated ? { created: [], missing: d.missing || [], unallocated: d.unallocated || [] } : null); throw new Error(d.error || 'Could not make the drafts') }
+      setDrafts(d); setTk(d.takeoff); setSaved(JSON.stringify(d.takeoff))
+    } catch (e) { setErr(e.message) }
     setBusy(false)
   }
   async function save() {
@@ -87,6 +100,20 @@ export default function MaterialsTakeoffs() {
               {[['takeoff', 'Take-off'], ['materials', 'Materials']].map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ ...btn, background: tab === k ? INK : '#fff', color: tab === k ? '#fff' : INK, borderColor: tab === k ? INK : '#d4d4d0' }}>{l}</button>)}
               {dirty && <span style={{ fontSize: 12.5, color: '#b45309', alignSelf: 'center', marginLeft: 8 }}>Not saved yet</span>}
             </div>
+            {tab === 'materials' && <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 14 }}>Order it</strong>
+              <span style={{ fontSize: 12.5, color: '#666' }}>One draft PO per supplier - the products below at packs x pack price, plus own lines allocated to that supplier. Finish and raise each as normal.</span>
+              <span style={{ flex: 1 }} />
+              {dirty ? <span style={{ fontSize: 12.5, color: '#b45309' }}>Save first, so the drafts match what is saved</span>
+                : <button onClick={makeDrafts} disabled={busy} style={primary}>{busy ? 'Making...' : (tk.draftPos || []).length ? 'Create draft POs again' : 'Create draft POs'}</button>}
+              {(tk.draftPos || []).length > 0 && !drafts && <div style={{ flexBasis: '100%', fontSize: 12.5, color: '#555' }}>Drafts already made: {tk.draftPos.map((d, i) => <span key={d.poId}>{i ? ', ' : ''}<a href={`/operations/purchasing/po/${d.poId}`} style={{ color: '#0f766e' }}>{d.supplier}</a></span>)}</div>}
+              {drafts && <div style={{ flexBasis: '100%', fontSize: 13 }}>
+                {drafts.created.length > 0 && <div style={{ marginBottom: 6 }}><strong>{drafts.created.length} draft PO{drafts.created.length === 1 ? '' : 's'} made:</strong>
+                  {drafts.created.map(c => <div key={c.id} style={{ display: 'flex', gap: 10, padding: '3px 0' }}><a href={`/operations/purchasing/po/${c.id}`} style={{ color: '#0f766e', fontWeight: 600, minWidth: 180 }}>{c.supplier}</a><span>{c.lines} line{c.lines === 1 ? '' : 's'}</span><span>{money(c.total)} ex VAT</span>{!c.linked && <span style={{ color: '#b45309' }}>not linked to a Xero contact - link it on Purchasing &gt; Suppliers</span>}</div>)}</div>}
+                {(drafts.missing || []).length > 0 && <div style={{ color: '#b45309' }}>Not ordered - no product chosen: {drafts.missing.join('; ')}</div>}
+                {(drafts.unallocated || []).length > 0 && <div style={{ color: '#b45309' }}>Not ordered - own lines not allocated to a supplier (allocate them below, then make again): {drafts.unallocated.join('; ')}</div>}
+              </div>}
+            </div>}
             {tab === 'materials' ? <div style={card}><MaterialsTab est={counting} lib={lib} change={change} money={money} readOnly={false} /></div> : (
               <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
