@@ -1,39 +1,35 @@
-PACKAGE 1202 - Purchase orders: attachments, site contact search, change the
-confirmations default; PO numbering fix
+PACKAGE 1203 - Purchase orders: any Xero contact as the supplier, searchable
 
-Seven files. Complete replacements. No re-seed. No env changes. Built on 1201.
+Three files. Complete replacements. No re-seed. No env changes. Built on 1202.
 
-  lib/purchaseOrders.js
   pages/api/purchase-orders.js
-  pages/api/po-view.js
-  pages/api/estimating/documents.js
+  pages/operations/purchasing/purchase-orders.js
   pages/operations/purchasing/po/[id].js     (folder literally named [id])
-  pages/po.js
-  components/DocumentsPanel.js
 
-ATTACHMENTS - an "Attachments" section on a PO (drawings, specifications,
-schedules), separate from the access route documents. Both are ATTACHED TO THE
-EMAIL to the supplier as files (fetched through links that last minutes - the
-files never become public) and listed on the supplier's page. Attach once the
-PO is saved as a draft or raised, until it is sent.
-SITE CONTACT - type to search: part of a name or a number; pick from the
-matches (Enter picks the first); Escape keeps the chosen one.
-ORDER CONFIRMATIONS - "Change default" (admins) beside the box: changes the
-company default for every new PO, and this PO's box if it still showed the
-old default.
-FIX - PO NUMBERING: saving PO settings put the number counter back to the
-stored start, so changing anything there (e.g. the confirmations address)
-after POs were raised would have REISSUED numbers already used. Now "Next
-number" shows the real next number and the counter only moves when that
-number is changed.
+THE SUPPLIER BOX lists EVERY CONTACT IN XERO, type to search - suppliers
+first, tagged "Supplier"; a contact linked to a price-list supplier (any of
+its linked contacts, duplicates too) is tagged "Price list: Soprema" and its
+products can be clicked in as before. Any other supplier (hire companies,
+merchants...) takes free lines - the product search says "No price list for
+this supplier - add free lines". The PO is raised against that exact Xero
+contact and emailed to its address in Xero. A contact not in Xero is refused:
+add it in Xero, then Refresh from Xero (Purchasing > Suppliers). POs saved by
+supplier name before this still work.
+FIX - both search boxes (supplier and site contact): after a pick, clicking
+the box again and typing searched on the PICKED NAME plus what was typed, so
+it found nothing. A pick now lets go of the box and a click starts afresh.
+The list page now warns only when no Xero contacts have been read.
 
-Checked through the real routes: three POs raised, then only the
-confirmations default changed -> the next PO APP-PO-0004 (not 0001); an admin
-setting 100 -> APP-PO-0100; an attachment and an access document attached; the
-email carried both files and named them; the supplier's page listed them
-separately and opened each. In a REAL browser (Chromium): "dave" -> Dave Kerr,
-picked with Enter; no match shown as such; Change default -> the new default
-saved (numbering untouched) and the box updated; the Attachments and Access
-route sections on a draft, worded accurately. All server routes compile; all
-pages pass the browser check. Built from your deployed packages (1022-1201,
-verified against their zips).
+Still to come: suppliers we raise POs with that are not on the price list
+should also appear on Purchasing > Suppliers, for the Dext rule.
+
+Checked through the real route: every contact listed (suppliers first,
+Soprema's two contacts tagged to the price list, Wates marked not a
+supplier); a PO to HSS Hire with free lines, raised against that contact and
+addressed to its email; a PO to the second Soprema contact still on Soprema's
+price list; a contact not in Xero refused; an older PO by name still raised.
+In a REAL browser (Chromium): all contacts tagged; "hss" -> HSS Hire, free
+lines; clicking again, "sopr" -> both Soprema contacts; Soprema UK Ltd ->
+its products, one clicked in; the site contact search still right. All server
+routes compile; all pages pass the browser check. Built from your deployed
+packages (1022-1202, verified against their zips).

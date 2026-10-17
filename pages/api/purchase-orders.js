@@ -48,6 +48,17 @@ function deliveryHtml(po, docs) {
   </table>`
 }
 
+// ANY XERO CONTACT can be a PO's supplier (1203) - suppliers first; each with the
+// price-list supplier it is linked to (any of that supplier's contacts), whose
+// products can then be added.
+async function xeroContacts() {
+  const [links, cache] = await Promise.all([get(LINKS_KEY), get(CONTACTS_KEY)])
+  const priceListOf = {}
+  for (const [name, l] of Object.entries(links || {})) for (const c of (l && l.contacts) || []) priceListOf[c.id] = name
+  return ((cache && cache.contacts) || []).map(c => ({ id: c.id, name: c.name, supplier: !!c.supplier, email: c.email || '', priceList: priceListOf[c.id] || '' }))
+    .sort((a, b) => (b.supplier - a.supplier) || a.name.localeCompare(b.name))
+}
+
 async function linkedSuppliers() {
   const [links, cache] = await Promise.all([get(LINKS_KEY), get(CONTACTS_KEY)])
   const byId = new Map(((cache && cache.contacts) || []).map(c => [c.id, c]))
@@ -101,7 +112,7 @@ async function handler(req, res) {
       const name = String(req.query.products)
       return res.status(200).json({ products: (products || []).filter(p => p.supplier === name).map(p => ({ ref: p.ref, code: p.code || '', description: p.description, section: p.section || '', price: p.price ?? null, unit: p.sellingUnit || p.baseUnit || '' })) })
     }
-    return res.status(200).json({ pos: await listPos(), settings: await loadPoSettings(), suppliers: await linkedSuppliers(), canSettings: normRole(session.role) === 'admin' })
+    return res.status(200).json({ pos: await listPos(), settings: await loadPoSettings(), suppliers: await linkedSuppliers(), contacts: await xeroContacts(), canSettings: normRole(session.role) === 'admin' })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -115,18 +126,21 @@ async function handler(req, res) {
     // to Xero, the project, and every line with a quantity (none quietly dropped).
     const src = b.po || {}
     const toDraft = b.action === 'create' ? !!b.draft : false
-    const sup = (await linkedSuppliers()).find(s => s.name === src.supplier) || null
+    const contacts = await xeroContacts()
+    let sup = null
+    if (src.contactId) { const c = contacts.find(x => x.id === String(src.contactId)); if (c) sup = { name: c.priceList || '', contactId: c.id, contactName: c.name, email: c.email } }
+    else if (src.supplier) { const l = (await linkedSuppliers()).find(s => s.name === src.supplier); if (l) sup = l }
     const lines = cleanLines(src.lines)
     const fullCheck = () => {
-      if (!sup) return 'Pick a supplier that is linked to its Xero contact (Purchasing > Suppliers)'
+      if (!sup) return 'Pick the supplier (any contact in Xero)'
       if (!src.projectId) return 'Pick the project'
       if (!lines.length) return 'Add at least one line'
       const k = lines.findIndex(l => !(Number(l.qty) > 0)); if (k >= 0) return `Line ${k + 1}${lines[k].description ? ` (${lines[k].description.slice(0, 40)})` : ''} has no quantity`
       const d = lines.findIndex(l => !l.description); if (d >= 0) return `Line ${d + 1} has no description`
       return null
     }
-    if (src.supplier && !sup) return res.status(400).json({ error: 'Pick a supplier that is linked to its Xero contact (Purchasing > Suppliers)' })
-    const fields = { projectId: String(src.projectId || ''), jobNo: String(src.jobNo || ''), projectName: String(src.projectName || ''), supplier: sup ? sup.name : '', contactId: sup ? sup.contactId : '', contactName: sup ? sup.contactName : '',
+    if ((src.contactId || src.supplier) && !sup) return res.status(400).json({ error: 'That supplier is not in Xero\'s contacts - add it in Xero, then Refresh from Xero on Purchasing > Suppliers' })
+    const fields = { projectId: String(src.projectId || ''), jobNo: String(src.jobNo || ''), projectName: String(src.projectName || ''), supplier: sup ? (sup.name || sup.contactName) : '', priceList: sup ? (sup.name || '') : '', contactId: sup ? sup.contactId : '', contactName: sup ? sup.contactName : '',
       lines, deliveryAddress: String(src.deliveryAddress || '').slice(0, 500), deliveryDate: String(src.deliveryDate || '').slice(0, 10), notes: String(src.notes || '').slice(0, 2000),
       // DELIVERY DETAILS (1200)
       moffett: yn(src.moffett), artics: yn(src.artics), accessRoutes: String(src.accessRoutes || '').slice(0, 2000),

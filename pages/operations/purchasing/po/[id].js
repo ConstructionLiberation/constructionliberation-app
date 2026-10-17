@@ -16,7 +16,7 @@ const th = { textAlign: 'left', padding: '7px 8px', fontSize: 11.5, color: '#666
 const td = { padding: '6px 8px', borderBottom: '1px solid #f1f0ec', fontSize: 13, verticalAlign: 'top' }
 const card = { background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 14, marginBottom: 12 }
 const label = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#666' }
-const blank = { projectId: '', jobNo: '', projectName: '', supplier: '', lines: [], deliveryAddress: '', deliveryDate: '', notes: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: '' }
+const blank = { projectId: '', jobNo: '', projectName: '', supplier: '', contactId: '', contactName: '', priceList: '', lines: [], deliveryAddress: '', deliveryDate: '', notes: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: '' }
 
 export default function PoPage() {
   const router = useRouter()
@@ -42,12 +42,14 @@ export default function PoPage() {
     if (isNew) setPo({ ...blank })
     else call(null, `?id=${encodeURIComponent(id)}`).then(d => { setPo(d.po); setLink(d.link) }).catch(e => setErr(e.message))
   }, [id])
-  useEffect(() => { if (po && po.supplier) call(null, `?products=${encodeURIComponent(po.supplier)}`).then(d => setProducts(d.products)).catch(() => setProducts([])); else setProducts([]) }, [po && po.supplier])
+  // the products come from the price-list supplier the chosen Xero contact is linked to (1203)
+  const priceList = po ? (po.priceList !== undefined ? po.priceList : po.supplier) : ''
+  useEffect(() => { if (priceList) call(null, `?products=${encodeURIComponent(priceList)}`).then(d => setProducts(d.products)).catch(() => setProducts([])); else setProducts([]) }, [priceList])
   const editable = po && (isNew || po.status === 'approved' || po.status === 'draft')
   const isDraft = po && (isNew || po.status === 'draft')
   // WHAT STOPS IT BEING RAISED (1201) - every line needs a quantity
   const missing = po ? [
-    !po.projectId && 'the project', !po.supplier && 'the supplier', !po.lines.length && 'a line',
+    !po.projectId && 'the project', !(po.contactId || po.supplier) && 'the supplier', !po.lines.length && 'a line',
     po.lines.some(l => !(Number(l.qty) > 0)) && `quantities (${po.lines.filter(l => !(Number(l.qty) > 0)).length})`,
     po.lines.some(l => !String(l.description || '').trim()) && 'a description on every line',
     !po.moffett && 'the Moffett question', !po.artics && 'the artics question'].filter(Boolean) : []
@@ -121,11 +123,10 @@ export default function PoPage() {
               {po.projectId && !(projects || []).some(p => p.id === po.projectId) && <option value={po.projectId}>{po.jobNo} {po.projectName}</option>}
               {(projects || []).map(p => <option key={p.id} value={p.id}>{p.jobNo} {p.name}</option>)}
             </select></label>
-          <label style={{ ...label, flex: '1 1 220px' }}>Supplier (linked to Xero)
-            <select value={po.supplier} onChange={e => set('supplier', e.target.value)} style={inp}>
-              <option value="">— choose the supplier —</option>
-              {((list && list.suppliers) || []).map(s => <option key={s.name} value={s.name}>{s.name}{s.contactName && s.contactName !== s.name ? ` (${s.contactName})` : ''}</option>)}
-            </select></label>
+          <div style={{ ...label, flex: '1 1 260px' }}>Supplier (any contact in Xero)
+            <SupplierSearch contacts={(list && list.contacts) || []} value={po.contactName || po.supplier}
+              onPick={c => setPo(x => ({ ...x, contactId: c.id, contactName: c.name, supplier: c.priceList || c.name, priceList: c.priceList || '' }))} />
+            {list && !(list.contacts || []).length && <span style={{ fontSize: 11.5, color: '#b45309' }}>No Xero contacts read yet - Purchasing &gt; Suppliers &gt; Refresh from Xero</span>}</div>
           <label style={{ ...label, flex: '0 1 170px' }}>Delivery required<input type="date" value={po.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} style={inp} /></label>
         </div>
         <div style={card}>
@@ -148,10 +149,10 @@ export default function PoPage() {
           </table>
           {editable && <div style={{ marginTop: 10 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input value={pq} onChange={e => setPq(e.target.value)} disabled={!po.supplier} placeholder={po.supplier ? `Search ${po.supplier}'s products on the price list…` : 'Choose the supplier to add their products'} style={{ ...inp, flex: 1 }} />
+              <input value={pq} onChange={e => setPq(e.target.value)} disabled={!priceList} placeholder={priceList ? `Search ${priceList}'s products on the price list…` : (po.contactId || po.supplier) ? 'No price list for this supplier - add free lines' : 'Choose the supplier to add their products'} style={{ ...inp, flex: 1 }} />
               <button onClick={() => { setPo(x => ({ ...x, lines: [...x.lines, { ref: null, code: '', description: '', qty: '', unit: '', price: 0 }] })); focusLastQty() }} style={btn}>+ Free line</button>
             </div>
-            {po.supplier && pq.trim() && <div style={{ border: '1px solid #f0efec', borderRadius: 8, marginTop: 6, maxHeight: 260, overflowY: 'auto' }}>
+            {priceList && pq.trim() && <div style={{ border: '1px solid #f0efec', borderRadius: 8, marginTop: 6, maxHeight: 260, overflowY: 'auto' }}>
               {!found.length ? <div style={{ padding: 10, color: '#aaa', fontSize: 13 }}>No product matches.</div> : found.map(p => (
                 <div key={p.ref} onClick={() => addProduct(p)} title="Add to the PO" onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}
                   style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 10px', borderBottom: '1px solid #f4f3f0', fontSize: 13, cursor: 'pointer' }}>
@@ -232,10 +233,10 @@ function ContactSearch({ people, value, onChange }) {
   const shown = value && value.name ? `${value.name}${value.phone ? ` - ${value.phone}` : ''}` : ''
   const words = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
   const found = q === null ? [] : people.filter(p => words.every(w => `${p.name} ${p.phone} ${p.kind}`.toLowerCase().includes(w))).slice(0, 12)
-  const pick = (p) => { onChange({ name: p.name, phone: p.phone || '' }); setQ(null) }
+  const pick = (p) => { onChange({ name: p.name, phone: p.phone || '' }); setQ(null); if (document.activeElement) document.activeElement.blur() }
   return (
     <div style={{ position: 'relative' }}>
-      <input value={q === null ? shown : q} placeholder="Type a name or number…" onFocus={() => setQ('')} onChange={e => setQ(e.target.value)}
+      <input value={q === null ? shown : q} placeholder="Type a name or number…" onFocus={() => setQ('')} onClick={() => { if (q === null) setQ('') }} onChange={e => setQ(e.target.value)}
         onBlur={() => setTimeout(() => setQ(null), 150)} onKeyDown={e => { if (e.key === 'Enter' && found[0]) { e.preventDefault(); pick(found[0]) } if (e.key === 'Escape') setQ(null) }}
         style={{ ...inp, width: '100%' }} />
       {q !== null && <div style={{ position: 'absolute', zIndex: 20, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.08)', maxHeight: 260, overflowY: 'auto' }}>
@@ -243,6 +244,30 @@ function ContactSearch({ people, value, onChange }) {
           <div key={i} onMouseDown={e => { e.preventDefault(); pick(p) }} style={{ padding: '7px 10px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #f4f3f0', display: 'flex', gap: 8 }}
             onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}>
             <span style={{ flex: 1 }}>{p.name}</span><span style={{ color: p.phone ? '#555' : '#b45309' }}>{p.phone || 'no mobile on record'}</span><span style={{ color: '#999', fontSize: 11.5 }}>{p.kind}</span>
+          </div>))}
+      </div>}
+    </div>
+  )
+}
+
+// SUPPLIER - type to search every Xero contact (1203); suppliers first, tagged; a
+// contact linked to a price-list supplier offers its products
+function SupplierSearch({ contacts, value, onPick }) {
+  const [q, setQ] = useState(null)
+  const words = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const found = q === null ? [] : contacts.filter(c => words.every(w => `${c.name} ${c.priceList}`.toLowerCase().includes(w))).slice(0, 30)
+  const pick = (c) => { onPick(c); setQ(null); if (document.activeElement) document.activeElement.blur() }
+  const tag = (t, col) => <span style={{ fontSize: 10.5, color: col, border: `1px solid ${col}`, borderRadius: 8, padding: '0 6px', marginLeft: 6, whiteSpace: 'nowrap' }}>{t}</span>
+  return (
+    <div style={{ position: 'relative' }}>
+      <input value={q === null ? (value || '') : q} placeholder="Type to search Xero contacts…" onFocus={() => setQ('')} onClick={() => { if (q === null) setQ('') }} onChange={e => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setQ(null), 150)} onKeyDown={e => { if (e.key === 'Enter' && found[0]) { e.preventDefault(); pick(found[0]) } if (e.key === 'Escape') setQ(null) }}
+        style={{ ...inp, width: '100%' }} />
+      {q !== null && <div style={{ position: 'absolute', zIndex: 20, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.08)', maxHeight: 300, overflowY: 'auto' }}>
+        {!found.length ? <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#aaa' }}>{contacts.length ? 'No contact matches - add the supplier in Xero, then Refresh from Xero' : 'No Xero contacts read yet'}</div> : found.map(c => (
+          <div key={c.id} onMouseDown={e => { e.preventDefault(); pick(c) }} style={{ padding: '7px 10px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #f4f3f0', display: 'flex', alignItems: 'center' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}>
+            <span style={{ flex: 1 }}>{c.name}</span>{c.priceList && tag(`Price list: ${c.priceList}`, '#0f766e')}{c.supplier && tag('Supplier', '#64748b')}
           </div>))}
       </div>}
     </div>
