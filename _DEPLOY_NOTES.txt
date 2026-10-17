@@ -1,45 +1,29 @@
-PACKAGE 1237 - Customer report: sent marker, sign-off; the report PDF fixed
+PACKAGE 1238 - Mark-up: move points; text the same size on screen and in the PDF
 
-Six files. Complete replacements. No re-seed. No env changes. Built on 1236.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1237.
 
+  components/DrawingMarkup.js          (the mark-up viewer - shared with the Design portal)
   lib/drawingPdf.js
-  lib/projectReportPdf.js
-  components/DrawingMarkup.js
-  pages/api/project-report-customer.js
-  pages/api/project-reports.js
-  pages/operations/project-management/report.js
 
-THE REPORT PDF (the download and the customer's):
-  1. MARK-UP NOW SITS OVER THE PLACES IT WAS DRAWN. The PDF drew the drawing's
-     WHOLE SHEET unrotated, while the viewer shows the page's VISIBLE AREA (its crop
-     box - architects' drawings are often a window inside a bigger sheet) at its
-     ROTATION - so the drawing came out shrunk into a corner with the mark-up over
-     the wrong places (PR-0027). It now draws exactly what the viewer shows.
-     Text marks also came out far too big - the PDF assumed a narrow viewer; a text
-     mark now records the width it was drawn at (marks made before this are taken
-     as drawn in the full-screen window).
-  2. THE DRAWINGS COME BEFORE THE PHOTOS - straight after the notes, each on its own
-     page; the photos carry on after them.
-  3. LINE BREAKS KEPT - works completed, site communications and your own sections
-     (numbered lines now stay on their own lines).
-  4. VARIATIONS AS A TABLE - No. / Description / Instructed / Total; YES in GREEN,
-     NO in RED; long descriptions wrap in their column.
-SEND CUSTOMER PROGRESS REPORT:
-  - once sent, the row shows a green "CUSTOMER REPORT SENT <date>" (hover: when, and
-    how many times) and "SEND CUSTOMER REPORT AGAIN"
-  - the email is SIGNED OFF by the portal user sending it: Kind regards, name,
-    company, email and phone (from their portal user record). The suggested message
-    no longer ends with its own "Kind regards".
+MOVE POINTS: select a polyline or polygon and every point has a handle - drag it.
+  - SNAP (when on) pulls the point onto the drawing's line ends and corners, or
+    onto other marks' points - line and box ends snap too
+  - hold SHIFT to line the point up with its neighbour - exactly level or plumb,
+    whichever it is nearer - so edges can be made truly straight. Shift works
+    while placing points too.
+TEXT - why the PDF's text was bigger than on screen: text is sized in screen
+pixels, so the PDF needs the width the drawing was shown at when the text was
+placed. A note made before 1237 carried no width, and the PDF assumed 1,200
+pixels - your full-screen window is about 1,800, so it printed half as big again
+and wrapped onto more lines. NOW a text mark is drawn on screen at the same size
+RELATIVE TO THE DRAWING on any screen (as a CAD annotation is), and the PDF
+prints it at that size. Notes made before the width was recorded count as made
+in the full-screen window (1,800 px).
 
-Checked: test drawings with an offset visible area, rotated 90 and 270, and both -
-the mark-up box exactly on a printed square in all five (and the squares' place
-confirmed independently with PDFium, which treats crop boxes and rotation as the
-viewer does); looked at. A J240-style report: the variations table (V02 Yes green,
-V03 No red, V13 wrapping evenly), works completed on three lines, notes, then the
-marked-up drawing, then the photos; looked at. Through the real routes: the sign-off
-"Kind regards, Will Reid, Rock Roofing Ltd, will@..., 07700 900123"; the reports
-list knowing PR-0012 was sent once. In a REAL browser (Chromium): the sent row's
-green "Customer Report Sent 17 Oct" and Send Customer Report Again (opening the
-send window); an unsent row's Send Customer Progress Report. All server routes
-compile; all pages pass the browser check. Built from your deployed packages
-(1022-1220) plus 1221-1236.
+Checked in a REAL browser (Chromium) on a PDF roof plan: a polygon placed roughly
+- its 4 handles shown; a point dragged near the corner snapped exactly onto it
+(0.8, 0.2); another Shift-dragged ended exactly plumb with its neighbour. A new
+text note: its width recorded; the window shrunk 1,398 -> 898 px and the note went
+18 -> 11.6 px - the same proportion of the drawing; an older note 23.3 -> 15.0 px
+by the same rule (30 x width / 1,800). The PDF renderer re-run. All pages pass the
+browser check. Built from your deployed packages (1022-1220) plus 1221-1237.

@@ -21,6 +21,11 @@ const TOOLS = [
   { key: 'text', label: 'Text' },
 ]
 const POLY = ['polyline', 'polygon']   // the tools drawn point by point (1235)
+// TEXT SCALES WITH THE DRAWING (1238): a text mark is drawn at its size x (the width the drawing
+// is shown at now / the width it was made at - vw), so it keeps its size RELATIVE TO THE DRAWING on
+// any screen, as the PDF prints it. Marks made before vw was recorded count as made at this width
+// (the full-screen window) - lib/drawingPdf.js uses the same figure.
+export const LEGACY_VIEW_WIDTH = 1800
 const COLOURS = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#111111']
 
 const isImageUrl = (url, contentType) => (contentType || '').startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(url || '')
@@ -59,6 +64,7 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
   const drawingPts = useRef({})          // page -> Float32Array of x,y fractions read from the PDF
   const [ptsReady, setPtsReady] = useState({})
   const lastDownRef = useRef(null)    // for spotting a double-click while drawing a polyline / polygon
+  const [wrapW, setWrapW] = useState(0)   // the width the drawing is shown at now (1238)
   const [editingId, setEditingId] = useState(null)   // id of the text box being typed into
   const [drag, setDrag] = useState(null)             // active edit drag: { id, mode, handle, start, orig }
   const [draft, setDraft] = useState(null)
@@ -164,6 +170,21 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
     return () => { cancelled = true }
   }, [page, pdfState, isImg])
 
+  // THE WIDTH THE DRAWING IS SHOWN AT (1238) - kept up to date as the window changes
+  useEffect(() => {
+    const el = wrapRef.current; if (!el) return
+    const measure = () => setWrapW(el.getBoundingClientRect().width || 0)
+    measure()
+    let ro = null
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el) }
+    window.addEventListener('resize', measure)
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure) }
+  }, [page, pdfState, isImg])
+  const textScale = (sh) => wrapW > 0 ? wrapW / (Number(sh.vw) > 200 ? Number(sh.vw) : LEGACY_VIEW_WIDTH) : 1
+
+  // SHIFT lines a point up with its neighbour - level or plumb, whichever it is nearer (1238)
+  const level = (q, n) => !n ? q : (Math.abs(q.x - n.x) * (wrapW || 1) < Math.abs(q.y - n.y) * ((wrapRef.current && wrapRef.current.getBoundingClientRect().height) || 1) ? { x: n.x, y: q.y } : { x: q.x, y: n.y })
+
   // Set the active page (for markup) and scroll the stack to it.
   const gotoPage = (pn) => {
     const p = Math.max(1, Math.min(numPages, pn))
@@ -200,14 +221,14 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
   // SNAP (1235): the nearest drawing point or mark point within ~10 screen pixels, else the
   // pointer itself. Measured in pixels so it feels the same at any zoom.
   const SNAP_PX = 10
-  function snapped(p) {
+  function snapped(p, among) {
     if (!snap || !wrapRef.current) { setSnapHint(null); return p }
     const r = wrapRef.current.getBoundingClientRect(); const W = r.width || 1, H = r.height || 1
     let best = null, bd = SNAP_PX * SNAP_PX
     const consider = (x, y) => { const dx = (x - p.x) * W, dy = (y - p.y) * H, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = { x, y } } }
     const arr = drawingPts.current[page]
     if (arr) for (let i = 0; i < arr.length; i += 2) consider(arr[i], arr[i + 1])
-    for (const sh of shapes) {
+    for (const sh of (among || shapes)) {
       if (sh.pts) sh.pts.forEach(q => consider(q.x, q.y))
       else if (sh.x1 != null) { consider(sh.x1, sh.y1); consider(sh.x2, sh.y2); if (sh.type === 'rect') { consider(sh.x1, sh.y2); consider(sh.x2, sh.y1) } }
     }
@@ -246,7 +267,8 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
       // close a polygon by clicking its first point
       const first = draft.pts[0], r = wrapRef.current.getBoundingClientRect()
       if (tool === 'polygon' && draft.pts.length > 3 && Math.hypot((p.x - first.x) * r.width, (p.y - first.y) * r.height) < 12) { finishPoly(); return }
-      setDraft(d => ({ ...d, pts: [...d.pts.slice(0, -1), p, p] }))
+      const pp = e.shiftKey ? level(p, draft.pts[draft.pts.length - 2]) : p   // Shift: level or plumb with the last point (1238)
+      setDraft(d => ({ ...d, pts: [...d.pts.slice(0, -1), pp, pp] }))
       return
     }
     if (tool === 'free') { setDraft({ id: id(), type: 'free', pts: [p], colour, opacity, width }); return }
@@ -265,7 +287,19 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
         updateShape(drag.id, moveShape(drag.orig, dx, dy))
       } else if (drag.mode === 'handle') {
         const c = (v) => Math.min(1, Math.max(0, v))
-        updateShape(drag.id, drag.handle === 1 ? { x1: c(p.x), y1: c(p.y) } : { x2: c(p.x), y2: c(p.y) })
+        // MOVING A POINT OF A POLYLINE / POLYGON (1238) - snapping, and Shift to line it up with
+        // its neighbour; line and box ends snap too
+        const others = shapes.filter(x => x.id !== drag.id)
+        let q = snapped(p, others)
+        if (typeof drag.handle === 'string' && drag.handle[0] === 'p') {
+          const i = Number(drag.handle.slice(1)), sh = shapes.find(x => x.id === drag.id); if (!sh || !sh.pts) return
+          if (e.shiftKey) q = level(q, sh.pts[i - 1] || sh.pts[i + 1])
+          updateShape(drag.id, { pts: sh.pts.map((pt, j) => j === i ? { x: c(q.x), y: c(q.y) } : pt) })
+          return
+        }
+        const sh = shapes.find(x => x.id === drag.id)
+        if (e.shiftKey && sh && sh.x1 != null) q = level(q, drag.handle === 1 ? { x: sh.x2, y: sh.y2 } : { x: sh.x1, y: sh.y1 })
+        updateShape(drag.id, drag.handle === 1 ? { x1: c(q.x), y1: c(q.y) } : { x2: c(q.x), y2: c(q.y) })
       }
       return
     }
@@ -273,11 +307,11 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
     const raw = rel(e)
     const p = SNAPS.includes(draft.type) ? snapped(raw) : raw
     if (draft.type === 'free' || draft.type === 'highlight') setDraft(d => ({ ...d, pts: [...d.pts, p] }))
-    else if (POLY.includes(draft.type)) setDraft(d => ({ ...d, pts: [...d.pts.slice(0, -1), p] }))
+    else if (POLY.includes(draft.type)) setDraft(d => ({ ...d, pts: [...d.pts.slice(0, -1), e.shiftKey ? level(p, d.pts[d.pts.length - 2]) : p] }))
     else setDraft(d => ({ ...d, x2: p.x, y2: p.y }))
   }
   function up() {
-    if (drag) { setDrag(null); return }
+    if (drag) { setDrag(null); setSnapHint(null); return }
     if (!draft) return
     if (POLY.includes(draft.type)) return   // a polyline / polygon carries on until it is finished
     if (draft.type === 'text') {
@@ -453,7 +487,7 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
               <polygon points="0 0, 10 4, 0 8" fill="context-stroke" />
             </marker>
           </defs>
-          {snapHint && canEdit && SNAPS.includes(draft ? draft.type : tool) && <g pointerEvents="none"><circle cx={snapHint.x * 1000} cy={snapHint.y * 1000} r={7} fill="none" stroke="#0f766e" strokeWidth={2.5} /><circle cx={snapHint.x * 1000} cy={snapHint.y * 1000} r={1.8} fill="#0f766e" /></g>}
+          {snapHint && canEdit && (SNAPS.includes(draft ? draft.type : tool) || (drag && drag.mode === 'handle')) && <g pointerEvents="none"><circle cx={snapHint.x * 1000} cy={snapHint.y * 1000} r={7} fill="none" stroke="#0f766e" strokeWidth={2.5} /><circle cx={snapHint.x * 1000} cy={snapHint.y * 1000} r={1.8} fill="#0f766e" /></g>}
           {all.filter(sh => sh.type !== 'text').map(sh => <Shape key={sh.id} sh={sh} selected={selected === sh.id} tool={tool} canEdit={canEdit}
             onSelect={() => { if (canEdit && tool === 'select') setSelected(sh.id) }}
             onStartMove={(e) => startMove(e, sh)} onStartHandle={(e, h) => startHandle(e, sh, h)} />)}
@@ -467,7 +501,7 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
           const boxStyle = {
             position: 'absolute', left: `${L}%`, top: `${T}%`, width: `${W}%`, minHeight: `${H}%`,
             color: sh.colour || '#dc2626', opacity: sh.opacity ?? 1,
-            fontSize: (sh.fontSize || 18), fontWeight: sh.bold ? 700 : 400, textDecoration: sh.underline ? 'underline' : 'none',
+            fontSize: (sh.fontSize || 18) * textScale(sh), fontWeight: sh.bold ? 700 : 400, textDecoration: sh.underline ? 'underline' : 'none',
             lineHeight: 1.25, padding: '2px 4px', boxSizing: 'border-box',
             border: (editing || selected === sh.id) ? '1px dashed #7c3aed' : '1px solid transparent',
             background: editing ? 'rgba(255,255,255,0.7)' : 'transparent',
@@ -559,6 +593,8 @@ function Shape({ sh, selected, tool, canEdit, onSelect, onStartMove, onStartHand
     return hit(<>
       <El points={pts} fill={sh.type === 'polygon' ? 'transparent' : 'none'} stroke="transparent" strokeWidth={Math.max((sh.width || 3) + 24, 28)} onMouseDown={bodyDown} onTouchStart={bodyDown} onClick={onSelect} style={{ cursor }} />
       <El points={pts} {...common} {...(sh.type === 'polyline' ? { fill: 'none' } : {})} strokeLinejoin="round" strokeLinecap="round" style={{ ...common.style, ...sel, pointerEvents: 'none' }} />
+      {/* MOVE ANY POINT (1238): a handle on each, when selected */}
+      {selected && editable && (sh.pts || []).map((p, i) => <g key={i}>{endHandle(p.x * S, p.y * S, (e) => onStartHandle(e, `p${i}`))}</g>)}
     </>)
   }
   if (sh.type === 'rect') {
