@@ -14,10 +14,13 @@ const TOOLS = [
   { key: 'rect', label: 'Box' },
   { key: 'circle', label: 'Circle' },
   { key: 'line', label: 'Line' },
+  { key: 'polyline', label: 'Polyline' },   // (1235) click each point; double-click / Enter / first point to finish
+  { key: 'polygon', label: 'Polygon' },
   { key: 'free', label: 'Draw' },
   { key: 'highlight', label: 'Highlight' },
   { key: 'text', label: 'Text' },
 ]
+const POLY = ['polyline', 'polygon']   // the tools drawn point by point (1235)
 const COLOURS = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#111111']
 
 const isImageUrl = (url, contentType) => (contentType || '').startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(url || '')
@@ -33,7 +36,8 @@ function toMap(initial) {
   return {}
 }
 
-export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit, onSave, fileName, docLabel = 'drawing' }) {
+// fullHeight (1235): the viewer fills the window it is in (the report's near full-screen window)
+export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit, onSave, fileName, docLabel = 'drawing', fullHeight = false }) {
   const isImg = isImageUrl(imageUrl, contentType)
   const [map, setMap] = useState(() => toMap(initial))
   const [page, setPage] = useState(1)
@@ -45,6 +49,16 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
   const [fontSize, setFontSize] = useState(18)
   const [bold, setBold] = useState(false)
   const [underline, setUnderline] = useState(false)
+  // FILL (1235) - boxes, circles and polygons can be filled, with their own fill opacity
+  const [fill, setFill] = useState(false)
+  const [fillOpacity, setFillOpacity] = useState(0.3)
+  // SNAP (1235) - to the drawing's own points (a PDF's line ends and corners) and to the
+  // points of the marks already made; on or off
+  const [snap, setSnap] = useState(true)
+  const [snapHint, setSnapHint] = useState(null)
+  const drawingPts = useRef({})          // page -> Float32Array of x,y fractions read from the PDF
+  const [ptsReady, setPtsReady] = useState({})
+  const lastDownRef = useRef(null)    // for spotting a double-click while drawing a polyline / polygon
   const [editingId, setEditingId] = useState(null)   // id of the text box being typed into
   const [drag, setDrag] = useState(null)             // active edit drag: { id, mode, handle, start, orig }
   const [draft, setDraft] = useState(null)
@@ -105,6 +119,51 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
     } catch { holder.dataset.rendered = '' }
   }
 
+  // THE DRAWING'S OWN POINTS for snapping (1235): every line end, curve end and rectangle corner
+  // on the PDF page, put through the page's transforms into the same 0-1 fractions as the
+  // mark-up. Read once per page, when it becomes the active one. (An image has no lines to read.)
+  useEffect(() => {
+    if (isImg || pdfState !== 'ok' || drawingPts.current[page]) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const pg = await pdfDocRef.current.getPage(page)
+        const vp = pg.getViewport({ scale: 1 })
+        const ops = await pg.getOperatorList()
+        const O = window.pdfjsLib.OPS
+        let ctm = [1, 0, 0, 1, 0, 0]; const stack = []; const out = []
+        const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
+        const seen = new Set()
+        const add = (x, y) => {
+          const X = ctm[0] * x + ctm[2] * y + ctm[4], Y = ctm[1] * x + ctm[3] * y + ctm[5]
+          const [vx, vy] = vp.convertToViewportPoint(X, Y); const fx = vx / vp.width, fy = vy / vp.height
+          if (!(fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1)) return
+          const k = `${Math.round(fx * 4000)},${Math.round(fy * 4000)}`; if (seen.has(k)) return
+          seen.add(k); out.push(fx, fy)
+        }
+        for (let i = 0; i < ops.fnArray.length && out.length < 600000; i++) {
+          const fn = ops.fnArray[i], args = ops.argsArray[i]
+          if (fn === O.save) stack.push(ctm)
+          else if (fn === O.restore) ctm = stack.pop() || ctm
+          else if (fn === O.transform) ctm = mul(ctm, args)
+          else if (fn === O.constructPath) {
+            const [pops, c] = args; let j = 0
+            for (const op of pops) {
+              if (op === O.moveTo || op === O.lineTo) { add(c[j], c[j + 1]); j += 2 }
+              else if (op === O.curveTo) { add(c[j + 4], c[j + 5]); j += 6 }
+              else if (op === O.curveTo2 || op === O.curveTo3) { add(c[j + 2], c[j + 3]); j += 4 }
+              else if (op === O.rectangle) { const [x, y, w, h] = [c[j], c[j + 1], c[j + 2], c[j + 3]]; add(x, y); add(x + w, y); add(x + w, y + h); add(x, y + h); j += 4 }
+            }
+          }
+        }
+        if (cancelled) return
+        drawingPts.current[page] = new Float32Array(out)
+        setPtsReady(r => ({ ...r, [page]: out.length / 2 }))
+      } catch { drawingPts.current[page] = new Float32Array(0); setPtsReady(r => ({ ...r, [page]: 0 })) }
+    })()
+    return () => { cancelled = true }
+  }, [page, pdfState, isImg])
+
   // Set the active page (for markup) and scroll the stack to it.
   const gotoPage = (pn) => {
     const p = Math.max(1, Math.min(numPages, pn))
@@ -120,7 +179,8 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
   }
   const updateShape = (sid, patch) => setShapes(s => s.map(x => x.id === sid ? { ...x, ...patch } : x))
   // Apply a style patch (colour, fontSize, bold, underline, width) to the selected shape.
-  const applyTextStyle = (patch) => { if (selected) updateShape(selected, patch) }
+  // ...and to a polyline / polygon still being drawn, so a change made mid-shape applies to it (1235)
+  const applyTextStyle = (patch) => { if (selected) updateShape(selected, patch); setDraft(d => d && POLY.includes(d.type) ? { ...d, ...patch } : d) }
 
   // Translate every coordinate of a shape by (dx, dy) in normalised space.
   function moveShape(sh, dx, dy) {
@@ -134,8 +194,36 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
 
   function rel(e) {
     const r = wrapRef.current.getBoundingClientRect()
-    const t = e.touches ? e.touches[0] : e
+    const t = e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e)
     return { x: Math.min(1, Math.max(0, (t.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (t.clientY - r.top) / r.height)) }
+  }
+  // SNAP (1235): the nearest drawing point or mark point within ~10 screen pixels, else the
+  // pointer itself. Measured in pixels so it feels the same at any zoom.
+  const SNAP_PX = 10
+  function snapped(p) {
+    if (!snap || !wrapRef.current) { setSnapHint(null); return p }
+    const r = wrapRef.current.getBoundingClientRect(); const W = r.width || 1, H = r.height || 1
+    let best = null, bd = SNAP_PX * SNAP_PX
+    const consider = (x, y) => { const dx = (x - p.x) * W, dy = (y - p.y) * H, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = { x, y } } }
+    const arr = drawingPts.current[page]
+    if (arr) for (let i = 0; i < arr.length; i += 2) consider(arr[i], arr[i + 1])
+    for (const sh of shapes) {
+      if (sh.pts) sh.pts.forEach(q => consider(q.x, q.y))
+      else if (sh.x1 != null) { consider(sh.x1, sh.y1); consider(sh.x2, sh.y2); if (sh.type === 'rect') { consider(sh.x1, sh.y2); consider(sh.x2, sh.y1) } }
+    }
+    setSnapHint(best)
+    return best || p
+  }
+  const SNAPS = ['arrow', 'rect', 'circle', 'line', 'polyline', 'polygon']   // the tools that snap
+  // finish (or cancel) a polyline / polygon being drawn
+  function finishPoly(cancel) {
+    const d = draft; if (!d || !POLY.includes(d.type)) return
+    setDraft(null); setSnapHint(null)
+    if (cancel) return
+    const pts = d.pts.slice(0, -1).filter((q, i, a) => !i || Math.abs(q.x - a[i - 1].x) > 1e-4 || Math.abs(q.y - a[i - 1].y) > 1e-4)
+    if (pts.length < (d.type === 'polygon' ? 3 : 2)) return
+    const done = { ...d, pts }
+    setShapes(s => [...s, done]); setSelected(done.id); setTool('select')
   }
   function down(e) {
     if (!canEdit) return
@@ -143,11 +231,28 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
     // by the shapes' own handlers (see startMove / startHandle), which call setDrag.
     if (tool === 'select') { if (!drag) setSelected(null); return }
     e.preventDefault()
-    const p = rel(e)
+    const raw = rel(e)
+    const p = SNAPS.includes(tool) ? snapped(raw) : raw
+    if (POLY.includes(tool)) {
+      // A DOUBLE-CLICK FINISHES - detected here: the browser's own dblclick never fires, because
+      // the mark-up layer is redrawn after every click and the two clicks land on different elements
+      const now = Date.now(), last = lastDownRef.current
+      lastDownRef.current = { t: now, x: raw.x, y: raw.y }
+      if (draft && draft.type === tool && last && now - last.t < 400 && wrapRef.current) {
+        const r = wrapRef.current.getBoundingClientRect()
+        if (Math.hypot((raw.x - last.x) * r.width, (raw.y - last.y) * r.height) < 8) { finishPoly(); return }
+      }
+      if (!draft || draft.type !== tool) { setDraft({ id: id(), type: tool, pts: [p, p], colour, opacity, width, ...(tool === 'polygon' ? { fill, fillOpacity } : {}) }); return }
+      // close a polygon by clicking its first point
+      const first = draft.pts[0], r = wrapRef.current.getBoundingClientRect()
+      if (tool === 'polygon' && draft.pts.length > 3 && Math.hypot((p.x - first.x) * r.width, (p.y - first.y) * r.height) < 12) { finishPoly(); return }
+      setDraft(d => ({ ...d, pts: [...d.pts.slice(0, -1), p, p] }))
+      return
+    }
     if (tool === 'free') { setDraft({ id: id(), type: 'free', pts: [p], colour, opacity, width }); return }
     if (tool === 'highlight') { setDraft({ id: id(), type: 'highlight', pts: [p], colour, opacity: Math.min(opacity, 0.4), width: Math.max(width * 4, 14) }); return }
     if (tool === 'text') { setDraft({ id: id(), type: 'text', x1: p.x, y1: p.y, x2: p.x, y2: p.y, text: '', colour, opacity, fontSize, bold, underline }); return }
-    setDraft({ id: id(), type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, colour, opacity, width })
+    setDraft({ id: id(), type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, colour, opacity, width, ...((tool === 'rect' || tool === 'circle') ? { fill, fillOpacity } : {}) })
   }
   function move(e) {
     // Editing an existing shape (move or handle drag).
@@ -163,14 +268,17 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
       }
       return
     }
-    if (!draft) return
-    const p = rel(e)
+    if (!draft) { if (canEdit && snap && SNAPS.includes(tool) && wrapRef.current) snapped(rel(e)); return }
+    const raw = rel(e)
+    const p = SNAPS.includes(draft.type) ? snapped(raw) : raw
     if (draft.type === 'free' || draft.type === 'highlight') setDraft(d => ({ ...d, pts: [...d.pts, p] }))
+    else if (POLY.includes(draft.type)) setDraft(d => ({ ...d, pts: [...d.pts.slice(0, -1), p] }))
     else setDraft(d => ({ ...d, x2: p.x, y2: p.y }))
   }
   function up() {
     if (drag) { setDrag(null); return }
     if (!draft) return
+    if (POLY.includes(draft.type)) return   // a polyline / polygon carries on until it is finished
     if (draft.type === 'text') {
       let d = draft
       if (Math.abs(d.x2 - d.x1) < 0.04 || Math.abs(d.y2 - d.y1) < 0.02) d = { ...d, x2: d.x1 + 0.18, y2: d.y1 + 0.06 }
@@ -228,11 +336,12 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
       if (editingId) return  // typing in a text box
       const t = e.target
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (draft && POLY.includes(draft.type)) { if (e.key === 'Enter') { e.preventDefault(); finishPoly() } else if (e.key === 'Escape') { e.preventDefault(); finishPoly(true) } return }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); removeSelected() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selected, editingId, canEdit])
+  }, [selected, editingId, canEdit, draft])
 
   const all = draft ? [...shapes, draft] : shapes
 
@@ -251,7 +360,7 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
           {COLOURS.map(c => <button key={c} onMouseDown={e => e.preventDefault()} onClick={() => { setColour(c); applyTextStyle({ colour: c }) }} style={{ width: 22, height: 22, borderRadius: 5, background: c, border: colour === c ? '2px solid #111' : '1px solid #ccc', cursor: 'pointer' }} />)}
           <span style={{ width: 1, height: 22, background: '#ddd' }} />
           <label style={{ fontSize: 12, color: '#666' }}>Thickness<input type="range" min="1" max="12" value={width} onChange={e => { const v = Number(e.target.value); setWidth(v); if (selected) { const sh = shapes.find(x => x.id === selected); if (sh && sh.type !== 'text') applyTextStyle({ width: v }) } }} style={{ verticalAlign: 'middle', marginLeft: 6, width: 80 }} /></label>
-          <label style={{ fontSize: 12, color: '#666' }}>Opacity<input type="range" min="0.1" max="1" step="0.1" value={opacity} onChange={e => setOpacity(Number(e.target.value))} style={{ verticalAlign: 'middle', marginLeft: 6, width: 80 }} /></label>
+          <label style={{ fontSize: 12, color: '#666' }}>Opacity<input type="range" min="0.1" max="1" step="0.1" value={opacity} onChange={e => { const v = Number(e.target.value); setOpacity(v); applyTextStyle({ opacity: v }) }} style={{ verticalAlign: 'middle', marginLeft: 6, width: 80 }} /></label>
           {(tool === 'text' || (selected && shapes.find(x => x.id === selected)?.type === 'text')) && (
             <>
               <span style={{ width: 1, height: 22, background: '#ddd' }} />
@@ -264,6 +373,18 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
               <button onMouseDown={e => e.preventDefault()} onClick={() => { const v = !underline; setUnderline(v); applyTextStyle({ underline: v }) }} style={{ ...ghost, textDecoration: 'underline', background: underline ? '#7c3aed' : '#fff', color: underline ? '#fff' : '#333', border: 'none' }}>U</button>
             </>
           )}
+          {(['rect', 'circle', 'polygon'].includes(tool) || ['rect', 'circle', 'polygon'].includes(shapes.find(x => x.id === selected)?.type)) && <>
+            <span style={{ width: 1, height: 22, background: '#ddd' }} />
+            <button onMouseDown={e => e.preventDefault()} onClick={() => { const v = !fill; setFill(v); applyTextStyle({ fill: v, fillOpacity }) }} style={{ ...ghost, background: fill ? '#7c3aed' : '#fff', color: fill ? '#fff' : '#333' }}>Fill {fill ? 'on' : 'off'}</button>
+            <label style={{ fontSize: 12, color: '#666' }}>Fill opacity<input type="range" min="0.05" max="1" step="0.05" value={fillOpacity} onChange={e => { const v = Number(e.target.value); setFillOpacity(v); applyTextStyle({ fillOpacity: v }) }} style={{ verticalAlign: 'middle', marginLeft: 6, width: 70 }} /></label>
+          </>}
+          <span style={{ width: 1, height: 22, background: '#ddd' }} />
+          <button onMouseDown={e => e.preventDefault()} onClick={() => { setSnap(v => !v); setSnapHint(null) }} title={isImg ? 'Snaps to the points of your marks (an image has no drawing lines to read)' : `Snaps to the drawing's line ends and corners${ptsReady[page] != null ? ` (${ptsReady[page]} points on this page)` : ''} and to your marks`}
+            style={{ ...ghost, background: snap ? '#0f766e' : '#fff', color: snap ? '#fff' : '#333' }}>Snap {snap ? 'on' : 'off'}</button>
+          {draft && POLY.includes(draft.type) && <>
+            <button onClick={() => finishPoly()} style={{ ...ghost, color: '#0f766e', fontWeight: 600 }}>Finish shape</button>
+            <button onClick={() => finishPoly(true)} style={ghost}>Cancel</button>
+          </>}
           <span style={{ width: 1, height: 22, background: '#ddd' }} />
           <button onClick={undo} style={ghost}>Undo</button>
           {selected && <button onClick={removeSelected} style={{ ...ghost, color: '#dc2626' }}>Delete selected</button>}
@@ -286,7 +407,7 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
       )}
 
       {isImg ? (
-        <div ref={wrapRef} onMouseDown={down} onMouseMove={move} onMouseUp={up} onMouseLeave={up}
+        <div ref={wrapRef} onMouseDown={down} onMouseMove={move} onMouseUp={up} onMouseLeave={up} onDoubleClick={() => finishPoly()}
           onTouchStart={down} onTouchMove={move} onTouchEnd={up}
           style={{ position: 'relative', width: '100%', border: '1px solid #ddd', borderRadius: 8, overflow: 'hidden', touchAction: 'none', background: '#f4f4f4' }}>
           <img src={imageUrl} alt={docLabel} style={{ display: 'block', width: '100%', pointerEvents: 'none' }} />
@@ -297,12 +418,12 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
       ) : pdfState === 'failed' ? (
         <div style={{ padding: 40, textAlign: 'center', color: '#bbb', border: '1px solid #ddd', borderRadius: 8 }}>Couldn't render this {docLabel} - use Download to view it.</div>
       ) : (
-        <div ref={scrollRef} style={{ border: '1px solid #ddd', borderRadius: 8, background: '#f4f4f4', overflow: 'auto', maxHeight: '70vh' }}>
+        <div ref={scrollRef} style={{ border: '1px solid #ddd', borderRadius: 8, background: '#f4f4f4', overflow: 'auto', maxHeight: fullHeight ? 'calc(100vh - 210px)' : '70vh' }}>
           {Array.from({ length: numPages }, (_, i) => i + 1).map(pn => {
             const isActive = pn === page
             return (
               <div key={pn} data-page={pn} ref={el => { pageEls.current[pn] = el }}
-                onMouseDown={isActive ? down : undefined} onMouseMove={isActive ? move : undefined} onMouseUp={isActive ? up : undefined} onMouseLeave={isActive ? up : undefined}
+                onMouseDown={isActive ? down : undefined} onMouseMove={isActive ? move : undefined} onMouseUp={isActive ? up : undefined} onMouseLeave={isActive ? up : undefined} onDoubleClick={isActive ? () => finishPoly() : undefined}
                 onTouchStart={isActive ? down : undefined} onTouchMove={isActive ? move : undefined} onTouchEnd={isActive ? up : undefined}
                 onClick={() => { if (page !== pn) setPage(pn) }}
                 style={{ position: 'relative', width: '100%', margin: '0 auto 10px', touchAction: 'none', outline: isActive && canEdit ? '2px solid #a78bfa' : 'none', outlineOffset: -2 }}>
@@ -331,6 +452,7 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
               <polygon points="0 0, 10 4, 0 8" fill="context-stroke" />
             </marker>
           </defs>
+          {snapHint && canEdit && SNAPS.includes(draft ? draft.type : tool) && <g pointerEvents="none"><circle cx={snapHint.x * 1000} cy={snapHint.y * 1000} r={7} fill="none" stroke="#0f766e" strokeWidth={2.5} /><circle cx={snapHint.x * 1000} cy={snapHint.y * 1000} r={1.8} fill="#0f766e" /></g>}
           {all.filter(sh => sh.type !== 'text').map(sh => <Shape key={sh.id} sh={sh} selected={selected === sh.id} tool={tool} canEdit={canEdit}
             onSelect={() => { if (canEdit && tool === 'select') setSelected(sh.id) }}
             onStartMove={(e) => startMove(e, sh)} onStartHandle={(e, h) => startHandle(e, sh, h)} />)}
@@ -413,7 +535,9 @@ function Shape({ sh, selected, tool, canEdit, onSelect, onStartMove, onStartHand
   // In select mode, pressing on the shape body starts a move (and selects it).
   const bodyDown = (e) => { if (editable) onStartMove(e) }
   const cursor = editable ? (selected ? 'move' : 'pointer') : 'pointer'
-  const common = { stroke, strokeWidth: (sh.width || 3), opacity: sh.opacity ?? 1, fill: 'none', onMouseDown: bodyDown, onTouchStart: bodyDown, onClick: onSelect, style: { cursor } }
+  // line opacity on the stroke and fill opacity on the fill (1235) - an unfilled mark looks exactly as before
+  const fillProps = sh.fill ? { fill: stroke, fillOpacity: sh.fillOpacity ?? 0.3 } : { fill: 'none' }
+  const common = { stroke, strokeWidth: (sh.width || 3), strokeOpacity: sh.opacity ?? 1, ...fillProps, onMouseDown: bodyDown, onTouchStart: bodyDown, onClick: onSelect, style: { cursor } }
   const sel = selected ? { filter: 'drop-shadow(0 0 2px #7c3aed)' } : {}
   if (sh.type === 'text') return null
 
@@ -426,6 +550,14 @@ function Shape({ sh, selected, tool, canEdit, onSelect, onStartMove, onStartHand
     return hit(<>
       <polyline points={pts} stroke="transparent" strokeWidth={Math.max((sh.width || 3) + 24, 28)} fill="none" onMouseDown={bodyDown} onTouchStart={bodyDown} onClick={onSelect} style={{ cursor }} />
       <polyline points={pts} stroke={stroke} strokeWidth={isHl ? (sh.width || 16) : (sh.width || 3)} opacity={isHl ? (sh.opacity ?? 0.35) : (sh.opacity ?? 1)} fill="none" strokeLinejoin="round" strokeLinecap="round" style={{ ...sel, pointerEvents: 'none' }} />
+    </>)
+  }
+  if (sh.type === 'polyline' || sh.type === 'polygon') {
+    const pts = (sh.pts || []).map(p => `${p.x * S},${p.y * S}`).join(' ')
+    const El = sh.type === 'polygon' ? 'polygon' : 'polyline'
+    return hit(<>
+      <El points={pts} fill={sh.type === 'polygon' ? 'transparent' : 'none'} stroke="transparent" strokeWidth={Math.max((sh.width || 3) + 24, 28)} onMouseDown={bodyDown} onTouchStart={bodyDown} onClick={onSelect} style={{ cursor }} />
+      <El points={pts} {...common} {...(sh.type === 'polyline' ? { fill: 'none' } : {})} strokeLinejoin="round" strokeLinecap="round" style={{ ...common.style, ...sel, pointerEvents: 'none' }} />
     </>)
   }
   if (sh.type === 'rect') {

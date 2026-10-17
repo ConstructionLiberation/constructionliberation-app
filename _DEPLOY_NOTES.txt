@@ -1,46 +1,39 @@
-PACKAGE 1234 - The Customer Progress Report (part 2)
+PACKAGE 1235 - Mark-up: full screen, polylines and polygons, fill, snap
 
-Five files. Complete replacements (two NEW). No re-seed. No env changes.
-Built on 1233 - DEPLOY 1233 FIRST (the drawings).
+Three files. Complete replacements. No re-seed. No env changes.
+Built on 1234.
 
-  lib/customerReport.js                          (NEW)
-  pages/api/project-report-customer.js           (NEW)
-  lib/projectReportPdf.js
-  pages/api/project-report-pdf.js
+  components/DrawingMarkup.js          (the mark-up viewer - shared with the Design portal)
+  lib/drawingPdf.js
   pages/operations/project-management/report.js
 
-PROJECT REPORTS - at the top, "EDIT CUSTOMER REPORT": tick what the customer is
-sent - every section of the report in order (variations, issues, site
-communications, works completed, drawings, planned works, customer notes, your
-own template sections, photos, additional photos, weather, approval). The
-project, address, customer and report date always head it. It starts as:
-variations (instructed and not), works completed, the marked-up drawings, the
-week's photos, planned works and the customer notes. Your own report is not
-changed.
-EACH ROW - "SEND CUSTOMER PROGRESS REPORT": an email window -
-  - TO: the customer's whole project team (from Project Details / the handover),
-    each once
-  - COPY IN: search and tick any portal users
-  - subject and message, prefilled and editable; "preview what they receive"
-  - sent FROM THE NOTIFICATIONS ADDRESS with the Customer Progress Report as a
-    PDF attachment - only the chosen sections, the marked-up drawings, photos and
-    comments; replies come to the sender; recorded on the report ("Sent before")
-  - no customer team with an email -> it says so, and to add them in Project
-    Details
-THE CUSTOMER PDF is titled "Customer Progress Report", has no internal status
-stamp or signature line, and is footed with the report number and page numbers.
-The internal report's PDF is unchanged.
+PROJECT REPORT - each drawing's row has a "VIEW / MARK-UP" button, and the
+mark-up window is NEARLY FULL SCREEN (97% of the window, the drawing filling it).
+THE MARK-UP VIEWER (in the report AND the Design portal and handover documents,
+which use the same viewer):
+  - POLYLINE and POLYGON tools: click each point (the next segment follows the
+    pointer); finish by clicking the first point, double-clicking, pressing
+    Enter or "Finish shape"; Esc or "Cancel" abandons it
+  - FILL on / off with its own FILL OPACITY - boxes, circles and polygons; line
+    colour and opacity as before; colour, opacity and fill now also change the
+    selected mark, and a shape being drawn
+  - SNAP on / off - points snap to the DRAWING'S OWN line ends and corners (read
+    from a PDF drawing - CAD exports have them; the button's tooltip says how many
+    on the page) and to the points of your own marks, with a marker showing the
+    snap. An image or scan has no lines to read, so it snaps to your marks only.
+  - marks already made look exactly as before; nothing else in the viewer changes
+THE REPORT PDF draws polylines, polygons and fills exactly as on screen.
 
-Checked through the real route (the mail service stood in, the email inspected):
-the default selection; a change saved; the recipients - the customer team (an
-address in two cases sent once) and active portal users; the email - from the
-notifications address, to the team, copying the chosen user, reply-to the
-sender, the PDF attached; the PDF - Customer Progress Report, variations V01 Yes
-and V02 No, works completed, the drawing with its mark-up, planned works (lines
-kept), customer notes; site communications ("INTERNAL..."), issues and approval
-left out; the customer footer; the send recorded; no team refused. The internal
-report still has every section. In a REAL browser (Chromium): Edit customer
-report - the sections including your own, ticks saved; Send Customer Progress
-Report - the team, the subject and message, the preview link, a portal user
-copied in, Sent. All server routes compile; all pages pass the browser check.
-Built from your deployed packages (1022-1220) plus 1221-1233.
+Checked: the PDF renderer - a filled polygon (corners on 10/40% gridlines), an
+open polyline, a filled box (50%), a filled circle (25%) and an unfilled box,
+looked at. In a REAL browser (Chromium) with a real PDF roof plan (pdf.js 3.11.174,
+the version the viewer loads): 6 points read from the drawing; a polygon clicked
+5-6 px OFF each corner snapped EXACTLY onto the four corners, filled when Fill
+was switched on mid-shape, finished by double-click; with snap off a line stayed
+where clicked; with snap on it snapped exactly onto the ridge; a polyline
+finished with Enter. Found and fixed on the way: the browser's own double-click
+never fired (the mark-up layer is redrawn between the two clicks), so the viewer
+now spots the double-click itself; a fill switched on mid-shape did not apply to
+it. On the report: View / Mark-up on the drawing's row; the window 97% of the
+screen. All pages - including the nine that use the viewer - pass the browser
+check. Built from your deployed packages (1022-1220) plus 1221-1234.

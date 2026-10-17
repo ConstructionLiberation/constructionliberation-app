@@ -686,15 +686,16 @@ const input = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', bor
 
 const miniBtn = { width: 26, height: 26, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: '24px', padding: 0 }
 
-function Modal({ title, children, onClose, wide }) {
+// full (1235): nearly full screen - the drawing mark-up window
+function Modal({ title, children, onClose, wide, full }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3vh 2vw', overflowY: 'auto' }}>
-      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: wide ? 880 : 620, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 26px', borderBottom: '1px solid #eee', position: 'sticky', top: 0, background: '#fff', borderRadius: '14px 14px 0 0', zIndex: 2 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: full ? '1.5vh 1.5vw' : '3vh 2vw', overflowY: 'auto' }}>
+      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: full ? '97vw' : wide ? 880 : 620, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: full ? '10px 18px' : '18px 26px', borderBottom: '1px solid #eee', position: 'sticky', top: 0, background: '#fff', borderRadius: '14px 14px 0 0', zIndex: 2 }}>
           <h2 style={{ margin: 0, fontSize: 17, color: INK }}>{title}</h2>
           <button onClick={onClose} style={{ fontSize: 24, border: 'none', background: 'none', cursor: 'pointer', color: '#999' }}>×</button>
         </div>
-        <div style={{ padding: '8px 26px 26px' }}>{children}</div>
+        <div style={{ padding: full ? '6px 14px 14px' : '8px 26px 26px' }}>{children}</div>
       </div>
     </div>
   )
@@ -740,8 +741,8 @@ function ReportDrawings({ projectNo, onChange }) {
       </label>
       <span style={{ fontSize: 11.5, color: '#999', marginLeft: 8 }}>PDF, PNG or JPEG - several at once</span>
       {err && <div style={{ fontSize: 12.5, color: '#b42318', marginTop: 6 }}>{err}</div>}
-      {open && <Modal title={`${open.name} - mark up what has been completed`} onClose={() => setOpen(null)} wide>
-        <DrawingMarkup key={open.id} imageUrl={open.url} contentType={open.contentType} initial={open.markup} canEdit fileName={open.name} onSave={(m) => saveMarkup(open, m)} />
+      {open && <Modal title={`${open.name} - mark up what has been completed`} onClose={() => setOpen(null)} full>
+        <DrawingMarkup key={open.id} imageUrl={open.url} contentType={open.contentType} initial={open.markup} canEdit fileName={open.name} onSave={(m) => saveMarkup(open, m)} fullHeight />
       </Modal>}
     </div>
   )
@@ -757,10 +758,11 @@ function DrawingList({ drawings, onOpen, onRemove, readOnly }) {
       {drawings.map(d => <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13 }}>
         <button onClick={() => readOnly ? setView(d) : onOpen(d)} style={{ border: 'none', background: 'none', color: '#2563eb', cursor: 'pointer', padding: 0, fontSize: 13, textAlign: 'left', flex: 1 }}>{d.name}</button>
         <span style={{ fontSize: 11.5, color: marks(d.markup) ? '#7c3aed' : '#999' }}>{marks(d.markup) ? `${marks(d.markup)} mark${marks(d.markup) === 1 ? '' : 's'}` : 'not marked up yet'}</span>
+        <button onClick={() => readOnly ? setView(d) : onOpen(d)} style={{ fontSize: 12, padding: '4px 10px', border: '1px solid #7c3aed', color: '#7c3aed', background: '#fff', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>{readOnly ? 'View' : 'View / Mark-up'}</button>
         {!readOnly && <button onClick={() => onRemove(d)} title="Take off the project's drawings" style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 15 }}>&times;</button>}
       </div>)}
-      {view && <Modal title={`${view.name} - as on this report`} onClose={() => setView(null)} wide>
-        <DrawingMarkup key={view.id} imageUrl={view.url} contentType={view.contentType} initial={view.markup} canEdit={false} fileName={view.name} onSave={() => {}} />
+      {view && <Modal title={`${view.name} - as on this report`} onClose={() => setView(null)} full>
+        <DrawingMarkup key={view.id} imageUrl={view.url} contentType={view.contentType} initial={view.markup} canEdit={false} fileName={view.name} onSave={() => {}} fullHeight />
       </Modal>}
     </div>
   )
