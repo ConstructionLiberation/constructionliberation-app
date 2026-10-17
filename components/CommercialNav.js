@@ -33,6 +33,7 @@ const MAIN = [
   { href: '/retention', label: 'Retention' },
   { href: '/variations', label: 'Variations' },
   { href: '/contracted-rates', label: 'Contracted Rates' },
+  { href: '/materials-takeoffs', label: 'Materials Take-offs' },   // the job's take-off, from the estimate (1226)
   { group: 'applications' },
   { href: '/wip', label: 'WIP' },
   { href: '/project-cashflow', label: 'Cash Flow' },

@@ -1,41 +1,41 @@
-PACKAGE 1225 - Estimate to job, part 1: Build contracted rates from estimate
+PACKAGE 1226 - Estimate to job, part 2: Materials Take-offs (Commercial)
 
-Four files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1224.
+Four files. Complete replacements (three NEW). No re-seed. No env changes.
+Built on 1225 - deploy 1225 first (the project's link to its estimate).
 
-  lib/estimateToRates.js               (NEW)
-  pages/api/contracted-rates.js
-  pages/api/estimating/estimates.js    (its price-library loader, now shared)
-  pages/contracted-rates.js
+  lib/jobTakeoff.js                    (NEW)
+  pages/api/job-takeoffs.js            (NEW)
+  pages/materials-takeoffs.js          (NEW)
+  components/CommercialNav.js          (the menu entry)
 
-COMMERCIAL > CONTRACTED RATES - for a project with no rates yet, beside the
-upload, "BUILD CONTRACTED RATES FROM ESTIMATE": pick the estimate (search by
-quote reference, title or customer; a negotiated project's own deal's
-estimates first). Its LATEST ISSUED REVISION - the one the customer accepted,
-never a revision still being edited - becomes the contracted rates, in the
-same preview an uploaded sheet gives: check, edit, Save, then Lock as ever, so
-the budgets, applications and cash flow work exactly as before.
-  - one rate per take-off item: item number, description, quantity, unit (as
-    printed - m², nr...), the selling rate as quoted, and materials and labour
-    per unit before profit (the budgets) - the estimate's own figures,
-    including its frozen revision prices and its own material rates
-  - rate-only items come through as "Rate only"; items below the line go below
-    the line; above or below follows where the item sits on the take-off
-  - an estimate never issued is refused: "issue it from Estimating first"
-  - saving records which estimate and revision the rates came from - shown as
-    "Built from estimate Q-1042 Rev A" - the project's link to its estimate,
-    which the materials take-offs and draft POs will build on next
+COMMERCIAL > MATERIALS TAKE-OFFS - the job's take-off, re-measured for
+construction without ever touching the quote.
+  - pick the project (those whose contracted rates were built from an estimate
+    show it); "START THE MATERIALS TAKE-OFF FROM Q-1042 REV A" copies that
+    revision - the same one the contracted rates came from. A project not
+    linked yet is pointed to Contracted Rates > Build from estimate.
+  - TAKE-OFF tab: each item with its estimate quantity and the JOB QUANTITY
+    (editable; purple once re-measured); LEAVE OUT / Put back an item the job
+    does not need; BUILD-UP opens the same editor as Estimating - for this job
+    only (the estimate and the library are not changed).
+  - MATERIALS tab: the Estimating Materials tab itself, on the job's take-off
+    (left-out items excluded) - suppliers, products, packs, order waste,
+    allocations - so the packs come out exactly as in Estimating.
+  - Save; the page shows how many items are re-measured or left out, and who
+    saved last.
+The job take-off is stored in the same shape as an estimate (its frozen prices
+and its own material rates included); part 3 turns its Materials list into
+draft POs, one per supplier.
 
-Checked through the real route with a real estimate priced from Rock's own
-price list, labour rates and build-ups: Rev A issued, Rev B started and not
-issued -> built from Rev A; the contracted rates' above-the-line total equal to
-the estimate's (811,200) and to the total recorded when it was issued; the
-materials (7,000) and labour (24,200) budgets equal to the estimate's; a
-rate-only item kept above the line (the first version put it below - fixed); a
-never-issued estimate refused; saved and locked -> the project's contract value
-and budgets set, the source recorded. The estimating route still creates and
-lists estimates on the shared loader. In a REAL browser (Chromium): the button,
-the picker and its search, the never-issued message, the four lines built into
-the preview with "Built from estimate Q-1042 Rev A", Save sending the source.
-All server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1220) plus 1221-1224.
+Checked through the real route with a real estimate priced from Rock's
+library: J228 linked to Q-1042 Rev A, J231 not; Start copied Rev A row for row
+with the original quantities kept, a second Start refused; a re-measure (640 ->
+960) and a left-out item saved by the CM; the estimate link could not be
+overwritten by a save; the MATERIALS LIST - estimate: Renolit Alkorplan, order
+640 = 31 packs; job re-measured: order 960 = 46 packs, and the left-out item's
+line gone; an unlinked project refused with directions. In a REAL browser
+(Chromium), on that data: the unlinked message; Start; the re-measure
+highlighted and counted; Leave out; the Materials tab showing Renolit; the
+Build-up editor; Save sending the quantities and the left-out flag. All server
+routes compile; all pages pass the browser check. Built from your deployed
+packages (1022-1220) plus 1221-1225.
