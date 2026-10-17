@@ -128,7 +128,9 @@ export default function PoPage() {
             </select></label>
           <div style={{ ...label, flex: '1 1 260px' }}>Supplier (any contact in Xero)
             <SupplierSearch contacts={(list && list.contacts) || []} value={po.contactName || po.supplier}
-              onPick={c => setPo(x => ({ ...x, contactId: c.id, contactName: c.name, supplier: c.priceList || c.name, priceList: c.priceList || '' }))} />
+              onPick={c => setPo(x => ({ ...x, contactId: c.id, contactName: c.name, supplier: c.priceList || c.name, priceList: c.priceList || '', to: x._toTyped ? x.to : (c.email || '') }))} />
+            {/* the supplier's email for this PO - from Xero, changeable (1214) */}
+            <input value={po.to || ''} onChange={e => setPo(x => ({ ...x, to: e.target.value, _toTyped: !!e.target.value }))} placeholder="Supplier email (from Xero - can be changed)" style={{ ...inp, marginTop: 6 }} />
             {list && !(list.contacts || []).length && <span style={{ fontSize: 11.5, color: '#b45309' }}>No Xero contacts read yet - Purchasing &gt; Suppliers &gt; Refresh from Xero</span>}</div>
         </div>
         <div style={card}>

@@ -104,7 +104,7 @@ function NewPo({ data, onDone, initial = null, onCancel }) {
   // NEW, or an existing PO being EDITED by the CM (1213) - its project stays as raised
   const [po, setPo] = useState(() => initial ? { projectNo: initial.jobNo || '', contactId: initial.contactId || '', contactName: initial.contactName || initial.supplier || '', priceList: initial.priceList || '',
       lines: (initial.lines || []).map(l => ({ ...l })), deliveryDate: initial.deliveryDate || '', deliveryAddress: initial.deliveryAddress || '', moffett: initial.moffett || '', artics: initial.artics || '', accessRoutes: initial.accessRoutes || '',
-      siteContact: { name: (initial.siteContact && initial.siteContact.name) || '', phone: (initial.siteContact && initial.siteContact.phone) || '' }, confirmationsTo: initial.confirmationsTo || '', notes: initial.notes || '', vat: initial.vat || 'standard' }
+      siteContact: { name: (initial.siteContact && initial.siteContact.name) || '', phone: (initial.siteContact && initial.siteContact.phone) || '' }, confirmationsTo: initial.confirmationsTo || '', notes: initial.notes || '', vat: initial.vat || 'standard', to: initial.to || '', _toTyped: !!initial.to }
     : { projectNo: '', contactId: '', contactName: '', priceList: '', lines: [], deliveryDate: '', deliveryAddress: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: data.settings.confirmationsTo || '', notes: '' })
   const [products, setProducts] = useState([]), [pq, setPq] = useState(''), [sq, setSq] = useState(''), [cq, setCq] = useState(null)
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false)
@@ -137,7 +137,8 @@ function NewPo({ data, onDone, initial = null, onCancel }) {
         <label style={lbl}>Supplier</label>
         {po.contactId ? <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong style={{ flex: 1, fontSize: 15 }}>{po.contactName}</strong><button onClick={() => setPo(x => ({ ...x, contactId: '', contactName: '', priceList: '' }))} style={{ ...back, color: '#0f766e' }}>Change</button></div>
           : <><input value={sq} onChange={e => setSq(e.target.value)} placeholder="Search suppliers…" style={inp} />
-            {supplierHits.length > 0 && <div style={{ border: '1px solid #e8e4da', borderRadius: 10, marginTop: 4, overflow: 'hidden' }}>{supplierHits.map(c => <button key={c.id} onClick={() => { setPo(x => ({ ...x, contactId: c.id, contactName: c.name, priceList: c.priceList || '' })); setSq('') }} style={pick}>{c.name}{c.priceList ? <span style={{ color: '#0f766e', fontSize: 12 }}> · price list</span> : ''}</button>)}</div>}</>}
+            {supplierHits.length > 0 && <div style={{ border: '1px solid #e8e4da', borderRadius: 10, marginTop: 4, overflow: 'hidden' }}>{supplierHits.map(c => <button key={c.id} onClick={() => { setPo(x => ({ ...x, contactId: c.id, contactName: c.name, priceList: c.priceList || '', to: x._toTyped ? x.to : (c.email || '') })); setSq('') }} style={pick}>{c.name}{c.priceList ? <span style={{ color: '#0f766e', fontSize: 12 }}> · price list</span> : ''}</button>)}</div>}</>}
+        {po.contactId && <><label style={lbl}>Supplier email</label><input value={po.to || ''} onChange={e => setPo(x => ({ ...x, to: e.target.value, _toTyped: !!e.target.value }))} inputMode="email" placeholder="From Xero - can be changed" style={{ ...inp, marginBottom: 0 }} /></>}
       </div>
       <div style={card}>
         <strong style={{ fontSize: 15 }}>What to order</strong>

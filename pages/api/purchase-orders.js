@@ -81,18 +81,19 @@ async function handler(req, res) {
     const strict = raising || (b.action === 'update' && existing && existing.status === 'approved')   // an approved PO stays complete when changed
     if (strict) { const why = await completeProblem(fields, sup, lines); if (why) return res.status(400).json({ error: why }) }
     if (fields.confirmationsTo && !EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
+    if (fields.to && !EMAIL.test(fields.to)) return res.status(400).json({ error: 'The supplier email address is not valid' })
     if (b.action === 'create') {
       const st = await loadPoSettings()
       if (!fields.confirmationsTo) fields.confirmationsTo = st.confirmationsTo || ''
       fields.vatRate = st.vatRate   // kept on the PO - a later change of rate does not alter it
       if (toDraft) {
         // a DRAFT: no number, not approved, not in Deliveries, cannot be sent
-        const po = { id: newId(), number: null, status: 'draft', ...fields, to: (sup && sup.email) || '', raisedBy: by, raisedByEmail: session.email || '', createdAt: now, raisedAt: now, history: [{ at: now, by, what: 'Saved as a draft' }] }
+        const po = { id: newId(), number: null, status: 'draft', ...fields, raisedBy: by, raisedByEmail: session.email || '', createdAt: now, raisedAt: now, history: [{ at: now, by, what: 'Saved as a draft' }] }
         await savePo(po)
         return res.status(200).json({ ok: true, po })
       }
       // raised by the office: approved on raising (operatives' POs wait for the CM - stage 2b)
-      const po = { id: newId(), number: await takeNumber(), status: 'approved', ...fields, to: sup.email || '', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [{ at: now, by, what: 'Raised and approved' }] }
+      const po = { id: newId(), number: await takeNumber(), status: 'approved', ...fields, raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [{ at: now, by, what: 'Raised and approved' }] }
       await savePo(po); await setDelivery(po)
       return res.status(200).json({ ok: true, po })
     }
@@ -101,14 +102,14 @@ async function handler(req, res) {
     if (b.action === 'raise') {
       if (po.status !== 'draft') return res.status(409).json({ error: `${po.number} has already been raised` })
       // a draft takes the VAT rate in force when it is RAISED (1204)
-      const next = { ...po, ...fields, vatRate: (await loadPoSettings()).vatRate, number: await takeNumber(), status: 'approved', to: po.to || sup.email || '', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [...(po.history || []), { at: now, by, what: 'Raised and approved' }] }
+      const next = { ...po, ...fields, vatRate: (await loadPoSettings()).vatRate, number: await takeNumber(), status: 'approved', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [...(po.history || []), { at: now, by, what: 'Raised and approved' }] }
       await savePo(next); await setDelivery(next)
       return res.status(200).json({ ok: true, po: next })
     }
     if (po.status !== 'approved' && po.status !== 'draft') return res.status(409).json({ error: `${po.number} has been ${po.status} - it can no longer be changed` })
     if (po.status === 'draft') {
       // saving a draft again - still incomplete if need be
-      const next = { ...po, ...fields, to: po.to || (sup && sup.email) || '', history: [...(po.history || []), { at: now, by, what: 'Draft saved' }] }
+      const next = { ...po, ...fields, history: [...(po.history || []), { at: now, by, what: 'Draft saved' }] }
       await savePo(next)
       return res.status(200).json({ ok: true, po: next })
     }

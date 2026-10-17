@@ -82,7 +82,7 @@ async function handler(req, res) {
     const why = await completeProblem(fields, sup, lines); if (why) return res.status(400).json({ error: why })
     if (!EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     const st = await loadPoSettings()
-    const po = { id: newId(), number: null, status: 'awaiting-approval', ...fields, vatRate: st.vatRate, to: (sup && sup.email) || '',
+    const po = { id: newId(), number: null, status: 'awaiting-approval', ...fields, vatRate: st.vatRate,
       raisedBy: by, raisedByEmail: user.email || '', raisedByOps: user.id, raisedAt: now, history: [{ at: now, by, what: 'Raised in the Site App - awaiting CM approval' }] }
     await savePo(po)
     const cm = await findProjectCM(proj._p)
@@ -104,7 +104,7 @@ async function handler(req, res) {
     const fields = buildFields({ ...src, projectId: po.projectId, jobNo: po.jobNo, projectName: po.projectName }, sup, lines)
     const why = await completeProblem(fields, sup, lines); if (why) return res.status(400).json({ error: why })
     if (!EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
-    const next = { ...po, ...fields, to: (sup && sup.email) || po.to || '', history: [...(po.history || []), { at: now, by, what: 'Changed by the CM' }] }
+    const next = { ...po, ...fields, history: [...(po.history || []), { at: now, by, what: 'Changed by the CM' }] }
     await savePo(next)
     if (next.status === 'approved') await setDelivery(next)
     return res.status(200).json({ ok: true, po: next })

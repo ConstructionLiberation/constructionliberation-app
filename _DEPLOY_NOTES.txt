@@ -1,32 +1,27 @@
-PACKAGE 1213 - Site App: CMs edit purchase orders before they are sent
+PACKAGE 1214 - Purchase orders: the supplier's email, changeable on the PO
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1212.
+Five files. Complete replacements. No re-seed. No env changes. Built on 1213.
 
+  lib/poData.js
+  pages/api/purchase-orders.js
   pages/api/site-po.js
+  pages/operations/purchasing/po/[id].js     (folder literally named [id])
   pages/forms/purchase-orders.js
-  pages/forms/cm/po-approvals.js
 
-A project's Contracts Manager can now EDIT a purchase order in the Site App
-until it is sent to the supplier:
-  - in PO Approvals, a waiting PO has "Edit" beside Approve and Reject: the
-    same form as raising one, filled in - supplier, lines, quantities, prices,
-    delivery details; the project stays as raised. "Save changes", then approve
-    or reject.
-  - an APPROVED PO the office has not yet sent stays editable - listed under
-    "Approved - not yet sent" in PO Approvals; its Deliveries entry follows the
-    changes.
-  - once SENT it is fixed (as in the portal).
-The edited PO must still be complete (the same full check), and every change
-is recorded in its history with the CM's name. Only that project's CM can
-edit - not the operative who raised it, nor anyone else.
+A "SUPPLIER EMAIL" box on the PO - in the portal (under the supplier) and in
+the Site App (under the chosen supplier). It fills in from the supplier's
+Xero contact and can be changed for this PO (a branch, a named rep); it is
+saved with the PO - kept through drafts, raising, approval and a CM's edits -
+and the PO is emailed there (the portal's send box can still adjust it at the
+last moment). Picking the supplier again refills it only if nobody has typed
+their own. A malformed address is refused.
 
-Checked through the real route: Will (the CM) edited Dave's waiting PO
-(quantity changed, a line added) - still awaiting, "Changed by the CM by Will
-Reid"; Dave and Ali refused; an incomplete edit refused; after approval an
-edit saved and Deliveries showed the new lines, the PO listed as approved -
-not yet sent; once the office sent it, editing refused and Edit gone. In a
-REAL browser (Chromium, phone size): the "Approved - not yet sent" section;
-Edit beside Approve / Reject; the form filled in with the project fixed;
-quantity changed, saved with the CM's token, back to the PO to approve. All
-server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1212, verified against their zips).
+Checked through the real routes: from Xero when nothing typed; a typed
+address kept on raising, through a draft saved and raised, and the email sent
+to it; a malformed one refused; an operative's typed address kept, the CM's
+edit keeping it and changing it. In a REAL browser (Chromium): the portal box
+filled from Xero, a typed address sticking when the supplier is picked again;
+the Site App box (phone size) filled from Xero, typed address kept, placed
+below the supplier. All server routes compile; all pages pass the browser
+check. Built from your deployed packages (1022-1213, verified against their
+zips).
