@@ -1,24 +1,19 @@
-PACKAGE 1205 - Purchase orders: delivery details required; questions lined up
+PACKAGE 1206 - Purchase orders: type any site contact
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1204.
-(Deploy 1202, 1203 and 1204 first if not yet done - this builds on them.)
+One file. Complete replacement. No re-seed. No env changes. Built on 1205.
 
-  pages/api/purchase-orders.js
   pages/operations/purchasing/po/[id].js     (folder literally named [id])
 
-REQUIRED TO RAISE A PO: the delivery address, "Is Moffett offload required?",
-"Are artics permitted?", the site contact, and where order confirmations are
-sent (this PO's address, else the company default). The "To raise it:" note
-lists whatever is missing, and the server refuses it too. A DRAFT can still
-be saved without them.
-LAYOUT: the Moffett and artics questions sit level with the delivery address
-box - "Are artics permitted?" on its bottom line.
+SITE CONTACT takes anyone, not only operatives and portal users: type a name
+(e.g. the customer's site manager) - the list offers "Use 'John Smith'" when
+it is not in the list, and Enter does the same when nothing matches. A MOBILE
+box sits beside it: filled in when someone is picked from the list, typed for
+anyone else, editable either way. A name is still required to raise the PO;
+the mobile is optional.
 
-Checked through the real route: raising refused with no delivery address, no
-site contact, and no confirmations address (and no default); with the default
-set it is used; everything in -> raised; a draft with none of them saved. In a
-REAL browser (Chromium): the address box's bottom and the artics row's bottom
-both at 705px (0px apart); "To raise it: ... the delivery address, the Moffett
-question, the artics question, the site contact". All server routes compile;
-all pages pass the browser check. Built from your deployed packages
-(1022-1204, verified against their zips).
+Checked in a REAL browser (Chromium): "John Smith (Wates)" -> "Use ..." -> set,
+with a mobile typed beside it; Dave Kerr picked from the list -> his mobile
+filled in; "Sarah Lane" + Enter -> used; the PO raised with Sarah Lane and the
+typed mobile. All pages pass the browser check. Built from your deployed
+packages (1022-1205, verified against their zips); the file checked identical
+to the tested version before zipping.

@@ -194,7 +194,11 @@ export default function PoPage() {
             : <DocumentsPanel ownerType="po-access" ownerId={po.id} title="Access route documents" hint="attached to the email to the supplier" readOnly={po.status !== 'approved' && po.status !== 'draft'} />}</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
             <div style={{ ...label, flex: '1 1 300px' }}>Site contact
-              <ContactSearch people={people} value={po.siteContact} onChange={v => set('siteContact', v)} /></div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ flex: 2 }}><ContactSearch people={people} value={po.siteContact} onChange={v => set('siteContact', v)} /></div>
+                {/* the mobile - filled in from the list, or typed for anyone else (1206) */}
+                <input value={(po.siteContact && po.siteContact.phone) || ''} onChange={e => set('siteContact', { ...(po.siteContact || {}), name: (po.siteContact && po.siteContact.name) || '', phone: e.target.value })} placeholder="Mobile" style={{ ...inp, flex: 1, minWidth: 0 }} />
+              </div></div>
             <div style={{ ...label, flex: '1 1 260px' }}>
               <span style={{ display: 'flex', alignItems: 'center' }}>Order confirmations sent to{list && list.canSettings && <button type="button" onClick={changeDefault} title="Change the company's default address for order confirmations" style={{ marginLeft: 'auto', border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 11.5, padding: 0 }}>Change default</button>}</span>
               <input value={po.confirmationsTo} onChange={e => set('confirmationsTo', e.target.value)} placeholder="orders@yourcompany.co.uk" style={inp} /></div>
@@ -242,17 +246,23 @@ function YesNo({ label, value, onChange }) {
 // SITE CONTACT - type to search operatives and portal users (1202)
 function ContactSearch({ people, value, onChange }) {
   const [q, setQ] = useState(null)       // null = not searching (shows the chosen contact)
-  const shown = value && value.name ? `${value.name}${value.phone ? ` - ${value.phone}` : ''}` : ''
+  const shown = (value && value.name) || ''
   const words = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
   const found = q === null ? [] : people.filter(p => words.every(w => `${p.name} ${p.phone} ${p.kind}`.toLowerCase().includes(w))).slice(0, 12)
   const pick = (p) => { onChange({ name: p.name, phone: p.phone || '' }); setQ(null); if (document.activeElement) document.activeElement.blur() }
+  // ANYONE ELSE (1206) - the customer's site manager, say: the typed name, keeping any mobile already typed
+  const typed = String(q || '').trim()
+  const useTyped = () => { onChange({ name: typed, phone: (value && value.name === typed && value.phone) || '' }); setQ(null); if (document.activeElement) document.activeElement.blur() }
+  const offerTyped = typed && !found.some(p => p.name.toLowerCase() === typed.toLowerCase())
   return (
     <div style={{ position: 'relative' }}>
       <input value={q === null ? shown : q} placeholder="Type a name or number…" onFocus={() => setQ('')} onClick={() => { if (q === null) setQ('') }} onChange={e => setQ(e.target.value)}
-        onBlur={() => setTimeout(() => setQ(null), 150)} onKeyDown={e => { if (e.key === 'Enter' && found[0]) { e.preventDefault(); pick(found[0]) } if (e.key === 'Escape') setQ(null) }}
+        onBlur={() => setTimeout(() => setQ(null), 150)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (found[0]) pick(found[0]); else if (typed) useTyped() } if (e.key === 'Escape') setQ(null) }}
         style={{ ...inp, width: '100%' }} />
       {q !== null && <div style={{ position: 'absolute', zIndex: 20, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.08)', maxHeight: 260, overflowY: 'auto' }}>
-        {!found.length ? <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#aaa' }}>No one matches</div> : found.map((p, i) => (
+        {offerTyped && <div onMouseDown={e => { e.preventDefault(); useTyped() }} style={{ padding: '7px 10px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #f4f3f0', color: '#0f766e' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}>Use "{typed}" <span style={{ color: '#999', fontSize: 11.5 }}>- not in the list; add their mobile beside</span></div>}
+        {!found.length ? (!offerTyped && <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#aaa' }}>Type a name - or pick from the list</div>) : found.map((p, i) => (
           <div key={i} onMouseDown={e => { e.preventDefault(); pick(p) }} style={{ padding: '7px 10px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #f4f3f0', display: 'flex', gap: 8 }}
             onMouseEnter={e => { e.currentTarget.style.background = '#f0fdfa' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}>
             <span style={{ flex: 1 }}>{p.name}</span><span style={{ color: p.phone ? '#555' : '#b45309' }}>{p.phone || 'no mobile on record'}</span><span style={{ color: '#999', fontSize: 11.5 }}>{p.kind}</span>
