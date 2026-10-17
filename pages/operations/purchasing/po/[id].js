@@ -52,7 +52,8 @@ export default function PoPage() {
     !po.projectId && 'the project', !(po.contactId || po.supplier) && 'the supplier', !po.lines.length && 'a line',
     po.lines.some(l => !(Number(l.qty) > 0)) && `quantities (${po.lines.filter(l => !(Number(l.qty) > 0)).length})`,
     po.lines.some(l => !String(l.description || '').trim()) && 'a description on every line',
-    !po.moffett && 'the Moffett question', !po.artics && 'the artics question'].filter(Boolean) : []
+    !String(po.deliveryAddress || '').trim() && 'the delivery address', !po.moffett && 'the Moffett question', !po.artics && 'the artics question',
+    !(po.siteContact && po.siteContact.name) && 'the site contact', !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(po.confirmationsTo || '').trim()) && 'the order confirmations email'].filter(Boolean) : []
   const set = (k, v) => setPo(x => ({ ...x, [k]: v }))
   const setLine = (i, k, v) => setPo(x => ({ ...x, lines: x.lines.map((l, j) => j === i ? { ...l, [k]: v } : l) }))
   // CLICK A PRODUCT TO ADD IT (1201) - the quantity blank (red) and ready to type
@@ -180,9 +181,10 @@ export default function PoPage() {
         {/* DELIVERY DETAILS (1200) */}
         <div style={card}>
           <strong style={{ fontSize: 14 }}>Delivery details</strong>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8, alignItems: 'stretch' }}>
             <label style={{ ...label, flex: '1 1 320px' }}>Deliver to <span style={{ color: '#999' }}>(from Project Details - can be changed)</span><textarea value={po.deliveryAddress} onChange={e => set('deliveryAddress', e.target.value)} rows={3} placeholder="Site address" style={{ ...inp, resize: 'vertical' }} /></label>
-            <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* level with the bottom of the address box (1205) */}
+            <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 10 }}>
               <YesNo label="Is Moffett offload required?" value={po.moffett} onChange={v => set('moffett', v)} />
               <YesNo label="Are artics permitted?" value={po.artics} onChange={v => set('artics', v)} />
             </div>

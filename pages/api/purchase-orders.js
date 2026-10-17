@@ -154,8 +154,13 @@ async function handler(req, res) {
     const strict = raising || (b.action === 'update' && existing && existing.status === 'approved')   // an approved PO stays complete when changed
     if (strict) {
       const why = fullCheck(); if (why) return res.status(400).json({ error: why })
+      if (!fields.deliveryAddress.trim()) return res.status(400).json({ error: 'Enter the delivery address' })
       if (!fields.moffett) return res.status(400).json({ error: 'Answer "Is Moffett offload required?"' })
       if (!fields.artics) return res.status(400).json({ error: 'Answer "Are artics permitted?"' })
+      if (!fields.siteContact.name) return res.status(400).json({ error: 'Choose the site contact' })
+      // the order confirmations address: this PO's, else the company default - one is needed (1205)
+      if (!fields.confirmationsTo) fields.confirmationsTo = (await loadPoSettings()).confirmationsTo || ''
+      if (!fields.confirmationsTo) return res.status(400).json({ error: 'Enter where order confirmations are sent' })
     }
     if (fields.confirmationsTo && !EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     if (b.action === 'create') {

@@ -1,32 +1,24 @@
-PACKAGE 1204 - Purchase orders: VAT (standard by default, or No VAT)
+PACKAGE 1205 - Purchase orders: delivery details required; questions lined up
 
-Seven files. Complete replacements. No re-seed. No env changes. Built on 1203.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1204.
+(Deploy 1202, 1203 and 1204 first if not yet done - this builds on them.)
 
-  lib/poShared.js
-  lib/purchaseOrders.js
   pages/api/purchase-orders.js
-  pages/api/po-view.js
-  pages/operations/purchasing/purchase-orders.js
   pages/operations/purchasing/po/[id].js     (folder literally named [id])
-  pages/po.js
 
-VAT ON BY DEFAULT - every PO is at the standard rate unless "No VAT" is
-chosen (beside the totals on the PO), e.g. for a supplier that is not VAT
-registered. The totals read Subtotal (ex VAT), VAT, Total - on the PO, in the
-email, on the supplier's page; the list shows the total inc VAT with the ex
-VAT figure beneath.
-THE RATE - a company setting in PO settings (20% to start; another country's
-rate, e.g. GST 15%, for other companies). Each PO KEEPS the rate it was raised
-at - a later change does not alter it; a draft takes the rate in force when it
-is raised. POs raised before this are treated as standard 20% (as the
-supplier will invoice them), and the list works their VAT out from the PO.
+REQUIRED TO RAISE A PO: the delivery address, "Is Moffett offload required?",
+"Are artics permitted?", the site contact, and where order confirmations are
+sent (this PO's address, else the company default). The "To raise it:" note
+lists whatever is missing, and the server refuses it too. A DRAFT can still
+be saved without them.
+LAYOUT: the Moffett and artics questions sit level with the delivery address
+box - "Are artics permitted?" on its bottom line.
 
-Checked through the real routes: a GBP 1,000 PO -> VAT 200, total 1,200; No
-VAT -> 0 and 1,000; the rate changed to 15% -> a new PO 150 / 1,150, the
-earlier PO still 200 / 1,200; a draft saved at 20% and raised after the
-change -> 15%; the email "Subtotal (ex VAT) 1,000.00 VAT 20% 200.00 Total
-1,200.00"; the supplier's view of a No VAT PO; a PO from before VAT listed as
-148.00 + 29.60 = 177.60. In a REAL browser (Chromium): the totals and the
-20% / No VAT switch; the list's inc-VAT column; the VAT rate in PO settings.
-All server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1203, verified against their zips).
+Checked through the real route: raising refused with no delivery address, no
+site contact, and no confirmations address (and no default); with the default
+set it is used; everything in -> raised; a draft with none of them saved. In a
+REAL browser (Chromium): the address box's bottom and the artics row's bottom
+both at 705px (0px apart); "To raise it: ... the delivery address, the Moffett
+question, the artics question, the site contact". All server routes compile;
+all pages pass the browser check. Built from your deployed packages
+(1022-1204, verified against their zips).
