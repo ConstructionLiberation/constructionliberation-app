@@ -1,35 +1,36 @@
-PACKAGE 1223 - Purchase orders in the project cash flow
+PACKAGE 1224 - Purchase orders: Save and Send, and Download PDF
 
-Five files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1222 (needs 1221 - the committed costs).
+Three files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1223.
 
-  lib/poForecast.js                    (NEW)
-  lib/poShared.js, lib/poCommitted.js
-  pages/project-cashflow.js
-  pages/api/business-financials.js
+  lib/poPdf.js                             (NEW)
+  pages/api/purchase-orders.js
+  pages/operations/purchasing/po/[id].js   (folder literally named [id])
 
-COMMERCIAL > CASH FLOW - in a project's forecast window, under "Materials
-forecasted on site", a new "ADD FROM PURCHASE ORDERS" button lists the
-project's POs with something still committed. You choose: tick one and it is
-added as a materials line - the still-committed amount, "PO number - supplier",
-the PO's delivery date - with its payment term set right there like any other
-materials line; untick to remove. A PO already in another forecast period is
-shown with that period and cannot be ticked twice.
-NO DOUBLE COUNTING AS BILLS ARRIVE: a PO line only ever forecasts what is
-STILL COMMITTED on that PO now - never more than was entered, and nothing once
-the PO is billed, closed, cancelled or deleted (that money is then an actual
-cost). One rule (lib/poShared.js), used in every place a forecast materials
-line becomes money: the project cash flow, and the business cash flow and
-forecast P&L (Business Financials). If the committed figures cannot be read,
-the saved figures are used as they are - never wiped.
+SAVE AND SEND - one click saves the PO and opens the send box (where the email
+can still be checked before it goes): "RAISE AND SEND" on a new PO or a draft,
+"SAVE AND SEND" on an approved one. On a new PO the page moves to the new PO
+and the send box opens there once it has loaded.
+DOWNLOAD PDF - on any saved PO: the purchase order as a PDF, downloaded and
+named after it ("APP-PO-0003 - HSS Hire.pdf"). The same content the supplier
+sees - the company letterhead and logo, the PO, supplier / project / delivery
+required, the delivery details, the lines (the table heading repeated on
+each page), VAT and totals, notes, attachment names, and "Please quote the PO
+number on your invoice" with page numbers. A PO that is not live is stamped
+(DRAFT, AWAITING APPROVAL, REJECTED, CANCELLED).
+Names in any language print: letters the PDF font has are kept (é, ó, ü, £),
+others are written plainly (Łódź -> Lódz, Jiří -> Jirí), anything else (an
+emoji) becomes "?" - rather than the download failing.
 
-Checked: the rule on every case (ordinary line unchanged; a PO line 285 with 85
-still committed -> 85; never above what was entered; closed or gone -> 0;
-figures unavailable -> the saved amount); the server's committed map through
-real code (a cancelled PO left out, a closed one 0). In a REAL browser
-(Chromium): "Add from purchase orders (2)" - the closed PO left out, the PO
-already in October's forecast greyed with that period; ticking APP-PO-0001
-added 85, its delivery date, EOM + 30 -> cash 30/12/26; unticking removed it.
-The cash flow page's browser bundle checked to carry no database library. All
-server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1220) plus 1221 and 1222.
+Checked: a 40-line draft PO with a Polish supplier, a Czech name and an emoji
+-> 2 pages, DRAFT stamp, the table heading repeated on page 2, the totals
+(31,570.00 + VAT 6,314.00 = 37,884.00), the footer on both pages, the names
+written as above; read back and looked at. Through the real route: a PDF
+returned as a download, named "APP-PO-0001 - Lodz Dachy Sp. z o.o.pdf" (and
+the full "Łódź" name for browsers that take it) - the first version mangled
+the name, now fixed; a missing PO refused. In a REAL browser (Chromium):
+Download PDF on a saved PO; Save and send -> saved, send box open; Raise and
+send on a draft -> raised as APP-PO-0012, send box open; on a new PO -> moved
+to the new PO with the send box opening there. All server routes compile; all
+pages pass the browser check. Built from your deployed packages (1022-1220)
+plus 1221-1223.

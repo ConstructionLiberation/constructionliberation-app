@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import OperationsShell from '../../../../components/OperationsShell'
 import { lineTotal, poTotal, poVat, poGross, poVatRate, PO_STATUS, DEFAULT_VAT_RATE, DEFAULT_PO_EMAIL, PO_EMAIL_FIELDS, poEmailValues, fillPoEmail } from '../../../../lib/poShared'
@@ -61,6 +61,9 @@ export default function PoPage() {
   const words = pq.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const found = useMemo(() => products.filter(p => words.every(w => `${p.description} ${p.code} ${p.ref} ${p.section}`.toLowerCase().includes(w))).slice(0, 40), [products, pq])
   // the project's address from Project Details - filled in unless someone has typed their own
+  // RAISE AND SEND on a new PO lands here with ?send=1 - open the send box once it is loaded (1224)
+  const sendOnLoad = useRef(String(router.query.send || '') === '1')
+  useEffect(() => { if (sendOnLoad.current && po && (po.status === 'approved' || po.status === 'sent') && list) { sendOnLoad.current = false; setSending(true) } }, [po && po.status, list])
   // RAISED FROM A PROJECT'S PAGE (1221): /operations/purchasing/po/new?project=<xero id>
   // - the project already picked, its address filled in
   const fromProject = isNew ? String(router.query.project || '') : ''
@@ -74,12 +77,14 @@ export default function PoPage() {
       setPo(x => (!x.deliveryAddress || x.deliveryAddress === x._autoAddress) ? { ...x, deliveryAddress: d.projectAddress || '', _autoAddress: d.projectAddress || '' } : x) } catch {}
   }
   // save as a DRAFT, RAISE (new or a draft), or save an approved PO's changes (1201)
-  async function save(how) {
+  // andSend (1224): RAISE AND SEND / SAVE AND SEND - save, then open the send box
+  async function save(how, andSend = false) {
     setBusy(true); setErr(''); setMsg('')
     try {
-      if (isNew) { const d = await call({ action: 'create', po, draft: how === 'draft' }); router.replace(`/operations/purchasing/po/${d.po.id}`); return }
+      if (isNew) { const d = await call({ action: 'create', po, draft: how === 'draft' }); router.replace(`/operations/purchasing/po/${d.po.id}${andSend ? '?send=1' : ''}`); return }
       const d = await call({ action: how === 'raise' ? 'raise' : 'update', id: po.id, po })
-      setPo(d.po); setMsg(how === 'raise' ? `Raised as ${d.po.number}.` : how === 'draft' ? 'Draft saved.' : 'Saved.')
+      setPo(d.po); setLoaded(JSON.stringify(d.po)); setMsg(how === 'raise' ? `Raised as ${d.po.number}.` : how === 'draft' ? 'Draft saved.' : 'Saved.')
+      if (andSend) setSending(true)
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
@@ -139,6 +144,8 @@ export default function PoPage() {
         <span style={{ flex: 1 }} />
         {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(link); setMsg('The supplier\'s link is copied.') }} style={btn}>Copy supplier link</button>}
         {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => setSending(true)} disabled={busy} style={primary}>{po.status === 'sent' ? 'Send again' : 'Send to supplier'}</button>}
+        {/* DOWNLOAD THE PO AS A PDF (1224) */}
+        {!isNew && <a href={`/api/purchase-orders?pdf=${encodeURIComponent(po.id)}`} download style={{ ...btn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Download PDF</a>}
         {/* billed in full without quoting the PO number - stop counting it as committed (1221) */}
         {!isNew && (po.status === 'approved' || po.status === 'sent') && <button onClick={() => billing('close')} disabled={busy} style={btn} title="The supplier's bill did not quote the PO number - close it so it no longer counts as committed">Mark as fully billed</button>}
         {!isNew && po.status === 'closed' && <button onClick={() => billing('reopen')} disabled={busy} style={btn}>Reopen</button>}
@@ -263,6 +270,7 @@ export default function PoPage() {
         {missing.length > 0 && <span style={{ fontSize: 12, color: '#b45309', alignSelf: 'center' }}>To {isDraft ? 'raise it' : 'save'}: {missing.join(', ')}</span>}
         {!isNew && po.status === 'draft' && <button onClick={discard} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete draft</button>}
         {isDraft && <button onClick={() => save('draft')} disabled={busy} style={btn}>{isNew ? 'Save as draft' : 'Save draft'}</button>}
+        <button onClick={() => save(isDraft ? 'raise' : 'update', true)} disabled={busy || missing.length > 0} style={{ ...btn, opacity: missing.length ? 0.5 : 1 }}>{isDraft ? 'Raise and send' : 'Save and send'}</button>
         <button onClick={() => save(isDraft ? 'raise' : 'update')} disabled={busy || missing.length > 0} style={{ ...primary, opacity: missing.length ? 0.5 : 1 }}>{isDraft ? 'Raise purchase order' : 'Save changes'}</button>
       </div>}
       {!isNew && (po.history || []).length > 0 && <div style={{ ...card, fontSize: 12.5, color: '#555' }}><strong style={{ fontSize: 13, color: '#333' }}>History</strong>

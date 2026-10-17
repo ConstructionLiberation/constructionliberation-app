@@ -24,6 +24,9 @@ import { sendPurchaseOrder } from '../../lib/poSend'
 import { decidePo } from '../../lib/poApprove'
 import { xeroPoProjects, xeroById, xeroMatch, projectGaps, GAPS_DISMISSED } from '../../lib/poProjects'
 import { committedFor, committedOf } from '../../lib/poCommitted'
+import { buildPoPDF } from '../../lib/poPdf'
+import { pdfLogoUrl } from '../../lib/pdfBrand'
+import { loadCompany, publicCompany } from '../../lib/companyDetails'
 import { findProjectCM } from '../../lib/ramsNotify'
 import { newId, esc, money, cleanLines, EMAIL, deliveryHtml, xeroContacts, linkedSuppliers, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { privateReady, shortLink } from '../../lib/privateFiles'
@@ -61,6 +64,22 @@ async function handler(req, res) {
       return res.status(200).json({ projectAddress })
     }
     // SITE CONTACTS - every active operative (Site App users) and portal user, with mobile (1200)
+    // DOWNLOAD THE PO AS A PDF (1224)
+    if (req.query.pdf) {
+      const po = await loadPo(String(req.query.pdf))
+      if (!po) return res.status(404).json({ error: 'That purchase order no longer exists' })
+      const c = await loadCompany().catch(() => null)
+      const attachmentNames = ((await listDocs('po', po.id).catch(() => [])) || []).map(d => d.name)
+      const bytes = await buildPoPDF({ po: { ...po, attachmentNames }, company: { name: companyName(), ...(publicCompany(c) || {}), logo: c && c.logo }, logoUrl: pdfLogoUrl(req) })
+      // the file name: "APP-PO-0003 - HSS Hire.pdf" - the full name (accents and all) for browsers
+      // that read filename*, a plain-letter one for those that do not; only the characters no
+      // file name may contain are removed, and no trailing full stops
+      const full = `${po.number || 'Draft PO'} - ${po.contactName || po.supplier || 'supplier'}`.replace(/[\\/:*?"<>|\r\n]+/g, '').replace(/\.+$/, '').trim().slice(0, 100) || 'Purchase order'
+      const plain = full.replace(/[Łł]/g, c => (c === 'Ł' ? 'L' : 'l')).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '').replace(/\.+$/, '').trim() || 'Purchase order'
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader('Content-Disposition', `attachment; filename="${plain}.pdf"; filename*=UTF-8''${encodeURIComponent(full + '.pdf')}`)
+      return res.send(Buffer.from(bytes))
+    }
     // COMMITTED COSTS for a project (1221) - its open POs less what has been billed
     if (req.query.committed) return res.status(200).json(await committedFor(String(req.query.committed)))
     if (req.query.people) {
