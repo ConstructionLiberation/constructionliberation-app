@@ -63,7 +63,9 @@ export default function SupplierPo() {
         <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={{ ...th, textAlign: 'right' }}>Price</th><th style={{ ...th, textAlign: 'right' }}>Total</th></tr></thead>
         <tbody>
           {po.lines.map((l, i) => <tr key={i}><td style={td}>{l.description}{l.code ? <div style={{ color: '#888', fontSize: 11.5 }}>{l.code}</div> : null}</td><td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>{l.qty} {l.unit}</td><td style={{ ...td, textAlign: 'right' }}>{money(l.price)}</td><td style={{ ...td, textAlign: 'right' }}>{money(lineTotal(l))}</td></tr>)}
-          <tr><td colSpan={3} style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>Total (ex VAT)</td><td style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>{money(po.total)}</td></tr>
+          <tr><td colSpan={3} style={{ padding: '6px 8px', textAlign: 'right' }}>Subtotal (ex VAT)</td><td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(po.total)}</td></tr>
+          <tr><td colSpan={3} style={{ padding: '6px 8px', textAlign: 'right' }}>{po.noVat ? 'No VAT' : `VAT ${po.vatRate ?? 20}%`}</td><td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(po.vat ?? 0)}</td></tr>
+          <tr><td colSpan={3} style={{ padding: 8, textAlign: 'right', fontWeight: 700, borderTop: '1px solid #222' }}>Total</td><td style={{ padding: 8, textAlign: 'right', fontWeight: 700, borderTop: '1px solid #222' }}>{money(po.gross ?? po.total)}</td></tr>
         </tbody>
       </table>
       {(po.attachments || []).length > 0 && <div style={{ marginBottom: 14, fontSize: 13 }}><div style={{ color: '#777', fontSize: 11.5 }}>Attachments</div>{po.attachments.map(d => <div key={d.id}><a href={`/api/po-view?token=${encodeURIComponent(token)}&doc=${encodeURIComponent(d.id)}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>{d.name}</a></div>)}</div>}

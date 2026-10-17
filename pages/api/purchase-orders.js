@@ -20,7 +20,7 @@ import { loadPriceList } from '../../lib/priceListStore'
 import { LINKS_KEY, CONTACTS_KEY } from '../../lib/suppliers'
 import { listDocs } from '../../lib/documentsStore'
 import { privateReady, shortLink } from '../../lib/privateFiles'
-import { listPos, loadPo, savePo, deletePo, takeNumber, loadPoSettings, savePoSettings, poTotal, lineTotal, createPoToken, deliveryRowFor } from '../../lib/purchaseOrders'
+import { summaryOf, listPos, loadPo, savePo, deletePo, takeNumber, loadPoSettings, savePoSettings, poTotal, lineTotal, poVat, poGross, poVatRate, createPoToken, deliveryRowFor } from '../../lib/purchaseOrders'
 
 // a document on this PO - attachments ('po') or access routes ('po-access')
 const newId = () => `po${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
@@ -112,7 +112,9 @@ async function handler(req, res) {
       const name = String(req.query.products)
       return res.status(200).json({ products: (products || []).filter(p => p.supplier === name).map(p => ({ ref: p.ref, code: p.code || '', description: p.description, section: p.section || '', price: p.price ?? null, unit: p.sellingUnit || p.baseUnit || '' })) })
     }
-    return res.status(200).json({ pos: await listPos(), settings: await loadPoSettings(), suppliers: await linkedSuppliers(), contacts: await xeroContacts(), canSettings: normRole(session.role) === 'admin' })
+    // POs listed before VAT (1204) carry no VAT figures - worked out from the PO itself
+    const pos = await Promise.all((await listPos()).map(async p => p.gross != null ? p : summaryOf((await loadPo(p.id)) || p)))
+    return res.status(200).json({ pos, settings: await loadPoSettings(), suppliers: await linkedSuppliers(), contacts: await xeroContacts(), canSettings: normRole(session.role) === 'admin' })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -145,7 +147,8 @@ async function handler(req, res) {
       // DELIVERY DETAILS (1200)
       moffett: yn(src.moffett), artics: yn(src.artics), accessRoutes: String(src.accessRoutes || '').slice(0, 2000),
       siteContact: { name: String((src.siteContact && src.siteContact.name) || '').slice(0, 120), phone: String((src.siteContact && src.siteContact.phone) || '').slice(0, 40) },
-      confirmationsTo: String(src.confirmationsTo || '').trim().slice(0, 200) }
+      confirmationsTo: String(src.confirmationsTo || '').trim().slice(0, 200),
+      vat: src.vat === 'none' ? 'none' : 'standard' }   // VAT on by default; 'No VAT' an option (1204)
     const raising = !toDraft && b.action !== 'update'   // create (not a draft) or raise a draft
     const existing = b.action === 'update' ? await loadPo(String(b.id)) : null
     const strict = raising || (b.action === 'update' && existing && existing.status === 'approved')   // an approved PO stays complete when changed
@@ -156,7 +159,9 @@ async function handler(req, res) {
     }
     if (fields.confirmationsTo && !EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     if (b.action === 'create') {
-      if (!fields.confirmationsTo) fields.confirmationsTo = (await loadPoSettings()).confirmationsTo || ''
+      const st = await loadPoSettings()
+      if (!fields.confirmationsTo) fields.confirmationsTo = st.confirmationsTo || ''
+      fields.vatRate = st.vatRate   // kept on the PO - a later change of rate does not alter it
       if (toDraft) {
         // a DRAFT: no number, not approved, not in Deliveries, cannot be sent
         const po = { id: newId(), number: null, status: 'draft', ...fields, to: (sup && sup.email) || '', raisedBy: by, raisedByEmail: session.email || '', createdAt: now, raisedAt: now, history: [{ at: now, by, what: 'Saved as a draft' }] }
@@ -172,7 +177,8 @@ async function handler(req, res) {
     if (!po) return res.status(404).json({ error: 'That purchase order no longer exists' })
     if (b.action === 'raise') {
       if (po.status !== 'draft') return res.status(409).json({ error: `${po.number} has already been raised` })
-      const next = { ...po, ...fields, number: await takeNumber(), status: 'approved', to: po.to || sup.email || '', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [...(po.history || []), { at: now, by, what: 'Raised and approved' }] }
+      // a draft takes the VAT rate in force when it is RAISED (1204)
+      const next = { ...po, ...fields, vatRate: (await loadPoSettings()).vatRate, number: await takeNumber(), status: 'approved', to: po.to || sup.email || '', raisedBy: by, raisedByEmail: session.email || '', raisedAt: now, approvedBy: by, approvedAt: now, history: [...(po.history || []), { at: now, by, what: 'Raised and approved' }] }
       await savePo(next); await setDelivery(next)
       return res.status(200).json({ ok: true, po: next })
     }
@@ -219,7 +225,9 @@ async function handler(req, res) {
       ${deliveryHtml(po, accessDocs.length)}
       ${attachDocs.length ? `<p>Attached: ${attachDocs.map(d => esc(d.name)).join(', ')}</p>` : ''}
       <table style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0"><tr style="background:#f5f5f3"><th style="padding:6px 8px;text-align:left">Item</th><th style="padding:6px 8px;text-align:right">Qty</th><th style="padding:6px 8px;text-align:right">Price</th><th style="padding:6px 8px;text-align:right">Total</th></tr>${rows}
-      <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold">Total (ex VAT)</td><td style="padding:8px;text-align:right;font-weight:bold">${money(poTotal(po))}</td></tr></table>
+      <tr><td colspan="3" style="padding:6px 8px;text-align:right">Subtotal (ex VAT)</td><td style="padding:6px 8px;text-align:right">${money(poTotal(po))}</td></tr>
+      <tr><td colspan="3" style="padding:6px 8px;text-align:right">${po.vat === 'none' ? 'No VAT' : `VAT ${poVatRate(po)}%`}</td><td style="padding:6px 8px;text-align:right">${money(poVat(po))}</td></tr>
+      <tr><td colspan="3" style="padding:8px;text-align:right;font-weight:bold">Total</td><td style="padding:8px;text-align:right;font-weight:bold">${money(poGross(po))}</td></tr></table>
       ${po.notes ? `<p><strong>Additional notes</strong><br>${esc(po.notes).replace(/\n/g, '<br>')}</p>` : ''}
       <p><a href="${link}" style="display:inline-block;background:#0f766e;color:#fff;padding:9px 16px;border-radius:6px;text-decoration:none">View or print the purchase order</a></p>
       <p style="color:#888;font-size:12px">Raised by ${esc(po.raisedBy)}. ${po.confirmationsTo ? `Please send the order confirmation to ${esc(po.confirmationsTo)} - replying to this email reaches it.` : 'Reply to this email with any questions.'}</p></div>`

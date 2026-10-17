@@ -1,35 +1,32 @@
-PACKAGE 1203 - Purchase orders: any Xero contact as the supplier, searchable
+PACKAGE 1204 - Purchase orders: VAT (standard by default, or No VAT)
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1202.
+Seven files. Complete replacements. No re-seed. No env changes. Built on 1203.
 
+  lib/poShared.js
+  lib/purchaseOrders.js
   pages/api/purchase-orders.js
+  pages/api/po-view.js
   pages/operations/purchasing/purchase-orders.js
   pages/operations/purchasing/po/[id].js     (folder literally named [id])
+  pages/po.js
 
-THE SUPPLIER BOX lists EVERY CONTACT IN XERO, type to search - suppliers
-first, tagged "Supplier"; a contact linked to a price-list supplier (any of
-its linked contacts, duplicates too) is tagged "Price list: Soprema" and its
-products can be clicked in as before. Any other supplier (hire companies,
-merchants...) takes free lines - the product search says "No price list for
-this supplier - add free lines". The PO is raised against that exact Xero
-contact and emailed to its address in Xero. A contact not in Xero is refused:
-add it in Xero, then Refresh from Xero (Purchasing > Suppliers). POs saved by
-supplier name before this still work.
-FIX - both search boxes (supplier and site contact): after a pick, clicking
-the box again and typing searched on the PICKED NAME plus what was typed, so
-it found nothing. A pick now lets go of the box and a click starts afresh.
-The list page now warns only when no Xero contacts have been read.
+VAT ON BY DEFAULT - every PO is at the standard rate unless "No VAT" is
+chosen (beside the totals on the PO), e.g. for a supplier that is not VAT
+registered. The totals read Subtotal (ex VAT), VAT, Total - on the PO, in the
+email, on the supplier's page; the list shows the total inc VAT with the ex
+VAT figure beneath.
+THE RATE - a company setting in PO settings (20% to start; another country's
+rate, e.g. GST 15%, for other companies). Each PO KEEPS the rate it was raised
+at - a later change does not alter it; a draft takes the rate in force when it
+is raised. POs raised before this are treated as standard 20% (as the
+supplier will invoice them), and the list works their VAT out from the PO.
 
-Still to come: suppliers we raise POs with that are not on the price list
-should also appear on Purchasing > Suppliers, for the Dext rule.
-
-Checked through the real route: every contact listed (suppliers first,
-Soprema's two contacts tagged to the price list, Wates marked not a
-supplier); a PO to HSS Hire with free lines, raised against that contact and
-addressed to its email; a PO to the second Soprema contact still on Soprema's
-price list; a contact not in Xero refused; an older PO by name still raised.
-In a REAL browser (Chromium): all contacts tagged; "hss" -> HSS Hire, free
-lines; clicking again, "sopr" -> both Soprema contacts; Soprema UK Ltd ->
-its products, one clicked in; the site contact search still right. All server
-routes compile; all pages pass the browser check. Built from your deployed
-packages (1022-1202, verified against their zips).
+Checked through the real routes: a GBP 1,000 PO -> VAT 200, total 1,200; No
+VAT -> 0 and 1,000; the rate changed to 15% -> a new PO 150 / 1,150, the
+earlier PO still 200 / 1,200; a draft saved at 20% and raised after the
+change -> 15%; the email "Subtotal (ex VAT) 1,000.00 VAT 20% 200.00 Total
+1,200.00"; the supplier's view of a No VAT PO; a PO from before VAT listed as
+148.00 + 29.60 = 177.60. In a REAL browser (Chromium): the totals and the
+20% / No VAT switch; the list's inc-VAT column; the VAT rate in PO settings.
+All server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1203, verified against their zips).

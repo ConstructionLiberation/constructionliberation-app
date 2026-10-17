@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/router'
 import OperationsShell from '../../../../components/OperationsShell'
-import { lineTotal, poTotal, PO_STATUS } from '../../../../lib/poShared'
+import { lineTotal, poTotal, poVat, poGross, poVatRate, PO_STATUS, DEFAULT_VAT_RATE } from '../../../../lib/poShared'
 import DocumentsPanel from '../../../../components/DocumentsPanel'
 
 // A PURCHASE ORDER (1199) - new, or one already raised. Raised by the office:
@@ -16,7 +16,7 @@ const th = { textAlign: 'left', padding: '7px 8px', fontSize: 11.5, color: '#666
 const td = { padding: '6px 8px', borderBottom: '1px solid #f1f0ec', fontSize: 13, verticalAlign: 'top' }
 const card = { background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, padding: 14, marginBottom: 12 }
 const label = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#666' }
-const blank = { projectId: '', jobNo: '', projectName: '', supplier: '', contactId: '', contactName: '', priceList: '', lines: [], deliveryAddress: '', deliveryDate: '', notes: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: '' }
+const blank = { vat: 'standard', projectId: '', jobNo: '', projectName: '', supplier: '', contactId: '', contactName: '', priceList: '', lines: [], deliveryAddress: '', deliveryDate: '', notes: '', moffett: '', artics: '', accessRoutes: '', siteContact: { name: '', phone: '' }, confirmationsTo: '' }
 
 export default function PoPage() {
   const router = useRouter()
@@ -144,7 +144,17 @@ export default function PoPage() {
                 <td style={{ ...td, width: 100, textAlign: 'right', fontWeight: 600 }}>{money(lineTotal(l))}</td>
                 <td style={{ ...td, width: 30 }}>{editable && <button onClick={() => setPo(x => ({ ...x, lines: x.lines.filter((_, j) => j !== i) }))} title="Remove" style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 15 }}>×</button>}</td>
               </tr>)}
-              <tr><td colSpan={5} style={{ ...td, textAlign: 'right', fontWeight: 700, borderBottom: 'none' }}>Total (ex VAT)</td><td style={{ ...td, textAlign: 'right', fontWeight: 700, borderBottom: 'none' }}>{money(poTotal(po))}</td><td style={{ ...td, borderBottom: 'none' }} /></tr>
+              {/* VAT (1204) - standard by default, or No VAT */}
+              {(() => { const shownPo = { ...po, vatRate: po.vatRate != null ? po.vatRate : ((list && list.settings && list.settings.vatRate) ?? DEFAULT_VAT_RATE) }
+                const r = (k, v, bold) => <tr key={k}><td colSpan={5} style={{ ...td, textAlign: 'right', fontWeight: bold ? 700 : 400, borderBottom: 'none', padding: '3px 8px' }}>{k}</td><td style={{ ...td, textAlign: 'right', fontWeight: bold ? 700 : 400, borderBottom: 'none', padding: '3px 8px' }}>{v}</td><td style={{ ...td, borderBottom: 'none' }} /></tr>
+                return [
+                  r('Subtotal (ex VAT)', money(poTotal(shownPo))),
+                  <tr key="vat"><td colSpan={5} style={{ ...td, textAlign: 'right', borderBottom: 'none', padding: '3px 8px' }}>
+                    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>VAT
+                      {[['standard', `${shownPo.vat === 'none' ? (shownPo.vatRate ?? DEFAULT_VAT_RATE) : poVatRate(shownPo)}%`], ['none', 'No VAT']].map(([k, t]) => <button key={k} type="button" disabled={!editable} onClick={() => set('vat', k)}
+                        style={{ fontSize: 11.5, padding: '2px 9px', border: `1px solid ${(po.vat || 'standard') === k ? '#0f766e' : '#d4d4d0'}`, background: (po.vat || 'standard') === k ? '#0f766e' : '#fff', color: (po.vat || 'standard') === k ? '#fff' : '#333', borderRadius: 6, cursor: editable ? 'pointer' : 'default', fontFamily: 'inherit' }}>{t}</button>)}</span></td>
+                    <td style={{ ...td, textAlign: 'right', borderBottom: 'none', padding: '3px 8px' }}>{money(poVat(shownPo))}</td><td style={{ ...td, borderBottom: 'none' }} /></tr>,
+                  r('Total', money(poGross(shownPo)), true)] })()}
             </tbody>
           </table>
           {editable && <div style={{ marginTop: 10 }}>

@@ -43,13 +43,13 @@ export default function PurchaseOrdersPage() {
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
         {!data ? <div style={{ padding: 14, color: '#aaa' }}>Loading…</div> : !shown.length ? <div style={{ padding: 14, color: '#aaa', fontSize: 13 }}>{data.pos.length ? 'Nothing here.' : 'No purchase orders yet.'}</div> : (
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead><tr>{['PO', 'Project', 'Supplier', 'Total (ex VAT)', 'Delivery required', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['PO', 'Project', 'Supplier', 'Total (inc VAT)', 'Delivery required', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
             <tbody>{shown.map(p => (
               <tr key={p.id} onClick={() => { window.location.href = `/operations/purchasing/po/${p.id}` }} style={{ cursor: 'pointer' }}>
                 <td style={{ ...td, fontWeight: 700 }}>{p.number || <span style={{ color: '#64748b', fontWeight: 600 }}>Draft</span>}</td>
                 <td style={td}><strong>{p.jobNo}</strong> {p.projectName}</td>
                 <td style={td}>{p.supplier}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{money(p.total)}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{money(p.gross != null ? p.gross : p.total)}<div style={{ fontSize: 11, color: '#999' }}>{money(p.total)} ex VAT</div></td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>{day(p.deliveryDate)}</td>
                 <td style={{ ...td, color: (STATUS[p.status] || [])[1], fontWeight: 600, whiteSpace: 'nowrap' }}>{(STATUS[p.status] || [p.status])[0]}</td>
                 <td style={{ ...td, color: '#888', fontSize: 12, whiteSpace: 'nowrap' }}>{day(p.raisedAt)} · {p.raisedBy}</td>
@@ -81,6 +81,7 @@ function Numbering({ settings, onClose, onSaved }) {
           <label style={{ ...f, flex: 1 }}>Digits<input type="number" min="1" max="8" value={s.width} onChange={e => setS({ ...s, width: e.target.value })} style={inp} /></label>
         </div>
         <div style={{ fontSize: 13, marginTop: 10 }}>The next PO will be <strong>{preview}</strong></div>
+        <label style={{ ...f, marginTop: 14, maxWidth: 200 }}>VAT rate (%) - the standard rate on new POs<input type="number" min="0" max="100" step="any" value={s.vatRate ?? 20} onChange={e => setS({ ...s, vatRate: e.target.value })} style={inp} /></label>
         <label style={{ ...f, marginTop: 14 }}>Order confirmations sent to - the default on every new PO (can be changed on each)<input value={s.confirmationsTo || ''} onChange={e => setS({ ...s, confirmationsTo: e.target.value })} placeholder="orders@yourcompany.co.uk" style={inp} /></label>
         {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 8 }}>{err}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}><button onClick={onClose} style={btn}>Cancel</button><button onClick={save} style={{ ...btn, background: '#0f766e', color: '#fff', borderColor: '#0f766e', fontWeight: 600 }}>Save</button></div>

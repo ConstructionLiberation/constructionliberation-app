@@ -6,7 +6,7 @@ import withTenant from '../../lib/withTenant'
 import { currentTenantId } from '../../lib/tenantContext'
 import { companyName } from '../../lib/tenantSettings'
 import { loadCompany, publicCompany } from '../../lib/companyDetails'
-import { loadPo, verifyPoToken, poTotal } from '../../lib/purchaseOrders'
+import { loadPo, verifyPoToken, poTotal, poVat, poGross, poVatRate } from '../../lib/purchaseOrders'
 import { listDocs } from '../../lib/documentsStore'
 import { privateReady, shortLink } from '../../lib/privateFiles'
 
@@ -27,7 +27,7 @@ async function handler(req, res) {
   const c = await loadCompany().catch(() => null)
   const logo = c && typeof c.logo === 'string' && c.logo.startsWith('data:image/') ? c.logo : null
   return res.status(200).json({
-    po: { number: po.number, status: po.status, jobNo: po.jobNo, projectName: po.projectName, supplier: po.contactName || po.supplier, lines: po.lines, total: poTotal(po),
+    po: { number: po.number, status: po.status, jobNo: po.jobNo, projectName: po.projectName, supplier: po.contactName || po.supplier, lines: po.lines, total: poTotal(po), vat: poVat(po), gross: poGross(po), vatRate: poVatRate(po), noVat: po.vat === 'none',
       deliveryAddress: po.deliveryAddress, deliveryDate: po.deliveryDate, notes: po.notes,
       moffett: po.moffett || '', artics: po.artics || '', accessRoutes: po.accessRoutes || '', siteContact: po.siteContact || null, confirmationsTo: po.confirmationsTo || '',
       documents: access.map(d => ({ id: d.id, name: d.name })), attachments: attach.map(d => ({ id: d.id, name: d.name })), raisedBy: po.raisedBy, raisedAt: po.raisedAt, cancelledAt: po.cancelledAt || null },
