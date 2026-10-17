@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/router'
 import OperationsShell from '../../../../components/OperationsShell'
-import { lineTotal, poTotal, poVat, poGross, poVatRate, PO_STATUS, DEFAULT_VAT_RATE } from '../../../../lib/poShared'
+import { lineTotal, poTotal, poVat, poGross, poVatRate, PO_STATUS, DEFAULT_VAT_RATE, DEFAULT_PO_EMAIL, PO_EMAIL_FIELDS, poEmailValues, fillPoEmail } from '../../../../lib/poShared'
 import DocumentsPanel from '../../../../components/DocumentsPanel'
 
 // A PURCHASE ORDER (1199) - new, or one already raised. Raised by the office:
@@ -217,25 +217,70 @@ export default function PoPage() {
       </div>}
       {!isNew && (po.history || []).length > 0 && <div style={{ ...card, fontSize: 12.5, color: '#555' }}><strong style={{ fontSize: 13, color: '#333' }}>History</strong>
         {(po.history || []).slice().reverse().map((h, i) => <div key={i} style={{ marginTop: 4 }}>{new Date(h.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {h.by} · {h.what}</div>)}</div>}
-      {sending && <SendBox po={po} onClose={() => setSending(false)} onSent={(p) => { setSending(false); setPo(p); setMsg(`${p.number} emailed to ${p.sentTo}.`) }} />}
+      {sending && <SendBox po={po} list={list} onSettings={(st) => setList(l => ({ ...l, settings: st }))} onClose={() => setSending(false)} onSent={(p) => { setSending(false); setPo(p); setMsg(`${p.number} emailed to ${p.sentTo}.`) }} />}
     </OperationsShell>
   )
 }
 
-function SendBox({ po, onClose, onSent }) {
+// SEND TO THE SUPPLIER (1210) - the company email template, filled in from the PO and
+// editable here; the PO (delivery details, lines, totals, attachments, the link)
+// always follows the message. "Edit template" (admins) changes it for everyone.
+function SendBox({ po, list, onSettings, onClose, onSent }) {
+  const st = (list && list.settings) || {}
+  const vals = poEmailValues(po, (list && list.companyName) || '')
+  const fromTemplate = (s) => ({ subject: fillPoEmail(s.emailSubject || DEFAULT_PO_EMAIL.subject, vals), body: fillPoEmail(s.emailBody || DEFAULT_PO_EMAIL.body, vals) })
   const [to, setTo] = useState(po.to || '')
-  const [message, setMessage] = useState('')
+  const [mail, setMail] = useState(() => fromTemplate(st))
+  const [editing, setEditing] = useState(false)
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false)
-  async function send() { setBusy(true); setErr(''); try { const d = await call({ action: 'send', id: po.id, to, message }); onSent(d.po) } catch (e) { setErr(e.message); setBusy(false) } }
+  async function send() { setBusy(true); setErr(''); try { const d = await call({ action: 'send', id: po.id, to, subject: mail.subject, body: mail.body }); onSent(d.po) } catch (e) { setErr(e.message); setBusy(false) } }
+  if (editing) return <TemplateBox settings={st} onClose={() => setEditing(false)} onSaved={(ns) => { onSettings(ns); setMail(fromTemplate(ns)); setEditing(false) }} />
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '60px 20px' }} onMouseDown={ev => { if (ev.target === ev.currentTarget) onClose() }}>
-      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 540, padding: 18 }}>
-        <strong style={{ fontSize: 16 }}>Send {po.number} to {po.contactName || po.supplier}</strong>
-        <div style={{ fontSize: 12.5, color: '#666', margin: '6px 0 12px' }}>The supplier gets the PO in the email and a link to view or print it - no login. Their replies come to you.</div>
-        <label style={label}>Supplier's email<input value={to} onChange={e => setTo(e.target.value)} placeholder="orders@supplier.co.uk" style={inp} /></label>
-        <label style={{ ...label, marginTop: 10 }}>Message (optional)<textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></label>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 20px', overflowY: 'auto' }} onMouseDown={ev => { if (ev.target === ev.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 640, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}><strong style={{ fontSize: 16 }}>Send {po.number} to {po.contactName || po.supplier}</strong><span style={{ flex: 1 }} />
+          {list && list.canSettings && <button type="button" onClick={() => setEditing(true)} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', fontSize: 12.5 }}>Edit template</button>}</div>
+        <label style={{ ...label, marginTop: 10 }}>To<input value={to} onChange={e => setTo(e.target.value)} placeholder="orders@supplier.co.uk" style={inp} /></label>
+        <label style={{ ...label, marginTop: 10 }}>Subject<input value={mail.subject} onChange={e => setMail(m => ({ ...m, subject: e.target.value }))} style={inp} /></label>
+        <label style={{ ...label, marginTop: 10 }}>Message<textarea value={mail.body} onChange={e => setMail(m => ({ ...m, body: e.target.value }))} rows={10} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} /></label>
+        <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>Followed automatically by the purchase order - delivery details, lines, VAT and totals - its attachments, and a link to view or print it (no login).</div>
         {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 8 }}>{err}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}><button onClick={onClose} style={btn}>Cancel</button><button onClick={send} disabled={busy} style={primary}>{busy ? 'Sending…' : 'Send'}</button></div>
+      </div>
+    </div>
+  )
+}
+
+// THE COMPANY'S PO EMAIL TEMPLATE (admins) - placeholders filled in from each PO
+function TemplateBox({ settings, onClose, onSaved }) {
+  const [t, setT] = useState({ subject: settings.emailSubject || DEFAULT_PO_EMAIL.subject, body: settings.emailBody || DEFAULT_PO_EMAIL.body })
+  const [focus, setFocus] = useState('body')
+  const [err, setErr] = useState(''), [busy, setBusy] = useState(false)
+  const insert = (key) => {
+    const el = document.querySelector(focus === 'subject' ? 'input[data-tpl="subject"]' : 'textarea[data-tpl="body"]')
+    const tag = `{{${key}}}`
+    if (!el) return setT(x => ({ ...x, [focus]: x[focus] + tag }))
+    const a = el.selectionStart ?? el.value.length, z = el.selectionEnd ?? a
+    setT(x => ({ ...x, [focus]: x[focus].slice(0, a) + tag + x[focus].slice(z) }))
+    setTimeout(() => { el.focus(); el.setSelectionRange(a + tag.length, a + tag.length) }, 0)
+  }
+  async function save() {
+    setBusy(true); setErr('')
+    try { const d = await call({ action: 'settings', ...settings, emailSubject: t.subject, emailBody: t.body }); onSaved(d.settings) } catch (e) { setErr(e.message); setBusy(false) }
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 20px', overflowY: 'auto' }} onMouseDown={ev => { if (ev.target === ev.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 640, padding: 18 }}>
+        <strong style={{ fontSize: 16 }}>Purchase order email template</strong>
+        <div style={{ fontSize: 12.5, color: '#666', margin: '6px 0 10px' }}>Used for every PO sent to a supplier, and editable before each send. Click a field to put it in where the cursor is.</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>{PO_EMAIL_FIELDS.map(([k, l]) => <button key={k} type="button" onMouseDown={e => e.preventDefault()} onClick={() => insert(k)} style={{ ...btn, fontSize: 11.5, padding: '3px 9px' }}>{l}</button>)}</div>
+        <label style={label}>Subject<input data-tpl="subject" value={t.subject} onFocus={() => setFocus('subject')} onChange={e => setT(x => ({ ...x, subject: e.target.value }))} style={inp} /></label>
+        <label style={{ ...label, marginTop: 10 }}>Message<textarea data-tpl="body" value={t.body} onFocus={() => setFocus('body')} onChange={e => setT(x => ({ ...x, body: e.target.value }))} rows={11} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} /></label>
+        {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 8 }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
+          <button type="button" onClick={() => setT({ ...DEFAULT_PO_EMAIL })} style={btn}>Reset to standard</button><span style={{ flex: 1 }} />
+          <button onClick={onClose} style={btn}>Cancel</button><button onClick={save} disabled={busy} style={primary}>Save template</button>
+        </div>
       </div>
     </div>
   )

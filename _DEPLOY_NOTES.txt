@@ -1,20 +1,34 @@
-PACKAGE 1209 - Site contacts: labelled by role; one entry per person
+PACKAGE 1210 - Purchase orders: the supplier email from a template, editable
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1208.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1209.
 
+  lib/poShared.js
+  lib/purchaseOrders.js
   pages/api/purchase-orders.js
+  pages/operations/purchasing/po/[id].js     (folder literally named [id])
 
-WHY CMs SHOWED AS OPERATIVES: the site contact list takes people from the Site
-App users and the portal users, and labelled every Site App user "Operative" -
-but a Site App user is either an operative or a CONTRACTS MANAGER (its access
-level), and the CMs have Site App logins as contracts managers. Someone in both
-places could also appear twice when the two records held different mobiles.
-NOW: each person is labelled by their role - Contracts Manager or Operative
-(from the Site App), or Portal user - and anyone in both is ONE entry, with the
-Site App's mobile (else the portal's).
+"Send to supplier" now opens a proper email - To, SUBJECT and MESSAGE -
+prefilled from the COMPANY EMAIL TEMPLATE with the PO's details, and editable
+before each send. The purchase order itself - delivery details, lines, VAT and
+totals, attachments, the view/print link - always follows the message
+automatically, so a PO can never go out without them.
+"EDIT TEMPLATE" (admins, in the send box): the subject and message, with
+buttons that put a field in at the cursor - PO number, Supplier, Project, Job
+number, Delivery required, Raised by, Company name, Order confirmations to.
+"Reset to standard". Until edited, a neutral standard template is used
+(nothing company-specific is stored by default). Saving it does not touch the
+PO numbering.
 
-Checked through the real route: Will Reid (a Site App contracts manager, and a
-portal user with a different mobile) -> one entry, "Contracts Manager", with
-his Site App mobile; Dave Kerr -> Operative; Mike Fleming -> Portal user; a
-leaver left out. All server routes compile. Built from your deployed packages
-(1022-1208, verified against their zips).
+NOTE: nothing is written to Xero yet - that is stage 3, waiting on the Xero
+write permissions. App POs are in the app and in Deliveries only.
+
+Checked through the real route: sending with nothing typed -> the standard
+template filled in ("Purchase order APP-PO-0001 - Rock Roofing Ltd - J228",
+"Dear HSS Hire, ..."); a company template saved by an admin -> used ("PO
+APP-PO-0002 for J228", "needed 4 November 2026"); an edited subject and
+message -> sent as typed; the PO details following every time; numbering
+untouched. In a REAL browser (Chromium): the send box prefilled; Edit template
+-> Delivery required put in at the cursor -> saved -> the email refilled; the
+edited subject sent. All server routes compile; all pages pass the browser
+check. Built from your deployed packages (1022-1209, verified against their
+zips).
