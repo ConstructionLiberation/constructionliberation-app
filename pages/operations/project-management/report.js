@@ -796,12 +796,15 @@ function CustomerReportSettings({ template, onClose }) {
 // portal users; from the notifications address, the customer PDF attached
 function SendCustomerReport({ report, onClose }) {
   const [d, setD] = useState(null), [cc, setCc] = useState(new Set()), [q, setQ] = useState('')
+  // (1236) the team members ticked (all to begin with), and addresses added by hand
+  const [toSet, setToSet] = useState(new Set()), [extraText, setExtraText] = useState('')
   const [subject, setSubject] = useState(''), [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [done, setDone] = useState(null)
   useEffect(() => {
     fetch(`/api/project-report-customer?report=${encodeURIComponent(report.id)}`).then(r => r.json()).then(x => {
       if (x.error) { setErr(x.error); return }
       setD(x)
+      setToSet(new Set(x.to.map(t => t.email)))
       setSubject(`${report.projectName || report.projectNo} - Customer Progress Report${report.date ? ` - ${String(report.date).split('-').reverse().join('/')}` : ''}`)
       setMessage(`Dear ${x.to.length === 1 ? (x.to[0].name || 'all').split(' ')[0] : 'all'},\n\nPlease find attached this week's progress report for ${report.projectName || report.projectNo}.\n\nKind regards`)
     }).catch(() => setErr('Could not load the recipients'))
@@ -809,11 +812,14 @@ function SendCustomerReport({ report, onClose }) {
   async function send() {
     setBusy(true); setErr('')
     try {
-      const r = await fetch('/api/project-report-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', reportId: report.id, cc: [...cc], subject, message }) })
+      const r = await fetch('/api/project-report-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', reportId: report.id, to: [...toSet], extra: extras.ok, cc: [...cc], subject, message }) })
       const x = await r.json(); if (!r.ok) throw new Error(x.error || 'Could not send'); setDone(x.sent)
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
+  // the addresses typed by hand - commas, spaces or new lines between them - checked as you type
+  const extras = (() => { const parts = extraText.split(/[\s,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean); const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; return { ok: [...new Set(parts.filter(x => re.test(x)))], bad: parts.filter(x => !re.test(x)) } })()
+  const nTo = toSet.size + extras.ok.filter(e => !toSet.has(e)).length
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const users = d ? d.users.filter(u => !words.length || words.every(w => `${u.name} ${u.email}`.toLowerCase().includes(w))) : []
   const box = { width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }
@@ -824,9 +830,14 @@ function SendCustomerReport({ report, onClose }) {
         <div>To {done.to.join(', ')}{done.cc.length ? <> - copied to {done.cc.join(', ')}</> : null}</div>
         <button onClick={onClose} style={{ ...primaryBtn, marginTop: 14 }}>Close</button>
       </div> : !d ? (err ? <div style={{ color: '#b42318', fontSize: 13 }}>{err}</div> : <Loading />) : <>
-        <div style={{ fontSize: 12.5, fontWeight: 700, margin: '10px 0 4px' }}>To - the customer's project team</div>
-        {d.to.length ? <div style={{ fontSize: 13 }}>{d.to.map(t => <div key={t.email}>{t.name || t.email}{t.title ? <span style={{ color: '#888' }}> - {t.title}</span> : null} <span style={{ color: '#888' }}>&lt;{t.email}&gt;</span></div>)}</div>
-          : <div style={{ fontSize: 13, color: '#b42318' }}>No customer project team with an email address - add them in Project Details first.</div>}
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: '10px 0 4px' }}>To - the customer's project team <span style={{ fontWeight: 400, color: '#888' }}>(untick anyone it should not go to)</span></div>
+        {d.to.length ? <div style={{ fontSize: 13 }}>{d.to.map(t => <label key={t.email} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 0', cursor: 'pointer', opacity: toSet.has(t.email) ? 1 : 0.5 }}>
+            <input type="checkbox" checked={toSet.has(t.email)} onChange={e => setToSet(s => { const n = new Set(s); e.target.checked ? n.add(t.email) : n.delete(t.email); return n })} />
+            <span>{t.name || t.email}{t.title ? <span style={{ color: '#888' }}> - {t.title}</span> : null} <span style={{ color: '#888' }}>&lt;{t.email}&gt;</span></span></label>)}</div>
+          : <div style={{ fontSize: 13, color: '#b45309' }}>No customer project team with an email address in Project Details - add the addresses below, or add the team in Project Details.</div>}
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: '12px 0 4px' }}>Add email addresses <span style={{ fontWeight: 400, color: '#888' }}>- anyone else to send it to; separate them with commas</span></div>
+        <input value={extraText} onChange={e => setExtraText(e.target.value)} placeholder="e.g. client.pm@example.co.uk, site.manager@example.co.uk" style={box} />
+        {extraText.trim() && <div style={{ fontSize: 12, marginTop: 4, color: extras.bad.length ? '#b42318' : '#0f766e' }}>{extras.ok.length ? `Adding ${extras.ok.join(', ')}` : ''}{extras.bad.length ? `${extras.ok.length ? ' - ' : ''}not an email address: ${extras.bad.join(', ')}` : ''}</div>}
         <div style={{ fontSize: 12.5, fontWeight: 700, margin: '14px 0 4px' }}>Copy in <span style={{ fontWeight: 400, color: '#888' }}>- portal users ({cc.size} chosen)</span></div>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search portal users..." style={{ ...box, marginBottom: 6 }} />
         <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8 }}>
@@ -842,7 +853,7 @@ function SendCustomerReport({ report, onClose }) {
         {(d.sends || []).length > 0 && <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Sent before: {d.sends.map(s => `${new Date(s.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} by ${s.by || 'someone'}`).join('; ')}</div>}
         {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 8 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <button onClick={send} disabled={busy || !d.to.length} style={{ ...primaryBtn, opacity: (busy || !d.to.length) ? 0.5 : 1 }}>{busy ? 'Sending...' : 'Send Customer Progress Report'}</button>
+          <button onClick={send} disabled={busy || !nTo || extras.bad.length > 0} style={{ ...primaryBtn, opacity: (busy || !nTo || extras.bad.length) ? 0.5 : 1 }}>{busy ? 'Sending...' : `Send Customer Progress Report${nTo ? ` to ${nTo}` : ''}`}</button>
           <button onClick={onClose} style={ghostBtn}>Cancel</button>
         </div>
       </>}

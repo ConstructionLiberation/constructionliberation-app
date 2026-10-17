@@ -1,39 +1,30 @@
-PACKAGE 1235 - Mark-up: full screen, polylines and polygons, fill, snap
+PACKAGE 1236 - Customer Progress Report: leave people out, add addresses
 
-Three files. Complete replacements. No re-seed. No env changes.
-Built on 1234.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1235.
 
-  components/DrawingMarkup.js          (the mark-up viewer - shared with the Design portal)
-  lib/drawingPdf.js
+  pages/api/project-report-customer.js
   pages/operations/project-management/report.js
 
-PROJECT REPORT - each drawing's row has a "VIEW / MARK-UP" button, and the
-mark-up window is NEARLY FULL SCREEN (97% of the window, the drawing filling it).
-THE MARK-UP VIEWER (in the report AND the Design portal and handover documents,
-which use the same viewer):
-  - POLYLINE and POLYGON tools: click each point (the next segment follows the
-    pointer); finish by clicking the first point, double-clicking, pressing
-    Enter or "Finish shape"; Esc or "Cancel" abandons it
-  - FILL on / off with its own FILL OPACITY - boxes, circles and polygons; line
-    colour and opacity as before; colour, opacity and fill now also change the
-    selected mark, and a shape being drawn
-  - SNAP on / off - points snap to the DRAWING'S OWN line ends and corners (read
-    from a PDF drawing - CAD exports have them; the button's tooltip says how many
-    on the page) and to the points of your own marks, with a marker showing the
-    snap. An image or scan has no lines to read, so it snaps to your marks only.
-  - marks already made look exactly as before; nothing else in the viewer changes
-THE REPORT PDF draws polylines, polygons and fills exactly as on screen.
+SEND CUSTOMER PROGRESS REPORT:
+  - the customer's project team is listed with ticks, all ticked to begin with -
+    UNTICK anyone it should not go to
+  - "ADD EMAIL ADDRESSES" - type any others (commas, spaces or new lines between
+    them); checked as you type - a mistyped one is named and Send waits until it
+    is put right; they go in the To line with the team
+  - the button says how many it is going to ("Send ... to 3")
+  - copying in portal users, the subject, message and preview as before
+  - the server sends only to team members ticked (an address can only be ticked
+    if it is one of the project's own team) and the addresses added; at least one
+    is needed; who was left out and who was added are recorded on the report
+  - a project with no customer team in Project Details can still be sent to the
+    addresses added by hand
 
-Checked: the PDF renderer - a filled polygon (corners on 10/40% gridlines), an
-open polyline, a filled box (50%), a filled circle (25%) and an unfilled box,
-looked at. In a REAL browser (Chromium) with a real PDF roof plan (pdf.js 3.11.174,
-the version the viewer loads): 6 points read from the drawing; a polygon clicked
-5-6 px OFF each corner snapped EXACTLY onto the four corners, filled when Fill
-was switched on mid-shape, finished by double-click; with snap off a line stayed
-where clicked; with snap on it snapped exactly onto the ridge; a polyline
-finished with Enter. Found and fixed on the way: the browser's own double-click
-never fired (the mark-up layer is redrawn between the two clicks), so the viewer
-now spots the double-click itself; a fill switched on mid-shape did not apply to
-it. On the report: View / Mark-up on the drawing's row; the window 97% of the
-screen. All pages - including the nine that use the viewer - pass the browser
-check. Built from your deployed packages (1022-1220) plus 1221-1234.
+Checked through the real route (mail stood in): Dan ticked, Sarah not, an
+address added -> to Dan and the added address only, copying Mike; Sarah
+recorded as left out, the address as added; Dan's address typed again sent once;
+an outside address passed off as ticked -> refused, nothing sent; nobody ->
+refused; no team + an added address -> sent; no ticks sent at all (an older
+window) -> the whole team as before. In a REAL browser (Chromium): both ticked
+("to 2"); Sarah unticked ("to 1"); a mistyped address named and Send held back;
+corrected ("to 3"); sent to Dan and the two added addresses. All pages pass the
+browser check. Built from your deployed packages (1022-1220) plus 1221-1235.

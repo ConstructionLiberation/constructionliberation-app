@@ -2,7 +2,8 @@
 //   GET                          -> { settings: { include }, template }   (what the customer is sent)
 //   POST { action: 'settings', include }
 //   GET ?report=<id>             -> { to: the customer's project team, users: portal users to copy in }
-//   POST { action: 'send', reportId, cc: [emails], subject, message }
+//   POST { action: 'send', reportId, to: [team emails ticked], extra: [emails typed], cc: [emails], subject, message }
+//        (1236) team members can be left out; any other addresses added by hand
 //        -> the customer PDF (only the chosen sections), from the notifications address, to the
 //           whole customer project team, copying in the chosen portal users; replies to the sender;
 //           recorded on the report (customerSends)
@@ -69,9 +70,17 @@ async function handler(req, res) {
     const i = reports.findIndex(r => r.id === String(b.reportId || ''))
     if (i < 0) return res.status(404).json({ error: 'That report no longer exists.' })
     const report = reports[i]
-    const to = await customerTeam(report.projectNo)
-    if (!to.length) return res.status(400).json({ error: 'There is no customer project team with an email address for this project - add them in Project Details.' })
-    const cc = [...new Set((Array.isArray(b.cc) ? b.cc : []).map(e => String(e || '').trim().toLowerCase()).filter(e => EMAIL.test(e) && !to.some(t => t.email === e)))]
+    const team = await customerTeam(report.projectNo)
+    const clean = (l) => [...new Set((Array.isArray(l) ? l : []).map(e => String(e || '').trim().toLowerCase()).filter(e => EMAIL.test(e)))]
+    // THE RECIPIENTS (1236): the team members ticked (only ever the project's own team - a
+    // ticked address must be one of them; none sent = the whole team, as before), plus any
+    // addresses added by hand
+    const ticked = Array.isArray(b.to) ? clean(b.to).filter(e => team.some(t => t.email === e)) : team.map(t => t.email)
+    const extra = clean(b.extra).filter(e => !ticked.includes(e))
+    const toEmails = [...ticked, ...extra]
+    if (!toEmails.length) return res.status(400).json({ error: team.length ? 'Choose at least one person to send it to.' : 'There is no customer project team with an email address for this project - add them in Project Details, or add an email address by hand.' })
+    const to = toEmails.map(e => team.find(t => t.email === e) || { name: '', title: '', email: e })
+    const cc = clean(b.cc).filter(e => !toEmails.includes(e))
     const key = process.env.RESEND_API_KEY
     if (!key) return res.status(500).json({ error: 'Email is not set up (RESEND_API_KEY missing).' })
     const only = new Set(customerInclude(await get(CUSTOMER_KEY)))
@@ -86,7 +95,7 @@ async function handler(req, res) {
       body: JSON.stringify({ from: fromEmail('notify'), to: to.map(t => t.email), ...(cc.length ? { cc } : {}), ...(EMAIL.test(sender) ? { reply_to: sender } : {}), subject, html,
         attachments: [{ filename: fname, content: Buffer.from(bytes).toString('base64') }] }) })
     if (!r.ok) { const t = await r.text().catch(() => ''); return res.status(502).json({ error: `The email could not be sent (${r.status}) ${t.slice(0, 200)}` }) }
-    const sent = { at: new Date().toISOString(), by: session.name || '', to: to.map(t => t.email), cc, subject }
+    const sent = { at: new Date().toISOString(), by: session.name || '', to: to.map(t => t.email), ...(extra.length ? { added: extra } : {}), ...(team.length > ticked.length ? { leftOut: team.filter(t => !ticked.includes(t.email)).map(t => t.email) } : {}), cc, subject }
     const next = [...reports]; next[i] = { ...report, customerSends: [...(report.customerSends || []), sent] }
     await set(REPORTS, next)
     return res.status(200).json({ ok: true, sent })
