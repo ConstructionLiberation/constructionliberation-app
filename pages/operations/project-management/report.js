@@ -5,6 +5,8 @@ import { sectionsFor, newSectionKey, SECTION_TYPES, BUILT_IN_SECTIONS, CUSTOM_AF
 import ReportWeather from '../../../components/ReportWeather'
 import { sourceLabel } from '../../../lib/siteWeatherLabel'
 import { autofillReport } from '../../../lib/projectReportAutofill'
+import DrawingMarkup from '../../../components/DrawingMarkup'
+import { upload } from '@vercel/blob/client'
 
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const parseLocal = (d) => { if (!d) return null; const [y, m, day] = String(d).split('-').map(Number); return new Date(y, (m || 1) - 1, day || 1) }
@@ -177,6 +179,8 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
   const [f, setF] = useState({
     date: todayISO(), projectNo: '', projectName: '', projectAddress: '', customerName: '',
     completedBy: meName || '', siteComms: '', worksCompleted: '', status: 'draft',
+    // (1233) two text boxes, and a copy of the project's marked-up drawings taken on save
+    plannedWorks: '', customerNotes: '', drawingsSnapshot: [],
     variationsSnapshot: [], issuesSnapshot: [], photos: [], approvalName: '', approvalDate: '',
     // Answers to the customer's own sections, keyed by section key.
     extra: {},
@@ -189,6 +193,7 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
     sections: null,
   })
   const [loaded, setLoaded] = useState(id ? false : true)
+  const [liveDrawings, setLiveDrawings] = useState(null)   // the project's drawings now (1233)
   const [saving, setSaving] = useState(false)
   const [autoLoading, setAutoLoading] = useState(false)
   const [err, setErr] = useState('')
@@ -288,6 +293,9 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
         // later change to the template must not rewrite a report that has
         // already gone to a customer - see lib/projectReportTemplate.js.
         sections: Array.isArray(f.sections) ? f.sections : secs,
+        // A COPY of the project's drawings and their mark-up as they are now (1233) - the report
+        // keeps it, so what went to the customer never changes as the mark-up develops
+        drawingsSnapshot: liveDrawings ? liveDrawings.map(d => ({ id: d.id, name: d.name, url: d.url, contentType: d.contentType, markup: d.markup || [] })) : (f.drawingsSnapshot || []),
       }
       if (id) report.id = id
       const r = await fetch('/api/project-reports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ report }) })
@@ -355,7 +363,17 @@ function ReportModal({ id, template, projects, meName, allReports, onClose, onSa
       <L req>Works completed</L>
       <textarea value={f.worksCompleted || ''} onChange={e => set({ worksCompleted: e.target.value })} style={{ ...input, minHeight: 90, resize: 'vertical' }} placeholder="Insert a description of works completed since our last project site report." />
 
-      {/* The customer's own sections, in template order, under Works completed. */}
+      {/* DRAWINGS (1233) - the project's, marked up to show progress; the mark-up carries on week to week */}
+      <L>Drawings <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(mark up what has been completed - it carries on to next week's report)</span></L>
+      {f.projectNo ? <ReportDrawings projectNo={f.projectNo} onChange={setLiveDrawings} /> : <div style={{ fontSize: 12.5, color: '#999' }}>Choose the project first.</div>}
+
+      <L>Planned works in the next 1 - 2 weeks</L>
+      <textarea value={f.plannedWorks || ''} onChange={e => set({ plannedWorks: e.target.value })} style={{ ...input, minHeight: 90, resize: 'vertical' }} placeholder="The works planned for the next one to two weeks." />
+
+      <L>Additional notes for customer report</L>
+      <textarea value={f.customerNotes || ''} onChange={e => set({ customerNotes: e.target.value })} style={{ ...input, minHeight: 80, resize: 'vertical' }} placeholder="Anything else the customer should know this week." />
+
+      {/* The customer's own sections, in template order, under the customer notes. */}
       {secs.map(sec => (
         <div key={sec.key}>
           <L req={sec.required}>{sec.label}</L>
@@ -446,6 +464,9 @@ function ViewModal({ id, onClose, onEdit }) {
       <Row label="Completion date">{fmtDMY(r.date)} · by {r.completedBy || '—'}</Row>
       <Row label="Site communications">{r.siteComms || '—'}</Row>
       <Row label="Works completed">{r.worksCompleted || '—'}</Row>
+      {(r.drawingsSnapshot || []).length > 0 && <Row label={`Drawings (${r.drawingsSnapshot.length})`}><DrawingList drawings={r.drawingsSnapshot} readOnly /></Row>}
+      {r.plannedWorks ? <Row label="Planned works in the next 1 - 2 weeks"><span style={{ whiteSpace: 'pre-line' }}>{r.plannedWorks}</span></Row> : null}
+      {r.customerNotes ? <Row label="Additional notes for customer report"><span style={{ whiteSpace: 'pre-line' }}>{r.customerNotes}</span></Row> : null}
       {/* The customer's own sections, from the report's OWN snapshot. */}
       {(Array.isArray(r.sections) ? r.sections : []).map(sec => {
         const val = (r.extra || {})[sec.key]
@@ -668,6 +689,72 @@ function Modal({ title, children, onClose, wide }) {
         </div>
         <div style={{ padding: '8px 26px 26px' }}>{children}</div>
       </div>
+    </div>
+  )
+}
+
+// THE PROJECT'S DRAWINGS on a report (1233): upload several; click one to mark it up in the
+// same viewer as the Design portal - saved as you go, kept per project so next week's
+// report carries the mark-up on. `onChange` gets the live list (the report copies it on save).
+function ReportDrawings({ projectNo, onChange }) {
+  const [list, setList] = useState(null)
+  const [open, setOpen] = useState(null)
+  const [busy, setBusy] = useState(''), [err, setErr] = useState('')
+  const apply = (l) => { setList(l); onChange && onChange(l) }
+  useEffect(() => { setList(null); fetch(`/api/project-report-drawings?projectNo=${encodeURIComponent(projectNo)}`).then(r => r.json()).then(d => apply(d.drawings || [])).catch(() => apply([])) }, [projectNo])
+  const call = async (body) => { const r = await fetch('/api/project-report-drawings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectNo, ...body }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Something went wrong'); return d }
+  async function onFiles(files) {
+    setErr('')
+    let next = list || []
+    for (const file of Array.from(files || [])) {
+      setBusy(`Uploading ${file.name}...`)
+      try {
+        const blob = await upload(file.name, file, { access: 'public', handleUploadUrl: '/api/blob-upload', contentType: file.type || 'application/octet-stream' })
+        const d = await call({ action: 'add', drawing: { name: file.name, url: blob.url, contentType: file.type || '' } })
+        next = [...next, d.drawing]; apply(next)
+      } catch (e) { setErr(`${file.name}: ${e.message}`) }
+    }
+    setBusy('')
+  }
+  async function saveMarkup(d, markup) {
+    try { const r = await call({ action: 'markup', id: d.id, markup }); apply((list || []).map(x => x.id === d.id ? r.drawing : x)); setOpen(o => o && o.id === d.id ? r.drawing : o) } catch (e) { setErr(e.message) }
+  }
+  async function remove(d) {
+    if (!window.confirm(`Take ${d.name} off this project's drawings? Reports already saved keep their copy.`)) return
+    try { await call({ action: 'remove', id: d.id }); apply((list || []).filter(x => x.id !== d.id)) } catch (e) { setErr(e.message) }
+  }
+  if (list == null) return <div style={{ fontSize: 12.5, color: '#999' }}>Loading drawings...</div>
+  return (
+    <div>
+      <DrawingList drawings={list} onOpen={setOpen} onRemove={remove} />
+      <label style={{ display: 'inline-block', marginTop: 8, fontSize: 13, padding: '6px 12px', border: '1px solid #d4d4d0', borderRadius: 8, cursor: busy ? 'default' : 'pointer', background: '#fff' }}>
+        {busy || '+ Upload drawings'}
+        <input type="file" multiple accept="application/pdf,image/png,image/jpeg" disabled={!!busy} onChange={e => { onFiles(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+      </label>
+      <span style={{ fontSize: 11.5, color: '#999', marginLeft: 8 }}>PDF, PNG or JPEG - several at once</span>
+      {err && <div style={{ fontSize: 12.5, color: '#b42318', marginTop: 6 }}>{err}</div>}
+      {open && <Modal title={`${open.name} - mark up what has been completed`} onClose={() => setOpen(null)} wide>
+        <DrawingMarkup key={open.id} imageUrl={open.url} contentType={open.contentType} initial={open.markup} canEdit fileName={open.name} onSave={(m) => saveMarkup(open, m)} />
+      </Modal>}
+    </div>
+  )
+}
+
+// a list of drawings - opened to mark up, or (on a saved report) to view its copy
+function DrawingList({ drawings, onOpen, onRemove, readOnly }) {
+  const [view, setView] = useState(null)
+  const marks = (m) => Array.isArray(m) ? m.length : Object.values(m || {}).reduce((a, x) => a + (Array.isArray(x) ? x.length : 0), 0)
+  if (!drawings.length) return <div style={{ fontSize: 12.5, color: '#999' }}>No drawings yet.</div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {drawings.map(d => <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13 }}>
+        <button onClick={() => readOnly ? setView(d) : onOpen(d)} style={{ border: 'none', background: 'none', color: '#2563eb', cursor: 'pointer', padding: 0, fontSize: 13, textAlign: 'left', flex: 1 }}>{d.name}</button>
+        <span style={{ fontSize: 11.5, color: marks(d.markup) ? '#7c3aed' : '#999' }}>{marks(d.markup) ? `${marks(d.markup)} mark${marks(d.markup) === 1 ? '' : 's'}` : 'not marked up yet'}</span>
+        {!readOnly && <button onClick={() => onRemove(d)} title="Take off the project's drawings" style={{ border: 'none', background: 'none', color: '#b42318', cursor: 'pointer', fontSize: 15 }}>&times;</button>}
+      </div>)}
+      {view && <Modal title={`${view.name} - as on this report`} onClose={() => setView(null)} wide>
+        <DrawingMarkup key={view.id} imageUrl={view.url} contentType={view.contentType} initial={view.markup} canEdit={false} fileName={view.name} onSave={() => {}} />
+      </Modal>}
     </div>
   )
 }

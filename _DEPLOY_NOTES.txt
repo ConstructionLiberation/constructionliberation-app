@@ -1,40 +1,43 @@
-PACKAGE 1232 - Costs remaining into the cash flow (ticked in, like POs)
+PACKAGE 1233 - Project Report: marked-up drawings, planned works, customer notes
+(part 1 of the Customer Progress Report)
 
-Five files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1231.
+Five files. Complete replacements (two NEW). No re-seed. No env changes.
+Built on 1232.
 
-  pages/api/forecast-remaining.js      (NEW)
-  lib/poShared.js, lib/poForecast.js
-  pages/project-cashflow.js
-  pages/api/business-financials.js
+  lib/drawingPdf.js                              (NEW)
+  pages/api/project-report-drawings.js           (NEW)
+  lib/projectReportPdf.js
+  lib/projectReportTemplate.js
+  pages/operations/project-management/report.js
 
-COMMERCIAL > CASH FLOW - in a project's forecast window, beside "Add from
-purchase orders", "ADD FROM COSTS REMAINING" lists the project's cost-remaining
-lines (entered by the CM under Forecast to complete on the project page). Tick
-one to put it in that period - its date and payment term set right there like
-any other line; untick to remove. A line already in another forecast period is
-shown with that period and cannot be ticked twice.
-STAYS LINKED: a ticked line never forecasts more than the CM's CURRENT figure for
-it - lower it on the project page and the cash flow follows; remove it and it
-forecasts nothing. (If the costs remaining cannot be read, the saved figure is
-used - never wiped.)
-LABOUR IS LABOUR: a cost-remaining line in the labour category goes to LABOUR
-out in the project cash flow, and to labour in the business cash flow and
-forecast P&L - not materials; it is left out of the window's materials total
-(shown beside it as labour), so it does not use up the materials budget.
-Materials, plant and other go to materials, as before.
-The same linked-line rule now covers both kinds of ticked line (POs and costs
-remaining), in every place a forecast line becomes money.
+THE REPORT FORM - under Works completed:
+  1. DRAWINGS - "+ Upload drawings" (PDF, PNG or JPEG, several at once). Click a
+     drawing to open it in the SAME mark-up viewer as the Design portal - arrow,
+     box, circle, line, draw, highlight, text, colours - saved as you go. The
+     drawings and their mark-up are kept PER PROJECT, so next week's report
+     carries the mark-up on and it is developed as the job progresses. Each
+     report keeps a COPY of the drawings and mark-up as they were when it was
+     saved, so a report already sent never changes.
+  2. PLANNED WORKS IN THE NEXT 1 - 2 WEEKS - a text box like the others.
+  3. ADDITIONAL NOTES FOR CUSTOMER REPORT - a text box.
+  Your own template sections now follow these.
+THE REPORT'S VIEW shows the drawings (click to see the mark-up as on that
+report), planned works and notes.
+THE REPORT'S PDF - the new sections in order after Works completed, and each
+marked-up drawing appended on a page of its own (landscape or portrait to suit;
+a PDF drawing's marked pages), every mark redrawn exactly where it was drawn -
+before the issue forms, with the signature footer on every page.
 
-Checked: the REAL business cash flow (its cashflow view run) with a forecast
-holding a PO line (285 entered, 85 still committed), a labour cost-remaining
-line ticked at 8,000 that the CM has since cut to 6,000, and a materials one
-the CM has since removed -> P&L materials 85 and 0; P&L labour 1,000 (the
-period's own) + 6,000 on its date; cash materials 85 and 0; cash labour 1,000
-+ 6,000 on its pay date. In a REAL browser (Chromium): "Add from costs
-remaining (3)" with the line already in October's forecast greyed; ticking the
-insulation and labour lines added both; the materials total 1,500 "plus 8,000
-labour from costs remaining, counted as labour". The cash flow page's browser
-bundle checked to carry no database library. All server routes compile; all
-pages pass the browser check. Built from your deployed packages (1022-1220)
-plus 1221-1231.
+Checked: the drawing renderer on a grid image and a two-page PDF drawing - a
+box, ellipse, arrow (with its head), line, freehand, highlighter and wrapped bold
+underlined text each landing exactly on their gridlines; only the PDF's marked
+page 2 drawn, titled "page 2 of 2"; a broken link gives an explanatory page. The
+drawings route (real code): add, a bad link refused, mark-up saved with who, remove,
+per project. The report PDF: Works completed > Drawings > Planned works (lines
+kept) > Additional notes > Approval, both drawings appended with their mark-up,
+the footer on every page; looked at. In a REAL browser (Chromium): the new boxes;
+choose the project; upload a drawing; open it - the Design portal's viewer and
+tools; draw a box -> mark-up saved automatically (0.10-0.30); the list shows "1
+mark"; save -> planned works, notes and the drawings copy sent with the report.
+All server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1220) plus 1221-1232.
