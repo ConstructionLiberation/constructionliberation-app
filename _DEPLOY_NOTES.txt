@@ -1,46 +1,25 @@
-PACKAGE 1217 - Purchase orders: one project list, tied to Xero
+PACKAGE 1218 - Project address on purchase orders (Site App and portal)
 
-Seven files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1216.
+One file. Complete replacement. No re-seed. No env changes. Built on 1217.
 
-  lib/poProjects.js                        (NEW)
-  lib/projectPeople.js                     (the job-number rule, now shared)
-  pages/api/purchase-orders.js
-  pages/api/site-po.js
-  pages/operations/purchasing/purchase-orders.js
-  pages/operations/purchasing/po/[id].js   (folder literally named [id])
-  pages/forms/purchase-orders.js
+  lib/projectPeople.js
 
-THE PORTAL AND THE SITE APP TOOK PROJECTS FROM TWO PLACES - the portal from
-the dashboard's Xero projects, the Site App from its own (IHM) project list,
-matched to Xero by an exact job number. Names could differ, and a Site App
-project with no exact Xero match was saved with NO Xero project - invisible
-now, but it would break committed costs, writing POs to Xero (stage 3) and
-bill matching.
-NOW ONE LOOKUP (lib/poProjects.js) for both:
-  - a PO is always tied to the XERO project - its id, job number and name come
-    from Xero, set on the server (never from the page)
-  - the Site App still decides WHICH projects an operative sees (their access,
-    live projects), each matched to Xero by job number - tolerantly (J228 =
-    228 = j228), the same rule the IHM lookups use
-  - a Site App project with no Xero project is shown GREYED: "not set up in
-    Xero yet, ask the office" - no PO can be raised against it
-  - Purchase Orders list (office): "Live Site App projects not set up in Xero:
-    J232 ..." and "N purchase orders not linked to a Xero project" with
-    "RELINK BY JOB NUMBER" (management / admin) - links each to the Xero
-    project of the same job number and reports any it cannot match.
+WHY THE ADDRESS WAS BLANK: a project keeps its address in one of two fields -
+projectAddress (the IHM / Project Details) or siteLocation (older and
+hand-added projects). The Site App's own project list reads either, but the
+address rule purchase orders use (the portal's too) read only projectAddress,
+so a project with its address in siteLocation came back blank - in BOTH the
+Site App and the portal.
+NOW: projectAddress, else siteLocation - unless the address was deliberately
+set or cleared in Project Details, which still wins. The same rule feeds the
+project report and the project-complete checks, so they pick these addresses
+up too.
+If a project's address is still blank after this, it has no address in
+Project Details / the IHM - add it there.
 
-AFTER DEPLOYING: open Purchase Orders - if the notice shows, fix the job
-numbers in Xero (or the IHM) and press Relink.
-
-Checked through the real routes: Xero's names and ids (hidden projects left
-out); J231 matched to Xero's "231"; J232 a gap, refused in the Site App; a PO
-stores Xero's project, job number and name whatever the page sent; a project
-not in Xero refused; relink refused for post-contract, done for management -
-APP-PO-0050 linked (history recorded), J999 reported unmatched. Every earlier
-Site App, cover and office test identical before and after once its project
-is in Xero (the one intended change: a PO must be against a Xero project).
-In a REAL browser (Chromium): the Site App greying J232 with the reason; the
-office notice and Relink; the portal's project list from the same lookup. All
-server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1216, verified against their zips).
+Checked through the real routes: a project with projectAddress, one with only
+siteLocation, and one with a Project Details override - all three now give
+their address, in the Site App and the portal (siteLocation was blank in both
+before). The rule: no override -> siteLocation used; override cleared on
+purpose -> stays blank; override set -> wins. All server routes compile.
+Built from your deployed packages (1022-1217, verified against their zips).
