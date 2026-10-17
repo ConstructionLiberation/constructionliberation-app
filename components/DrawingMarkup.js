@@ -251,7 +251,8 @@ export default function DrawingMarkup({ imageUrl, contentType, initial, canEdit,
     }
     if (tool === 'free') { setDraft({ id: id(), type: 'free', pts: [p], colour, opacity, width }); return }
     if (tool === 'highlight') { setDraft({ id: id(), type: 'highlight', pts: [p], colour, opacity: Math.min(opacity, 0.4), width: Math.max(width * 4, 14) }); return }
-    if (tool === 'text') { setDraft({ id: id(), type: 'text', x1: p.x, y1: p.y, x2: p.x, y2: p.y, text: '', colour, opacity, fontSize, bold, underline }); return }
+    // vw (1237): the width the drawing is shown at, so a PDF can size the text as it looked here
+    if (tool === 'text') { setDraft({ id: id(), type: 'text', x1: p.x, y1: p.y, x2: p.x, y2: p.y, text: '', colour, opacity, fontSize, bold, underline, vw: Math.round((wrapRef.current && wrapRef.current.getBoundingClientRect().width) || 0) || undefined }); return }
     setDraft({ id: id(), type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, colour, opacity, width, ...((tool === 'rect' || tool === 'circle') ? { fill, fillOpacity } : {}) })
   }
   function move(e) {

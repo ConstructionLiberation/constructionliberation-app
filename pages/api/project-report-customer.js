@@ -89,7 +89,11 @@ async function handler(req, res) {
     const fname = `Customer Progress Report ${report.reportId || ''} - ${report.projectName || report.projectNo || ''}`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) + '.pdf'
     const subject = String(b.subject || `${report.projectName || report.projectNo} - Customer Progress Report${report.date ? ` - ${report.date.split('-').reverse().join('/')}` : ''}`).slice(0, 300)
     const message = String(b.message || '').trim()
-    const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">${message ? message.split('\n').map(l => `<p style="margin:0 0 8px">${esc(l) || '&nbsp;'}</p>`).join('') : ''}<p style="color:#666;font-size:13px">The ${esc(co)} customer progress report for ${esc(report.projectName || report.projectNo)} is attached.</p></div>`
+    // SIGNED OFF by the portal user sending it (1237): name, company, email and phone
+    const me = (await getPortalUsers()).find(u => (session.id && u.id === session.id) || (session.email && String(u.email || '').toLowerCase() === String(session.email).toLowerCase())) || {}
+    const sName = me.name || session.name || '', sEmail = me.email || session.email || '', sPhone = me.phone || ''
+    const signOff = `<p style="margin:14px 0 0">Kind regards,</p><p style="margin:6px 0 0"><strong>${esc(sName)}</strong>${co ? `<br>${esc(co)}` : ''}${sEmail ? `<br><a href="mailto:${esc(sEmail)}" style="color:#0f766e">${esc(sEmail)}</a>` : ''}${sPhone ? `<br>${esc(sPhone)}` : ''}</p>`
+    const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">${message ? message.split('\n').map(l => `<p style="margin:0 0 8px">${esc(l) || '&nbsp;'}</p>`).join('') : ''}<p style="color:#666;font-size:13px">The ${esc(co)} customer progress report for ${esc(report.projectName || report.projectNo)} is attached.</p>${signOff}</div>`
     const sender = String(session.email || '').trim()
     const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: fromEmail('notify'), to: to.map(t => t.email), ...(cc.length ? { cc } : {}), ...(EMAIL.test(sender) ? { reply_to: sender } : {}), subject, html,

@@ -100,7 +100,7 @@ export default function ReportPage() {
         </div>} />
 
       {custOpen && <CustomerReportSettings template={template} onClose={() => setCustOpen(false)} />}
-      {sendFor && <SendCustomerReport report={sendFor} onClose={() => setSendFor(null)} />}
+      {sendFor && <SendCustomerReport report={sendFor} onClose={(sent) => { setSendFor(null); if (sent) load() }} />}
       {tplOpen && <TemplateModal template={template} onClose={() => setTplOpen(false)}
         onSaved={(t) => { setTemplate(t); setTplOpen(false) }} />}
 
@@ -141,7 +141,11 @@ export default function ReportPage() {
                     ? <span style={{ fontSize: 11.5, color: '#16a34a', background: '#dcfce7', padding: '2px 10px', borderRadius: 12, fontWeight: 600 }}>Submitted</span>
                     : <span style={{ fontSize: 11.5, color: '#b45309', background: '#fef3c7', padding: '2px 10px', borderRadius: 12, fontWeight: 700 }}>● DRAFT</span>}</td>
                   <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <button onClick={() => setSendFor(r)} style={{ ...linkBtn, color: '#0f766e', fontWeight: 600 }}>Send Customer Progress Report</button>
+                    {/* SENT (1237): a green marker, then Send Again */}
+                    {r.customerSentAt ? <>
+                      <span title={`Last sent ${new Date(r.customerSentAt).toLocaleString('en-GB')}${r.customerSends > 1 ? ` - sent ${r.customerSends} times` : ''}`} style={{ display: 'inline-block', fontSize: 11.5, fontWeight: 700, color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 999, padding: '2px 9px', marginRight: 6 }}>Customer Report Sent {new Date(r.customerSentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                      <button onClick={() => setSendFor(r)} style={{ ...linkBtn, color: '#0f766e', fontWeight: 600 }}>Send Customer Report Again</button>
+                    </> : <button onClick={() => setSendFor(r)} style={{ ...linkBtn, color: '#0f766e', fontWeight: 600 }}>Send Customer Progress Report</button>}
                     <button onClick={() => setView(r.id)} style={linkBtn}>View</button>
                     <button onClick={() => setEdit(r.id)} style={linkBtn}>Edit</button>
                     <button onClick={() => del(r)} style={{ ...linkBtn, color: '#dc2626' }}>Delete</button>
@@ -806,7 +810,7 @@ function SendCustomerReport({ report, onClose }) {
       setD(x)
       setToSet(new Set(x.to.map(t => t.email)))
       setSubject(`${report.projectName || report.projectNo} - Customer Progress Report${report.date ? ` - ${String(report.date).split('-').reverse().join('/')}` : ''}`)
-      setMessage(`Dear ${x.to.length === 1 ? (x.to[0].name || 'all').split(' ')[0] : 'all'},\n\nPlease find attached this week's progress report for ${report.projectName || report.projectNo}.\n\nKind regards`)
+      setMessage(`Dear ${x.to.length === 1 ? (x.to[0].name || 'all').split(' ')[0] : 'all'},\n\nPlease find attached this week's progress report for ${report.projectName || report.projectNo}.`)   // the sign-off (name, email, phone) is added on sending (1237)
     }).catch(() => setErr('Could not load the recipients'))
   }, [report.id])
   async function send() {
@@ -828,7 +832,8 @@ function SendCustomerReport({ report, onClose }) {
       {done ? <div style={{ padding: '10px 0', fontSize: 14 }}>
         <div style={{ color: '#0f766e', fontWeight: 600, marginBottom: 6 }}>Sent.</div>
         <div>To {done.to.join(', ')}{done.cc.length ? <> - copied to {done.cc.join(', ')}</> : null}</div>
-        <button onClick={onClose} style={{ ...primaryBtn, marginTop: 14 }}>Close</button>
+        <div style={{ fontSize: 12.5, color: '#666', marginTop: 4 }}>Signed off with your name, email and phone number.</div>
+        <button onClick={() => onClose(true)} style={{ ...primaryBtn, marginTop: 14 }}>Close</button>
       </div> : !d ? (err ? <div style={{ color: '#b42318', fontSize: 13 }}>{err}</div> : <Loading />) : <>
         <div style={{ fontSize: 12.5, fontWeight: 700, margin: '10px 0 4px' }}>To - the customer's project team <span style={{ fontWeight: 400, color: '#888' }}>(untick anyone it should not go to)</span></div>
         {d.to.length ? <div style={{ fontSize: 13 }}>{d.to.map(t => <label key={t.email} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 0', cursor: 'pointer', opacity: toSet.has(t.email) ? 1 : 0.5 }}>
@@ -849,7 +854,7 @@ function SendCustomerReport({ report, onClose }) {
         <input value={subject} onChange={e => setSubject(e.target.value)} style={box} />
         <div style={{ fontSize: 12.5, fontWeight: 700, margin: '14px 0 4px' }}>Message</div>
         <textarea value={message} onChange={e => setMessage(e.target.value)} style={{ ...box, minHeight: 120, resize: 'vertical' }} />
-        <div style={{ fontSize: 12, color: '#777', marginTop: 8 }}>Sent from the notifications address with the Customer Progress Report attached as a PDF - <a href={`/api/project-report-customer?preview=${encodeURIComponent(report.id)}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>preview what they receive</a>. Replies come to you.</div>
+        <div style={{ fontSize: 12, color: '#777', marginTop: 8 }}>Sent from the notifications address, signed off with your name, email and phone number, with the Customer Progress Report attached as a PDF - <a href={`/api/project-report-customer?preview=${encodeURIComponent(report.id)}`} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>preview what they receive</a>. Replies come to you.</div>
         {(d.sends || []).length > 0 && <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Sent before: {d.sends.map(s => `${new Date(s.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} by ${s.by || 'someone'}`).join('; ')}</div>}
         {err && <div style={{ color: '#b42318', fontSize: 13, marginTop: 8 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>

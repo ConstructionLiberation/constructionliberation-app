@@ -1,30 +1,45 @@
-PACKAGE 1236 - Customer Progress Report: leave people out, add addresses
+PACKAGE 1237 - Customer report: sent marker, sign-off; the report PDF fixed
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1235.
+Six files. Complete replacements. No re-seed. No env changes. Built on 1236.
 
+  lib/drawingPdf.js
+  lib/projectReportPdf.js
+  components/DrawingMarkup.js
   pages/api/project-report-customer.js
+  pages/api/project-reports.js
   pages/operations/project-management/report.js
 
+THE REPORT PDF (the download and the customer's):
+  1. MARK-UP NOW SITS OVER THE PLACES IT WAS DRAWN. The PDF drew the drawing's
+     WHOLE SHEET unrotated, while the viewer shows the page's VISIBLE AREA (its crop
+     box - architects' drawings are often a window inside a bigger sheet) at its
+     ROTATION - so the drawing came out shrunk into a corner with the mark-up over
+     the wrong places (PR-0027). It now draws exactly what the viewer shows.
+     Text marks also came out far too big - the PDF assumed a narrow viewer; a text
+     mark now records the width it was drawn at (marks made before this are taken
+     as drawn in the full-screen window).
+  2. THE DRAWINGS COME BEFORE THE PHOTOS - straight after the notes, each on its own
+     page; the photos carry on after them.
+  3. LINE BREAKS KEPT - works completed, site communications and your own sections
+     (numbered lines now stay on their own lines).
+  4. VARIATIONS AS A TABLE - No. / Description / Instructed / Total; YES in GREEN,
+     NO in RED; long descriptions wrap in their column.
 SEND CUSTOMER PROGRESS REPORT:
-  - the customer's project team is listed with ticks, all ticked to begin with -
-    UNTICK anyone it should not go to
-  - "ADD EMAIL ADDRESSES" - type any others (commas, spaces or new lines between
-    them); checked as you type - a mistyped one is named and Send waits until it
-    is put right; they go in the To line with the team
-  - the button says how many it is going to ("Send ... to 3")
-  - copying in portal users, the subject, message and preview as before
-  - the server sends only to team members ticked (an address can only be ticked
-    if it is one of the project's own team) and the addresses added; at least one
-    is needed; who was left out and who was added are recorded on the report
-  - a project with no customer team in Project Details can still be sent to the
-    addresses added by hand
+  - once sent, the row shows a green "CUSTOMER REPORT SENT <date>" (hover: when, and
+    how many times) and "SEND CUSTOMER REPORT AGAIN"
+  - the email is SIGNED OFF by the portal user sending it: Kind regards, name,
+    company, email and phone (from their portal user record). The suggested message
+    no longer ends with its own "Kind regards".
 
-Checked through the real route (mail stood in): Dan ticked, Sarah not, an
-address added -> to Dan and the added address only, copying Mike; Sarah
-recorded as left out, the address as added; Dan's address typed again sent once;
-an outside address passed off as ticked -> refused, nothing sent; nobody ->
-refused; no team + an added address -> sent; no ticks sent at all (an older
-window) -> the whole team as before. In a REAL browser (Chromium): both ticked
-("to 2"); Sarah unticked ("to 1"); a mistyped address named and Send held back;
-corrected ("to 3"); sent to Dan and the two added addresses. All pages pass the
-browser check. Built from your deployed packages (1022-1220) plus 1221-1235.
+Checked: test drawings with an offset visible area, rotated 90 and 270, and both -
+the mark-up box exactly on a printed square in all five (and the squares' place
+confirmed independently with PDFium, which treats crop boxes and rotation as the
+viewer does); looked at. A J240-style report: the variations table (V02 Yes green,
+V03 No red, V13 wrapping evenly), works completed on three lines, notes, then the
+marked-up drawing, then the photos; looked at. Through the real routes: the sign-off
+"Kind regards, Will Reid, Rock Roofing Ltd, will@..., 07700 900123"; the reports
+list knowing PR-0012 was sent once. In a REAL browser (Chromium): the sent row's
+green "Customer Report Sent 17 Oct" and Send Customer Report Again (opening the
+send window); an unsent row's Send Customer Progress Report. All server routes
+compile; all pages pass the browser check. Built from your deployed packages
+(1022-1220) plus 1221-1236.

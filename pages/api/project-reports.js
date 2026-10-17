@@ -40,6 +40,8 @@ async function handler(req, res) {
       id: r.id, reportId: r.reportId, projectNo: r.projectNo, projectName: r.projectName,
       customerName: r.customerName, completedBy: r.completedBy, date: r.date,
       status: r.status || 'draft', revision: r.revision || 0, updatedAt: r.updatedAt || r.createdAt || 0,
+      // the Customer Progress Report: when it was last sent, and how many times (1237)
+      customerSentAt: (r.customerSends || []).length ? r.customerSends[r.customerSends.length - 1].at : null, customerSends: (r.customerSends || []).length,
       // Compact record of which issues this report captured and whether they were
       // closed at the time — so the report form can apply the "show once when closed" rule.
       issueHistory: (r.issuesSnapshot || []).map(s => ({ id: s.id, status: s.status || 'Open' })).filter(s => s.id),
