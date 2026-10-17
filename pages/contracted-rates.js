@@ -608,8 +608,9 @@ export default function ContractedRatesPage() {
               <td style={{ ...td, color: '#6b7280', fontWeight: 600 }}>
                 {isEditing ? <input value={x.code || ''} onChange={e => update(x.id, { code: e.target.value })} style={{ ...cellInput, width: 46 }} /> : (x.code || '')}
               </td>
-              <td style={{ ...td, minWidth: 200, maxWidth: 320, whiteSpace: 'normal', ...fmtStyle, ...strike }}>
-                {isEditing ? <input value={x.description || ''} onChange={e => update(x.id, { description: e.target.value })} style={cellInput} /> : (x.description || '—')}
+              <td style={{ ...td, minWidth: 200, maxWidth: 320, whiteSpace: 'pre-line', ...fmtStyle, ...strike }}>
+                {/* line breaks shown, and kept when edited (1227) - a description from the estimate runs over several lines */}
+                {isEditing ? <textarea value={x.description || ''} onChange={e => update(x.id, { description: e.target.value })} rows={Math.min(8, Math.max(2, String(x.description || '').split('\n').length))} style={{ ...cellInput, resize: 'vertical', fontFamily: 'inherit' }} /> : (x.description || '—')}
               </td>
               <td style={tdR}>
                 {isEditing ? <input type="number" value={x.qty ?? ''} onChange={e => update(x.id, { qty: e.target.value === '' ? null : parseFloat(e.target.value) })} style={{ ...cellInput, width: 60, textAlign: 'right' }} /> : (x.qty ?? '')}

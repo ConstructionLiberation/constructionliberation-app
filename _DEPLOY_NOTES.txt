@@ -1,41 +1,32 @@
-PACKAGE 1226 - Estimate to job, part 2: Materials Take-offs (Commercial)
+PACKAGE 1227 - Contracted rates from an estimate: the quote's descriptions and
+section headers
 
-Four files. Complete replacements (three NEW). No re-seed. No env changes.
-Built on 1225 - deploy 1225 first (the project's link to its estimate).
+Two files. Complete replacements. No re-seed. No env changes. Built on 1226.
 
-  lib/jobTakeoff.js                    (NEW)
-  pages/api/job-takeoffs.js            (NEW)
-  pages/materials-takeoffs.js          (NEW)
-  components/CommercialNav.js          (the menu entry)
+  lib/estimateToRates.js
+  pages/contracted-rates.js
 
-COMMERCIAL > MATERIALS TAKE-OFFS - the job's take-off, re-measured for
-construction without ever touching the quote.
-  - pick the project (those whose contracted rates were built from an estimate
-    show it); "START THE MATERIALS TAKE-OFF FROM Q-1042 REV A" copies that
-    revision - the same one the contracted rates came from. A project not
-    linked yet is pointed to Contracted Rates > Build from estimate.
-  - TAKE-OFF tab: each item with its estimate quantity and the JOB QUANTITY
-    (editable; purple once re-measured); LEAVE OUT / Put back an item the job
-    does not need; BUILD-UP opens the same editor as Estimating - for this job
-    only (the estimate and the library are not changed).
-  - MATERIALS tab: the Estimating Materials tab itself, on the job's take-off
-    (left-out items excluded) - suppliers, products, packs, order waste,
-    allocations - so the packs come out exactly as in Estimating.
-  - Save; the page shows how many items are re-measured or left out, and who
-    saved last.
-The job take-off is stored in the same shape as an estimate (its frozen prices
-and its own material rates included); part 3 turns its Materials list into
-draft POs, one per supplier.
+DESCRIPTIONS - each rate now carries the description AS THE QUOTE PRINTS IT:
+the item's written build-up description (over its lines) when it has one,
+otherwise its name - the quote's own rule, so the contracted rates read exactly
+as the customer's quote did. The short name is kept with it.
+SECTION HEADERS - each section of the estimate comes in as a HEADING in the same
+place (above or below the line), bold and underlined - the way the quote prints
+section headers (the estimate has no other style for them), and the Contracted
+Rates default heading style. Applications carry headings and their formatting
+on through, and labour schedules show them as headings. Spacers stay out (the
+quote leaves them out too).
+CONTRACTED RATES PAGE - a description's line breaks now show, and edit in a box
+that keeps them (the single-line box used to lose them).
+Rates already built from an estimate are not changed - use Delete & re-upload,
+then Build from estimate again, to bring the descriptions and headings in.
 
-Checked through the real route with a real estimate priced from Rock's
-library: J228 linked to Q-1042 Rev A, J231 not; Start copied Rev A row for row
-with the original quantities kept, a second Start refused; a re-measure (640 ->
-960) and a left-out item saved by the CM; the estimate link could not be
-overwritten by a save; the MATERIALS LIST - estimate: Renolit Alkorplan, order
-640 = 31 packs; job re-measured: order 960 = 46 packs, and the left-out item's
-line gone; an unlinked project refused with directions. In a REAL browser
-(Chromium), on that data: the unlinked message; Start; the re-measure
-highlighted and counted; Leave out; the Materials tab showing Renolit; the
-Build-up editor; Save sending the quantities and the left-out flag. All server
+Checked through the real route with a real estimate from Rock's library: the
+section "Main roof" built as a heading above the line, bold and underlined; an
+item with a written build-up description carries it over three lines, the
+others their names - exactly what the quote prints; the totals and budgets
+still equal the estimate's (811,200 / 7,000 / 24,200). In a REAL browser
+(Chromium): the heading drawn bold and underlined; the description over its
+three lines; editing it in a text box with the line breaks kept. All server
 routes compile; all pages pass the browser check. Built from your deployed
-packages (1022-1220) plus 1221-1225.
+packages (1022-1220) plus 1221-1226.
