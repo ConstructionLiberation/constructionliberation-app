@@ -1,32 +1,25 @@
-PACKAGE 1227 - Contracted rates from an estimate: the quote's descriptions and
-section headers
+PACKAGE 1228 - Fix: no projects on Materials Take-offs (and at times on POs)
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1226.
+One file. Complete replacement. No re-seed. No env changes. Built on 1227.
 
-  lib/estimateToRates.js
-  pages/contracted-rates.js
+  lib/poProjects.js
 
-DESCRIPTIONS - each rate now carries the description AS THE QUOTE PRINTS IT:
-the item's written build-up description (over its lines) when it has one,
-otherwise its name - the quote's own rule, so the contracted rates read exactly
-as the customer's quote did. The short name is kept with it.
-SECTION HEADERS - each section of the estimate comes in as a HEADING in the same
-place (above or below the line), bold and underlined - the way the quote prints
-section headers (the estimate has no other style for them), and the Contracted
-Rates default heading style. Applications carry headings and their formatting
-on through, and labour schedules show them as headings. Spacers stay out (the
-quote leaves them out too).
-CONTRACTED RATES PAGE - a description's line breaks now show, and edit in a box
-that keeps them (the single-line box used to lose them).
-Rates already built from an estimate are not changed - use Delete & re-upload,
-then Build from estimate again, to bring the descriptions and headings in.
+WHY THE TAKE-OFFS PAGE LISTED NO PROJECTS: the project list for POs and
+take-offs (1217) read the dashboard's SAVED project list - which is a cache, not
+a register. It expires after 4 hours, and it is wiped whenever figures change -
+LOCKING CONTRACTED RATES among them. So after building and locking the rates
+from the estimate, the list was empty until somebody opened Project
+Financials. The office's PO project list and the Site App's had the same gap.
+NOW: the PERMANENT project register (projects:registry - every project Xero has
+ever returned, kept even when the cache is empty), less hidden projects and the
+tracking options that are not projects - the same list the In Query page uses -
+plus anything in the dashboard's cache the register has not caught up with yet.
 
-Checked through the real route with a real estimate from Rock's library: the
-section "Main roof" built as a heading above the line, bold and underlined; an
-item with a written build-up description carries it over three lines, the
-others their names - exactly what the quote prints; the totals and budgets
-still equal the estimate's (811,200 / 7,000 / 24,200). In a REAL browser
-(Chromium): the heading drawn bold and underlined; the description over its
-three lines; editing it in a text box with the line breaks kept. All server
-routes compile; all pages pass the browser check. Built from your deployed
-packages (1022-1220) plus 1221-1226.
+Checked: with the register full and the dashboard's cache EMPTY (as after
+locking rates) - the previous lookup returned no projects at all (the fault
+reproduced); the new one returns them, Materials Take-offs lists J228 linked to
+Q-1042 Rev A, and the office's PO project list is full; a hidden project and
+"In Query" left out; a project only in the cache included. The earlier
+project-lookup, delete and cover tests all identical before and after. All
+server routes compile. Built from your deployed packages (1022-1220) plus
+1221-1227.
