@@ -6,7 +6,7 @@ import OperationsShell from '../../../components/OperationsShell'
 const INK = '#1a1a19'
 const TABS = [
   ['over', 'Over the PO', '#b42318'], ['noPo', 'No PO number', '#b45309'], ['cancelled', 'PO cancelled', '#b42318'],
-  ['matched', 'Matched', '#166534'], ['noPoNeeded', 'No PO needed', '#555'],
+  ['matched', 'Matched', '#166534'], ['noPoNeeded', 'No PO needed', '#555'], ['other', 'Other suppliers', '#555'],
 ]
 const NOTE = {
   over: 'The PO\'s bills, all together ex VAT, are more than its value - check the price or quantities with the supplier.',
@@ -14,6 +14,7 @@ const NOTE = {
   cancelled: 'These bills quote a PO that was cancelled.',
   matched: 'The PO number is on the bill (or it was linked by hand) and the PO is not over-billed.',
   noPoNeeded: 'Marked as not needing a purchase order.',
+  other: 'From suppliers you have never raised a purchase order with (utilities, rent, subcontractors...). Nothing to do - but if one belongs to a PO (a supplier billing under a different Xero contact, say), link it.',
 }
 const th = { textAlign: 'left', padding: '7px 8px', fontSize: 12, color: '#666', fontWeight: 600, borderBottom: '1px solid #eee', whiteSpace: 'nowrap' }
 const td = { padding: '7px 8px', fontSize: 13, borderBottom: '1px solid #f4f3f0', verticalAlign: 'top' }
@@ -46,6 +47,13 @@ export default function BillsToCheck() {
       {err && <div style={{ background: '#fef2f2', color: '#b42318', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 10 }}>{err}</div>}
       {showSet && d && <Settings settings={d.settings} onSave={(s) => { act({ action: 'settings', ...s }, 'settings'); setShowSet(false) }} />}
       {d && <>
+        {/* WHAT WAS READ, AND WHERE IT WENT (1241) - so an empty tab is never mistaken for nothing read */}
+        {d.at && <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 10, padding: '9px 12px', fontSize: 13, marginBottom: 10, color: '#333' }}>
+          {d.total === 0
+            ? <><strong>Xero returned no supplier bills dated from {dmy(d.from)}.</strong> If there should be some, set an earlier date in Settings and Refresh from Xero.</>
+            : <>Read <strong>{d.total} bill{d.total === 1 ? '' : 's'}</strong> from Xero dated from {dmy(d.from)}: <strong>{(d.groups.matched.length + d.groups.over.length + d.groups.cancelled.length)}</strong> match a PO, <strong>{d.groups.noPo.length}</strong> from your PO suppliers have no PO number, <strong>{d.groups.noPoNeeded.length}</strong> marked no PO needed, and <strong>{d.groups.other.length}</strong> {d.groups.other.length === 1 ? 'is' : 'are'} from suppliers you have never raised a PO with ({d.poSuppliers} supplier{d.poSuppliers === 1 ? '' : 's'} on your POs so far).</>}
+          {d.stats && d.stats.skipped > 0 && <span style={{ color: '#888' }}> {d.stats.skipped} deleted or voided in Xero left out.</span>}
+        </div>}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
           {TABS.map(([k, label, colour]) => { const n = (d.groups[k] || []).length; const on = tab === k
             return <button key={k} onClick={() => { setTab(k); setOpen(null); setLinking(null) }} style={{ ...btn, padding: '6px 12px', fontSize: 13, background: on ? INK : '#fff', color: on ? '#fff' : INK, borderColor: on ? INK : '#d4d4d0' }}>
@@ -59,7 +67,6 @@ export default function BillsToCheck() {
               <tbody>{rows.map(b => <BillRow key={b.id} b={b} tab={tab} pos={d.pos} open={open === b.id} onOpen={() => setOpen(o => o === b.id ? null : b.id)} linking={linking === b.id} setLinking={(v) => setLinking(v ? b.id : null)} busy={busy} act={act} />)}</tbody>
             </table>)}
         </div>
-        <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>{d.other ? `${d.other} bill${d.other === 1 ? '' : 's'} from suppliers you have never raised a PO with ${d.other === 1 ? 'is' : 'are'} not shown.` : ''}</div>
       </>}
     </OperationsShell>
   )
@@ -83,6 +90,7 @@ function BillRow({ b, tab, pos, open, onOpen, linking, setLinking, busy, act }) 
           {tab === 'over' && <div style={{ fontSize: 12, color: '#b42318', marginTop: 2 }}>PO {money(b.po.net)} - billed {money(b.po.billed)} - <strong>{money(b.po.over)} over</strong></div>}
         </> : tab === 'noPoNeeded' && b.noPo ? <span style={{ fontSize: 12, color: '#555' }}>{b.noPo.reason} <span style={{ color: '#999' }}>- {b.noPo.by}</span></span> : '-'}</td>
       <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+        {tab === 'other' && !linking && <button onClick={() => setLinking(true)} style={btn}>Link to PO</button>}
         {tab === 'noPo' && !linking && <>
           <button onClick={() => setLinking(true)} style={btn}>Link to PO</button>{' '}
           <button onClick={() => { const r = window.prompt('Why does this bill need no purchase order? (e.g. "Account payment", "Plant hire on account")'); if (r && r.trim()) act({ action: 'nopo', billId: b.id, reason: r }, b.id) }} style={btn}>No PO needed</button>

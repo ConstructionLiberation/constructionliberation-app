@@ -1,48 +1,26 @@
-PACKAGE 1240 - Bills to Check (Xero, part 1)
+PACKAGE 1241 - Bills to Check: say what was read; Other suppliers tab
 
-Seven files. Complete replacements (three NEW). No re-seed. No env changes.
-Built on 1239. Works with Xero's READ access, which the app already has.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1240.
 
-  lib/billsCheck.js                         (NEW)
-  pages/api/bills-check.js                  (NEW)
-  pages/operations/purchasing/bills.js      (NEW)
-  components/OperationsNav.js               (Purchasing > Bills to Check)
-  lib/poCommitted.js, lib/poForecast.js
-  pages/api/purchase-orders.js
+  lib/billsCheck.js
+  pages/operations/purchasing/bills.js
 
-PURCHASING > BILLS TO CHECK - every supplier bill in Xero since a start date
-(default: a fortnight before your first PO; deleted and voided bills left out),
-against your purchase orders. "REFRESH FROM XERO" reads them. Tabs, with counts:
-  - OVER THE PO   the PO's bills all together, ex VAT, more than its value -
-                  showing the PO value, billed and how much over (tolerance in
-                  Settings: 2% or GBP 5, whichever is larger, to begin with)
-  - NO PO NUMBER  from a supplier you raise POs with, but no PO found -
-                  "LINK TO PO" (that supplier's POs listed first) or
-                  "NO PO NEEDED" (with the reason)
-  - PO CANCELLED  quoting a PO that was cancelled
-  - MATCHED       the PO number on the bill (or linked by hand) - "Unlink" for one
-                  linked by hand
-  - NO PO NEEDED  with who said so and why - "Undo"
-Click a bill for its lines and due date. Bills from suppliers never on a PO
-(utilities, say) are counted but not shown.
-ONE MATCHING RULE: the same as committed costs - the PO number in the bill's
-reference, number or a line's description, from the same supplier (PO-0002 is not
-PO-00021). A BILL LINKED BY HAND COUNTS AGAINST ITS PO IN COMMITTED COSTS TOO, and
-only against that PO - so Bills to Check, the PO list, the project page and the
-cash flow agree. When Vinay confirms which Xero field carries the PO number, the
-rule is one line to change.
+WHY THE PAGE LOOKED EMPTY: it only showed bills from suppliers you have raised a
+portal PO with, and mentioned the rest in a small grey line under the table - so
+with only a few POs so far nearly every bill was hidden, and an empty page could
+not be told apart from nothing being read.
+NOW, after each Refresh from Xero, a plain summary: "Read 143 bills from Xero
+dated from 17/09/2026: 2 match a PO, 1 from your PO suppliers have no PO number,
+0 marked no PO needed, and 140 are from suppliers you have never raised a PO with
+(4 suppliers on your POs so far)" - plus any deleted or voided bills left out.
+If Xero returns none it says so, and to try an earlier date in Settings.
+A new OTHER SUPPLIERS tab lists those bills - each can still be LINKED TO A PO
+(a supplier billing under a different Xero contact, say).
 
-Checked through the real route, Xero stood in: nine bills - matched (INV-101);
-both Soprema bills over by GBP 100, one quoting the PO only in a line description;
-the cancelled PO's bill; no PO number (SIG-77, INV-102, and S-58 quoting PO-00021,
-correctly NOT matched to PO-0002); British Gas counted aside; the deleted bill left
-out; the start date worked out (17 Sept). SIG-77 linked by hand -> matched, and
-J231's committed costs went from 0 billed / 300 committed to 250 / 50; unlinked ->
-back; No PO needed needs a reason, then recorded against who; a 15% tolerance ->
-the Soprema bills matched; Xero refusing -> said plainly. The 1221 committed-costs
-test identical before and after; the cash flow's committed figures unchanged. In a
-REAL browser (Chromium) on the route's real output: the tabs and counts, opening on
-Over the PO; the over row's PO / billed / over; a bill's lines; Link to PO with the
-supplier's own PO first, the link sent; No PO needed asking why. All server routes
-compile; all pages pass the browser check. Built from your deployed packages
-(1022-1220) plus 1221-1239.
+Checked through the real route (Xero stood in): the summary counted all 8 bills
+and where they went, the deleted one left out; British Gas in Other suppliers and
+linked to a PO (landing in Over the PO, correctly - that PO was already part
+billed); Xero returning nothing -> read 0. In a REAL browser (Chromium): the
+summary line; the Other suppliers tab with Link to PO; the "Xero returned no
+supplier bills" message. All pages pass the browser check. Built from your
+deployed packages (1022-1220) plus 1221-1240.
