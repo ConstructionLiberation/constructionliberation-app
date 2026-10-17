@@ -101,11 +101,21 @@ async function handler(req, res) {
     if (req.query.people) {
       const [users, ops] = await Promise.all([getPortalUsers().catch(() => []), getOpsUsers().catch(() => [])])
       const name = (u) => (u.name || [u.firstName, u.lastName].filter(Boolean).join(' ')).trim()
-      const people = [...(ops || []).filter(u => u.active !== false).map(u => ({ name: name(u), phone: u.phone || '', kind: 'Operative' })),
-        ...(users || []).filter(u => u.active !== false).map(u => ({ name: name(u), phone: u.phone || '', kind: 'Portal user' }))]
-        .filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name))
-      const seen = new Set()
-      return res.status(200).json({ people: people.filter(p => { const k = `${p.name.toLowerCase()}|${p.phone}`; if (seen.has(k)) return false; seen.add(k); return true }) })
+      // ONE ENTRY PER PERSON, BY THEIR ROLE (1209): a Site App user is a Contracts
+      // Manager or an operative (its accessLevel); someone in both the Site App and
+      // the portal is merged into one, with whichever mobile is on record.
+      const byName = new Map()
+      for (const u of (ops || []).filter(u => u.active !== false)) {
+        const n = name(u); if (!n) continue
+        byName.set(n.toLowerCase(), { name: n, phone: u.phone || '', kind: u.accessLevel === 'contracts-manager' ? 'Contracts Manager' : 'Operative' })
+      }
+      for (const u of (users || []).filter(u => u.active !== false)) {
+        const n = name(u); if (!n) continue
+        const cur = byName.get(n.toLowerCase())
+        if (cur) { if (!cur.phone && u.phone) cur.phone = u.phone }
+        else byName.set(n.toLowerCase(), { name: n, phone: u.phone || '', kind: 'Portal user' })
+      }
+      return res.status(200).json({ people: [...byName.values()].sort((x, y) => x.name.localeCompare(y.name)) })
     }
     if (req.query.products) {
       const { products } = await loadPriceList()
