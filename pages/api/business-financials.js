@@ -1,4 +1,5 @@
-import { poLineAmount, poCommittedById } from '../../lib/poForecast'
+import { poLineAmount, poCommittedById, remainingByRef } from '../../lib/poForecast'
+import { isLabourLine } from '../../lib/poShared'
 import { requireRole } from '../../lib/portalAuth'
 import { getClient } from '../../lib/db'
 import { crmDealsToFlat } from '../../lib/crmDashboardAdapter'
@@ -1152,6 +1153,9 @@ export async function businessFinancials(req, res) {
       }
       // POs ticked into forecasts forecast only what is still committed (1223)
       const poCom = await poCommittedById().catch(() => null)
+      // costs remaining ticked in forecast the CM's current figure; a labour one is labour (1232)
+      const remCom = await remainingByRef().catch(() => null)
+      const lineAmt = (m, saved) => poLineAmount(m, poCom, saved, remCom)
       for (const k of keys) {
         const pk = k.replace('cashflow:hyp-apps:', '')
         // pk is "L:<projectNo>" (live/draft) or "N:<dealId>" (negotiated).
@@ -1181,9 +1185,10 @@ export async function businessFinancials(req, res) {
             // materials had none - so on an older forecast the sales came through and
             // the costs did not, which is exactly the shape of the problem: income with
             // no spend against it.
-            labourSchedule: (Array.isArray(fc.labourSchedule) && fc.labourSchedule.length)
+            labourSchedule: [...((Array.isArray(fc.labourSchedule) && fc.labourSchedule.length)
               ? fc.labourSchedule
-              : (fc.labourDate ? [{ date: fc.labourDate, amount: fc.labourThisPeriod || 0 }] : []),
+              : (fc.labourDate ? [{ date: fc.labourDate, amount: fc.labourThisPeriod || 0 }] : [])),
+              ...(fc.matItems || []).filter(isLabourLine).map(m => ({ date: m.payDate, amount: lineAmt(m, Number(m.amount != null && m.amount !== '' ? m.amount : m.value) || 0) }))],
             // MATERIALS. `amount` is resolved at SAVE time - a line can be a percentage
             // of the materials budget (mode: 'pct') and only then becomes a figure. Any
             // line saved before `amount` existed, or any pct line saved without a budget,
@@ -1252,23 +1257,24 @@ export async function businessFinancials(req, res) {
               revenueTo: fc.to || '',
               revenue: Number(fc.revenueThisPeriod) || Number(fc.thisCertTotal) || 0,
               materials: (Array.isArray(fc.matItems) && fc.matItems.length)
-                ? fc.matItems.map(m => ({ date: m.deliverDay || '', amount: poLineAmount(m, poCom, Number(m.amount != null && m.amount !== '' ? m.amount : m.value) || 0) }))
+                ? fc.matItems.filter(m => !isLabourLine(m)).map(m => ({ date: m.deliverDay || '', amount: lineAmt(m, Number(m.amount != null && m.amount !== '' ? m.amount : m.value) || 0) }))
                 : (fc.matDeliverDay ? [{ date: fc.matDeliverDay, amount: Number(fc.materialsThisPeriod) || 0 }] : []),
-              labour: (Array.isArray(fc.labourSchedule) && fc.labourSchedule.length)
+              labour: [...((Array.isArray(fc.labourSchedule) && fc.labourSchedule.length)
                 ? fc.labourSchedule.map(l => ({
                     // "2026-08-01..2026-08-14" - the second half is when the work was done.
                     date: (typeof l.window === 'string' && l.window.includes('..')) ? l.window.split('..')[1] : (l.date || ''),
                     amount: Number(l.amount) || 0,
                   }))
-                : (fc.to ? [{ date: fc.to, amount: Number(fc.labourThisPeriod) || 0 }] : []),
+                : (fc.to ? [{ date: fc.to, amount: Number(fc.labourThisPeriod) || 0 }] : [])),
+                ...(fc.matItems || []).filter(isLabourLine).map(m => ({ date: m.deliverDay || '', amount: lineAmt(m, Number(m.amount != null && m.amount !== '' ? m.amount : m.value) || 0) }))],
             },
             matItems: (!Array.isArray(fc.matItems) || !fc.matItems.length)
               ? (fc.matDeliverDay && (fc.materialsThisPeriod || 0) > 0
                   ? [{ date: payFromDeliver(fc.matDeliverDay, legacyMatDays), amount: Number(fc.materialsThisPeriod) || 0, undated: false, unresolved: false, estimatedTerm: true, deliverDay: fc.matDeliverDay, raw: Number(fc.materialsThisPeriod) || 0 }]
                   : [])
-              : (fc.matItems || []).map(m => ({
+              : (fc.matItems || []).filter(m => !isLabourLine(m)).map(m => ({
               date: m.payDate,
-              amount: poLineAmount(m, poCom, (m.amount != null && m.amount !== '') ? Number(m.amount) || 0
+              amount: lineAmt(m, (m.amount != null && m.amount !== '') ? Number(m.amount) || 0
                     : (m.mode === 'pct' ? 0 : Number(m.value) || 0)),
               // Diagnostics for the banner: money that cannot be scheduled and why.
               unresolved: (m.amount == null || m.amount === '') && m.mode === 'pct',

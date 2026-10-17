@@ -1,29 +1,40 @@
-PACKAGE 1231 - Forecast to complete: the take-off's materials budgets
+PACKAGE 1232 - Costs remaining into the cash flow (ticked in, like POs)
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1230.
+Five files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1231.
 
-  pages/api/job-takeoffs.js
-  pages/project/[id].js                (folder literally named [id])
+  pages/api/forecast-remaining.js      (NEW)
+  lib/poShared.js, lib/poForecast.js
+  pages/project-cashflow.js
+  pages/api/business-financials.js
 
-THE PROJECT PAGE (from Project Financials) > FORECAST TO COMPLETE - under
-"Costs remaining - not yet ordered or billed", the MATERIALS BUDGETS FROM THE
-TAKE-OFF (as re-measured):
-  - one row per price-list supplier, per category of your own (e.g.
-    Insulation), and "Not from the price list - not allocated" - the same groups
-    as the Materials tab and the draft-PO list (one calculation), with the
-    number of lines and the budget; the total materials budget below
-  - "+ Add as a line" puts that budget into the costs remaining as a materials
-    line - then change the amount to what is still to buy, and Save (nothing is
-    added unless you click)
-  - lines with no product chosen are noted, as they are not in these budgets
-  - no take-off yet -> a link to start one on Materials Take-offs
+COMMERCIAL > CASH FLOW - in a project's forecast window, beside "Add from
+purchase orders", "ADD FROM COSTS REMAINING" lists the project's cost-remaining
+lines (entered by the CM under Forecast to complete on the project page). Tick
+one to put it in that period - its date and payment term set right there like
+any other line; untick to remove. A line already in another forecast period is
+shown with that period and cannot be ticked twice.
+STAYS LINKED: a ticked line never forecasts more than the CM's CURRENT figure for
+it - lower it on the project page and the cash flow follows; remove it and it
+forecasts nothing. (If the costs remaining cannot be read, the saved figure is
+used - never wiped.)
+LABOUR IS LABOUR: a cost-remaining line in the labour category goes to LABOUR
+out in the project cash flow, and to labour in the business cash flow and
+forecast P&L - not materials; it is left out of the window's materials total
+(shown beside it as labour), so it does not use up the materials budget.
+Materials, plant and other go to materials, as before.
+The same linked-line rule now covers both kinds of ticked line (POs and costs
+remaining), in every place a forecast line becomes money.
 
-Checked through the real route with the re-measured take-off: the budgets
-equal the draft-PO list exactly (Renolit 8,549.10, Soprema 1,380.96,
-Insulation 1,500, not allocated 360), from Q-1042 Rev A; a project with no
-take-off says so. In a REAL browser (Chromium): the table below the costs
-remaining with the total (11,790.06) and the note of the line with no product;
-"+ Add as a line" on Insulation -> a materials line "Materials - Insulation" at
-1,500, ready to adjust and save; no take-off -> the link to start one. All
-server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1220) plus 1221-1230.
+Checked: the REAL business cash flow (its cashflow view run) with a forecast
+holding a PO line (285 entered, 85 still committed), a labour cost-remaining
+line ticked at 8,000 that the CM has since cut to 6,000, and a materials one
+the CM has since removed -> P&L materials 85 and 0; P&L labour 1,000 (the
+period's own) + 6,000 on its date; cash materials 85 and 0; cash labour 1,000
++ 6,000 on its pay date. In a REAL browser (Chromium): "Add from costs
+remaining (3)" with the line already in October's forecast greyed; ticking the
+insulation and labour lines added both; the materials total 1,500 "plus 8,000
+labour from costs remaining, counted as labour". The cash flow page's browser
+bundle checked to carry no database library. All server routes compile; all
+pages pass the browser check. Built from your deployed packages (1022-1220)
+plus 1221-1231.

@@ -3,7 +3,7 @@ import { businessToday, businessNow } from '../lib/businessDate'
 import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import CommercialNav from '../components/CommercialNav'
-import { poLineAmount } from '../lib/poShared'
+import { poLineAmount, isLabourLine } from '../lib/poShared'
 import { computeApplicationSummary, resolveAppDates } from '../lib/applications'
 
 // ── Layout constants (mirror the planning gantt) ──
@@ -38,6 +38,7 @@ function cellCount(cell) {
 
 export default function ProjectCashflow() {
   const [poCommitted, setPoCommitted] = useState(null)   // PO id -> still committed (1223)
+  const [remByRef, setRemByRef] = useState(null)         // cost-remaining line -> the CM's current figure (1232)
   const { money, currencySymbol, companyName } = useFormat()
   const gbp = (n) => money(Number(n) || 0)
   const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
@@ -121,6 +122,7 @@ export default function ProjectCashflow() {
     // that (1223). null if it cannot be read: the saved figures are then used as they are.
     fetch('/api/purchase-orders').then(r => r.ok ? r.json() : null)
       .then(d => setPoCommitted(d && Array.isArray(d.pos) ? Object.fromEntries(d.pos.filter(p => p.committed != null).map(p => [p.id, p.committed])) : null)).catch(() => setPoCommitted(null))
+    fetch('/api/forecast-remaining').then(r => r.ok ? r.json() : null).then(d => setRemByRef(d && d.byRef ? d.byRef : null)).catch(() => setRemByRef(null))
     fetch('/api/project-cashflow?all=1').then(r => r.json())
       .then(d => { setAllForecasts(d.all || {}); setAppActuals(d.actuals || {}); setManual(Array.isArray(d.manual) ? d.manual : []) }).catch(() => {})
   }
@@ -392,7 +394,8 @@ export default function ProjectCashflow() {
         for (const s of (fc.labourSchedule || [])) add(s.date, 'labourOut', s.amount || 0)
         if ((!fc.labourSchedule || !fc.labourSchedule.length) && fc.labourDate) add(fc.labourDate, 'labourOut', fc.labourThisPeriod || 0)
         // a PO line forecasts only what is still committed on the PO now (1223)
-        for (const m of (fc.matItems || [])) add(m.payDate, 'matOut', poLineAmount(m, poCommitted, m.amount || 0))
+        // a cost-remaining line forecasts the CM's current figure; a labour one is labour (1232)
+        for (const m of (fc.matItems || [])) add(m.payDate, isLabourLine(m) ? 'labourOut' : 'matOut', poLineAmount(m, poCommitted, m.amount || 0, remByRef))
       }
     }
     // RETENTION RELEASES.
@@ -423,7 +426,7 @@ export default function ProjectCashflow() {
     // month called "__detai" carrying every figure twice.
     Object.defineProperty(map, '__detail', { value: detail, enumerable: false })
     return map
-  }, [allForecasts, retention, appActuals, supersededIds, jobNoOfXeroId, projectNames, xeroMap, retFin, focusKey, manualNames, poCommitted])
+  }, [allForecasts, retention, appActuals, supersededIds, jobNoOfXeroId, projectNames, xeroMap, retFin, focusKey, manualNames, poCommitted, remByRef])
 
   const shift = (deltaWeeks) => setAnchorMonday(m => mondayOf(addDays(m, deltaWeeks * 7)))
 
@@ -1129,6 +1132,15 @@ function HypAppModal({ modal, onClose, onSaved }) {
   const [poPick, setPoPick] = useState(false)
   useEffect(() => { if (xeroId) fetch(`/api/purchase-orders?committed=${encodeURIComponent(xeroId)}`).then(r => r.ok ? r.json() : null).then(d => setPoOpts(d ? (d.pos || []).filter(p => p.committed > 0) : [])).catch(() => setPoOpts([])) }, [xeroId])
   const poElsewhere = useMemo(() => { const m = {}; for (const a of (hypApps || [])) { if (a.id === editId) continue; for (const x of (a.matItems || [])) if (x.poId) m[x.poId] = a } return m }, [hypApps, editId])
+  // COSTS REMAINING INTO THE FORECAST (1232) - the project's cost-remaining lines (the CM's,
+  // on the project page); ticking one adds it here with its category; a labour one is
+  // labour. A line already in another forecast period cannot be ticked twice.
+  const [remOpts, setRemOpts] = useState(null)
+  const [remPick, setRemPick] = useState(false)
+  useEffect(() => { if (xeroId) fetch(`/api/project/${encodeURIComponent(xeroId)}/forecast-costs`).then(r => r.ok ? r.json() : null).then(d => setRemOpts(d && Array.isArray(d.lines) ? d.lines.filter(l => Number(l.amount) > 0) : [])).catch(() => setRemOpts([])) }, [xeroId])
+  const remElsewhere = useMemo(() => { const m = {}; for (const a of (hypApps || [])) { if (a.id === editId) continue; for (const x of (a.matItems || [])) if (x.remRef) m[x.remRef] = a } return m }, [hypApps, editId])
+  const toggleRem = (l) => { const ref = `${xeroId}:${l.id}`; setMatItems(list => list.some(m => m.remRef === ref) ? list.filter(m => m.remRef !== ref)
+    : [...list, { id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, mode: 'figure', value: Number(l.amount) || 0, comment: `${l.description || 'Cost remaining'} (cost remaining)`, deliverDay: to, term: { basis: 'eom', days: 30 }, remRef: ref, category: l.category || 'other' }]) }
   const togglePo = (p) => setMatItems(l => l.some(m => m.poId === p.id) ? l.filter(m => m.poId !== p.id)
     : [...l, { id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, mode: 'figure', value: p.committed, comment: `${p.number} - ${p.supplier}`, deliverDay: p.deliveryDate || to, term: { basis: 'eom', days: 30 }, poId: p.id, poNumber: p.number }])
   // DEFAULTS TO THE PROJECT'S OWN APPLICATION DATES.
@@ -1555,7 +1567,9 @@ function HypAppModal({ modal, onClose, onSaved }) {
   const mosDrawdown = mosPriorRaw - mosToDate
   const materialsToBuy = Math.max(0, materialsConsumed - mosDrawdown)
   const matLineValue = (m) => m.mode === 'pct' ? materialsBudget * (num(m.value) / 100) : num(m.value)
-  const materialsThisPeriod = useMemo(() => matItems.reduce((s, m) => s + matLineValue(m), 0), [matItems, materialsBudget])
+  // labour lines (cost-remaining lines in the labour category) are labour, not materials (1232)
+  const materialsThisPeriod = useMemo(() => matItems.filter(m => !isLabourLine(m)).reduce((s, m) => s + matLineValue(m), 0), [matItems, materialsBudget])
+  const remLabourThisPeriod = useMemo(() => matItems.filter(isLabourLine).reduce((s, m) => s + matLineValue(m), 0), [matItems, materialsBudget])
 
   // Above-the-line budgets from rates: labour (labRate x qty) and sales (contract total).
   const labourBudget = useMemo(() => {
@@ -2396,6 +2410,8 @@ function HypAppModal({ modal, onClose, onSaved }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>Materials forecasted on site <span style={{ fontSize: 11, color: '#aaa', fontWeight: 400 }}>(supplier payments out - budget {gbp(materialsBudget)})</span></div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {xeroId && <button onClick={() => setRemPick(v => !v)} style={{ ...ghostBtn, padding: '5px 12px', borderColor: remPick ? '#0f766e' : undefined, color: remPick ? '#0f766e' : undefined }}>
+                    Add from costs remaining{remOpts && remOpts.length ? ` (${remOpts.length})` : ''}</button>}
                   {xeroId && <button onClick={() => setPoPick(v => !v)} style={{ ...ghostBtn, padding: '5px 12px', borderColor: poPick ? '#7c3aed' : undefined, color: poPick ? '#7c3aed' : undefined }}>
                     Add from purchase orders{poOpts && poOpts.length ? ` (${poOpts.length})` : ''}</button>}
                   <button onClick={addMaterialsFromLineItems} disabled={!(materialsToBuy > 0)}
@@ -2411,6 +2427,18 @@ function HypAppModal({ modal, onClose, onSaved }) {
                     style={{ ...ghostBtn, padding: '5px 12px' }}>+ Add material</button>
                 </div>
               </div>
+              {remPick && <div style={{ border: '1px solid #99f6e4', background: '#f0fdfa', borderRadius: 10, padding: '8px 10px', marginBottom: 10, fontSize: 12 }}>
+                <div style={{ color: '#0f766e', marginBottom: 6 }}>Tick a <strong>cost remaining</strong> (entered on the project page) to put it in this period - set its date and payment term in the table below. It never forecasts more than the CM's current figure for it; a <strong>labour</strong> line counts as labour.</div>
+                {remOpts == null ? <div style={{ color: '#999' }}>Loading...</div> : !remOpts.length ? <div style={{ color: '#999' }}>No costs remaining on this project - add them under Forecast to complete on the project page.</div>
+                  : remOpts.map(l => { const ref = `${xeroId}:${l.id}`; const here = matItems.some(m => m.remRef === ref); const other = remElsewhere[ref]
+                    return <label key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', opacity: other ? 0.55 : 1, cursor: other ? 'default' : 'pointer' }}>
+                      <input type="checkbox" checked={here} disabled={!!other} onChange={() => toggleRem(l)} />
+                      <span style={{ flex: 1 }}>{l.description || 'Cost remaining'}</span>
+                      <span style={{ color: '#777', minWidth: 80 }}>{({ labour: 'Labour', materials: 'Materials', plant: 'Plant', other: 'Other' })[l.category] || l.category}</span>
+                      <span style={{ minWidth: 90, textAlign: 'right', fontWeight: 600, color: '#0f766e' }}>{gbp(l.amount)}</span>
+                      {other && <span style={{ color: '#b45309' }}>in the {fmtD(other.from)} - {fmtD(other.to)} forecast</span>}
+                    </label> })}
+              </div>}
               {poPick && <div style={{ border: '1px solid #ddd6fe', background: '#faf5ff', borderRadius: 10, padding: '8px 10px', marginBottom: 10, fontSize: 12 }}>
                 <div style={{ color: '#6d28d9', marginBottom: 6 }}>Tick a purchase order to add what is <strong>still committed</strong> on it as a materials line - set its delivery day and payment term in the table below. As bills come in against it, the forecast shrinks to what is left.</div>
                 {poOpts == null ? <div style={{ color: '#999' }}>Loading...</div> : !poOpts.length ? <div style={{ color: '#999' }}>No purchase orders on this project with anything still committed.</div>
@@ -2476,7 +2504,7 @@ function HypAppModal({ modal, onClose, onSaved }) {
                     })}
                   </tbody>
                   {matItems.length > 0 && <tfoot><tr style={{ borderTop: '2px solid #eee', background: '#faf9f7', fontWeight: 700 }}>
-                    <td colSpan={5} style={{ padding: '6px 10px', textAlign: 'right' }}>Total materials this period</td>
+                    <td colSpan={5} style={{ padding: '6px 10px', textAlign: 'right' }}>Total materials this period{remLabourThisPeriod > 0 ? <span style={{ color: '#0f766e', fontWeight: 400 }}> (plus {gbp(remLabourThisPeriod)} labour from costs remaining, counted as labour)</span> : null}</td>
                     <td style={{ padding: '6px 10px', textAlign: 'right', color: '#7c3aed' }}>{gbp(materialsThisPeriod)}</td><td></td>
                   </tr></tfoot>}
                 </table>
