@@ -98,6 +98,8 @@ export async function middleware(req) {
       pathname.startsWith('/api/issue-pdf') ||
       pathname.startsWith('/api/download') ||
       pathname.startsWith('/api/deliveries') ||
+      // Site App purchase orders (1211) - the sign-in token is checked inside
+      pathname.startsWith('/api/site-po') ||
       pathname.startsWith('/api/operatives') ||
       pathname.startsWith('/api/planning') ||
       pathname.startsWith('/api/srats') ||

@@ -108,13 +108,15 @@ export default function PoPage() {
         <h1 style={{ fontSize: 20, margin: 0 }}>{isNew ? 'New purchase order' : po.number || 'Draft purchase order'}</h1>
         {st && <span style={{ fontSize: 12, fontWeight: 700, color: st[1] }}>{st[0]}</span>}
         <span style={{ flex: 1 }} />
-        {!isNew && po.status !== 'cancelled' && po.status !== 'draft' && <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(link); setMsg('The supplier\'s link is copied.') }} style={btn}>Copy supplier link</button>}
-        {!isNew && po.status !== 'cancelled' && po.status !== 'draft' && <button onClick={() => setSending(true)} disabled={busy} style={primary}>{po.status === 'sent' ? 'Send again' : 'Send to supplier'}</button>}
-        {!isNew && po.status !== 'cancelled' && po.status !== 'draft' && <button onClick={cancel} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Cancel PO</button>}
+        {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(link); setMsg('The supplier\'s link is copied.') }} style={btn}>Copy supplier link</button>}
+        {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => setSending(true)} disabled={busy} style={primary}>{po.status === 'sent' ? 'Send again' : 'Send to supplier'}</button>}
+        {!isNew && ['approved', 'sent', 'awaiting-approval'].includes(po.status) && <button onClick={cancel} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Cancel PO</button>}
       </div>
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {msg && <div style={{ color: '#0f766e', fontSize: 13, marginBottom: 8 }}>{msg}</div>}
       {po.status === 'sent' && <div style={{ ...card, background: '#f0fdfa', borderColor: '#99f6e4', fontSize: 13 }}>Sent to {po.sentTo} on {new Date(po.sentAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} - it stands as sent. Cancel it and raise a new one to change it.</div>}
+      {po.status === 'awaiting-approval' && <div style={{ ...card, background: '#f5f3ff', borderColor: '#ddd6fe', fontSize: 13 }}>Raised in the Site App by {po.raisedBy} - awaiting the project's Contracts Manager. It is numbered and can be sent once approved.</div>}
+      {po.status === 'rejected' && <div style={{ ...card, background: '#fef2f2', borderColor: '#fecaca', fontSize: 13 }}>Rejected by {po.rejectedBy}{po.rejectReason ? ` - ${po.rejectReason}` : ''}.</div>}
       {po.status === 'cancelled' && <div style={{ ...card, background: '#f6f6f4', fontSize: 13 }}>Cancelled {po.cancelledBy ? `by ${po.cancelledBy}` : ''}{po.cancelReason ? ` - ${po.cancelReason}` : ''}.</div>}
       <fieldset disabled={!editable} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
         <div style={{ ...card, display: 'flex', gap: 12, flexWrap: 'wrap' }}>

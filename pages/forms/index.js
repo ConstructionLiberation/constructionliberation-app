@@ -65,6 +65,8 @@ export default function FormsHome() {
       const d = await r.json()
       if (d.ok) {
         try { localStorage.setItem('ops_phone', phone) } catch {}
+        // the server-checked sign-in (1211) - sent with requests that must know who is asking
+        try { sessionStorage.setItem('ops_token', d.token || '') } catch {}
         if (d.mustResetPin) {
           setResetUser(d.user); setPin('')
         } else {
@@ -90,7 +92,7 @@ export default function FormsHome() {
     setBusy(true)
     try {
       const r = await fetch('/api/ops-users', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-ops-token': sessionStorage.getItem('ops_token') || '' },
         body: JSON.stringify({ action: 'set-pin', id: resetUser.id, pin: newPin }),
       })
       const d = await r.json()
@@ -106,7 +108,7 @@ export default function FormsHome() {
   }
 
   function logout() {
-    sessionStorage.removeItem('ops_operative')
+    sessionStorage.removeItem('ops_operative'); sessionStorage.removeItem('ops_token')
     setUser(null); setPin(''); setResetUser(null)
   }
 

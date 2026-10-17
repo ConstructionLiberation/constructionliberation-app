@@ -1,3 +1,7 @@
+import { createOpsToken, opsUserFromReq } from '../../lib/opsToken'
+import { currentTenantId } from '../../lib/tenantContext'
+import { getSessionFromReq } from '../../lib/portalAuth'
+import { normRole } from '../../lib/roles'
 import { fromEmail, replyTo, siteAppUrl } from '../../lib/tenantSettings'
 import { requireRole } from '../../lib/portalAuth'
 import { getOpsUsers, saveOpsUsers, getOpsProjects } from '../../lib/db'
@@ -167,7 +171,8 @@ async function handler(req, res) {
       }
       const safe = strip(users[idx])
       safe.name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.name || ''
-      return res.json({ ok: true, user: safe, mustResetPin: !!user.mustResetPin })
+      // the sign-in, proved on the server from now on (1211)
+      return res.json({ ok: true, user: safe, mustResetPin: !!user.mustResetPin, token: createOpsToken({ uid: user.id, tenantId: currentTenantId() }) })
     }
 
     // ── Forgot PIN: enter mobile, get a new temp PIN emailed ───────────────
@@ -190,6 +195,12 @@ async function handler(req, res) {
     // ── Operative sets their own PIN (first login or change) ───────────────
     if (body.action === 'set-pin') {
       const { id, pin } = body
+      // ONLY THE OPERATIVE THEMSELVES (signed in - 1211) OR A PORTAL ADMIN / MANAGER. It used to
+      // set the PIN of any id it was given, for anyone who asked.
+      const me = await opsUserFromReq(req)
+      const portal = getSessionFromReq(req)
+      const isOffice = portal && ['admin', 'management'].includes(normRole(portal.role))
+      if (!(me && String(me.id) === String(id)) && !isOffice) return res.status(403).json({ error: 'Sign in again to set your PIN.' })
       if (!pin || !/^\d{4,6}$/.test(String(pin))) return res.status(400).json({ error: 'PIN must be 4–6 digits.' })
       // PINs do NOT need to be unique — login is by mobile number + PIN, so two
       // users may share a PIN as long as their mobiles differ.

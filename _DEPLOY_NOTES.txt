@@ -1,34 +1,58 @@
-PACKAGE 1210 - Purchase orders: the supplier email from a template, editable
+PACKAGE 1211 - Purchasing, stage 2b-1: operatives' POs and the CM's approval
+(the server side); the Site App sign-in proved on the server
 
-Four files. Complete replacements. No re-seed. No env changes. Built on 1209.
+Fourteen files. Complete replacements (three NEW). No re-seed. No env changes.
+Built on 1210.
 
-  lib/poShared.js
-  lib/purchaseOrders.js
-  pages/api/purchase-orders.js
-  pages/operations/purchasing/po/[id].js     (folder literally named [id])
+  lib/opsToken.js                                  (NEW)
+  lib/poData.js                                    (NEW)
+  pages/api/site-po.js                             (NEW)
+  lib/purchaseOrders.js, lib/poShared.js, lib/ramsNotify.js
+  pages/api/purchase-orders.js, pages/api/po-view.js, pages/api/ops-users.js
+  pages/forms/index.js
+  pages/operations/purchasing/purchase-orders.js
+  pages/operations/purchasing/po/[id].js           (folder literally named [id])
+  middleware.js, lib/withTenant.js
 
-"Send to supplier" now opens a proper email - To, SUBJECT and MESSAGE -
-prefilled from the COMPANY EMAIL TEMPLATE with the PO's details, and editable
-before each send. The purchase order itself - delivery details, lines, VAT and
-totals, attachments, the view/print link - always follows the message
-automatically, so a PO can never go out without them.
-"EDIT TEMPLATE" (admins, in the send box): the subject and message, with
-buttons that put a field in at the cursor - PO number, Supplier, Project, Job
-number, Delivery required, Raised by, Company name, Order confirmations to.
-"Reset to standard". Until edited, a neutral standard template is used
-(nothing company-specific is stored by default). Saving it does not touch the
-PO numbering.
+THE SITE APP SIGN-IN, PROVED ON THE SERVER. The PIN sign-in was only
+remembered in the browser - the Site App's routes did not check who was
+asking. A correct PIN now also returns a signed token (one Site App user, one
+company, a working day), which the Site App keeps and sends; the new PO route
+checks it on every request. Operatives signed in before this deploy are asked
+to sign in again when they first use POs.
+FIX - "SET PIN": it set the PIN of ANY user it was given, for anyone who
+asked. Now only the operative themselves (signed in) or a portal admin /
+manager.
+OPERATIVES' PURCHASE ORDERS (the server; the Site App screens are 2b-2):
+  - an operative raises a PO for ONE OF THEIR PROJECTS (their Site App project
+    access) - the same full check as the office; the project, its Xero project
+    and its address come from the server, not the phone
+  - it waits as "AWAITING CM APPROVAL" - not numbered, not in Deliveries,
+    cannot be sent, its link does not open; the project's Contracts Manager is
+    EMAILED
+  - ONLY THAT PROJECT'S CM can approve or reject (found as the portal's RAMS
+    notifications find it - now one shared rule). Approve -> numbered, into
+    Deliveries, ready for the office to send; reject -> a reason is required.
+    The operative is emailed either way.
+  - the portal: "Awaiting approval" filter; such POs say so, cannot be sent
+SHARED RULES - what a complete PO is (supplier, fields, the full check),
+site contacts, products, the Deliveries entry and the email's delivery block
+now live once, in lib/poData.js, for the office and the Site App alike.
+Proved neutral: every earlier PO test gives identical output before and after.
 
-NOTE: nothing is written to Xero yet - that is stage 3, waiting on the Xero
-write permissions. App POs are in the app and in Deliveries only.
+STILL OPEN (not changed here): the Site App's OTHER routes (deliveries,
+issues, reports...) still do not check who is asking. Worth tightening with
+the same token - a separate piece of work.
 
-Checked through the real route: sending with nothing typed -> the standard
-template filled in ("Purchase order APP-PO-0001 - Rock Roofing Ltd - J228",
-"Dear HSS Hire, ..."); a company template saved by an admin -> used ("PO
-APP-PO-0002 for J228", "needed 4 November 2026"); an edited subject and
-message -> sent as typed; the PO details following every time; numbering
-untouched. In a REAL browser (Chromium): the send box prefilled; Edit template
--> Delivery required put in at the cursor -> saved -> the email refilled; the
-edited subject sent. All server routes compile; all pages pass the browser
-check. Built from your deployed packages (1022-1209, verified against their
-zips).
+Checked through the real routes: sign-in returns a token; set-pin refused
+with none and with someone else's, accepted for oneself; the PO route refuses
+no token, a tampered one, another company's; Dave (on J228 only) sees J228
+with its Xero project and address; raising for J230 refused, an incomplete PO
+refused, a complete one awaiting approval with the CM emailed; the office
+cannot send it, its link does not open; Ali and Dave cannot approve; Will (the
+CM) sees and approves -> APP-PO-0001, into Deliveries, Dave emailed; approving
+twice refused; the office then sends it; a rejection needs a reason, Dave
+emailed; Dave's list shows both. In a REAL browser (Chromium, phone size): the
+Site App keeps the token and sends it when setting a new PIN. All server
+routes and the middleware compile; all pages pass the browser check. Built
+from your deployed packages (1022-1210, verified against their zips).

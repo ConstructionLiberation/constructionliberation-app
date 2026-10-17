@@ -33,7 +33,7 @@ export default function PurchaseOrdersPage() {
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {data && !(data.contacts || []).length && <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>Read your contacts from Xero first - <a href="/operations/purchasing/suppliers" style={{ color: '#0f766e' }}>Purchasing &gt; Suppliers</a> &gt; Refresh from Xero. Any Xero contact can then be a PO's supplier.</div>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        {[['open', 'Not sent'], ['draft', 'Drafts'], ['sent', 'Sent'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) =>
+        {[['open', 'Not sent'], ['awaiting-approval', 'Awaiting approval'], ['draft', 'Drafts'], ['sent', 'Sent'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) =>
           <button key={k} onClick={() => setShow(k)} style={{ ...btn, background: show === k ? '#0f766e' : '#fff', color: show === k ? '#fff' : '#333', borderColor: show === k ? '#0f766e' : '#d4d4d0' }}>{l} ({count(k)})</button>)}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search number, project, supplier…" style={{ fontSize: 13, padding: '6px 10px', border: '1px solid #d4d4d0', borderRadius: 7, minWidth: 260 }} />
         <span style={{ flex: 1 }} />
@@ -46,7 +46,7 @@ export default function PurchaseOrdersPage() {
             <thead><tr>{['PO', 'Project', 'Supplier', 'Total (inc VAT)', 'Delivery required', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
             <tbody>{shown.map(p => (
               <tr key={p.id} onClick={() => { window.location.href = `/operations/purchasing/po/${p.id}` }} style={{ cursor: 'pointer' }}>
-                <td style={{ ...td, fontWeight: 700 }}>{p.number || <span style={{ color: '#64748b', fontWeight: 600 }}>Draft</span>}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{p.number || <span style={{ color: '#64748b', fontWeight: 600 }}>{p.status === 'draft' ? 'Draft' : 'Not yet numbered'}</span>}</td>
                 <td style={td}><strong>{p.jobNo}</strong> {p.projectName}</td>
                 <td style={td}>{p.supplier}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{money(p.gross != null ? p.gross : p.total)}<div style={{ fontSize: 11, color: '#999' }}>{money(p.total)} ex VAT</div></td>
