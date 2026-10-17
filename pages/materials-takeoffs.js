@@ -43,15 +43,27 @@ export default function MaterialsTakeoffs() {
     try { const d = await call({ action: 'start', projectId }); setTk(d.takeoff); setSaved(JSON.stringify(d.takeoff)); setMsg(`Started from ${d.takeoff.quoteRef} Rev ${d.takeoff.revision} - re-measure the quantities for the job.`); setProjects(ps => (ps || []).map(p => p.projectId === projectId ? { ...p, hasTakeoff: true } : p)) } catch (e) { setErr(e.message) }
     setBusy(false)
   }
-  // DRAFT POs, one per supplier, from the Materials list (1229)
-  async function makeDrafts() {
-    const again = (tk.draftPos || []).length > 0
-    if (again && !window.confirm(`Draft POs were already made from this take-off (${tk.draftPos.length}). Make another set?`)) return
-    setBusy(true); setErr(''); setMsg('')
+  // DRAFT POs (1229, 1230): first the POs it could make, to choose from - then make the ticked ones
+  const [chooser, setChooser] = useState(null)   // { groups, missing, already, contacts, picks: { key: { on, contactId, contactName } } }
+  async function openChooser() {
+    setBusy(true); setErr(''); setMsg(''); setDrafts(null)
     try {
-      const r = await fetch('/api/job-takeoffs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'draft-pos', projectId, again }) })
-      const d = await r.json(); if (!r.ok) { setDrafts(d.missing || d.unallocated ? { created: [], missing: d.missing || [], unallocated: d.unallocated || [] } : null); throw new Error(d.error || 'Could not make the drafts') }
-      setDrafts(d); setTk(d.takeoff); setSaved(JSON.stringify(d.takeoff))
+      const r = await fetch('/api/job-takeoffs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'draft-preview', projectId }) })
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not read the materials')
+      const picks = Object.fromEntries(d.groups.map(g => [g.key, { on: g.kind === 'supplier' && !!g.contactId, contactId: g.contactId || '', contactName: g.contactName || '' }]))
+      setChooser({ ...d, picks })
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+  async function makeChosen() {
+    const picks = Object.entries(chooser.picks).filter(([, p]) => p.on).map(([key, p]) => ({ key, contactId: p.contactId }))
+    const again = (tk.draftPos || []).length > 0
+    if (again && !window.confirm(`Draft POs were already made from this take-off (${tk.draftPos.length}). Make these ${picks.length} as well?`)) return
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/job-takeoffs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'draft-pos', projectId, picks, again }) })
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not make the drafts')
+      setDrafts(d); setChooser(null); setTk(d.takeoff); setSaved(JSON.stringify(d.takeoff))
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
@@ -105,14 +117,14 @@ export default function MaterialsTakeoffs() {
               <span style={{ fontSize: 12.5, color: '#666' }}>One draft PO per supplier - the products below at packs x pack price, plus own lines allocated to that supplier. Finish and raise each as normal.</span>
               <span style={{ flex: 1 }} />
               {dirty ? <span style={{ fontSize: 12.5, color: '#b45309' }}>Save first, so the drafts match what is saved</span>
-                : <button onClick={makeDrafts} disabled={busy} style={primary}>{busy ? 'Making...' : (tk.draftPos || []).length ? 'Create draft POs again' : 'Create draft POs'}</button>}
+                : <button onClick={openChooser} disabled={busy || !!chooser} style={primary}>{busy && !chooser ? 'Reading...' : (tk.draftPos || []).length ? 'Create more draft POs...' : 'Create draft POs...'}</button>}
               {(tk.draftPos || []).length > 0 && !drafts && <div style={{ flexBasis: '100%', fontSize: 12.5, color: '#555' }}>Drafts already made: {tk.draftPos.map((d, i) => <span key={d.poId}>{i ? ', ' : ''}<a href={`/operations/purchasing/po/${d.poId}`} style={{ color: '#0f766e' }}>{d.supplier}</a></span>)}</div>}
               {drafts && <div style={{ flexBasis: '100%', fontSize: 13 }}>
                 {drafts.created.length > 0 && <div style={{ marginBottom: 6 }}><strong>{drafts.created.length} draft PO{drafts.created.length === 1 ? '' : 's'} made:</strong>
                   {drafts.created.map(c => <div key={c.id} style={{ display: 'flex', gap: 10, padding: '3px 0' }}><a href={`/operations/purchasing/po/${c.id}`} style={{ color: '#0f766e', fontWeight: 600, minWidth: 180 }}>{c.supplier}</a><span>{c.lines} line{c.lines === 1 ? '' : 's'}</span><span>{money(c.total)} ex VAT</span>{!c.linked && <span style={{ color: '#b45309' }}>not linked to a Xero contact - link it on Purchasing &gt; Suppliers</span>}</div>)}</div>}
-                {(drafts.missing || []).length > 0 && <div style={{ color: '#b45309' }}>Not ordered - no product chosen: {drafts.missing.join('; ')}</div>}
-                {(drafts.unallocated || []).length > 0 && <div style={{ color: '#b45309' }}>Not ordered - own lines not allocated to a supplier (allocate them below, then make again): {drafts.unallocated.join('; ')}</div>}
+                {(drafts.skipped || []).length > 0 && <div style={{ color: '#b45309' }}>Not made: {drafts.skipped.map(x => `${x.name || x.key} - ${x.reason}`).join('; ')}</div>}
               </div>}
+              {chooser && <OrderChooser chooser={chooser} setChooser={setChooser} money={money} busy={busy} onMake={makeChosen} />}
             </div>}
             {tab === 'materials' ? <div style={card}><MaterialsTab est={counting} lib={lib} change={change} money={money} readOnly={false} /></div> : (
               <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
@@ -153,5 +165,54 @@ export default function MaterialsTakeoffs() {
         </div>
       </div>
     </>
+  )
+}
+
+// CHOOSE THE DRAFT POs TO MAKE (1230) - each PO it could make, ticked or not; a supplier to
+// choose for a category of your own (e.g. "Insulation"), the lines not allocated, or a
+// price-list supplier not yet linked to Xero
+function OrderChooser({ chooser, setChooser, money, busy, onMake }) {
+  const setPick = (key, patch) => setChooser(c => ({ ...c, picks: { ...c.picks, [key]: { ...c.picks[key], ...patch } } }))
+  const n = Object.values(chooser.picks).filter(p => p.on).length
+  const KIND = { supplier: 'price-list supplier', category: 'your category', unallocated: 'not allocated on the take-off' }
+  return (
+    <div style={{ flexBasis: '100%', border: '1px solid #99f6e4', borderRadius: 10, padding: 12, marginTop: 4 }}>
+      <div style={{ fontSize: 13, marginBottom: 8 }}><strong>Choose the draft POs to make</strong> <span style={{ color: '#666' }}>- tick the ones you want; anything without a supplier needs one choosing first.</span></div>
+      {!chooser.groups.length ? <div style={{ color: '#999', fontSize: 13 }}>Nothing to order on this take-off yet - choose products on the items, or allocate their own lines.</div> : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead><tr>{['', 'PO for', 'Lines', 'Total ex VAT', 'Supplier (Xero contact)'].map((h, i) => <th key={i} style={{ textAlign: i === 2 || i === 3 ? 'right' : 'left', padding: '5px 8px', color: '#666', fontWeight: 600, borderBottom: '1px solid #eee' }}>{h}</th>)}</tr></thead>
+          <tbody>{chooser.groups.map(g => { const p = chooser.picks[g.key] || {}; const needs = !p.contactId && g.kind !== 'supplier'
+            return <tr key={g.key} style={{ borderBottom: '1px solid #f4f3f0' }}>
+              <td style={{ padding: '6px 8px', width: 26 }}><input type="checkbox" checked={!!p.on} disabled={needs} onChange={e => setPick(g.key, { on: e.target.checked })} title={needs ? 'Choose a supplier first' : ''} /></td>
+              <td style={{ padding: '6px 8px' }}><strong>{g.name}</strong> <span style={{ color: '#999', fontSize: 11.5 }}>{KIND[g.kind]}</span></td>
+              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{g.lines.length}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(g.total)}</td>
+              <td style={{ padding: '6px 8px', minWidth: 280 }}><ContactPick contacts={chooser.contacts || []} value={p.contactName} hint={g.kind === 'supplier' && !p.contactId ? 'not linked - choose its Xero contact' : 'choose a supplier'}
+                onPick={(c) => setPick(g.key, { contactId: c.id, contactName: c.name, on: true })} /></td>
+            </tr> })}</tbody>
+        </table>)}
+      {(chooser.missing || []).length > 0 && <div style={{ fontSize: 12.5, color: '#b45309', marginTop: 8 }}>Not on any PO - no product chosen: {chooser.missing.join('; ')}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+        <button onClick={onMake} disabled={busy || !n} style={{ fontSize: 13, padding: '6px 14px', border: 'none', background: '#0f766e', color: '#fff', borderRadius: 7, cursor: 'pointer', opacity: (busy || !n) ? 0.5 : 1, fontWeight: 600 }}>{busy ? 'Making...' : `Create ${n} draft PO${n === 1 ? '' : 's'}`}</button>
+        <button onClick={() => setChooser(null)} style={{ fontSize: 13, padding: '6px 12px', border: '1px solid #d4d4d0', background: '#fff', borderRadius: 7, cursor: 'pointer' }}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+// a Xero contact, typed to search (suppliers first)
+function ContactPick({ contacts, value, hint, onPick }) {
+  const [q, setQ] = useState(null)
+  const words = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const found = q === null ? [] : contacts.filter(c => words.every(w => `${c.name} ${c.priceList || ''}`.toLowerCase().includes(w))).slice(0, 12)
+  return (
+    <div style={{ position: 'relative' }}>
+      <input value={q === null ? (value || '') : q} placeholder={hint} onFocus={() => setQ('')} onChange={e => setQ(e.target.value)} onBlur={() => setTimeout(() => setQ(null), 150)}
+        style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '5px 8px', border: `1px solid ${value ? '#d4d4d0' : '#f59e0b'}`, borderRadius: 6, fontFamily: 'inherit' }} />
+      {q !== null && <div style={{ position: 'absolute', zIndex: 20, left: 0, right: 0, top: '100%', marginTop: 2, background: '#fff', border: '1px solid #d4d4d0', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.08)', maxHeight: 240, overflowY: 'auto' }}>
+        {!found.length ? <div style={{ padding: '7px 10px', fontSize: 12.5, color: '#aaa' }}>{contacts.length ? 'No contact matches' : 'No Xero contacts read yet - Purchasing > Suppliers > Refresh from Xero'}</div>
+          : found.map(c => <div key={c.id} onMouseDown={e => { e.preventDefault(); onPick(c); setQ(null) }} style={{ padding: '6px 10px', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #f4f3f0' }}>{c.name}{c.supplier ? <span style={{ color: '#999', fontSize: 11 }}> · supplier</span> : null}</div>)}
+      </div>}
+    </div>
   )
 }

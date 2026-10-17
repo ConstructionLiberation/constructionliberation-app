@@ -11,7 +11,8 @@ import { loadProject } from '../../lib/projectStore'
 import { xeroPoProjects } from '../../lib/poProjects'
 import { loadPriceLib } from '../../lib/estimateToRates'
 import { loadTakeoff, saveTakeoff, startTakeoff, cleanSave } from '../../lib/jobTakeoff'
-import { draftPosFromTakeoff } from '../../lib/takeoffPos'
+import { draftPosFromTakeoff, takeoffOrderGroups } from '../../lib/takeoffPos'
+import { xeroContacts } from '../../lib/poData'
 
 async function handler(req, res) {
   const session = requireArea(req, res, 'commercial')
@@ -50,15 +51,25 @@ async function handler(req, res) {
     await saveTakeoff(pid, next)
     return res.status(200).json({ ok: true, takeoff: next })
   }
-  // DRAFT POs, one per supplier, from the take-off's materials (1229). The take-off remembers
-  // the drafts it made; making them again needs { again: true } (the page asks first).
+  // THE POs IT COULD MAKE - to choose from first (1230), with the Xero contacts to pick a
+  // supplier from (for a category, the lines not allocated, or a supplier not yet linked)
+  if (b.action === 'draft-preview') {
+    const tk = await loadTakeoff(pid)
+    if (!tk) return res.status(404).json({ error: 'Start the take-off first.' })
+    const r = await takeoffOrderGroups(tk, await loadPriceLib())
+    return res.status(200).json({ ok: true, ...r, already: tk.draftPos || [], contacts: await xeroContacts() })
+  }
+  // MAKE THE CHOSEN DRAFT POs (1229, 1230) - only those ticked, each with its supplier. The
+  // take-off remembers the drafts it made; making more needs { again: true } (the page asks).
   if (b.action === 'draft-pos') {
     const tk = await loadTakeoff(pid)
     if (!tk) return res.status(404).json({ error: 'Start the take-off first.' })
+    const picks = Array.isArray(b.picks) ? b.picks.filter(p => p && p.key) : []
+    if (!picks.length) return res.status(400).json({ error: 'Tick the POs to make.' })
     if ((tk.draftPos || []).length && !b.again) return res.status(409).json({ error: 'Draft POs have already been made from this take-off.', already: tk.draftPos })
-    const r = await draftPosFromTakeoff(tk, await loadPriceLib(), { by })
-    if (!r.created.length) return res.status(400).json({ error: 'There is nothing to order on this take-off yet - choose products on the items, or allocate their own lines to a supplier.', ...r })
-    const next = { ...tk, draftPos: [...(tk.draftPos || []), ...r.created.map(c => ({ poId: c.id, supplier: c.supplier, at: new Date().toISOString(), by }))] }
+    const r = await draftPosFromTakeoff(tk, await loadPriceLib(), { by, picks })
+    if (!r.created.length) return res.status(400).json({ error: r.skipped.length ? `Nothing made: ${r.skipped.map(x => `${x.name || x.key} - ${x.reason}`).join('; ')}` : 'Nothing to make.', ...r })
+    const next = { ...tk, draftPos: [...(tk.draftPos || []), ...r.created.map(c => ({ poId: c.id, supplier: c.supplier, group: c.group, at: new Date().toISOString(), by }))] }
     await saveTakeoff(pid, next)
     return res.status(200).json({ ok: true, ...r, takeoff: next })
   }

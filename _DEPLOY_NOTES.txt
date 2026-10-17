@@ -1,46 +1,37 @@
-PACKAGE 1229 - Estimate to job, part 3: draft POs from the materials take-off
-(includes the 1228 fix - deploying this covers both)
+PACKAGE 1230 - Draft POs from the take-off: choose which, and a supplier for
+anything without one
 
-Six files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1227 (+1228).
+Three files. Complete replacements. No re-seed. No env changes. Built on 1229.
 
-  lib/takeoffPos.js                    (NEW)
-  lib/poProjects.js                    (the 1228 fix, plus one shared address lookup)
+  lib/takeoffPos.js
   pages/api/job-takeoffs.js
-  pages/api/purchase-orders.js
-  pages/api/site-po.js
   pages/materials-takeoffs.js
 
-MATERIALS TAKE-OFFS > MATERIALS tab > "CREATE DRAFT POs" - one draft PO per
-supplier, from the same materials list the tab shows:
-  - the supplier's products at PACKS x the PACK PRICE (the unit is the selling
-    unit - a roll, a pack), plus any own lines (not from the price list)
-    allocated to that supplier on the Materials tab
-  - the supplier is the Xero contact linked to that price-list supplier
-    (Purchasing > Suppliers); not linked yet -> the draft is still made, named
-    for the supplier, with a note to link it
-  - the project, its delivery address and the order confirmations email filled
-    in; "From the materials take-off (Q-1042 Rev A)"
-  - they are DRAFTS: add the delivery details, check, raise or delete as normal
-  - what cannot be ordered is listed: items with no product chosen, own lines
-    not allocated to a supplier
-  - the take-off remembers the drafts it made (links shown); making them again
-    asks first. "Save first" if the take-off has unsaved changes.
-ALSO: the project-address lookup is now ONE shared function, used by the
-office's PO page, the Site App and these drafts (it had been written twice).
-AND the 1228 fix: projects come from the permanent project register, so the
-take-offs and PO project lists are never empty after rates are locked.
+MATERIALS TAKE-OFFS > MATERIALS > "CREATE DRAFT POs..." now shows the POs it
+could make FIRST - nothing is made until you choose:
+  - a row per PO: tick, what it is for, the lines and the total
+      PRICE-LIST SUPPLIER   its products (+ own lines allocated to it); its linked
+                            Xero contact shown, changeable; not linked -> choose
+                            its contact (or make it named and flagged, as before)
+      YOUR CATEGORY         own lines allocated to a category of your own - e.g.
+                            "Insulation" - choose a supplier for it
+      NOT ALLOCATED         own lines not allocated - choose a supplier for them
+  - the supplier: type to search your Xero contacts; choosing one ticks the row;
+    a category or the not-allocated lines cannot be ticked until they have one
+  - "Create N draft POs" makes only the ticked ones, each to its chosen supplier
+    (a category's PO notes the category); Cancel makes nothing
+  - items with no product chosen are listed; drafts made before are remembered
+    and making more asks first
 
-Checked through the real routes with a real take-off (Q-1042, re-measured), one
-supplier linked and one not: Renolit draft - linked to Renolit UK Ltd,
-Alkorplan 46 packs x 185.85 (exactly the Materials tab's) plus the allocated own
-line, project J228, the address and confirmations filled in, a draft with no
-number; Soprema draft - named, no contact, a note to link it; the unallocated
-own line reported, not ordered; making again refused without asking, done
-when confirmed, the take-off remembering all four; the drafts in the PO list.
-The shared address lookup: all three kinds of project give the same address in
-the portal and the Site App, the Site App tests identical before and after. In a
-REAL browser (Chromium): Save first; Create draft POs -> 2 made, with links,
-totals and the not-linked flag; the unallocated line listed; making again asks.
-All server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1220) plus 1221-1228.
+Checked through the real routes: the preview listed Renolit (linked to Renolit
+UK Ltd), Soprema (needs a supplier), Insulation (your category, needs a
+supplier) and Not allocated; ticking Renolit and Insulation with Kingspan made
+exactly those two - the Insulation PO to Kingspan Insulation with its line and
+"- Insulation" in its notes, no Soprema PO, nothing for the unallocated line;
+Insulation ticked without a supplier -> "choose a supplier for it"; Soprema with
+SIG Roofing chosen -> a draft to SIG Roofing, Soprema's price list kept. In a
+REAL browser (Chromium): Renolit ticked by default, Insulation and Not allocated
+held until a supplier is chosen; "king" -> Kingspan Insulation ticked
+Insulation; Renolit unticked; Create sent only Insulation with Kingspan. All
+server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1220) plus 1221-1229.
