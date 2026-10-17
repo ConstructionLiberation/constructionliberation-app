@@ -1,4 +1,4 @@
-// BILLS TO CHECK (1240) - see lib/billsCheck.js. Purchasing.
+// BILLS TO CHECK (1240) - see lib/billsCheck.js. Bookkeeping (1243).
 //   GET                                   -> { at, from, settings, groups, other, total, pos }
 //   POST { action: 'refresh' }            -> read the bills from Xero again
 //   POST { action: 'link', billId, poId } / { action: 'unlink', billId }
@@ -11,7 +11,7 @@ import { refreshBills, sortBills, NOPO_KEY, SETTINGS_KEY } from '../../lib/bills
 import { BILL_LINKS } from '../../lib/poCommitted'
 
 async function handler(req, res) {
-  const session = requireArea(req, res, 'purchasing')
+  const session = requireArea(req, res, 'bookkeeping')   // Bookkeeping > Bills to Check (1243)
   if (!session) return
   const by = session.name || session.email || ''
   if (req.method === 'GET') return res.status(200).json(await sortBills())
@@ -41,8 +41,7 @@ async function handler(req, res) {
   if (b.action === 'settings') {
     const pct = Number(b.tolerancePct), abs = Number(b.toleranceAbs)
     const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fromDate || '')) ? String(b.fromDate) : ''
-    const dextEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(b.dextEmail || '').trim()) ? String(b.dextEmail).trim().toLowerCase() : ''   // documents from suppliers go on to Dext (1242)
-    await set(SETTINGS_KEY, { fromDate, tolerancePct: isFinite(pct) && pct >= 0 ? pct : 2, toleranceAbs: isFinite(abs) && abs >= 0 ? abs : 5, dextEmail })
+    await set(SETTINGS_KEY, { fromDate, tolerancePct: isFinite(pct) && pct >= 0 ? pct : 2, toleranceAbs: isFinite(abs) && abs >= 0 ? abs : 5 })
     return res.status(200).json(await sortBills())
   }
   return res.status(400).json({ error: 'Unknown action' })

@@ -5,7 +5,6 @@
 //   POST { t, message, file?: { name, type, data (base64) } }   (a document up to 3 MB)
 import withTenant from '../../lib/withTenant'
 import { queryByToken, addMessage, publicView } from '../../lib/billQueries'
-import { billsSettings } from '../../lib/billsCheck'
 import { shortLink } from '../../lib/privateFiles'
 
 export const config = { api: { bodyParser: { sizeLimit: '4.5mb' } } }
@@ -26,7 +25,7 @@ async function handler(req, res) {
   if (q.status === 'resolved') return res.status(400).json({ error: 'This query has been closed - please reply to the email if anything is still outstanding.' })
   const b = req.body || {}
   const f = b.file && b.file.data ? { name: String(b.file.name || 'document'), type: String(b.file.type || ''), data: String(b.file.data) } : null
-  const r = await addMessage(q.billId, { from: 'supplier', text: String(b.message || '').slice(0, 5000), file: f, dextEmail: (await billsSettings()).dextEmail })
+  const r = await addMessage(q.billId, { from: 'supplier', text: String(b.message || '').slice(0, 5000), file: f })
   if (r.error) return res.status(400).json({ error: r.error })
   return res.status(200).json(publicView(r.query))
 }

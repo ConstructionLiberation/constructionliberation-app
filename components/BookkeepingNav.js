@@ -7,6 +7,7 @@ const SUBS = [
   { href: '/bookkeeping', label: 'Bookkeeping' },
   { href: '/bookkeeping-weekly-tasks', label: 'Weekly Tasks' },
   { href: '/bookkeeping-monthly-tasks', label: 'Monthly Tasks' },
+  { href: '/bookkeeping-bills', label: 'Bills to Check' },   // supplier bills against the POs, and supplier queries (1243)
 ]
 
 export default function BookkeepingNav({ active }) {

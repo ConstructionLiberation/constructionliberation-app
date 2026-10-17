@@ -39,7 +39,6 @@ export const navFor = (term) => {
     children: [
       { key: 'purchasing:pos', label: 'Purchase Orders', href: '/operations/purchasing/purchase-orders' },
       { key: 'purchasing:suppliers', label: 'Suppliers', href: '/operations/purchasing/suppliers' },
-      { key: 'purchasing:bills', label: 'Bills to Check', href: '/operations/purchasing/bills' },   // supplier bills against the POs (1240)
     ],
   },
   { key: 'financials', label: 'Project Financials', href: '/operations/project-financials' },

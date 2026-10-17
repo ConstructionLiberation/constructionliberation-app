@@ -1,4 +1,4 @@
-// SUPPLIER QUERIES - our side (1242). Purchasing. See lib/billQueries.js.
+// SUPPLIER QUERIES - our side (1242). Bookkeeping (1243). See lib/billQueries.js.
 //   POST { action: 'start', billId, to, message }
 //   POST { action: 'reply', billId, message }
 //   POST { action: 'resolve' | 'reopen', billId }
@@ -6,12 +6,12 @@
 import withTenant from '../../lib/withTenant'
 import { getPortalUsers } from '../../lib/db'
 import { requireArea } from '../../lib/portalAuth'
-import { sortBills, billsSettings } from '../../lib/billsCheck'
+import { sortBills } from '../../lib/billsCheck'
 import { startQuery, addMessage, setStatus, loadQueries } from '../../lib/billQueries'
 import { shortLink } from '../../lib/privateFiles'
 
 async function handler(req, res) {
-  const session = requireArea(req, res, 'purchasing')
+  const session = requireArea(req, res, 'bookkeeping')   // Bookkeeping > Bills to Check (1243)
   if (!session) return
   if (req.method === 'GET') {
     const q = (await loadQueries())[String(req.query.billId || '')]

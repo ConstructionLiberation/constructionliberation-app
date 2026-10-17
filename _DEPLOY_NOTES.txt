@@ -1,47 +1,30 @@
-PACKAGE 1242 - Supplier queries on bills (Xero, part 2)
+PACKAGE 1243 - Bills to Check moves to Bookkeeping; query any bill; no Dext forwarding
 
-Nine files. Complete replacements (four NEW). No re-seed. No env changes.
-Built on 1241. Uses the private file store that estimates' documents already use.
+Nine files. Complete replacements (two NEW). No re-seed. No env changes. Built on 1242.
 
-  lib/billQueries.js                       (NEW)
-  pages/api/bill-queries.js                (NEW)  our side
-  pages/api/bill-query.js                  (NEW)  the supplier's side
-  pages/bill-query.js                      (NEW)  the supplier's page
-  lib/billsCheck.js, lib/privateFiles.js
-  pages/api/bills-check.js
-  pages/operations/purchasing/bills.js
-  middleware.js                            (the supplier's page opens without sign-in)
+  components/BillsToCheck.js           (NEW - the page itself, shared)
+  pages/bookkeeping-bills.js           (NEW - Bookkeeping > Bills to Check)
+  pages/operations/purchasing/bills.js (now forwards to Bookkeeping)
+  components/BookkeepingNav.js, components/OperationsNav.js
+  lib/billQueries.js, lib/billsCheck.js
+  pages/api/bills-check.js, pages/api/bill-queries.js, pages/api/bill-query.js
 
-BILLS TO CHECK - every bill has "QUERY WITH SUPPLIER":
-  - a window to the supplier's email (the PO's, else their Xero contact's) with a
-    message already describing the problem (e.g. "invoices against PO APP-PO-0002
-    now total GBP 1,100 - GBP 100 more than ordered... please send a credit note")
-    - edit it and Send query: from the notifications address, signed off with your
-    name, email and phone, replies to the email come to you
-  - the bill then shows "QUERY OPEN" / "SUPPLIER REPLIED" / "QUERY RESOLVED" -
-    click it for the conversation, the supplier's documents, Reply (emails them),
-    MARK RESOLVED or Reopen
-  - a QUERIES tab (first) lists every bill with a query still open or answered
-  - SETTINGS: "Send suppliers' documents to Dext" - the Dext forwarding email;
-    blank = off. Leave blank until Vinay gives the address.
-THE SUPPLIER gets a link that needs NO ACCOUNT (a random key opens that one query
-only): your company, their invoice, your PO, the conversation; they REPLY and can
-ATTACH A DOCUMENT (a credit note, PDF or photo, up to 3 MB). You are emailed when
-they reply. Their documents are stored PRIVATELY (no public address) and open only
-through a link that lasts a few minutes. Once resolved, the link says it is closed.
+BOOKKEEPING > BILLS TO CHECK - its own tab beside Weekly and Monthly Tasks, open to
+accounts, management and admin (as the rest of Bookkeeping). It has left the
+Purchasing menu; the old address forwards to it.
+QUERY ANY BILL - "Query with supplier" is on every bill in every tab, including Other
+suppliers (where all 469 of your bills were - which is why there was no way to query
+one).
+NO DEXT FORWARDING - the setting and the forwarding are removed. The supplier's
+replies go to the portal user who raised the query: they are emailed when the
+supplier replies (the email links to Bookkeeping > Bills to Check), replies to the
+email itself reach them, and the conversation is on the bill.
 
-Checked through the real routes (mail, Xero and the private store stood in): the
-query email from notifications to the supplier's Xero email, reply-to the raiser,
-phone in the sign-off, a 40-character key in the link; a second open query on the
-same bill refused; the supplier's view showing the bill and PO and nothing internal
-(not even the key); a made-up key refused; their reply with a credit note PDF -
-stored privately under this company and bill, status "supplier replied", the raiser
-emailed, the PDF sent to Dext; a file over 3 MB refused; our reply emailed with the
-link; the bill's query and the Queries tab; file links short-lived, a file not on
-that query unreachable; resolved -> off the tab, the supplier cannot post; reopened.
-The private library's options confirmed in the installed version. In a REAL browser
-(Chromium): the supplier's page - reading, attaching a PDF, replying, "Sent - thank
-you"; Bills to Check - opening on Queries, the badge, the window with the
-conversation and the document, Reply, Mark resolved; a new query's prefilled
-message. All server routes compile; all pages pass the browser check. Built from
-your deployed packages (1022-1220) plus 1221-1241.
+Checked through the real routes: the whole query flow re-run - the reply emails the
+raiser and links to Bookkeeping; nothing sent to Dext (an old Dext setting ignored);
+who can open it - accounts, management, admin yes; post-contract and pre-contract no.
+In a REAL browser (Chromium): Bookkeeping's menu with Bills to Check; an Other
+suppliers bill with Query with supplier, opening the query window; no Dext box in
+Settings; the old Purchasing address forwarding to /bookkeeping-bills. All server
+routes compile; all pages pass the browser check. Built from your deployed packages
+(1022-1220) plus 1221-1242.
