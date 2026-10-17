@@ -626,9 +626,13 @@ function Shape({ sh, selected, tool, canEdit, onSelect, onStartMove, onStartHand
 }
 
 // Draggable endpoint handle (for lines/arrows).
+// The spot is a QUARTER of the old size (1239), so it does not hide the drawing under it; an
+// invisible circle at the old size is what you catch, so it is as easy to grab as before.
 function endHandle(cx, cy, onDown) {
-  return <circle cx={cx} cy={cy} r={14} fill="#fff" stroke="#7c3aed" strokeWidth={3}
-    onMouseDown={onDown} onTouchStart={onDown} style={{ cursor: 'crosshair' }} />
+  return <g>
+    <circle cx={cx} cy={cy} r={14} fill="transparent" stroke="none" onMouseDown={onDown} onTouchStart={onDown} style={{ cursor: 'crosshair' }} />
+    <circle cx={cx} cy={cy} r={3.5} fill="#fff" stroke="#7c3aed" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+  </g>
 }
 // Two opposite corner handles for rect/circle (handle 1 = x1/y1 corner, 2 = x2/y2 corner).
 function cornerHandles(sh, S, onStartHandle) {
