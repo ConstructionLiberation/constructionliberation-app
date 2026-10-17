@@ -22,7 +22,9 @@ export default function SuppliersPage() {
   const act = async (key, body, note) => { setBusy(key); setErr(''); setMsg(''); try { const d = await call(body); if (d.notConnected) setMsg(d.message); else if (note) setMsg(typeof note === 'function' ? note(d) : note); await load() } catch (e) { setErr(e.message) } setBusy('') }
   const list = data ? data.suppliers : []
   const unlinked = list.filter(s => !(s.link && s.link.contacts && s.link.contacts.length))
+  const others = data ? (data.others || []) : []
   const toDext = list.filter(s => !(s.link && s.link.dextSet))
+  const othersToDext = others.filter(o => !o.dextSet)
   const shown = show === 'unlinked' ? unlinked : show === 'dext' ? toDext : list
   return (
     <OperationsShell active="purchasing:suppliers" section="purchasing" title="Suppliers" wide>
@@ -31,7 +33,7 @@ export default function SuppliersPage() {
         <span style={{ fontSize: 13, color: '#666' }}>Each price-list supplier linked to its supplier contact in Xero - so a PO, the supplier's bill and the supplier always line up.</span>
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '10px 0 12px' }}>
-        {[['all', `All (${list.length})`], ['unlinked', `Not linked to Xero (${unlinked.length})`], ['dext', `To change in Dext (${toDext.length})`]].map(([k, l]) =>
+        {[['all', `All (${list.length})`], ['unlinked', `Not linked to Xero (${unlinked.length})`], ['dext', `To change in Dext (${toDext.length + othersToDext.length})`]].map(([k, l]) =>
           <button key={k} onClick={() => setShow(k)} style={{ ...btn, background: show === k ? '#0f766e' : '#fff', color: show === k ? '#fff' : '#333', borderColor: show === k ? '#0f766e' : '#d4d4d0' }}>{l}</button>)}
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 12, color: '#888' }}>{data && (data.contactsAt ? `Xero contacts read ${new Date(data.contactsAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${data.contacts.length}` : 'Xero contacts not read yet')}</span>
@@ -62,6 +64,24 @@ export default function SuppliersPage() {
               </tr> })}</tbody>
           </table>)}
       </div>
+      {/* OTHER SUPPLIERS WE RAISE POs WITH - not on the price list (1207) */}
+      {data && (show === 'dext' ? othersToDext : others).length > 0 && (show !== 'unlinked') && <div style={{ marginTop: 18 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Other suppliers we raise POs with</div>
+        <div style={{ fontSize: 12.5, color: '#666', marginBottom: 8 }}>Xero contacts on purchase orders that are not on the price list. Their invoices need the same Dext rule, so they come to the app to be matched.</div>
+        <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead><tr>{['Xero contact', 'Purchase orders', 'Dext should publish as', 'Set in Dext'].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <tbody>{(show === 'dext' ? othersToDext : others).map(o => <tr key={o.contactId}>
+              <td style={{ ...td, fontWeight: 600 }}>{o.name}</td>
+              <td style={td}>{o.pos}</td>
+              <td style={{ ...td, fontWeight: 600, color: '#0f766e' }}>{o.dextShould}</td>
+              <td style={td}>{o.dextSet
+                ? <label style={{ fontSize: 12.5, display: 'inline-flex', gap: 6, alignItems: 'center', color: '#0f766e' }}><input type="checkbox" checked disabled={!data.canDext || busy === o.contactId} onChange={() => act(o.contactId, { action: 'dext-contact', contactId: o.contactId, set: false })} /> Set{o.dextSetBy ? <span style={{ color: '#888' }}> · {o.dextSetBy}</span> : ''}</label>
+                : <label style={{ fontSize: 12.5, display: 'inline-flex', gap: 6, alignItems: 'center', color: '#b45309', fontWeight: 600 }}><input type="checkbox" checked={false} disabled={!data.canDext || busy === o.contactId} onChange={() => act(o.contactId, { action: 'dext-contact', contactId: o.contactId, set: true })} /> To change in Dext</label>}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </div>}
       {picking && <Picker supplier={picking} contacts={data.contacts} onClose={() => setPicking(null)}
         onSave={(ids, main) => { setPicking(null); act(picking.name, { action: 'link', supplier: picking.name, contactIds: ids, main }, `${picking.name} linked.`) }}
         onUnlink={() => { setPicking(null); act(picking.name, { action: 'unlink', supplier: picking.name }, `${picking.name} unlinked.`) }} />}

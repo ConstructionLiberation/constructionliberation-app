@@ -15,7 +15,8 @@ import { normRole } from '../../lib/roles'
 import { get, set, getTokens, saveTokens } from '../../lib/db'
 import { refreshXeroToken, fetchContacts } from '../../lib/xero'
 import { loadPriceList } from '../../lib/priceListStore'
-import { CONTACTS_KEY, LINKS_KEY, suggest, dextShould } from '../../lib/suppliers'
+import { CONTACTS_KEY, LINKS_KEY, DEXT_KEY, suggest, dextShould } from '../../lib/suppliers'
+import { listPos, loadPo } from '../../lib/purchaseOrders'
 
 async function priceListSuppliers() {
   const { products } = await loadPriceList()
@@ -35,7 +36,22 @@ async function handler(req, res) {
       const link = L[s.name] || null
       return { ...s, link, dextShould: dextShould(link), suggestions: link && link.contacts && link.contacts.length ? [] : suggest(s.name, contacts) }
     })
-    return res.status(200).json({ suppliers, contacts, contactsAt: (cache && cache.at) || null, xero: !!tokens, canDext: ['accounts', 'management', 'admin'].includes(normRole(session.role)) })
+    // OTHER SUPPLIERS WE RAISE POs WITH (1207) - Xero contacts on raised POs that are
+    // not linked to a price-list supplier (hire companies, merchants...). Their invoices
+    // need the same Dext rule (Awaiting Approval) so they come to the app to be matched.
+    const linkedIds = new Set(Object.values(L).flatMap(l => ((l && l.contacts) || []).map(c => c.id)))
+    const dext = (await get(DEXT_KEY)) || {}
+    const byContact = {}
+    for (const p of await listPos()) {
+      if (p.status === 'draft' || p.status === 'cancelled') continue
+      let id = p.contactId, name = p.contactName
+      if (!id) { const full = await loadPo(p.id).catch(() => null); id = full && full.contactId; name = full && full.contactName }
+      if (!id || linkedIds.has(id)) continue
+      byContact[id] = byContact[id] || { contactId: id, name: name || id, pos: 0 }
+      byContact[id].pos++
+    }
+    const others = Object.values(byContact).map(o => ({ ...o, ...(dext[o.contactId] || {}), dextShould: 'Awaiting Approval' })).sort((a, b) => a.name.localeCompare(b.name))
+    return res.status(200).json({ suppliers, others, contacts, contactsAt: (cache && cache.at) || null, xero: !!tokens, canDext: ['accounts', 'management', 'admin'].includes(normRole(session.role)) })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const b = req.body || {}
@@ -48,6 +64,15 @@ async function handler(req, res) {
     const at = new Date().toISOString()
     await set(CONTACTS_KEY, { at, contacts })
     return res.status(200).json({ ok: true, count: contacts.length, at })
+  }
+  // Vinay's tick for a supplier that is not on the price list (1207)
+  if (b.action === 'dext-contact') {
+    if (!['accounts', 'management', 'admin'].includes(normRole(session.role))) return res.status(403).json({ error: 'Only the bookkeeper or an admin can confirm the Dext settings' })
+    const id = String(b.contactId || ''); if (!id) return res.status(400).json({ error: 'Which supplier?' })
+    const dext = (await get(DEXT_KEY)) || {}
+    dext[id] = { dextSet: !!b.set, dextSetBy: b.set ? by : '', dextSetAt: b.set ? new Date().toISOString() : null }
+    await set(DEXT_KEY, dext)
+    return res.status(200).json({ ok: true })
   }
   const name = String(b.supplier || '').trim()
   if (!name) return res.status(400).json({ error: 'Which supplier?' })

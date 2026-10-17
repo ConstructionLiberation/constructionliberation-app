@@ -1,19 +1,24 @@
-PACKAGE 1206 - Purchase orders: type any site contact
+PACKAGE 1207 - Suppliers: the other suppliers we raise POs with, for Dext
 
-One file. Complete replacement. No re-seed. No env changes. Built on 1205.
+Four files. Complete replacements. No re-seed. No env changes. Built on 1206.
 
-  pages/operations/purchasing/po/[id].js     (folder literally named [id])
+  lib/purchaseOrders.js
+  lib/suppliers.js
+  pages/api/suppliers.js
+  pages/operations/purchasing/suppliers.js
 
-SITE CONTACT takes anyone, not only operatives and portal users: type a name
-(e.g. the customer's site manager) - the list offers "Use 'John Smith'" when
-it is not in the list, and Enter does the same when nothing matches. A MOBILE
-box sits beside it: filled in when someone is picked from the list, typed for
-anyone else, editable either way. A name is still required to raise the PO;
-the mobile is optional.
+PURCHASING > SUPPLIERS now also lists "OTHER SUPPLIERS WE RAISE POs WITH" -
+Xero contacts on raised purchase orders that are not on the price list (hire
+companies, merchants...), with how many POs each. Their invoices need the
+same Dext rule - "Dext should publish as: Awaiting Approval" - and Vinay
+ticks "Set in Dext" for each, as for the price-list suppliers; they count in
+"To change in Dext". Drafts and cancelled POs do not put a supplier on the
+list; a supplier linked to the price list appears in the main table instead.
 
-Checked in a REAL browser (Chromium): "John Smith (Wates)" -> "Use ..." -> set,
-with a mobile typed beside it; Dave Kerr picked from the list -> his mobile
-filled in; "Sarah Lane" + Enter -> used; the PO raised with Sarah Lane and the
-typed mobile. All pages pass the browser check. Built from your deployed
-packages (1022-1205, verified against their zips); the file checked identical
-to the tested version before zipping.
+Checked through the real routes: two POs to HSS Hire, one to Soprema (price
+list), a draft and a cancelled PO to Speedy Hire, and an older PO to Jewson ->
+the list shows HSS Hire (2) and Jewson (1) only; the tick refused for an
+estimator, set by Vinay. In a REAL browser (Chromium): the section, the tick,
+and "To change in Dext" counting them (6 -> 5). All server routes compile; all
+pages pass the browser check. Built from your deployed packages (1022-1206,
+verified against their zips).
