@@ -20,6 +20,7 @@ import { listPos, loadPo, savePo, takeNumber, loadPoSettings } from '../../lib/p
 import { newId, esc, money, cleanLines, EMAIL, xeroContacts, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { poTotal, poGross } from '../../lib/poShared'
 import { sendPurchaseOrder } from '../../lib/poSend'
+import { decidePo, mail, summary } from '../../lib/poApprove'
 
 const nameOf = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.name || ''
 async function myProjects(user) {
@@ -37,12 +38,6 @@ async function addressOf(proj) {
   } catch { return '' }
 }
 const isProjectCm = async (user, proj) => { const cm = await findProjectCM(proj._p); return !!(cm && cm.id && String(cm.id) === String(user.id)) }
-async function mail(to, subject, html) {
-  const key = process.env.RESEND_API_KEY
-  if (!key || !to) return false
-  try { const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: fromEmail('notify'), to: [to], subject, html }) }); return r.ok } catch { return false }
-}
-const summary = (po) => `<p style="margin:0 0 6px"><strong>${esc(po.number || 'New purchase order')}</strong> - ${esc([po.jobNo, po.projectName].filter(Boolean).join(' '))}</p><p style="margin:0 0 6px">${esc(po.contactName || po.supplier)} - ${money(poGross(po))} inc VAT (${money(poTotal(po))} ex VAT)</p><p style="margin:0 0 12px;color:#555">Raised by ${esc(po.raisedBy)}</p>`
 const button = (href, text) => `<p><a href="${href}" style="display:inline-block;background:#0f766e;color:#fff;padding:9px 16px;border-radius:6px;text-decoration:none">${text}</a></p>`
 
 async function handler(req, res) {
@@ -124,27 +119,10 @@ async function handler(req, res) {
     const po = await loadPo(String(b.id || ''))
     const proj = po && projOf(po)
     if (!po || !proj || !(await isProjectCm(user, proj))) return res.status(403).json({ error: 'Only the project\'s Contracts Manager can decide this purchase order.' })
-    if (po.status !== 'awaiting-approval') return res.status(409).json({ error: `This purchase order has already been ${po.status === 'approved' || po.status === 'sent' ? 'approved' : po.status}.` })
-    if (b.action === 'reject') {
-      const reason = String(b.reason || '').trim().slice(0, 500)
-      if (!reason) return res.status(400).json({ error: 'Say why it is rejected' })
-      const next = { ...po, status: 'rejected', rejectedBy: by, rejectedAt: now, rejectReason: reason, history: [...(po.history || []), { at: now, by, what: `Rejected: ${reason}` }] }
-      await savePo(next)
-      await mail(po.raisedByEmail, `PO rejected - ${po.jobNo} ${po.contactName || po.supplier}`, `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><p>Your purchase order was rejected by ${esc(by)}:</p><p><em>${esc(reason)}</em></p>${summary(po)}</div>`)
-      return res.status(200).json({ ok: true, po: next })
-    }
-    // APPROVED: numbered now, at the VAT rate in force; into Deliveries; ready for the office to send
-    const next = { ...po, number: await takeNumber(), status: 'approved', vatRate: (await loadPoSettings()).vatRate, approvedBy: by, approvedAt: now, history: [...(po.history || []), { at: now, by, what: 'Approved by the CM' }] }
-    await savePo(next); await setDelivery(next)
-    // APPROVE AND SEND (1215) - the same email the office sends; "approve only" leaves it for the office
-    if (b.send) {
-      const s = await sendPurchaseOrder(next, { by, replyFallback: user.email })
-      if (s.error) return res.status(200).json({ ok: true, po: next, sendError: s.error })
-      await mail(po.raisedByEmail, `PO approved and sent - ${next.number} - ${po.jobNo} ${po.contactName || po.supplier}`, `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><p>Your purchase order was approved by ${esc(by)} and sent to the supplier.</p>${summary(s.po)}</div>`)
-      return res.status(200).json({ ok: true, po: s.po, sent: true })
-    }
-    await mail(po.raisedByEmail, `PO approved - ${next.number} - ${po.jobNo} ${po.contactName || po.supplier}`, `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><p>Your purchase order was approved by ${esc(by)}. The office will send it to the supplier.</p>${summary(next)}</div>`)
-    return res.status(200).json({ ok: true, po: next })
+    // the shared decision (lib/poApprove, 1216) - the CM deciding, so no one else to tell
+    const r = await decidePo(po, { action: b.action, by, reason: b.reason, send: !!b.send, replyFallback: user.email })
+    if (r.error) return res.status(r.status || 400).json({ error: r.error })
+    return res.status(200).json({ ok: true, ...r })
   }
   return res.status(400).json({ error: 'Unknown action' })
 }

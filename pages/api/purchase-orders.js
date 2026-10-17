@@ -21,6 +21,8 @@ import { LINKS_KEY, CONTACTS_KEY } from '../../lib/suppliers'
 import { listDocs } from '../../lib/documentsStore'
 import { DEFAULT_PO_EMAIL, poEmailValues, fillPoEmail } from '../../lib/poShared'
 import { sendPurchaseOrder } from '../../lib/poSend'
+import { decidePo } from '../../lib/poApprove'
+import { findProjectCM } from '../../lib/ramsNotify'
 import { newId, esc, money, cleanLines, EMAIL, deliveryHtml, xeroContacts, linkedSuppliers, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { privateReady, shortLink } from '../../lib/privateFiles'
 import { summaryOf, listPos, loadPo, savePo, deletePo, takeNumber, loadPoSettings, savePoSettings, poTotal, lineTotal, poVat, poGross, poVatRate, createPoToken, deliveryRowFor } from '../../lib/purchaseOrders'
@@ -30,6 +32,11 @@ const linkFor = (po) => `${baseUrl()}/po?token=${encodeURIComponent(createPoToke
 
 
 
+// the project's CM, as the Site App and the RAMS notifications find them
+async function projectCmOf(po) {
+  try { const p = ((await get('ops:projects')) || []).find(x => String(x.projectNo).toLowerCase() === String(po.jobNo || '').toLowerCase()); return p ? await findProjectCM(p) : null } catch { return null }
+}
+
 async function handler(req, res) {
   const session = requireArea(req, res, 'purchasing'); if (!session) return
   const by = session.name || session.email || ''
@@ -37,7 +44,8 @@ async function handler(req, res) {
     if (req.query.id) {
       const po = await loadPo(String(req.query.id))
       if (!po) return res.status(404).json({ error: 'That purchase order no longer exists' })
-      return res.status(200).json({ po, link: linkFor(po) })
+      const cm = po.status === 'awaiting-approval' ? await projectCmOf(po) : null
+      return res.status(200).json({ po, link: linkFor(po), cmName: cm ? [cm.firstName, cm.lastName].filter(Boolean).join(' ') || cm.name || '' : '' })
     }
     // THE PROJECT'S ADDRESS from Project Details - the commercial override, else the IHM (1200)
     if (req.query.project) {
@@ -79,7 +87,7 @@ async function handler(req, res) {
     const fields = buildFields(src, sup, lines)
     const raising = !toDraft && b.action !== 'update'   // create (not a draft) or raise a draft
     const existing = b.action === 'update' ? await loadPo(String(b.id)) : null
-    const strict = raising || (b.action === 'update' && existing && existing.status === 'approved')   // an approved PO stays complete when changed
+    const strict = raising || (b.action === 'update' && existing && (existing.status === 'approved' || existing.status === 'awaiting-approval'))   // an approved or waiting PO stays complete when changed
     if (strict) { const why = await completeProblem(fields, sup, lines); if (why) return res.status(400).json({ error: why }) }
     if (fields.confirmationsTo && !EMAIL.test(fields.confirmationsTo)) return res.status(400).json({ error: 'The order confirmations address is not a valid email address' })
     if (fields.to && !EMAIL.test(fields.to)) return res.status(400).json({ error: 'The supplier email address is not valid' })
@@ -107,7 +115,7 @@ async function handler(req, res) {
       await savePo(next); await setDelivery(next)
       return res.status(200).json({ ok: true, po: next })
     }
-    if (po.status !== 'approved' && po.status !== 'draft') return res.status(409).json({ error: `${po.number} has been ${po.status} - it can no longer be changed` })
+    if (po.status !== 'approved' && po.status !== 'draft' && po.status !== 'awaiting-approval') return res.status(409).json({ error: `${po.number} has been ${po.status} - it can no longer be changed` })
     if (po.status === 'draft') {
       // saving a draft again - still incomplete if need be
       const next = { ...po, ...fields, history: [...(po.history || []), { at: now, by, what: 'Draft saved' }] }
@@ -115,11 +123,21 @@ async function handler(req, res) {
       return res.status(200).json({ ok: true, po: next })
     }
     const next = { ...po, ...fields, history: [...(po.history || []), { at: now, by, what: 'Changed' }] }
-    await savePo(next); await setDelivery(next)
+    await savePo(next); if (next.status === 'approved') await setDelivery(next)
     return res.status(200).json({ ok: true, po: next })
   }
   const po = await loadPo(String(b.id || ''))
   if (!po) return res.status(404).json({ error: 'That purchase order no longer exists' })
+  // COVER FOR THE CM (1216) - any portal user with Purchasing can approve (and send)
+  // or reject a PO raised in the Site App, e.g. when the CM is away. The same decision
+  // as the CM's (lib/poApprove); the history says who and where; the CM is told.
+  if (b.action === 'approve' || b.action === 'reject') {
+    const cm = await projectCmOf(po)
+    const r = await decidePo(po, { action: b.action, by, where: ` by ${by} in the portal`, reason: b.reason, send: false, replyFallback: session.email,
+      cm: cm && cm.email && String(cm.email).toLowerCase() !== String(session.email || '').toLowerCase() ? { email: cm.email, firstName: cm.firstName || '' } : null })
+    if (r.error) return res.status(r.status || 400).json({ error: r.error })
+    return res.status(200).json({ ok: true, ...r })
+  }
   if (b.action === 'discard') {
     if (po.status !== 'draft') return res.status(409).json({ error: 'Only a draft can be deleted - cancel a raised PO instead' })
     await deletePo(po.id)

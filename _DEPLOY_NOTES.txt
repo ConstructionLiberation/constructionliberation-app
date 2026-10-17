@@ -1,41 +1,39 @@
-PACKAGE 1215 - Site App: the CM sends purchase orders to the supplier
+PACKAGE 1216 - Purchase orders: any portal user can approve when the CM is away
 
-Five files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1214.
+Four files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1215.
 
-  lib/poSend.js                         (NEW)
+  lib/poApprove.js                         (NEW)
   pages/api/purchase-orders.js
   pages/api/site-po.js
-  pages/forms/purchase-orders.js
-  pages/forms/cm/po-approvals.js
+  pages/operations/purchasing/po/[id].js   (folder literally named [id])
 
-WHY YOUR PO WAS NOT SENT: approving in the Site App only marked it approved -
-sending was left to the office (the portal), and the Site App had no Send
-button. Now the CM sends from the Site App:
-  - a waiting PO: "APPROVE AND SEND" (approved, numbered and emailed to the
-    supplier at once), "Approve only" (left for the office), or Reject
-  - an approved PO not yet sent (like PO-0002): "SEND TO SUPPLIER" (asks to
-    confirm, showing the address)
-The CM's email is the SAME as the office's - one shared sender now (lib/
-poSend.js): the company template, the PO with delivery details, lines, VAT
-and totals, its attachments, the view / print link, reply-to the order
-confirmations address. If there is no supplier email, the PO is still
-approved and the screen says why it could not be sent.
-THE HEADING now shows the supplier's name (the price-list name where there is
-one), with "Xero contact: ..." and "Sent to: <address>" beneath. Your PO-0002
-showed "sales@fixfast.com" as its heading because that is the NAME of the Xero
-contact Fixfast is linked to - worth checking that contact in Xero (Dext
-sometimes creates contacts named after an email) and renaming or merging it.
+COVER FOR THE CM. Any portal user who can open Purchasing > Purchase Orders -
+that is every role (pre-contract, post-contract, accounts, management, admin) -
+can decide a PO raised in the Site App. Open it (filter: Awaiting approval):
+  "Raised in the Site App by Dave Kerr - waiting for Will Reid. If they are
+   away, you can check it (and change it) here, then approve or reject it."
+  - change it first if needed (the same full check)
+  - "Approve and send..." - approved and numbered, then the send box opens
+  - "Approve only" - approved, sent later
+  - "Reject..." - asks why
+The PO's history records who and where ("Approved by Mike Fleming in the
+portal"); the operative is told, and so is the CM ("PO approved for you"), so
+they know what was decided while they were away. The CM can still decide in
+the Site App exactly as before.
+ONE COPY of the decision (approve / approve and send / reject) for the Site
+App and the portal - lib/poApprove.js. Proved unchanged for the Site App:
+its four test runs identical before and after. (The move briefly broke
+rejection - a parameter and a variable with the same name, which compiles and
+fails when run; the before/after comparison caught it and it is fixed.)
 
-Checked through the real route: approve and send -> sent, the supplier's
-email complete (message, PO, delivery, line, VAT and total, link, reply-to the
-confirmations address), the operative told; approve only -> approved, then
-Send -> sent, a second send refused; someone other than the CM refused; no
-supplier email -> approved, with the reason. The office's sending proved
-unchanged (template, attachments, sending after approval and the supplier
-email tests identical before and after). In a REAL browser (Chromium, phone
-size): Edit / Approve and send / Approve only / Reject; "approved and sent to
-hire@hss.com"; the approved PO's heading (Fixfast, its Xero contact, sent-to
-address) and "Send to supplier". All server routes compile; all pages pass the
-browser check. Built from your deployed packages (1022-1214, verified against
+Checked through the real routes: the page names the CM; Mike's edit kept it
+waiting and out of Deliveries; Mike's approval -> APP-PO-0001, into
+Deliveries, history "Approved by Mike Fleming in the portal", Dave and Will
+emailed, then sent; deciding twice refused; a rejection needs a reason,
+recorded, both told; Will approving in the Site App as before (only Dave
+told). In a REAL browser (Chromium): the banner naming Will Reid and its three
+buttons; Approve and send -> approved (no needless save) and the send box
+open; Reject asking why. All server routes compile; all pages pass the
+browser check. Built from your deployed packages (1022-1215, verified against
 their zips).

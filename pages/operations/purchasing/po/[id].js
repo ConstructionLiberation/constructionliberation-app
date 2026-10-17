@@ -24,6 +24,8 @@ export default function PoPage() {
   const isNew = id === 'new'
   const [po, setPo] = useState(null)
   const [link, setLink] = useState('')
+  const [cmName, setCmName] = useState('')   // the project's CM, for a PO waiting for them (1216)
+  const [loaded, setLoaded] = useState('')   // the PO as loaded - to save before approving only if changed
   const [list, setList] = useState(null)          // { suppliers }
   const [projects, setProjects] = useState(null)
   const [products, setProducts] = useState([])
@@ -40,12 +42,12 @@ export default function PoPage() {
       setProjects((d.projects || []).filter(p => p.xeroId && !hidden.has(String(p.xeroId))).map(p => ({ id: String(p.xeroId), jobNo: p.jobNo || '', name: p.name || p.projectName || '' })).sort((a, b) => String(b.jobNo).localeCompare(String(a.jobNo), undefined, { numeric: true })))
     })
     if (isNew) setPo({ ...blank })
-    else call(null, `?id=${encodeURIComponent(id)}`).then(d => { setPo(d.po); setLink(d.link) }).catch(e => setErr(e.message))
+    else call(null, `?id=${encodeURIComponent(id)}`).then(d => { setPo(d.po); setLink(d.link); setCmName(d.cmName || ''); setLoaded(JSON.stringify(d.po)) }).catch(e => setErr(e.message))
   }, [id])
   // the products come from the price-list supplier the chosen Xero contact is linked to (1203)
   const priceList = po ? (po.priceList !== undefined ? po.priceList : po.supplier) : ''
   useEffect(() => { if (priceList) call(null, `?products=${encodeURIComponent(priceList)}`).then(d => setProducts(d.products)).catch(() => setProducts([])); else setProducts([]) }, [priceList])
-  const editable = po && (isNew || po.status === 'approved' || po.status === 'draft')
+  const editable = po && (isNew || po.status === 'approved' || po.status === 'draft' || po.status === 'awaiting-approval')
   const isDraft = po && (isNew || po.status === 'draft')
   // WHAT STOPS IT BEING RAISED (1201) - every line needs a quantity
   const missing = po ? [
@@ -90,6 +92,20 @@ export default function PoPage() {
       setMsg(`The default for order confirmations is now ${d.settings.confirmationsTo || 'blank'}.`)
     } catch (e) { setErr(e.message) }
   }
+  // approve (and then send) or reject a PO waiting for the CM - saving any changes first
+  async function decide(action, thenSend) {
+    let reason = ''
+    if (action === 'reject') { reason = window.prompt('Why is it rejected? (the operative is told)') || ''; if (!reason.trim()) return }
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      if (action === 'approve' && JSON.stringify(po) !== loaded) await call({ action: 'update', id: po.id, po })
+      const d = await call({ action, id: po.id, reason })
+      setPo(d.po); setCmName('')
+      if (action === 'reject') setMsg('Rejected - the operative has been told.')
+      else { setMsg(`Approved as ${d.po.number}.`); if (thenSend) setSending(true) }
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
   async function discard() {
     if (!window.confirm('Delete this draft purchase order?')) return
     setBusy(true); setErr(''); try { await call({ action: 'discard', id: po.id }); router.replace('/operations/purchasing/purchase-orders') } catch (e) { setErr(e.message); setBusy(false) }
@@ -115,7 +131,14 @@ export default function PoPage() {
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {msg && <div style={{ color: '#0f766e', fontSize: 13, marginBottom: 8 }}>{msg}</div>}
       {po.status === 'sent' && <div style={{ ...card, background: '#f0fdfa', borderColor: '#99f6e4', fontSize: 13 }}>Sent to {po.sentTo} on {new Date(po.sentAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} - it stands as sent. Cancel it and raise a new one to change it.</div>}
-      {po.status === 'awaiting-approval' && <div style={{ ...card, background: '#f5f3ff', borderColor: '#ddd6fe', fontSize: 13 }}>Raised in the Site App by {po.raisedBy} - awaiting the project's Contracts Manager. It is numbered and can be sent once approved.</div>}
+      {/* COVER FOR THE CM (1216) - anyone here can decide a PO raised in the Site App */}
+      {po.status === 'awaiting-approval' && <div style={{ ...card, background: '#f5f3ff', borderColor: '#ddd6fe', fontSize: 13 }}>
+        <div>Raised in the Site App by <strong>{po.raisedBy}</strong> - waiting for {cmName ? <strong>{cmName}</strong> : 'the project\'s Contracts Manager'}. If they are away, you can check it (and change it) here, then approve or reject it; {cmName ? cmName.split(' ')[0] : 'the CM'} is told.</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <button onClick={() => decide('approve', true)} disabled={busy || missing.length > 0} style={{ ...primary, opacity: missing.length ? 0.5 : 1 }}>Approve and send…</button>
+          <button onClick={() => decide('approve', false)} disabled={busy || missing.length > 0} style={btn}>Approve only</button>
+          <button onClick={() => decide('reject')} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Reject…</button>
+        </div></div>}
       {po.status === 'rejected' && <div style={{ ...card, background: '#fef2f2', borderColor: '#fecaca', fontSize: 13 }}>Rejected by {po.rejectedBy}{po.rejectReason ? ` - ${po.rejectReason}` : ''}.</div>}
       {po.status === 'cancelled' && <div style={{ ...card, background: '#f6f6f4', fontSize: 13 }}>Cancelled {po.cancelledBy ? `by ${po.cancelledBy}` : ''}{po.cancelReason ? ` - ${po.cancelReason}` : ''}.</div>}
       <fieldset disabled={!editable} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
