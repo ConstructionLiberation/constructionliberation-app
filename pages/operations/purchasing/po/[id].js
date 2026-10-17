@@ -103,6 +103,12 @@ export default function PoPage() {
     } catch (e) { setErr(e.message) }
     setBusy(false)
   }
+  async function billing(action) {
+    if (action === 'close' && !window.confirm(`Mark ${po.number} as fully billed? It will no longer count as committed on the project.`)) return
+    setBusy(true); setErr(''); setMsg('')
+    try { const d = await call({ action, id: po.id }); setPo(d.po); setMsg(action === 'close' ? 'Marked as fully billed.' : 'Reopened - it counts as committed again.'); call().then(setList).catch(() => {}) } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
   async function discard() {
     // a draft, or (management / admin) a cancelled or rejected PO (1219)
     const dead = po.status === 'cancelled' || po.status === 'rejected'
@@ -125,6 +131,9 @@ export default function PoPage() {
         <span style={{ flex: 1 }} />
         {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(link); setMsg('The supplier\'s link is copied.') }} style={btn}>Copy supplier link</button>}
         {!isNew && ['approved', 'sent'].includes(po.status) && <button onClick={() => setSending(true)} disabled={busy} style={primary}>{po.status === 'sent' ? 'Send again' : 'Send to supplier'}</button>}
+        {/* billed in full without quoting the PO number - stop counting it as committed (1221) */}
+        {!isNew && (po.status === 'approved' || po.status === 'sent') && <button onClick={() => billing('close')} disabled={busy} style={btn} title="The supplier's bill did not quote the PO number - close it so it no longer counts as committed">Mark as fully billed</button>}
+        {!isNew && po.status === 'closed' && <button onClick={() => billing('reopen')} disabled={busy} style={btn}>Reopen</button>}
         {/* delete a cancelled or rejected PO - management / admin (1219) */}
         {!isNew && (po.status === 'cancelled' || po.status === 'rejected') && list && list.canRelink && <button onClick={discard} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Delete</button>}
         {!isNew && ['approved', 'sent', 'awaiting-approval'].includes(po.status) && <button onClick={cancel} disabled={busy} style={{ ...btn, color: '#b42318', borderColor: '#f5c2c2' }}>Cancel PO</button>}
@@ -132,6 +141,11 @@ export default function PoPage() {
       {err && <div style={{ color: '#b42318', fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {msg && <div style={{ color: '#0f766e', fontSize: 13, marginBottom: 8 }}>{msg}</div>}
       {po.status === 'sent' && <div style={{ ...card, background: '#f0fdfa', borderColor: '#99f6e4', fontSize: 13 }}>Sent to {po.sentTo} on {new Date(po.sentAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} - it stands as sent. Cancel it and raise a new one to change it.</div>}
+      {/* BILLED / COMMITTED (1221) */}
+      {(() => { const e = !isNew && list && (list.pos || []).find(x => x.id === po.id); return e && e.committed != null ? <div style={{ ...card, fontSize: 13, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+        <span>Billed so far: <strong>{money(e.billed || 0)}</strong> <span style={{ color: '#999' }}>(supplier bills in Xero quoting {po.number})</span></span>
+        <span>Still committed: <strong style={{ color: e.committed > 0 ? '#7c3aed' : '#16a34a' }}>{money(e.committed)}</strong> ex VAT</span>
+        {po.status === 'closed' && <span style={{ color: '#475569' }}>Closed as fully billed{po.closedBy ? ` by ${po.closedBy}` : ''}</span>}</div> : null })()}
       {/* COVER FOR THE CM (1216) - anyone here can decide a PO raised in the Site App */}
       {po.status === 'awaiting-approval' && <div style={{ ...card, background: '#f5f3ff', borderColor: '#ddd6fe', fontSize: 13 }}>
         <div>Raised in the Site App by <strong>{po.raisedBy}</strong> - waiting for {cmName ? <strong>{cmName}</strong> : 'the project\'s Contracts Manager'}. If they are away, you can check it (and change it) here, then approve or reject it; {cmName ? cmName.split(' ')[0] : 'the CM'} is told.</div>

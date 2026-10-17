@@ -17,12 +17,14 @@ export default function PurchaseOrdersPage() {
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
   const [show, setShow] = useState('open')    // open | draft | sent | cancelled | all
+  const [proj, setProj] = useState('')        // one project's POs and committed total (1221)
   const [numbering, setNumbering] = useState(false)
   const load = () => call().then(setData).catch(e => setErr(e.message))
   useEffect(() => { load() }, [])
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const shown = useMemo(() => (data ? data.pos : []).filter(p => show === 'all' || (show === 'open' ? p.status === 'approved' : p.status === show))
-    .filter(p => words.every(w => `${p.number || 'draft'} ${p.jobNo} ${p.projectName} ${p.supplier} ${p.raisedBy}`.toLowerCase().includes(w))), [data, q, show])
+  const shown = useMemo(() => (data ? data.pos : []).filter(p => !proj || String(p.projectId) === proj).filter(p => show === 'all' || (show === 'open' ? p.status === 'approved' : p.status === show))
+    .filter(p => words.every(w => `${p.number || 'draft'} ${p.jobNo} ${p.projectName} ${p.supplier} ${p.raisedBy}`.toLowerCase().includes(w))), [data, q, show, proj])
+  const projCommitted = proj && data ? data.pos.filter(p => String(p.projectId) === proj).reduce((a, p) => a + (Number(p.committed) || 0), 0) : 0
   const count = (st) => (data ? data.pos : []).filter(p => st === 'all' || (st === 'open' ? p.status === 'approved' : p.status === st)).length
   async function gapAction(action, key) {
     try { const r = await fetch('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, key }) }).then(x => x.json()); if (r.error) throw new Error(r.error); window.location.reload() }
@@ -53,8 +55,12 @@ export default function PurchaseOrdersPage() {
       {data && data.canRelink && data.gapsDismissed > 0 && <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>{data.gapsDismissed} project{data.gapsDismissed === 1 ? '' : 's'} hidden from the "not set up in Xero" notice - <button onClick={() => gapAction('restore-gaps')} style={{ border: 'none', background: 'none', color: '#0f766e', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 12 }}>show again</button></div>}
       {data && !(data.contacts || []).length && <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>Read your contacts from Xero first - <a href="/operations/purchasing/suppliers" style={{ color: '#0f766e' }}>Purchasing &gt; Suppliers</a> &gt; Refresh from Xero. Any Xero contact can then be a PO's supplier.</div>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        {[['open', 'Not sent'], ['awaiting-approval', 'Awaiting approval'], ['draft', 'Drafts'], ['sent', 'Sent'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) =>
+        {[['open', 'Not sent'], ['awaiting-approval', 'Awaiting approval'], ['draft', 'Drafts'], ['sent', 'Sent'], ['closed', 'Billed - closed'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) =>
           <button key={k} onClick={() => setShow(k)} style={{ ...btn, background: show === k ? '#0f766e' : '#fff', color: show === k ? '#fff' : '#333', borderColor: show === k ? '#0f766e' : '#d4d4d0' }}>{l} ({count(k)})</button>)}
+        <select value={proj} onChange={e => setProj(e.target.value)} style={{ fontSize: 13, padding: '6px 8px', border: '1px solid #d4d4d0', borderRadius: 8, fontFamily: 'inherit', maxWidth: 260 }}>
+          <option value="">All projects</option>{((data && data.projects) || []).map(p => <option key={p.projectId} value={p.projectId}>{p.jobNo} {p.name}</option>)}
+        </select>
+        {proj && <span style={{ fontSize: 13, color: '#334155' }}>Committed on this project: <strong>{money(projCommitted)}</strong> ex VAT</span>}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search number, project, supplier…" style={{ fontSize: 13, padding: '6px 10px', border: '1px solid #d4d4d0', borderRadius: 7, minWidth: 260 }} />
         <span style={{ flex: 1 }} />
         {data && data.canSettings && <button onClick={() => setNumbering(true)} style={btn}>PO settings…</button>}
@@ -63,13 +69,14 @@ export default function PurchaseOrdersPage() {
       <div style={{ background: '#fff', border: '1px solid #e8e7e3', borderRadius: 12, overflow: 'auto' }}>
         {!data ? <div style={{ padding: 14, color: '#aaa' }}>Loading…</div> : !shown.length ? <div style={{ padding: 14, color: '#aaa', fontSize: 13 }}>{data.pos.length ? 'Nothing here.' : 'No purchase orders yet.'}</div> : (
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead><tr>{['PO', 'Project', 'Supplier', 'Total (inc VAT)', 'Delivery required', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['PO', 'Project', 'Supplier', 'Total (inc VAT)', 'Committed', 'Delivery required', 'Status', 'Raised'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
             <tbody>{shown.map(p => (
               <tr key={p.id} onClick={() => { window.location.href = `/operations/purchasing/po/${p.id}` }} style={{ cursor: 'pointer' }}>
                 <td style={{ ...td, fontWeight: 700 }}>{p.number || <span style={{ color: '#64748b', fontWeight: 600 }}>{p.status === 'draft' ? 'Draft' : 'Not yet numbered'}</span>}</td>
                 <td style={td}><strong>{p.jobNo}</strong> {p.projectName}</td>
                 <td style={td}>{p.supplier}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{money(p.gross != null ? p.gross : p.total)}<div style={{ fontSize: 11, color: '#999' }}>{money(p.total)} ex VAT</div></td>
+                <td style={{ ...td, textAlign: 'right' }}>{p.committed != null ? <>{money(p.committed)}<div style={{ fontSize: 11, color: '#999' }}>{money(p.billed || 0)} billed</div></> : <span style={{ color: '#ccc' }}>-</span>}</td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>{day(p.deliveryDate)}</td>
                 <td style={{ ...td, color: (STATUS[p.status] || [])[1], fontWeight: 600, whiteSpace: 'nowrap' }}>{(STATUS[p.status] || [p.status])[0]}</td>
                 <td style={{ ...td, color: '#888', fontSize: 12, whiteSpace: 'nowrap' }}>{day(p.raisedAt)} · {p.raisedBy}</td>

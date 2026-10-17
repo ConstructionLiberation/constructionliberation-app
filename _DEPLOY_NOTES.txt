@@ -1,55 +1,48 @@
-PACKAGE 1220 - Securing the Site App's routes
+PACKAGE 1221 - Committed costs per project (open POs not yet billed)
 
-Eight files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1219.
+Seven files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1220.
 
-  lib/internalKey.js                    (NEW)
-  lib/withTenant.js
-  middleware.js
-  pages/forms/index.js
-  lib/outstandingInvoicesReport.js, lib/designRfiNotify.js,
-  pages/api/design-rfis.js, pages/api/cron/gp-snapshot.js
+  lib/poCommitted.js                       (NEW)
+  lib/poShared.js, lib/xero.js
+  pages/api/purchase-orders.js
+  pages/operations/purchasing/purchase-orders.js
+  pages/operations/purchasing/po/[id].js   (folder literally named [id])
+  pages/project/[id].js                    (folder literally named [id])
 
-1. THE SITE APP'S ROUTES NOW CHECK WHO IS ASKING. On the Site App address, 37
-   API routes were let through and most checked nothing but the company -
-   deliveries, issues, reports, tasks, projects, the dashboard's financials...
-   Now a call must come from a signed-in Site App user (the token from the PIN
-   sign-in), a signed-in portal user of THAT company, or the server itself.
-   Left open, as on the main address: sign-in, Site App POs (their own check),
-   the public RAMS approval page, downloads, scheduled jobs (cron secret), and
-   Vercel Blob's signed upload callback. The check is one function, called
-   whether multi-tenancy is switched on or off - placed first so an early
-   return cannot skip it.
-2. EVERY SITE APP SCREEN SENDS THE TOKEN - added once, in the file every Site
-   App page loads, not screen by screen. An operative signed in before 1211
-   (no token) is sent to the sign-in screen once, instead of screens failing.
-3. SCHEDULED JOBS WERE OPEN ON THE SITE APP ADDRESS. The main address demanded
-   the cron secret; the Site App address let /api/cron straight through, so
-   any job (Xero sync, reports, reminder emails) could be run by anyone through
-   it. Now one cron check for both addresses. (Confirmed against the previous
-   middleware: "let through" before, refused now.)
-4. THE SERVER'S OWN CALLS WERE BEING REFUSED. The outstanding-invoices report
-   and the GP snapshot fetch /api/dashboard, and the design RFI notices fetch
-   /api/planning, over HTTP with no login - so on the main address they got a
-   401. They now send a private internal key (derived from the session secret,
-   never sent to a browser), which both addresses accept. Those reports and
-   notices should start working again. (Confirmed: the previous middleware
-   refused the internal call; this one lets it through.)
+COMMITTED = what has been ordered on a project but not yet billed: each
+approved / sent purchase order's value ex VAT, less the supplier bills that
+have come in against it, never below zero.
+BILLS ARE MATCHED TO POs BY THE PO NUMBER - a bill on the same project, from
+the same Xero supplier, quoting the number in its reference, its bill number
+or a line description ("APP-PO-0002", "APP PO 0002", "PO-0002" all match; a
+longer number such as PO-00021 does not). To do this the project cost lines
+now also keep each bill's reference, number and Xero contact - they fill in at
+the next cost sync; nothing else about the costs changes.
+"MARK AS FULLY BILLED" on a PO - for a bill that did not quote the PO number:
+the PO is closed ("Billed - closed") and no longer counts as committed;
+"Reopen" puts it back. A closed PO cannot be sent or changed.
+WHERE YOU SEE IT:
+  - Purchase Orders list: a "Committed" column (still committed, billed
+    beneath); pick a project to see "Committed on this project"; a "Billed -
+    closed" filter
+  - a PO: "Billed so far" and "Still committed"
+  - the project page: a "Committed (open POs)" card beside Total Spent
+When Vinay confirms which Xero field Dext puts the PO number in, matching can be
+narrowed to that field; until then reference, number and description are all
+searched.
 
-AFTER DEPLOYING: operatives may be asked to sign in once more. Check that the
-Site App screens load, and (next weekly run) that the outstanding-invoices
-report and design RFI notices arrive.
+AFTER DEPLOYING: the next cost sync fills in the bill references - until then
+bills already in Xero show as "not yet billed" against their POs.
 
-Checked through the REAL company wrapper - multi-tenancy off AND on: a Site
-App route refused with nothing, allowed with a token, refused with a tampered
-one; allowed with a portal login of the same company; Rock's token and Rock's
-portal login REFUSED on another company's Site App address; the internal key
-accepted, a wrong key refused; the open routes untouched; the Blob callback
-allowed; the main address untouched. The REAL middleware (Next 14.2.29): cron
-on the Site App address refused without the secret, allowed with it or with
-Vercel's header; ordinary Site App routes passed to the wrapper; the internal
-key accepted on the main address, a wrong one refused. In a REAL browser
-(Chromium, phone size): every call from the Site App home carried the token;
-a call refused as signed out sent the operative to sign in. All server routes
-and the middleware compile; all pages pass the browser check. Built from your
-deployed packages (1022-1219, verified against their zips).
+Checked through the real route: on one project, a sent PO (285) with a bill
+quoting only "PO-0001" (200) -> 85 committed; an approved PO (1000) with a bill
+"APP-PO-0002 part" (400) -> 600; an approved PO (500) -> 500; total 1185 - the
+unrelated bill, a cancelled PO and a draft left out; another project's PO on
+its own; Mark as fully billed -> 685, a closed PO refused for sending, Reopen
+-> 1185; closing a draft refused. The matching rule checked on its own: the
+number's forms, no match on a longer number or another supplier, closed = 0,
+over-billing not negative. In a REAL browser (Chromium): the Committed column
+and the project total; the PO's billed / committed line, Mark as fully billed
+and Reopen. All server routes compile; all pages pass the browser check. Built
+from your deployed packages (1022-1220, verified against their zips).

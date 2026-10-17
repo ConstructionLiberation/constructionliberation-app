@@ -23,6 +23,7 @@ import { DEFAULT_PO_EMAIL, poEmailValues, fillPoEmail } from '../../lib/poShared
 import { sendPurchaseOrder } from '../../lib/poSend'
 import { decidePo } from '../../lib/poApprove'
 import { xeroPoProjects, xeroById, xeroMatch, projectGaps, GAPS_DISMISSED } from '../../lib/poProjects'
+import { committedFor, committedOf } from '../../lib/poCommitted'
 import { findProjectCM } from '../../lib/ramsNotify'
 import { newId, esc, money, cleanLines, EMAIL, deliveryHtml, xeroContacts, linkedSuppliers, setDelivery, sitePeople, supplierProducts, resolveSupplier, buildFields, completeProblem } from '../../lib/poData'
 import { privateReady, shortLink } from '../../lib/privateFiles'
@@ -60,6 +61,8 @@ async function handler(req, res) {
       return res.status(200).json({ projectAddress })
     }
     // SITE CONTACTS - every active operative (Site App users) and portal user, with mobile (1200)
+    // COMMITTED COSTS for a project (1221) - its open POs less what has been billed
+    if (req.query.committed) return res.status(200).json(await committedFor(String(req.query.committed)))
     if (req.query.people) {
       return res.status(200).json({ people: await sitePeople() })
     }
@@ -67,7 +70,18 @@ async function handler(req, res) {
       return res.status(200).json({ products: await supplierProducts(String(req.query.products)) })
     }
     // POs listed before VAT (1204) carry no VAT figures - worked out from the PO itself
-    const pos = await Promise.all((await listPos()).map(async p => p.gross != null ? p : summaryOf((await loadPo(p.id)) || p)))
+    const pos0 = await Promise.all((await listPos()).map(async p => p.gross != null ? p : summaryOf((await loadPo(p.id)) || p)))
+    // billed and still committed on each approved / sent / closed PO (1221) - one read of
+    // each project's cost lines
+    const linesOf = {}, pos = []
+    for (const p of pos0) {
+      if (!['approved', 'sent', 'closed'].includes(p.status)) { pos.push(p); continue }
+      const pid = String(p.projectId || '')
+      if (!(pid in linesOf)) linesOf[pid] = (await get(`costs:lines:${pid}`).catch(() => null)) || []
+      const full = await loadPo(p.id)
+      const c = full ? committedOf(full, linesOf[pid]) : null
+      pos.push(c ? { ...p, billed: c.billed, committed: c.committed } : p)
+    }
     // THE PROJECTS - Xero's, the same lookup as the Site App (1217); and what needs fixing
     const xp = await xeroPoProjects()
     const unlinked = pos.filter(p => p.status !== 'cancelled' && !xeroById(xp, p.projectId)).length
@@ -168,6 +182,20 @@ async function handler(req, res) {
       cm: cm && cm.email && String(cm.email).toLowerCase() !== String(session.email || '').toLowerCase() ? { email: cm.email, firstName: cm.firstName || '' } : null })
     if (r.error) return res.status(r.status || 400).json({ error: r.error })
     return res.status(200).json({ ok: true, ...r })
+  }
+  // MARK AS FULLY BILLED (1221) - for a PO whose bill did not quote its number, so it
+  // stops counting as committed; REOPEN puts it back
+  if (b.action === 'close') {
+    if (po.status !== 'approved' && po.status !== 'sent') return res.status(409).json({ error: 'Only an approved or sent purchase order can be marked as billed' })
+    const now = new Date().toISOString()
+    const next = { ...po, status: 'closed', closedFrom: po.status, closedBy: by, closedAt: now, history: [...(po.history || []), { at: now, by, what: 'Marked as fully billed' }] }
+    await savePo(next); return res.status(200).json({ ok: true, po: next })
+  }
+  if (b.action === 'reopen') {
+    if (po.status !== 'closed') return res.status(409).json({ error: 'It is not closed' })
+    const now = new Date().toISOString()
+    const next = { ...po, status: po.closedFrom || 'sent', closedFrom: null, history: [...(po.history || []), { at: now, by, what: 'Reopened - still to be billed' }] }
+    await savePo(next); return res.status(200).json({ ok: true, po: next })
   }
   if (b.action === 'discard') {
     // DELETING (1219): a draft - anyone; a CANCELLED or REJECTED PO - management / admin;

@@ -135,6 +135,9 @@ export default function ProjectPage() {
   const { id } = router.query
   const [project, setProject] = useState(null)
   const [settings, setSettings] = useState(null)
+  // COMMITTED COSTS - open purchase orders less what has been billed (1221)
+  const [committed, setCommitted] = useState(null)
+  useEffect(() => { if (id) fetch(`/api/purchase-orders?committed=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).then(d => setCommitted(d)).catch(() => setCommitted(null)) }, [id])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState('overview')
@@ -382,11 +385,12 @@ export default function ProjectPage() {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 12, marginBottom: 20 }}>
             {[
               { label: 'AFA', value: fmt(atDate.afa), sub: atDate.afaSource ? `${atDate.afaSource} · CV: ${fmt(parseFloat(settings?.contractValue || 0))}` : `CV: ${fmt(parseFloat(settings?.contractValue || 0))}` },
               { label: 'Application total inc. retention', value: fmt(atDate.appliedForGross), sub: atDate.afa > 0 ? `${((atDate.appliedForGross / atDate.afa) * 100).toFixed(0)}% of AFA` : `as at ${vDateLabel}` },
               { label: 'Total Spent', value: fmt(live.costsToDate), sub: live.totalBudget > 0 ? `${((live.costsToDate / live.totalBudget) * 100).toFixed(0)}% of budget` : `as at ${vDateLabel}` },
+              { label: 'Committed (open POs)', value: committed ? fmt(committed.committed) : '\u2014', sub: committed ? (committed.pos.length ? `${committed.open} open PO${committed.open === 1 ? '' : 's'} · ${fmt(committed.billed)} billed` : 'no purchase orders yet') : 'purchase orders', color: committed && committed.committed > 0 ? '#7c3aed' : undefined },
               { label: 'Total Budget', value: fmt(live.totalBudget), sub: live.totalBudget > 0 ? `${((live.costsToDate / live.totalBudget) * 100).toFixed(0)}% used` : '⚠ Set budget' },
               { label: 'Current Margin', value: atDate.margin != null ? (atDate.margin * 100).toFixed(1) + '%' : '—', sub: `as at ${vDateLabel}`, color: marginColor(atDate.margin), bg: marginBg(atDate.margin), showKey: true },
               { label: 'Remaining to apply for', value: fmt(atDate.remainingToApply), sub: 'gross, AFA less applied for', color: atDate.remainingToApply > 0 ? '#2563eb' : '#e63946' },
