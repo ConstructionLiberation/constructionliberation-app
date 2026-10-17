@@ -23,7 +23,7 @@ import { DEFAULT_PO_EMAIL, poEmailValues, fillPoEmail } from '../../lib/poShared
 import { sendPurchaseOrder } from '../../lib/poSend'
 import { decidePo } from '../../lib/poApprove'
 import { xeroPoProjects, xeroById, xeroMatch, projectGaps, GAPS_DISMISSED, projectAddressFor } from '../../lib/poProjects'
-import { committedFor, committedOf } from '../../lib/poCommitted'
+import { committedFor, committedOf, billLinks } from '../../lib/poCommitted'
 import { buildPoPDF } from '../../lib/poPdf'
 import { pdfLogoUrl } from '../../lib/pdfBrand'
 import { loadCompany, publicCompany } from '../../lib/companyDetails'
@@ -84,12 +84,13 @@ async function handler(req, res) {
     // billed and still committed on each approved / sent / closed PO (1221) - one read of
     // each project's cost lines
     const linesOf = {}, pos = []
+    const links = await billLinks()   // bills linked to a PO by hand (1240)
     for (const p of pos0) {
       if (!['approved', 'sent', 'closed'].includes(p.status)) { pos.push(p); continue }
       const pid = String(p.projectId || '')
       if (!(pid in linesOf)) linesOf[pid] = (await get(`costs:lines:${pid}`).catch(() => null)) || []
       const full = await loadPo(p.id)
-      const c = full ? committedOf(full, linesOf[pid]) : null
+      const c = full ? committedOf(full, linesOf[pid], links) : null
       pos.push(c ? { ...p, billed: c.billed, committed: c.committed } : p)
     }
     // THE PROJECTS - Xero's, the same lookup as the Site App (1217); and what needs fixing
