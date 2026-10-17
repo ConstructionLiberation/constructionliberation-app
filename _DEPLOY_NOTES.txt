@@ -1,58 +1,38 @@
-PACKAGE 1211 - Purchasing, stage 2b-1: operatives' POs and the CM's approval
-(the server side); the Site App sign-in proved on the server
+PACKAGE 1212 - Purchasing, stage 2b-2: purchase orders in the Site App
 
-Fourteen files. Complete replacements (three NEW). No re-seed. No env changes.
-Built on 1210.
+Four files. Complete replacements (three NEW). No re-seed. No env changes.
+Built on 1211 - deploy 1211 first (the sign-in token these screens use).
 
-  lib/opsToken.js                                  (NEW)
-  lib/poData.js                                    (NEW)
-  pages/api/site-po.js                             (NEW)
-  lib/purchaseOrders.js, lib/poShared.js, lib/ramsNotify.js
-  pages/api/purchase-orders.js, pages/api/po-view.js, pages/api/ops-users.js
+  lib/siteApi.js                        (NEW)
+  pages/forms/purchase-orders.js        (NEW)
+  pages/forms/cm/po-approvals.js        (NEW)
   pages/forms/index.js
-  pages/operations/purchasing/purchase-orders.js
-  pages/operations/purchasing/po/[id].js           (folder literally named [id])
-  middleware.js, lib/withTenant.js
 
-THE SITE APP SIGN-IN, PROVED ON THE SERVER. The PIN sign-in was only
-remembered in the browser - the Site App's routes did not check who was
-asking. A correct PIN now also returns a signed token (one Site App user, one
-company, a working day), which the Site App keeps and sends; the new PO route
-checks it on every request. Operatives signed in before this deploy are asked
-to sign in again when they first use POs.
-FIX - "SET PIN": it set the PIN of ANY user it was given, for anyone who
-asked. Now only the operative themselves (signed in) or a portal admin /
-manager.
-OPERATIVES' PURCHASE ORDERS (the server; the Site App screens are 2b-2):
-  - an operative raises a PO for ONE OF THEIR PROJECTS (their Site App project
-    access) - the same full check as the office; the project, its Xero project
-    and its address come from the server, not the phone
-  - it waits as "AWAITING CM APPROVAL" - not numbered, not in Deliveries,
-    cannot be sent, its link does not open; the project's Contracts Manager is
-    EMAILED
-  - ONLY THAT PROJECT'S CM can approve or reject (found as the portal's RAMS
-    notifications find it - now one shared rule). Approve -> numbered, into
-    Deliveries, ready for the office to send; reject -> a reason is required.
-    The operative is emailed either way.
-  - the portal: "Awaiting approval" filter; such POs say so, cannot be sent
-SHARED RULES - what a complete PO is (supplier, fields, the full check),
-site contacts, products, the Deliveries entry and the email's delivery block
-now live once, in lib/poData.js, for the office and the Site App alike.
-Proved neutral: every earlier PO test gives identical output before and after.
+SITE APP HOME - a "Purchase Orders" card for everyone; for Contracts Managers,
+"PO Approvals" in their section with a count of what is waiting.
+PURCHASE ORDERS (operatives) - "My purchase orders" with their status
+(awaiting the CM, approved, sent, rejected and why) and "+ New purchase order",
+made for a phone:
+  - project: one of theirs - the delivery address fills in
+  - supplier: search any Xero contact; a price-list supplier's products can be
+    tapped in (quantity blank and red until typed), or "+ Add an item"
+  - delivery: required date, address, Moffett and artics (Yes/No), access
+    routes, site contact (search, or type anyone, with their mobile), order
+    confirmations email (prefilled with the company default), notes
+  - "Send for approval" - held until complete, saying what is still needed;
+    then "Sent to <the CM> for approval"
+PO APPROVALS (CMs) - the POs on their projects waiting for them; open one to
+see the lines, VAT, totals and delivery details; Approve, or Reject with a
+reason. An approved PO is numbered and goes to the office to send.
+Operatives signed in before 1211 are asked to sign out and in again the first
+time (their sign-in had no token).
 
-STILL OPEN (not changed here): the Site App's OTHER routes (deliveries,
-issues, reports...) still do not check who is asking. Worth tightening with
-the same token - a separate piece of work.
-
-Checked through the real routes: sign-in returns a token; set-pin refused
-with none and with someone else's, accepted for oneself; the PO route refuses
-no token, a tampered one, another company's; Dave (on J228 only) sees J228
-with its Xero project and address; raising for J230 refused, an incomplete PO
-refused, a complete one awaiting approval with the CM emailed; the office
-cannot send it, its link does not open; Ali and Dave cannot approve; Will (the
-CM) sees and approves -> APP-PO-0001, into Deliveries, Dave emailed; approving
-twice refused; the office then sends it; a rejection needs a reason, Dave
-emailed; Dave's list shows both. In a REAL browser (Chromium, phone size): the
-Site App keeps the token and sends it when setting a new PIN. All server
-routes and the middleware compile; all pages pass the browser check. Built
-from your deployed packages (1022-1210, verified against their zips).
+Checked in a REAL browser (Chromium, phone size): an operative's list (sent,
+rejected); a new PO - J228 (address filled), Soprema found by "sopr", a
+product tapped in with a blank red focused quantity, "Send for approval" held
+(quantities, Moffett, artics, site contact) then enabled, sent with the
+operative's token - "Sent to Will Reid for approval"; the CM's home - the
+Purchase Orders card and PO Approvals with a badge of 1; opened, Reject held
+until a reason, Approve -> "Approved as APP-PO-0007", sent with the CM's
+token. The server side was proved in 1211. All pages pass the browser check.
+Built from your deployed packages (1022-1211, verified against their zips).

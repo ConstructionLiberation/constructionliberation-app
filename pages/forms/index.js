@@ -1,3 +1,4 @@
+import { siteApi } from '../../lib/siteApi'
 import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Head from 'next/head'
@@ -217,6 +218,9 @@ function FormsHomeMenu({ user }) {
   const [overdueTaskCount, setOverdueTaskCount] = useState(0)
   const [ramsBadge, setRamsBadge] = useState(0)
   const [deliveriesBadge, setDeliveriesBadge] = useState(0)
+  // POs waiting for this CM (1212) - counted with the sign-in token; 0 if it is not there yet
+  const [poApprovals, setPoApprovals] = useState(0)
+  useEffect(() => { if (user?.accessLevel !== 'contracts-manager') return; siteApi('/api/site-po').then(d => setPoApprovals((d.approvals || []).length)).catch(() => setPoApprovals(0)) }, [user])
   async function refreshBadges() {
     if (!user?.id && !user?.name) return
     try {
@@ -320,6 +324,11 @@ function FormsHomeMenu({ user }) {
           {deliveriesBadge > 0 && <span style={homeBadge('#dc2626')}>{deliveriesBadge}</span>}
           <div style={{ color: BRAND, fontSize: 24 }}>›</div>
         </button>
+        <button onClick={() => router.push('/forms/purchase-orders')} style={homeCard}>
+          <div style={{ fontSize: 30 }}>🧾</div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 700, color: INK }}>Purchase Orders</div><div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>Order materials for your projects</div></div>
+          <div style={{ color: BRAND, fontSize: 24 }}>›</div>
+        </button>
 
         {/* ── Contracts Manager area ── */}
         {isCM && (
@@ -336,6 +345,7 @@ function FormsHomeMenu({ user }) {
               ['💷', 'Variations', 'View project variations', '/forms/cm/variations', 0, null],
               ['📈', 'Project Finance', 'Margin, labour & materials budgets', '/forms/cm/project-finance', 0, null],
               ['📑', 'Contracted Rates', 'View the rate schedule', '/forms/cm/contracted-rates', 0, null],
+              ['🧾', 'PO Approvals', 'Purchase orders waiting for you', '/forms/cm/po-approvals', poApprovals, '#7c3aed'],
             ].map(([icon, title, sub, href, badge, badgeColour]) => (
               <button key={href} onClick={() => router.push(href)} style={homeCard}>
                 <div style={{ fontSize: 30 }}>{icon}</div>
