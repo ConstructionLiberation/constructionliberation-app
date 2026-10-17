@@ -1,32 +1,35 @@
-PACKAGE 1222 - Forecast Gross Project Margin
+PACKAGE 1223 - Purchase orders in the project cash flow
 
-Two files. Complete replacements (one NEW). No re-seed. No env changes.
-Built on 1221 - DEPLOY 1221 FIRST (this replaces the project page 1221 changed).
+Five files. Complete replacements (one NEW). No re-seed. No env changes.
+Built on 1222 (needs 1221 - the committed costs).
 
-  pages/api/project/[id]/forecast-costs.js   (NEW; folder literally named [id])
-  pages/project/[id].js                      (folder literally named [id])
+  lib/poForecast.js                    (NEW)
+  lib/poShared.js, lib/poCommitted.js
+  pages/project-cashflow.js
+  pages/api/business-financials.js
 
-ON THE PROJECT PAGE (from Project Financials):
-  - a FORECAST MARGIN card beside Current Margin - the same colours (25% / 21%)
-  - a FORECAST TO COMPLETE section under Purchase orders:
-      Costs to date + Committed (open POs) + Costs remaining = Forecast cost,
-      against the AFA -> the forecast margin in pounds and per cent
-  - COSTS REMAINING are entered by the CM as lines - description, category
-    (labour, materials, plant, other), amount - "+ Add line", "Save costs
-    remaining"; who updated them and when is shown.
-The forecast updates by itself as POs are raised (committed rises), as bills
-arrive (cost moves from committed to costs to date) and as the CM revises the
-costs remaining. The AFA is the same figure as the AFA card - one shared rule
-(latest sent application, else an override, else contract value plus
-instructed variations).
-Who can enter costs remaining: post-contract, management, admin.
+COMMERCIAL > CASH FLOW - in a project's forecast window, under "Materials
+forecasted on site", a new "ADD FROM PURCHASE ORDERS" button lists the
+project's POs with something still committed. You choose: tick one and it is
+added as a materials line - the still-committed amount, "PO number - supplier",
+the PO's delivery date - with its payment term set right there like any other
+materials line; untick to remove. A PO already in another forecast period is
+shown with that period and cannot be ticked twice.
+NO DOUBLE COUNTING AS BILLS ARRIVE: a PO line only ever forecasts what is
+STILL COMMITTED on that PO now - never more than was entered, and nothing once
+the PO is billed, closed, cancelled or deleted (that money is then an actual
+cost). One rule (lib/poShared.js), used in every place a forecast materials
+line becomes money: the project cash flow, and the business cash flow and
+forecast P&L (Business Financials). If the committed figures cannot be read,
+the saved figures are used as they are - never wiped.
 
-Checked through the real route: lines saved (a blank one dropped, an unknown
-category kept as "other", amounts to the penny), read back, who saved them
-recorded; pre-contract refused. In a REAL browser (Chromium): costs to date
-12,000 + committed 685 + remaining 8,000 = 20,685 against an AFA of 50,000 ->
-29,315 (58.6%); a materials line of 5,000 added and saved -> 25,685, 24,315
-(48.6%), the card and the sum both updated, each line's category kept. The
-page first crashed when the costs reply had no lines - it now treats that as
-none. All server routes compile; all pages pass the browser check. Built from
-your deployed packages (1022-1220) plus 1221.
+Checked: the rule on every case (ordinary line unchanged; a PO line 285 with 85
+still committed -> 85; never above what was entered; closed or gone -> 0;
+figures unavailable -> the saved amount); the server's committed map through
+real code (a cancelled PO left out, a closed one 0). In a REAL browser
+(Chromium): "Add from purchase orders (2)" - the closed PO left out, the PO
+already in October's forecast greyed with that period; ticking APP-PO-0001
+added 85, its delivery date, EOM + 30 -> cash 30/12/26; unticking removed it.
+The cash flow page's browser bundle checked to carry no database library. All
+server routes compile; all pages pass the browser check. Built from your
+deployed packages (1022-1220) plus 1221 and 1222.

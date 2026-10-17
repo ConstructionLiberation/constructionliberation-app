@@ -3,6 +3,7 @@ import { businessToday, businessNow } from '../lib/businessDate'
 import { useFormat } from '../components/TenantProvider'
 import Head from 'next/head'
 import CommercialNav from '../components/CommercialNav'
+import { poLineAmount } from '../lib/poShared'
 import { computeApplicationSummary, resolveAppDates } from '../lib/applications'
 
 // ── Layout constants (mirror the planning gantt) ──
@@ -36,6 +37,7 @@ function cellCount(cell) {
 }
 
 export default function ProjectCashflow() {
+  const [poCommitted, setPoCommitted] = useState(null)   // PO id -> still committed (1223)
   const { money, currencySymbol, companyName } = useFormat()
   const gbp = (n) => money(Number(n) || 0)
   const gbpK = (n) => { const v = n || 0; return Math.abs(v) >= 1000 ? `${currencySymbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${currencySymbol}${Math.round(v)}` }
@@ -115,6 +117,10 @@ export default function ProjectCashflow() {
   }
 
   function loadAllForecasts() {
+    // what is still committed on each PO - so a PO ticked into a forecast forecasts only
+    // that (1223). null if it cannot be read: the saved figures are then used as they are.
+    fetch('/api/purchase-orders').then(r => r.ok ? r.json() : null)
+      .then(d => setPoCommitted(d && Array.isArray(d.pos) ? Object.fromEntries(d.pos.filter(p => p.committed != null).map(p => [p.id, p.committed])) : null)).catch(() => setPoCommitted(null))
     fetch('/api/project-cashflow?all=1').then(r => r.json())
       .then(d => { setAllForecasts(d.all || {}); setAppActuals(d.actuals || {}); setManual(Array.isArray(d.manual) ? d.manual : []) }).catch(() => {})
   }
@@ -385,7 +391,8 @@ export default function ProjectCashflow() {
         } else if (fc.salesDate) { add(fc.salesDate, 'forecastIn', fc.revenueThisPeriod || 0); note(fc.to, fc.salesDate, 'forecast', `${fcLabel} forecast`, fc.revenueThisPeriod || 0, salesValue(fc.revenueThisPeriod || 0, fc.retentionPct)) }
         for (const s of (fc.labourSchedule || [])) add(s.date, 'labourOut', s.amount || 0)
         if ((!fc.labourSchedule || !fc.labourSchedule.length) && fc.labourDate) add(fc.labourDate, 'labourOut', fc.labourThisPeriod || 0)
-        for (const m of (fc.matItems || [])) add(m.payDate, 'matOut', m.amount || 0)
+        // a PO line forecasts only what is still committed on the PO now (1223)
+        for (const m of (fc.matItems || [])) add(m.payDate, 'matOut', poLineAmount(m, poCommitted, m.amount || 0))
       }
     }
     // RETENTION RELEASES.
@@ -416,7 +423,7 @@ export default function ProjectCashflow() {
     // month called "__detai" carrying every figure twice.
     Object.defineProperty(map, '__detail', { value: detail, enumerable: false })
     return map
-  }, [allForecasts, retention, appActuals, supersededIds, jobNoOfXeroId, projectNames, xeroMap, retFin, focusKey, manualNames])
+  }, [allForecasts, retention, appActuals, supersededIds, jobNoOfXeroId, projectNames, xeroMap, retFin, focusKey, manualNames, poCommitted])
 
   const shift = (deltaWeeks) => setAnchorMonday(m => mondayOf(addDays(m, deltaWeeks * 7)))
 
@@ -1115,6 +1122,15 @@ function HypAppModal({ modal, onClose, onSaved }) {
   const [mcdPct, setMcdPct] = useState(0)
   const [retPct, setRetPct] = useState(5)
   const [matItems, setMatItems] = useState([])    // [{ id, mode, value, comment, deliverDay }]
+  // PURCHASE ORDERS INTO THE FORECAST (1223) - this project's POs with something still
+  // committed; ticking one adds it as a materials line (its timing and terms set here
+  // like any other). A PO already in another forecast period cannot be ticked twice.
+  const [poOpts, setPoOpts] = useState(null)
+  const [poPick, setPoPick] = useState(false)
+  useEffect(() => { if (xeroId) fetch(`/api/purchase-orders?committed=${encodeURIComponent(xeroId)}`).then(r => r.ok ? r.json() : null).then(d => setPoOpts(d ? (d.pos || []).filter(p => p.committed > 0) : [])).catch(() => setPoOpts([])) }, [xeroId])
+  const poElsewhere = useMemo(() => { const m = {}; for (const a of (hypApps || [])) { if (a.id === editId) continue; for (const x of (a.matItems || [])) if (x.poId) m[x.poId] = a } return m }, [hypApps, editId])
+  const togglePo = (p) => setMatItems(l => l.some(m => m.poId === p.id) ? l.filter(m => m.poId !== p.id)
+    : [...l, { id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, mode: 'figure', value: p.committed, comment: `${p.number} - ${p.supplier}`, deliverDay: p.deliveryDate || to, term: { basis: 'eom', days: 30 }, poId: p.id, poNumber: p.number }])
   // DEFAULTS TO THE PROJECT'S OWN APPLICATION DATES.
   //
   // Under eom+30 a forecast lands on a date the real application will never use, so when
@@ -2380,6 +2396,8 @@ function HypAppModal({ modal, onClose, onSaved }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>Materials forecasted on site <span style={{ fontSize: 11, color: '#aaa', fontWeight: 400 }}>(supplier payments out - budget {gbp(materialsBudget)})</span></div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {xeroId && <button onClick={() => setPoPick(v => !v)} style={{ ...ghostBtn, padding: '5px 12px', borderColor: poPick ? '#7c3aed' : undefined, color: poPick ? '#7c3aed' : undefined }}>
+                    Add from purchase orders{poOpts && poOpts.length ? ` (${poOpts.length})` : ''}</button>}
                   <button onClick={addMaterialsFromLineItems} disabled={!(materialsToBuy > 0)}
                     title={materialsToBuy > 0
                       ? 'Add one line for the materials that actually have to be bought this period - what the measured work consumed, less anything drawn out of stock already on site.'
@@ -2393,6 +2411,18 @@ function HypAppModal({ modal, onClose, onSaved }) {
                     style={{ ...ghostBtn, padding: '5px 12px' }}>+ Add material</button>
                 </div>
               </div>
+              {poPick && <div style={{ border: '1px solid #ddd6fe', background: '#faf5ff', borderRadius: 10, padding: '8px 10px', marginBottom: 10, fontSize: 12 }}>
+                <div style={{ color: '#6d28d9', marginBottom: 6 }}>Tick a purchase order to add what is <strong>still committed</strong> on it as a materials line - set its delivery day and payment term in the table below. As bills come in against it, the forecast shrinks to what is left.</div>
+                {poOpts == null ? <div style={{ color: '#999' }}>Loading...</div> : !poOpts.length ? <div style={{ color: '#999' }}>No purchase orders on this project with anything still committed.</div>
+                  : poOpts.map(p => { const here = matItems.some(m => m.poId === p.id); const other = poElsewhere[p.id]
+                    return <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', opacity: other ? 0.55 : 1, cursor: other ? 'default' : 'pointer' }}>
+                      <input type="checkbox" checked={here} disabled={!!other} onChange={() => togglePo(p)} />
+                      <strong style={{ minWidth: 100 }}>{p.number}</strong><span style={{ flex: 1 }}>{p.supplier}</span>
+                      <span style={{ color: '#777' }}>{p.deliveryDate ? `delivery ${fmtD(p.deliveryDate)}` : 'no delivery date'}</span>
+                      <span style={{ minWidth: 90, textAlign: 'right', fontWeight: 600, color: '#7c3aed' }}>{gbp(p.committed)}</span>
+                      {other && <span style={{ color: '#b45309' }}>in the {fmtD(other.from)} - {fmtD(other.to)} forecast</span>}
+                    </label> })}
+              </div>}
               <div style={{ border: '1px solid #eee', borderRadius: 10, overflow: 'auto', marginBottom: 18 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead><tr style={{ background: '#faf9f7', color: '#999' }}>

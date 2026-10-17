@@ -1,3 +1,4 @@
+import { poLineAmount, poCommittedById } from '../../lib/poForecast'
 import { requireRole } from '../../lib/portalAuth'
 import { getClient } from '../../lib/db'
 import { crmDealsToFlat } from '../../lib/crmDashboardAdapter'
@@ -1149,6 +1150,8 @@ export async function businessFinancials(req, res) {
         }
         redis.set('config:project-index', idxNext).catch(() => {})
       }
+      // POs ticked into forecasts forecast only what is still committed (1223)
+      const poCom = await poCommittedById().catch(() => null)
       for (const k of keys) {
         const pk = k.replace('cashflow:hyp-apps:', '')
         // pk is "L:<projectNo>" (live/draft) or "N:<dealId>" (negotiated).
@@ -1249,7 +1252,7 @@ export async function businessFinancials(req, res) {
               revenueTo: fc.to || '',
               revenue: Number(fc.revenueThisPeriod) || Number(fc.thisCertTotal) || 0,
               materials: (Array.isArray(fc.matItems) && fc.matItems.length)
-                ? fc.matItems.map(m => ({ date: m.deliverDay || '', amount: Number(m.amount != null && m.amount !== '' ? m.amount : m.value) || 0 }))
+                ? fc.matItems.map(m => ({ date: m.deliverDay || '', amount: poLineAmount(m, poCom, Number(m.amount != null && m.amount !== '' ? m.amount : m.value) || 0) }))
                 : (fc.matDeliverDay ? [{ date: fc.matDeliverDay, amount: Number(fc.materialsThisPeriod) || 0 }] : []),
               labour: (Array.isArray(fc.labourSchedule) && fc.labourSchedule.length)
                 ? fc.labourSchedule.map(l => ({
@@ -1265,8 +1268,8 @@ export async function businessFinancials(req, res) {
                   : [])
               : (fc.matItems || []).map(m => ({
               date: m.payDate,
-              amount: (m.amount != null && m.amount !== '') ? Number(m.amount) || 0
-                    : (m.mode === 'pct' ? 0 : Number(m.value) || 0),
+              amount: poLineAmount(m, poCom, (m.amount != null && m.amount !== '') ? Number(m.amount) || 0
+                    : (m.mode === 'pct' ? 0 : Number(m.value) || 0)),
               // Diagnostics for the banner: money that cannot be scheduled and why.
               unresolved: (m.amount == null || m.amount === '') && m.mode === 'pct',
               undated: !m.payDate,
