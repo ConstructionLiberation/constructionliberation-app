@@ -1,37 +1,29 @@
-PACKAGE 1230 - Draft POs from the take-off: choose which, and a supplier for
-anything without one
+PACKAGE 1231 - Forecast to complete: the take-off's materials budgets
 
-Three files. Complete replacements. No re-seed. No env changes. Built on 1229.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1230.
 
-  lib/takeoffPos.js
   pages/api/job-takeoffs.js
-  pages/materials-takeoffs.js
+  pages/project/[id].js                (folder literally named [id])
 
-MATERIALS TAKE-OFFS > MATERIALS > "CREATE DRAFT POs..." now shows the POs it
-could make FIRST - nothing is made until you choose:
-  - a row per PO: tick, what it is for, the lines and the total
-      PRICE-LIST SUPPLIER   its products (+ own lines allocated to it); its linked
-                            Xero contact shown, changeable; not linked -> choose
-                            its contact (or make it named and flagged, as before)
-      YOUR CATEGORY         own lines allocated to a category of your own - e.g.
-                            "Insulation" - choose a supplier for it
-      NOT ALLOCATED         own lines not allocated - choose a supplier for them
-  - the supplier: type to search your Xero contacts; choosing one ticks the row;
-    a category or the not-allocated lines cannot be ticked until they have one
-  - "Create N draft POs" makes only the ticked ones, each to its chosen supplier
-    (a category's PO notes the category); Cancel makes nothing
-  - items with no product chosen are listed; drafts made before are remembered
-    and making more asks first
+THE PROJECT PAGE (from Project Financials) > FORECAST TO COMPLETE - under
+"Costs remaining - not yet ordered or billed", the MATERIALS BUDGETS FROM THE
+TAKE-OFF (as re-measured):
+  - one row per price-list supplier, per category of your own (e.g.
+    Insulation), and "Not from the price list - not allocated" - the same groups
+    as the Materials tab and the draft-PO list (one calculation), with the
+    number of lines and the budget; the total materials budget below
+  - "+ Add as a line" puts that budget into the costs remaining as a materials
+    line - then change the amount to what is still to buy, and Save (nothing is
+    added unless you click)
+  - lines with no product chosen are noted, as they are not in these budgets
+  - no take-off yet -> a link to start one on Materials Take-offs
 
-Checked through the real routes: the preview listed Renolit (linked to Renolit
-UK Ltd), Soprema (needs a supplier), Insulation (your category, needs a
-supplier) and Not allocated; ticking Renolit and Insulation with Kingspan made
-exactly those two - the Insulation PO to Kingspan Insulation with its line and
-"- Insulation" in its notes, no Soprema PO, nothing for the unallocated line;
-Insulation ticked without a supplier -> "choose a supplier for it"; Soprema with
-SIG Roofing chosen -> a draft to SIG Roofing, Soprema's price list kept. In a
-REAL browser (Chromium): Renolit ticked by default, Insulation and Not allocated
-held until a supplier is chosen; "king" -> Kingspan Insulation ticked
-Insulation; Renolit unticked; Create sent only Insulation with Kingspan. All
+Checked through the real route with the re-measured take-off: the budgets
+equal the draft-PO list exactly (Renolit 8,549.10, Soprema 1,380.96,
+Insulation 1,500, not allocated 360), from Q-1042 Rev A; a project with no
+take-off says so. In a REAL browser (Chromium): the table below the costs
+remaining with the total (11,790.06) and the note of the line with no product;
+"+ Add as a line" on Insulation -> a materials line "Materials - Insulation" at
+1,500, ready to adjust and save; no take-off -> the link to start one. All
 server routes compile; all pages pass the browser check. Built from your
-deployed packages (1022-1220) plus 1221-1229.
+deployed packages (1022-1220) plus 1221-1230.

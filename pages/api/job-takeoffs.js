@@ -28,6 +28,16 @@ async function handler(req, res) {
       }
       return res.status(200).json({ projects: out })
     }
+    // THE TAKE-OFF'S MATERIALS BUDGETS for the project page's Forecast to complete (1231):
+    // per price-list supplier, per category of your own, and the own lines not allocated -
+    // the same groups as the Materials tab and the draft-PO list (one calculation)
+    if (req.query.budgets) {
+      const tk = await loadTakeoff(String(req.query.budgets))
+      if (!tk) return res.status(200).json({ takeoff: false })
+      const r = await takeoffOrderGroups(tk, await loadPriceLib())
+      return res.status(200).json({ takeoff: true, quoteRef: tk.quoteRef || '', revision: tk.revision || '', missing: (r.missing || []).length,
+        groups: r.groups.map(g => ({ key: g.key, kind: g.kind, name: g.name, total: g.total, lines: g.lines.length })) })
+    }
     const pid = String(req.query.projectId || '')
     if (!pid) return res.status(400).json({ error: 'Which project?' })
     const proj = await loadProject(pid)

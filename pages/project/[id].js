@@ -153,6 +153,10 @@ export default function ProjectPage() {
     } catch (e) { setRemMsg(e.message) }
     setRemBusy(false)
   }
+  // THE TAKE-OFF'S MATERIALS BUDGETS (1231) - per supplier / category / not allocated, shown
+  // under the costs remaining so they can be seen while entering what is still to buy
+  const [budgets, setBudgets] = useState(null)
+  useEffect(() => { if (id) fetch(`/api/job-takeoffs?budgets=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).then(setBudgets).catch(() => setBudgets(null)) }, [id])
   // the project's purchase orders, for the section below the cards (1221)
   const [projectPos, setProjectPos] = useState(null)
   useEffect(() => { if (id) fetch('/api/purchase-orders').then(r => r.ok ? r.json() : null).then(d => setProjectPos(d ? (d.pos || []).filter(p => String(p.projectId) === String(id)) : null)).catch(() => setProjectPos(null)) }, [id])
@@ -488,6 +492,26 @@ export default function ProjectPage() {
               {remMsg && <span style={{ fontSize: 12.5, color: remMsg === 'Saved.' ? '#16a34a' : '#b42318' }}>{remMsg}</span>}
               <span style={{ flex: 1 }} /><span style={{ fontSize: 12, color: '#999' }}>Lines not yet saved count once saved.</span>
             </div>
+            {/* MATERIALS BUDGETS FROM THE TAKE-OFF (1231) */}
+            {budgets && <div style={{ marginTop: 14, borderTop: '1px solid #eee', paddingTop: 10 }}>
+              {!budgets.takeoff ? <div style={{ fontSize: 12.5, color: '#888' }}>No materials take-off for this project yet - <a href="/materials-takeoffs" style={{ color: '#0f766e' }}>start one on Materials Take-offs</a> to see the materials budgets here.</div> : <>
+                <div style={{ fontSize: 13, marginBottom: 6 }}><strong>Materials budgets from the take-off</strong> <span style={{ color: '#888', fontSize: 12 }}>({budgets.quoteRef} Rev {budgets.revision}, as re-measured) - to help with the costs remaining above</span></div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead><tr>{['Supplier / category', '', 'Lines', 'Budget', ''].map((h, k) => <th key={k} style={{ textAlign: k === 2 || k === 3 ? 'right' : 'left', padding: '5px 8px', color: '#666', fontWeight: 600, borderBottom: '1px solid #eee' }}>{h}</th>)}</tr></thead>
+                  <tbody>{budgets.groups.map(g => <tr key={g.key} style={{ borderBottom: '1px solid #f4f3f0' }}>
+                    <td style={{ padding: '5px 8px', fontWeight: 600 }}>{g.kind === 'unallocated' ? 'Not from the price list - not allocated' : g.name}</td>
+                    <td style={{ padding: '5px 8px', color: '#999', fontSize: 11.5 }}>{({ supplier: 'price-list supplier', category: 'your category', unallocated: '' })[g.kind]}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{g.lines}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmt(g.total)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', width: 130 }}><button onClick={() => setRemLines(ls => [...ls, { id: `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 4)}`, description: `Materials - ${g.kind === 'unallocated' ? 'not from the price list' : g.name}`, category: 'materials', amount: g.total }])}
+                      title="Adds it to the costs remaining above - then change the amount to what is still to buy" style={{ fontSize: 12, padding: '3px 9px', border: '1px solid #d4d4d0', background: '#fff', borderRadius: 6, cursor: 'pointer' }}>+ Add as a line</button></td>
+                  </tr>)}
+                    <tr><td colSpan={3} style={{ padding: '6px 8px', fontWeight: 700 }}>Total materials budget</td><td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{fmt(budgets.groups.reduce((a, g) => a + (Number(g.total) || 0), 0))}</td><td /></tr>
+                  </tbody>
+                </table>
+                {budgets.missing > 0 && <div style={{ fontSize: 12, color: '#b45309', marginTop: 4 }}>{budgets.missing} take-off line{budgets.missing === 1 ? ' has' : 's have'} no product chosen, so {budgets.missing === 1 ? 'is' : 'are'} not in these budgets.</div>}
+              </>}
+            </div>}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
