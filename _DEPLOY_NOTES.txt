@@ -1,17 +1,14 @@
-PACKAGE 1244 - Bills to Check tab on the main Bookkeeping page
+PACKAGE 1245 - Query window stays open when clicking outside it
 
-Two files. Complete replacements. No re-seed. No env changes. Built on 1243.
+One file. Complete replacement. No re-seed. No env changes. Built on 1244.
 
-  components/BookkeepingNav.js
-  pages/bookkeeping.js
+  components/BillsToCheck.js
 
-WHY IT WAS MISSING: the main Bookkeeping page draws its own header and kept its own
-copy of the tab list (Bookkeeping, Weekly Tasks, Monthly Tasks). 1243 added Bills
-to Check to the Bookkeeping menu used by the other Bookkeeping pages, so the tab
-showed there but not on the main page. NOW there is ONE list of Bookkeeping tabs,
-in the Bookkeeping menu, and the main page uses it - so a tab added later shows
-everywhere.
+QUERY WITH SUPPLIER - clicking the dark background around the window no longer
+closes it (that could lose a message half written). Only the x at the top, or the
+Close button at the bottom, closes it.
 
-Checked in a REAL browser (Chromium): the main Bookkeeping page's tabs - Bookkeeping,
-Weekly Tasks, Monthly Tasks, Bills to Check (-> /bookkeeping-bills). All pages pass
-the browser check. Built from your deployed packages (1022-1220) plus 1221-1243.
+Checked in a REAL browser (Chromium): a message typed, the background clicked in
+two places - the window still open, the message kept; the x - closed. All pages
+pass the browser check. Built from your deployed packages (1022-1220) plus
+1221-1244.

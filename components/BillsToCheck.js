@@ -151,8 +151,9 @@ function QueryWindow({ b, onClose, onChange }) {
   if (!b) return null
   const box = { width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #d4d4d0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4vh 2vw', overflowY: 'auto' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 760, padding: '16px 22px 20px' }}>
+    // clicking the background does NOT close it (1245) - only the × or Close, so a message being written is never lost
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4vh 2vw', overflowY: 'auto' }}>
+      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 760, padding: '16px 22px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
           <h2 style={{ fontSize: 17, margin: 0, flex: 1 }}>{q ? 'Query' : 'Query with supplier'} - {b.contactName} {b.number}</h2>
           <button onClick={onClose} style={{ fontSize: 22, border: 'none', background: 'none', cursor: 'pointer', color: '#999' }}>×</button>
