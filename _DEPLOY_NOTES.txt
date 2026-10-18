@@ -1,30 +1,17 @@
-PACKAGE 1243 - Bills to Check moves to Bookkeeping; query any bill; no Dext forwarding
+PACKAGE 1244 - Bills to Check tab on the main Bookkeeping page
 
-Nine files. Complete replacements (two NEW). No re-seed. No env changes. Built on 1242.
+Two files. Complete replacements. No re-seed. No env changes. Built on 1243.
 
-  components/BillsToCheck.js           (NEW - the page itself, shared)
-  pages/bookkeeping-bills.js           (NEW - Bookkeeping > Bills to Check)
-  pages/operations/purchasing/bills.js (now forwards to Bookkeeping)
-  components/BookkeepingNav.js, components/OperationsNav.js
-  lib/billQueries.js, lib/billsCheck.js
-  pages/api/bills-check.js, pages/api/bill-queries.js, pages/api/bill-query.js
+  components/BookkeepingNav.js
+  pages/bookkeeping.js
 
-BOOKKEEPING > BILLS TO CHECK - its own tab beside Weekly and Monthly Tasks, open to
-accounts, management and admin (as the rest of Bookkeeping). It has left the
-Purchasing menu; the old address forwards to it.
-QUERY ANY BILL - "Query with supplier" is on every bill in every tab, including Other
-suppliers (where all 469 of your bills were - which is why there was no way to query
-one).
-NO DEXT FORWARDING - the setting and the forwarding are removed. The supplier's
-replies go to the portal user who raised the query: they are emailed when the
-supplier replies (the email links to Bookkeeping > Bills to Check), replies to the
-email itself reach them, and the conversation is on the bill.
+WHY IT WAS MISSING: the main Bookkeeping page draws its own header and kept its own
+copy of the tab list (Bookkeeping, Weekly Tasks, Monthly Tasks). 1243 added Bills
+to Check to the Bookkeeping menu used by the other Bookkeeping pages, so the tab
+showed there but not on the main page. NOW there is ONE list of Bookkeeping tabs,
+in the Bookkeeping menu, and the main page uses it - so a tab added later shows
+everywhere.
 
-Checked through the real routes: the whole query flow re-run - the reply emails the
-raiser and links to Bookkeeping; nothing sent to Dext (an old Dext setting ignored);
-who can open it - accounts, management, admin yes; post-contract and pre-contract no.
-In a REAL browser (Chromium): Bookkeeping's menu with Bills to Check; an Other
-suppliers bill with Query with supplier, opening the query window; no Dext box in
-Settings; the old Purchasing address forwarding to /bookkeeping-bills. All server
-routes compile; all pages pass the browser check. Built from your deployed packages
-(1022-1220) plus 1221-1242.
+Checked in a REAL browser (Chromium): the main Bookkeeping page's tabs - Bookkeeping,
+Weekly Tasks, Monthly Tasks, Bills to Check (-> /bookkeeping-bills). All pages pass
+the browser check. Built from your deployed packages (1022-1220) plus 1221-1243.

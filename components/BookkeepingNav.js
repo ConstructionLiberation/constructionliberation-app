@@ -3,7 +3,9 @@ import ReportImprovementLink from './ReportImprovementLink'
 import BrandLogo from './BrandLogo'
 
 const INK = '#1a1a2e'
-const SUBS = [
+// THE BOOKKEEPING TABS - one list (1244): the main Bookkeeping page draws its own header and
+// used to keep its own copy of these, so a tab added here (Bills to Check) never showed there.
+export const BOOKKEEPING_TABS = [
   { href: '/bookkeeping', label: 'Bookkeeping' },
   { href: '/bookkeeping-weekly-tasks', label: 'Weekly Tasks' },
   { href: '/bookkeeping-monthly-tasks', label: 'Monthly Tasks' },
@@ -25,7 +27,7 @@ export default function BookkeepingNav({ active }) {
       </div>
       {/* Sub-nav (Ops style: white bar, gold underline) */}
       <div style={{ background: '#fff', borderBottom: '1px solid #ececec', padding: '0 24px', display: 'flex', gap: 4, height: 46, alignItems: 'center' }}>
-        {SUBS.map(s => {
+        {BOOKKEEPING_TABS.map(s => {
           const on = active === s.href
           return (
             <Link key={s.href} href={s.href} style={{

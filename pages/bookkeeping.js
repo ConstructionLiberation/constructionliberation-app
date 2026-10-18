@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { BOOKKEEPING_TABS } from '../components/BookkeepingNav'   // the one list of tabs (1244)
 import * as XLSX from 'xlsx'
 
 // One list of tabs, used by the tab strip and by the export filename. Two copies would
@@ -360,7 +361,7 @@ export default function BookkeepingPage() {
 
       {/* Sub-nav tabs (Ops style) */}
       <div style={{ background: '#fff', borderBottom: '1px solid #ececec', padding: '0 24px', display: 'flex', gap: 4, height: 46, alignItems: 'center', position: 'sticky', top: 56, zIndex: 19 }}>
-        {[['/bookkeeping', 'Bookkeeping'], ['/bookkeeping-weekly-tasks', 'Weekly Tasks'], ['/bookkeeping-monthly-tasks', 'Monthly Tasks']].map(([href, label]) => {
+        {BOOKKEEPING_TABS.map(t => [t.href, t.label]).map(([href, label]) => {
           const on = href === '/bookkeeping'
           return (
             <Link key={href} href={href} style={{
